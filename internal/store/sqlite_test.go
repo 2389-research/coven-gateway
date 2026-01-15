@@ -5,6 +5,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -248,11 +249,12 @@ func TestGetThreadMessages_Limit(t *testing.T) {
 	// Save 5 messages
 	baseTime := time.Now().UTC().Truncate(time.Second)
 	for i := 0; i < 5; i++ {
+		msgID := fmt.Sprintf("msg-%c", 'a'+i)
 		msg := &Message{
-			ID:        "msg-" + string(rune('a'+i)),
+			ID:        msgID,
 			ThreadID:  "thread-limit-test",
 			Sender:    "user",
-			Content:   "Message " + string(rune('a'+i)),
+			Content:   fmt.Sprintf("Message %c", 'a'+i),
 			CreatedAt: baseTime.Add(time.Duration(i) * time.Minute),
 		}
 		if err := store.SaveMessage(ctx, msg); err != nil {

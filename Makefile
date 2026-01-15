@@ -30,7 +30,7 @@ proto-deps:
 
 # Run the server
 run: build
-	./bin/fold-gateway serve --config config.yaml
+	FOLD_CONFIG=config.yaml ./bin/fold-gateway serve
 
 # Run tests
 test:

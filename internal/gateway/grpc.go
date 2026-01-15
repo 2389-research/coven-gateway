@@ -52,6 +52,11 @@ func (s *foldControlServer) AgentStream(stream pb.FoldControl_AgentStreamServer)
 		return status.Error(codes.InvalidArgument, "first message must be RegisterAgent")
 	}
 
+	// Validate required fields
+	if reg.GetAgentId() == "" {
+		return status.Error(codes.InvalidArgument, "agent_id is required")
+	}
+
 	// Create connection for this agent
 	conn := agent.NewConnection(
 		reg.GetAgentId(),

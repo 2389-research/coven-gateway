@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -121,9 +122,14 @@ func runHealth(ctx context.Context) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	// Make HTTP request to health endpoint
+	// Make HTTP request to health endpoint with context
 	url := fmt.Sprintf("http://%s/health", cfg.Server.HTTPAddr)
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}
@@ -149,18 +155,25 @@ func runAgents(ctx context.Context) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	// Make HTTP request to ready endpoint
+	// Make HTTP request to ready endpoint with context
 	url := fmt.Sprintf("http://%s/health/ready", cfg.Server.HTTPAddr)
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("agents check failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Read response body
-	buf := make([]byte, 1024)
-	n, _ := resp.Body.Read(buf)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response: %w", err)
+	}
 
-	fmt.Println(string(buf[:n]))
+	fmt.Println(string(body))
 	return nil
 }

@@ -5,6 +5,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"testing"
@@ -327,8 +328,8 @@ func TestManagerListAgents(t *testing.T) {
 		for i := 1; i <= 3; i++ {
 			stream := newMockStream()
 			conn := NewConnection(
-				"agent-"+string(rune('0'+i)),
-				"Agent "+string(rune('0'+i)),
+				fmt.Sprintf("agent-%d", i),
+				fmt.Sprintf("Agent %d", i),
 				[]string{"chat"},
 				stream,
 				slog.Default(),
@@ -534,7 +535,7 @@ func TestConcurrentAccess(t *testing.T) {
 				defer wg.Done()
 				stream := newMockStream()
 				conn := NewConnection(
-					"agent-"+string(rune('a'+id)),
+					fmt.Sprintf("agent-%d", id),
 					"Agent",
 					[]string{"chat"},
 					stream,
