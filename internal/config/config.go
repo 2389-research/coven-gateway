@@ -109,6 +109,11 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parsing durations: %w", err)
 	}
 
+	// Validate required fields
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("validating config: %w", err)
+	}
+
 	return &cfg, nil
 }
 
@@ -123,6 +128,40 @@ func expandEnvVars(s string) string {
 		varName := re.FindStringSubmatch(match)[1]
 		return os.Getenv(varName)
 	})
+}
+
+// validRoutingStrategies defines the allowed routing strategy values
+var validRoutingStrategies = map[string]bool{
+	"round_robin": true,
+	"affinity":    true,
+	"capability":  true,
+	"random":      true,
+}
+
+// Validate checks that all required configuration fields are present and valid.
+// Returns an error describing the first validation failure encountered.
+func (c *Config) Validate() error {
+	if c.Server.GRPCAddr == "" {
+		return fmt.Errorf("server.grpc_addr is required")
+	}
+
+	if c.Server.HTTPAddr == "" {
+		return fmt.Errorf("server.http_addr is required")
+	}
+
+	if c.Database.Path == "" {
+		return fmt.Errorf("database.path is required")
+	}
+
+	if c.Routing.Strategy == "" {
+		return fmt.Errorf("routing.strategy is required")
+	}
+
+	if !validRoutingStrategies[c.Routing.Strategy] {
+		return fmt.Errorf("routing.strategy %q is invalid; must be one of: round_robin, affinity, capability, random", c.Routing.Strategy)
+	}
+
+	return nil
 }
 
 // parseDurations converts the raw duration strings into time.Duration values

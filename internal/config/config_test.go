@@ -427,6 +427,166 @@ metrics:
 	}
 }
 
+func TestLoad_MissingRequiredFields(t *testing.T) {
+	tests := []struct {
+		name          string
+		configContent string
+		wantErrSubstr string
+	}{
+		{
+			name: "missing grpc_addr",
+			configContent: `
+server:
+  grpc_addr: ""
+  http_addr: "0.0.0.0:8080"
+database:
+  path: "./test.db"
+routing:
+  strategy: "affinity"
+`,
+			wantErrSubstr: "server.grpc_addr is required",
+		},
+		{
+			name: "missing http_addr",
+			configContent: `
+server:
+  grpc_addr: "0.0.0.0:50051"
+  http_addr: ""
+database:
+  path: "./test.db"
+routing:
+  strategy: "affinity"
+`,
+			wantErrSubstr: "server.http_addr is required",
+		},
+		{
+			name: "missing database path",
+			configContent: `
+server:
+  grpc_addr: "0.0.0.0:50051"
+  http_addr: "0.0.0.0:8080"
+database:
+  path: ""
+routing:
+  strategy: "affinity"
+`,
+			wantErrSubstr: "database.path is required",
+		},
+		{
+			name: "missing routing strategy",
+			configContent: `
+server:
+  grpc_addr: "0.0.0.0:50051"
+  http_addr: "0.0.0.0:8080"
+database:
+  path: "./test.db"
+routing:
+  strategy: ""
+`,
+			wantErrSubstr: "routing.strategy is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, "config.yaml")
+
+			err := os.WriteFile(configPath, []byte(tt.configContent), 0644)
+			if err != nil {
+				t.Fatalf("failed to write test config: %v", err)
+			}
+
+			_, err = Load(configPath)
+			if err == nil {
+				t.Errorf("Load() expected error containing %q, got nil", tt.wantErrSubstr)
+				return
+			}
+
+			if !contains(err.Error(), tt.wantErrSubstr) {
+				t.Errorf("Load() error = %q, want error containing %q", err.Error(), tt.wantErrSubstr)
+			}
+		})
+	}
+}
+
+func TestLoad_InvalidRoutingStrategy(t *testing.T) {
+	tests := []struct {
+		name     string
+		strategy string
+	}{
+		{name: "typo", strategy: "round-robin"},
+		{name: "unknown", strategy: "unknown_strategy"},
+		{name: "partial", strategy: "round"},
+		{name: "uppercase", strategy: "AFFINITY"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, "config.yaml")
+
+			configContent := `
+server:
+  grpc_addr: "0.0.0.0:50051"
+  http_addr: "0.0.0.0:8080"
+database:
+  path: "./test.db"
+routing:
+  strategy: "` + tt.strategy + `"
+`
+			err := os.WriteFile(configPath, []byte(configContent), 0644)
+			if err != nil {
+				t.Fatalf("failed to write test config: %v", err)
+			}
+
+			_, err = Load(configPath)
+			if err == nil {
+				t.Errorf("Load() expected error for invalid strategy %q, got nil", tt.strategy)
+				return
+			}
+
+			if !contains(err.Error(), "invalid") {
+				t.Errorf("Load() error = %q, want error containing 'invalid'", err.Error())
+			}
+		})
+	}
+}
+
+func TestValidate_ValidStrategies(t *testing.T) {
+	validStrategies := []string{"round_robin", "affinity", "capability", "random"}
+
+	for _, strategy := range validStrategies {
+		t.Run(strategy, func(t *testing.T) {
+			cfg := &Config{
+				Server:   ServerConfig{GRPCAddr: "0.0.0.0:50051", HTTPAddr: "0.0.0.0:8080"},
+				Database: DatabaseConfig{Path: "./test.db"},
+				Routing:  RoutingConfig{Strategy: strategy},
+			}
+
+			err := cfg.Validate()
+			if err != nil {
+				t.Errorf("Validate() unexpected error for strategy %q: %v", strategy, err)
+			}
+		})
+	}
+}
+
+// contains checks if substr is contained in s
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && searchSubstring(s, substr)))
+}
+
+func searchSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func TestExpandEnvVars(t *testing.T) {
 	t.Setenv("FOO", "bar")
 	t.Setenv("BAZ", "qux")
