@@ -6,9 +6,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/2389/fold-gateway/internal/config"
+	"github.com/2389/fold-gateway/internal/gateway"
 )
 
 func main() {
@@ -45,26 +50,117 @@ func main() {
 }
 
 func runServe(ctx context.Context) error {
-	// TODO: Implement
-	// 1. Load config
-	// 2. Initialize store
-	// 3. Initialize agent manager
-	// 4. Initialize frontends
-	// 5. Start GRPC server
-	// 6. Wait for shutdown signal
-	fmt.Println("fold-gateway serve: not yet implemented")
-	fmt.Println("See SPEC.md for implementation plan")
-	return nil
+	// Determine config path
+	configPath := os.Getenv("FOLD_CONFIG")
+	if configPath == "" {
+		configPath = "config.yaml"
+	}
+
+	// Load configuration
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	// Setup logger
+	logger := setupLogger(cfg.Logging)
+
+	logger.Info("starting fold-gateway",
+		"config", configPath,
+		"grpc_addr", cfg.Server.GRPCAddr,
+		"http_addr", cfg.Server.HTTPAddr,
+	)
+
+	// Create and run gateway
+	gw, err := gateway.New(cfg, logger)
+	if err != nil {
+		return fmt.Errorf("creating gateway: %w", err)
+	}
+
+	return gw.Run(ctx)
+}
+
+func setupLogger(cfg config.LoggingConfig) *slog.Logger {
+	var level slog.Level
+	switch cfg.Level {
+	case "debug":
+		level = slog.LevelDebug
+	case "info":
+		level = slog.LevelInfo
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
+
+	opts := &slog.HandlerOptions{
+		Level: level,
+	}
+
+	var handler slog.Handler
+	if cfg.Format == "json" {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
+
+	return slog.New(handler)
 }
 
 func runHealth(ctx context.Context) error {
-	// TODO: Implement - HTTP health check
-	fmt.Println("fold-gateway health: not yet implemented")
+	// Get HTTP address from config or use default
+	configPath := os.Getenv("FOLD_CONFIG")
+	if configPath == "" {
+		configPath = "config.yaml"
+	}
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	// Make HTTP request to health endpoint
+	url := fmt.Sprintf("http://%s/health", cfg.Server.HTTPAddr)
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("health check failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unhealthy: status %d", resp.StatusCode)
+	}
+
+	fmt.Println("healthy")
 	return nil
 }
 
 func runAgents(ctx context.Context) error {
-	// TODO: Implement - list connected agents
-	fmt.Println("fold-gateway agents: not yet implemented")
+	// Get HTTP address from config or use default
+	configPath := os.Getenv("FOLD_CONFIG")
+	if configPath == "" {
+		configPath = "config.yaml"
+	}
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	// Make HTTP request to ready endpoint
+	url := fmt.Sprintf("http://%s/health/ready", cfg.Server.HTTPAddr)
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("agents check failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	buf := make([]byte, 1024)
+	n, _ := resp.Body.Read(buf)
+
+	fmt.Println(string(buf[:n]))
 	return nil
 }
