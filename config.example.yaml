@@ -1,0 +1,56 @@
+# fold-gateway configuration example
+# Copy to config.yaml and customize
+
+server:
+  # GRPC address for agent connections
+  grpc_addr: "0.0.0.0:50051"
+  # HTTP address for health checks and metrics
+  http_addr: "0.0.0.0:8080"
+
+database:
+  # SQLite database path
+  path: "./fold-gateway.db"
+
+routing:
+  # Routing strategy: round_robin, affinity, capability, random
+  strategy: "affinity"
+
+agents:
+  # How often agents should send heartbeats
+  heartbeat_interval: "30s"
+  # How long to wait before considering agent dead
+  heartbeat_timeout: "90s"
+  # Grace period for agent reconnection before reassigning work
+  reconnect_grace_period: "5m"
+
+frontends:
+  slack:
+    enabled: false
+    # Socket mode app token (xapp-...)
+    app_token: "${SLACK_APP_TOKEN}"
+    # Bot user OAuth token (xoxb-...)
+    bot_token: "${SLACK_BOT_TOKEN}"
+    # Only respond in these channels (empty = all)
+    allowed_channels: []
+
+  matrix:
+    enabled: false
+    homeserver: "https://matrix.org"
+    user_id: "@yourbot:matrix.org"
+    access_token: "${MATRIX_ACCESS_TOKEN}"
+    # Only respond to these users (empty = all - dangerous!)
+    allowed_users: []
+    # Only respond in these rooms (empty = all - dangerous!)
+    allowed_rooms: []
+
+logging:
+  # Log level: debug, info, warn, error
+  level: "info"
+  # Log format: json, text
+  format: "text"
+
+metrics:
+  # Enable Prometheus metrics endpoint
+  enabled: true
+  # Metrics endpoint path
+  path: "/metrics"
