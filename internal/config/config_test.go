@@ -6,6 +6,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -503,7 +504,7 @@ routing:
 				return
 			}
 
-			if !contains(err.Error(), tt.wantErrSubstr) {
+			if !strings.Contains(err.Error(), tt.wantErrSubstr) {
 				t.Errorf("Load() error = %q, want error containing %q", err.Error(), tt.wantErrSubstr)
 			}
 		})
@@ -546,7 +547,7 @@ routing:
 				return
 			}
 
-			if !contains(err.Error(), "invalid") {
+			if !strings.Contains(err.Error(), "invalid") {
 				t.Errorf("Load() error = %q, want error containing 'invalid'", err.Error())
 			}
 		})
@@ -570,21 +571,6 @@ func TestValidate_ValidStrategies(t *testing.T) {
 			}
 		})
 	}
-}
-
-// contains checks if substr is contained in s
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && searchSubstring(s, substr)))
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func TestExpandEnvVars(t *testing.T) {
