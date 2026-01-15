@@ -36,6 +36,7 @@ type Store interface {
 	// Threads
 	CreateThread(ctx context.Context, thread *Thread) error
 	GetThread(ctx context.Context, id string) (*Thread, error)
+	GetThreadByFrontendID(ctx context.Context, frontendName, externalID string) (*Thread, error)
 	UpdateThread(ctx context.Context, thread *Thread) error
 
 	// Messages (for audit/history)

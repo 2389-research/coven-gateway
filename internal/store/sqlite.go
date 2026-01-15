@@ -175,6 +175,48 @@ func (s *SQLiteStore) GetThread(ctx context.Context, id string) (*Thread, error)
 	return &thread, nil
 }
 
+// GetThreadByFrontendID retrieves a thread by frontend name and external ID.
+// This uses the idx_threads_frontend_external index for efficient lookups.
+// Returns ErrNotFound if no thread exists for the given frontend/external ID combination.
+func (s *SQLiteStore) GetThreadByFrontendID(ctx context.Context, frontendName, externalID string) (*Thread, error) {
+	query := `
+		SELECT id, frontend_name, external_id, agent_id, created_at, updated_at
+		FROM threads
+		WHERE frontend_name = ? AND external_id = ?
+	`
+
+	var thread Thread
+	var createdAtStr, updatedAtStr string
+
+	err := s.db.QueryRowContext(ctx, query, frontendName, externalID).Scan(
+		&thread.ID,
+		&thread.FrontendName,
+		&thread.ExternalID,
+		&thread.AgentID,
+		&createdAtStr,
+		&updatedAtStr,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying thread by frontend ID: %w", err)
+	}
+
+	thread.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("parsing created_at: %w", err)
+	}
+
+	thread.UpdatedAt, err = time.Parse(time.RFC3339, updatedAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("parsing updated_at: %w", err)
+	}
+
+	return &thread, nil
+}
+
 // UpdateThread updates an existing thread.
 // Returns ErrNotFound if the thread doesn't exist.
 func (s *SQLiteStore) UpdateThread(ctx context.Context, thread *Thread) error {

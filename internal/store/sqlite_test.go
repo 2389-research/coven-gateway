@@ -371,6 +371,110 @@ func TestAgentState_NotFound(t *testing.T) {
 	}
 }
 
+func TestGetThreadByFrontendID(t *testing.T) {
+	store := newTestStore(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	thread := &Thread{
+		ID:           "thread-frontend-test",
+		FrontendName: "slack",
+		ExternalID:   "C12345678",
+		AgentID:      "agent-001",
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+
+	if err := store.CreateThread(ctx, thread); err != nil {
+		t.Fatalf("CreateThread failed: %v", err)
+	}
+
+	got, err := store.GetThreadByFrontendID(ctx, "slack", "C12345678")
+	if err != nil {
+		t.Fatalf("GetThreadByFrontendID failed: %v", err)
+	}
+
+	if got.ID != thread.ID {
+		t.Errorf("ID mismatch: got %q, want %q", got.ID, thread.ID)
+	}
+	if got.FrontendName != thread.FrontendName {
+		t.Errorf("FrontendName mismatch: got %q, want %q", got.FrontendName, thread.FrontendName)
+	}
+	if got.ExternalID != thread.ExternalID {
+		t.Errorf("ExternalID mismatch: got %q, want %q", got.ExternalID, thread.ExternalID)
+	}
+	if got.AgentID != thread.AgentID {
+		t.Errorf("AgentID mismatch: got %q, want %q", got.AgentID, thread.AgentID)
+	}
+	if !got.CreatedAt.Equal(thread.CreatedAt) {
+		t.Errorf("CreatedAt mismatch: got %v, want %v", got.CreatedAt, thread.CreatedAt)
+	}
+	if !got.UpdatedAt.Equal(thread.UpdatedAt) {
+		t.Errorf("UpdatedAt mismatch: got %v, want %v", got.UpdatedAt, thread.UpdatedAt)
+	}
+}
+
+func TestGetThreadByFrontendID_NotFound(t *testing.T) {
+	store := newTestStore(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	_, err := store.GetThreadByFrontendID(ctx, "slack", "nonexistent-channel")
+	if err != ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestGetThreadByFrontendID_DifferentFrontends(t *testing.T) {
+	store := newTestStore(t)
+	defer store.Close()
+
+	ctx := context.Background()
+
+	// Create two threads with the same external ID but different frontends
+	slackThread := &Thread{
+		ID:           "thread-slack",
+		FrontendName: "slack",
+		ExternalID:   "C12345",
+		AgentID:      "agent-001",
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+	matrixThread := &Thread{
+		ID:           "thread-matrix",
+		FrontendName: "matrix",
+		ExternalID:   "C12345", // Same external ID, different frontend
+		AgentID:      "agent-002",
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+
+	if err := store.CreateThread(ctx, slackThread); err != nil {
+		t.Fatalf("CreateThread (slack) failed: %v", err)
+	}
+	if err := store.CreateThread(ctx, matrixThread); err != nil {
+		t.Fatalf("CreateThread (matrix) failed: %v", err)
+	}
+
+	// Lookup slack thread
+	gotSlack, err := store.GetThreadByFrontendID(ctx, "slack", "C12345")
+	if err != nil {
+		t.Fatalf("GetThreadByFrontendID (slack) failed: %v", err)
+	}
+	if gotSlack.ID != "thread-slack" {
+		t.Errorf("expected thread-slack, got %s", gotSlack.ID)
+	}
+
+	// Lookup matrix thread
+	gotMatrix, err := store.GetThreadByFrontendID(ctx, "matrix", "C12345")
+	if err != nil {
+		t.Fatalf("GetThreadByFrontendID (matrix) failed: %v", err)
+	}
+	if gotMatrix.ID != "thread-matrix" {
+		t.Errorf("expected thread-matrix, got %s", gotMatrix.ID)
+	}
+}
+
 // newTestStore creates a new SQLite store in a temporary directory for testing
 func newTestStore(t *testing.T) *SQLiteStore {
 	t.Helper()
