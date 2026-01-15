@@ -1,0 +1,10 @@
+# Build artifacts
+bin/
+
+# Local config (use config.example.yaml as template)
+config.yaml
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
