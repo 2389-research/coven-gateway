@@ -15,12 +15,23 @@ import (
 // Config represents the complete fold-gateway configuration
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
+	Tailscale TailscaleConfig `yaml:"tailscale"`
 	Database  DatabaseConfig  `yaml:"database"`
 	Routing   RoutingConfig   `yaml:"routing"`
 	Agents    AgentsConfig    `yaml:"agents"`
 	Frontends FrontendsConfig `yaml:"frontends"`
 	Logging   LoggingConfig   `yaml:"logging"`
 	Metrics   MetricsConfig   `yaml:"metrics"`
+}
+
+// TailscaleConfig holds Tailscale tsnet configuration
+type TailscaleConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	Hostname  string `yaml:"hostname"`
+	AuthKey   string `yaml:"auth_key"`
+	StateDir  string `yaml:"state_dir"`
+	Ephemeral bool   `yaml:"ephemeral"`
+	Funnel    bool   `yaml:"funnel"`
 }
 
 // ServerConfig holds server address configuration
@@ -141,12 +152,19 @@ var validRoutingStrategies = map[string]bool{
 // Validate checks that all required configuration fields are present and valid.
 // Returns an error describing the first validation failure encountered.
 func (c *Config) Validate() error {
-	if c.Server.GRPCAddr == "" {
-		return fmt.Errorf("server.grpc_addr is required")
+	// Server addresses are required unless Tailscale is enabled
+	if !c.Tailscale.Enabled {
+		if c.Server.GRPCAddr == "" {
+			return fmt.Errorf("server.grpc_addr is required (or enable tailscale)")
+		}
+		if c.Server.HTTPAddr == "" {
+			return fmt.Errorf("server.http_addr is required (or enable tailscale)")
+		}
 	}
 
-	if c.Server.HTTPAddr == "" {
-		return fmt.Errorf("server.http_addr is required")
+	// Tailscale requires a hostname
+	if c.Tailscale.Enabled && c.Tailscale.Hostname == "" {
+		return fmt.Errorf("tailscale.hostname is required when tailscale is enabled")
 	}
 
 	if c.Database.Path == "" {

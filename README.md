@@ -82,6 +82,7 @@ cargo run -p fold-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 - **TUI Client**: Interactive terminal client for testing
 - **Health Endpoints**: Liveness and readiness checks
 - **Graceful Shutdown**: Clean termination with configurable timeout
+- **Tailscale Integration**: Run as a node on your tailnet via [tsnet](https://tailscale.com/kb/1244/tsnet)
 
 ### Planned
 
@@ -163,6 +164,70 @@ Environment variables can be used with `${VAR}` syntax:
 slack:
   bot_token: "${SLACK_BOT_TOKEN}"
 ```
+
+## Tailscale Integration
+
+Run fold-gateway as a node on your [Tailscale](https://tailscale.com) network. This enables secure access from anywhere on your tailnet without port forwarding.
+
+### Setup
+
+1. Get an auth key from [Tailscale Admin Console](https://login.tailscale.com/admin/settings/keys)
+
+2. Configure `config.yaml`:
+
+```yaml
+tailscale:
+  enabled: true
+  hostname: "fold-gateway"    # Becomes fold-gateway.tailnet-xxx.ts.net
+  auth_key: "${TS_AUTHKEY}"   # Or set via environment
+  ephemeral: false            # Keep node after restart
+  funnel: false               # Expose HTTP publicly (optional)
+```
+
+3. Start the gateway:
+
+```bash
+export TS_AUTHKEY="tskey-auth-xxx"
+./bin/fold-gateway serve
+```
+
+The gateway will:
+- Join your tailnet as `fold-gateway`
+- Listen for gRPC on `:50051` (tailnet only)
+- Listen for HTTP on `:80` (or `:443` with Funnel)
+- Log its MagicDNS name and Tailscale IP
+
+### Connecting Agents via Tailscale
+
+```bash
+# Agent connects using MagicDNS name
+cargo run -p fold-agent -- \
+  --server http://fold-gateway.tailnet-xxx.ts.net:50051 \
+  --name "remote-agent"
+```
+
+### Connecting Clients via Tailscale
+
+```bash
+# TUI connects using MagicDNS
+./bin/fold-tui --server http://fold-gateway.tailnet-xxx.ts.net
+
+# Or use Tailscale IP
+./bin/fold-tui --server http://100.x.y.z
+```
+
+### Funnel (Public Access)
+
+Enable [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) to expose the HTTP API publicly:
+
+```yaml
+tailscale:
+  enabled: true
+  hostname: "fold-gateway"
+  funnel: true  # Exposes https://fold-gateway.tailnet-xxx.ts.net publicly
+```
+
+**Note:** Funnel requires HTTPS and only works on ports 443, 8443, or 10000. gRPC remains tailnet-only.
 
 ## Architecture
 

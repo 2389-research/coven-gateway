@@ -2,10 +2,26 @@
 # Copy to config.yaml and customize
 
 server:
-  # GRPC address for agent connections
+  # GRPC address for agent connections (not needed if tailscale.enabled)
   grpc_addr: "0.0.0.0:50051"
-  # HTTP address for health checks and metrics
+  # HTTP address for health checks and metrics (not needed if tailscale.enabled)
   http_addr: "0.0.0.0:8080"
+
+# Tailscale integration - run gateway as a node on your tailnet
+# When enabled, gateway listens on Tailscale network instead of local TCP
+tailscale:
+  enabled: false
+  # Hostname for this node (e.g., "fold-gateway" -> fold-gateway.tailnet-xxx.ts.net)
+  hostname: "fold-gateway"
+  # Auth key for automatic registration (or set TS_AUTHKEY env var)
+  # Generate at: https://login.tailscale.com/admin/settings/keys
+  auth_key: "${TS_AUTHKEY}"
+  # State directory (default: ~/.local/share/fold-gateway/tailscale)
+  state_dir: ""
+  # Ephemeral node - removed from tailnet when gateway stops
+  ephemeral: false
+  # Enable Funnel to expose HTTP API publicly (requires Funnel enabled in tailnet)
+  funnel: false
 
 database:
   # SQLite database path

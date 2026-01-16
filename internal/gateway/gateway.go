@@ -9,10 +9,13 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc"
+	"tailscale.com/tsnet"
 
 	"github.com/2389/fold-gateway/internal/agent"
 	"github.com/2389/fold-gateway/internal/config"
@@ -28,6 +31,7 @@ type Gateway struct {
 	store        store.Store
 	grpcServer   *grpc.Server
 	httpServer   *http.Server
+	tsnetServer  *tsnet.Server
 	logger       *slog.Logger
 
 	// serverID identifies this gateway instance
@@ -91,36 +95,47 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 // Run starts the gateway servers and blocks until the context is cancelled.
 // It manages graceful shutdown of both GRPC and HTTP servers.
 func (g *Gateway) Run(ctx context.Context) error {
-	g.logger.Info("starting gateway",
-		"grpc_addr", g.config.Server.GRPCAddr,
-		"http_addr", g.config.Server.HTTPAddr,
-	)
-
 	// Channel to collect errors from servers
 	errCh := make(chan error, 2)
 
-	// Start GRPC server
-	grpcListener, err := net.Listen("tcp", g.config.Server.GRPCAddr)
-	if err != nil {
-		return fmt.Errorf("listening on gRPC address: %w", err)
+	var grpcListener, httpListener net.Listener
+	var err error
+
+	// Setup listeners - either via Tailscale or regular TCP
+	if g.config.Tailscale.Enabled {
+		grpcListener, httpListener, err = g.setupTailscaleListeners(ctx)
+		if err != nil {
+			return fmt.Errorf("setting up tailscale: %w", err)
+		}
+	} else {
+		g.logger.Info("starting gateway",
+			"grpc_addr", g.config.Server.GRPCAddr,
+			"http_addr", g.config.Server.HTTPAddr,
+		)
+
+		grpcListener, err = net.Listen("tcp", g.config.Server.GRPCAddr)
+		if err != nil {
+			return fmt.Errorf("listening on gRPC address: %w", err)
+		}
+
+		httpListener, err = net.Listen("tcp", g.config.Server.HTTPAddr)
+		if err != nil {
+			grpcListener.Close()
+			return fmt.Errorf("listening on HTTP address: %w", err)
+		}
 	}
 
+	// Start GRPC server
 	go func() {
-		g.logger.Info("gRPC server listening", "addr", g.config.Server.GRPCAddr)
+		g.logger.Info("gRPC server listening", "addr", grpcListener.Addr().String())
 		if err := g.grpcServer.Serve(grpcListener); err != nil {
 			errCh <- fmt.Errorf("gRPC server: %w", err)
 		}
 	}()
 
 	// Start HTTP server
-	httpListener, err := net.Listen("tcp", g.config.Server.HTTPAddr)
-	if err != nil {
-		g.grpcServer.Stop()
-		return fmt.Errorf("listening on HTTP address: %w", err)
-	}
-
 	go func() {
-		g.logger.Info("HTTP server listening", "addr", g.config.Server.HTTPAddr)
+		g.logger.Info("HTTP server listening", "addr", httpListener.Addr().String())
 		if err := g.httpServer.Serve(httpListener); err != nil && err != http.ErrServerClosed {
 			errCh <- fmt.Errorf("HTTP server: %w", err)
 		}
@@ -149,6 +164,81 @@ func (g *Gateway) Run(ctx context.Context) error {
 	return nil
 }
 
+// setupTailscaleListeners creates a tsnet server and returns listeners for gRPC and HTTP.
+func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn net.Listener, err error) {
+	tsCfg := g.config.Tailscale
+
+	// Determine state directory
+	stateDir := tsCfg.StateDir
+	if stateDir == "" {
+		homeDir, _ := os.UserHomeDir()
+		stateDir = filepath.Join(homeDir, ".local", "share", "fold-gateway", "tailscale")
+	}
+
+	// Ensure state directory exists
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		return nil, nil, fmt.Errorf("creating tailscale state dir: %w", err)
+	}
+
+	// Create tsnet server
+	g.tsnetServer = &tsnet.Server{
+		Hostname:  tsCfg.Hostname,
+		Dir:       stateDir,
+		Ephemeral: tsCfg.Ephemeral,
+	}
+
+	// Set auth key from config or env
+	if tsCfg.AuthKey != "" {
+		g.tsnetServer.AuthKey = tsCfg.AuthKey
+	}
+
+	g.logger.Info("starting tailscale node",
+		"hostname", tsCfg.Hostname,
+		"state_dir", stateDir,
+		"ephemeral", tsCfg.Ephemeral,
+	)
+
+	// Start and wait for tailscale to be ready
+	status, err := g.tsnetServer.Up(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("starting tailscale: %w", err)
+	}
+
+	// Log tailscale address info
+	var tsAddr string
+	if len(status.TailscaleIPs) > 0 {
+		tsAddr = status.TailscaleIPs[0].String()
+	}
+
+	g.logger.Info("tailscale node ready",
+		"hostname", tsCfg.Hostname,
+		"tailscale_ip", tsAddr,
+		"dns_name", status.Self.DNSName,
+	)
+
+	// Create gRPC listener on port 50051
+	grpcLn, err = g.tsnetServer.Listen("tcp", ":50051")
+	if err != nil {
+		g.tsnetServer.Close()
+		return nil, nil, fmt.Errorf("listening on tailscale gRPC port: %w", err)
+	}
+
+	// Create HTTP listener - use Funnel if enabled, otherwise regular tailscale listen
+	if tsCfg.Funnel {
+		g.logger.Info("enabling tailscale funnel on :443")
+		httpLn, err = g.tsnetServer.ListenFunnel("tcp", ":443")
+	} else {
+		httpLn, err = g.tsnetServer.Listen("tcp", ":80")
+	}
+	if err != nil {
+		grpcLn.Close()
+		g.tsnetServer.Close()
+		return nil, nil, fmt.Errorf("listening on tailscale HTTP port: %w", err)
+	}
+
+	return grpcLn, httpLn, nil
+}
+
 // Shutdown gracefully stops all gateway servers and releases resources.
 func (g *Gateway) Shutdown(ctx context.Context) error {
 	g.logger.Info("shutting down gateway")
@@ -173,6 +263,13 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	case <-ctx.Done():
 		// Force stop
 		g.grpcServer.Stop()
+	}
+
+	// Close tsnet server if running
+	if g.tsnetServer != nil {
+		if err := g.tsnetServer.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("tailscale shutdown: %w", err))
+		}
 	}
 
 	// Close store
