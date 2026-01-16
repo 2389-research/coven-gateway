@@ -11,11 +11,11 @@ import (
 // MockStore is an in-memory Store implementation for testing.
 type MockStore struct {
 	mu          sync.RWMutex
-	threads     map[string]*Thread            // keyed by thread ID
-	threadIndex map[string]string             // keyed by "frontendName:externalID" -> thread ID
-	messages    map[string][]*Message         // keyed by threadID
-	bindings    map[string]*ChannelBinding    // keyed by "frontend:channelID"
-	agentState  map[string][]byte             // keyed by agentID
+	threads     map[string]*Thread         // keyed by thread ID
+	threadIndex map[string]string          // keyed by "frontendName:externalID" -> thread ID
+	messages    map[string][]*Message      // keyed by threadID
+	bindings    map[string]*ChannelBinding // keyed by "frontend:channelID"
+	agentState  map[string][]byte          // keyed by agentID
 }
 
 // NewMockStore creates a new MockStore.
