@@ -18,6 +18,7 @@ import (
 
 	"github.com/2389/fold-gateway/internal/agent"
 	"github.com/2389/fold-gateway/internal/config"
+	"github.com/2389/fold-gateway/internal/dedupe"
 	"github.com/2389/fold-gateway/internal/store"
 	pb "github.com/2389/fold-gateway/proto/fold"
 )
@@ -35,6 +36,9 @@ type Gateway struct {
 
 	// serverID identifies this gateway instance
 	serverID string
+
+	// dedupe is used to prevent duplicate bridge message processing
+	dedupe *dedupe.Cache
 
 	// mockSender is used for testing to inject a mock message sender
 	mockSender messageSender
@@ -62,6 +66,10 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	// Create gRPC server
 	grpcServer := grpc.NewServer()
 
+	// Create dedupe cache for bridge message deduplication
+	// TTL of 5 minutes, max size 100,000 entries
+	dedupeCache := dedupe.New(5*time.Minute, 100_000)
+
 	// Create gateway
 	gw := &Gateway{
 		config:       cfg,
@@ -70,6 +78,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		grpcServer:   grpcServer,
 		logger:       logger.With("component", "gateway"),
 		serverID:     generateServerID(),
+		dedupe:       dedupeCache,
 	}
 
 	// Register FoldControl service
@@ -302,6 +311,11 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	// Close store
 	if err := g.store.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("store close: %w", err))
+	}
+
+	// Close dedupe cache (stops background cleanup goroutine)
+	if g.dedupe != nil {
+		g.dedupe.Close()
 	}
 
 	if len(errs) > 0 {
