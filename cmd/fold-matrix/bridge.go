@@ -33,9 +33,10 @@ type Bridge struct {
 }
 
 // NewBridge creates a new Matrix bridge.
+// The client is created but not logged in - call Login() before Run().
 func NewBridge(cfg *Config, logger *slog.Logger) (*Bridge, error) {
-	// Create Matrix client
-	client, err := mautrix.NewClient(cfg.Matrix.Homeserver, id.UserID(cfg.Matrix.UserID), cfg.Matrix.AccessToken)
+	// Create Matrix client (not logged in yet)
+	client, err := mautrix.NewClient(cfg.Matrix.Homeserver, "", "")
 	if err != nil {
 		return nil, fmt.Errorf("creating matrix client: %w", err)
 	}
@@ -51,11 +52,38 @@ func NewBridge(cfg *Config, logger *slog.Logger) (*Bridge, error) {
 	}, nil
 }
 
+// Login authenticates with the Matrix homeserver using username/password.
+func (b *Bridge) Login(ctx context.Context) error {
+	b.logger.Info("logging in to matrix", "homeserver", b.config.Matrix.Homeserver, "username", b.config.Matrix.Username)
+
+	resp, err := b.matrix.Login(ctx, &mautrix.ReqLogin{
+		Type: mautrix.AuthTypePassword,
+		Identifier: mautrix.UserIdentifier{
+			Type: mautrix.IdentifierTypeUser,
+			User: b.config.Matrix.Username,
+		},
+		Password:                 b.config.Matrix.Password,
+		InitialDeviceDisplayName: "fold-matrix",
+		StoreCredentials:         true,
+	})
+	if err != nil {
+		return fmt.Errorf("login failed: %w", err)
+	}
+
+	b.logger.Info("logged in to matrix", "user_id", resp.UserID, "device_id", resp.DeviceID)
+	return nil
+}
+
+// UserID returns the logged-in user's ID.
+func (b *Bridge) UserID() string {
+	return b.matrix.UserID.String()
+}
+
 // Run starts the bridge and blocks until context is cancelled.
 func (b *Bridge) Run(ctx context.Context) error {
 	b.logger.Info("starting matrix bridge",
 		"homeserver", b.config.Matrix.Homeserver,
-		"user_id", b.config.Matrix.UserID,
+		"user_id", b.matrix.UserID,
 		"gateway", b.config.Gateway.URL,
 	)
 
@@ -94,7 +122,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 // handleMessageEvent processes incoming Matrix messages.
 func (b *Bridge) handleMessageEvent(ctx context.Context, evt *event.Event) {
 	// Ignore our own messages
-	if evt.Sender == id.UserID(b.config.Matrix.UserID) {
+	if evt.Sender == b.matrix.UserID {
 		return
 	}
 
@@ -254,6 +282,7 @@ func (b *Bridge) sendMessage(roomID id.RoomID, text string) {
 	// Use a longer timeout for sending messages (they can be large)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
 	_, err := b.matrix.SendText(ctx, roomID, text)
 	if err != nil {
 		b.logger.Error("failed to send message", "room", roomID.String(), "error", err)

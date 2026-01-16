@@ -104,7 +104,7 @@ func run() error {
 	green.Print("    ▶ ")
 	fmt.Printf("Homeserver: %s\n", cfg.Matrix.Homeserver)
 	green.Print("    ▶ ")
-	fmt.Printf("User:       %s\n", cfg.Matrix.UserID)
+	fmt.Printf("Username:   %s\n", cfg.Matrix.Username)
 	green.Print("    ▶ ")
 	fmt.Printf("Gateway:    %s\n", cfg.Gateway.URL)
 	if cfg.Matrix.RecoveryKey != "" {
@@ -123,13 +123,21 @@ func run() error {
 		return fmt.Errorf("creating bridge: %w", err)
 	}
 
-	// Setup encryption
-	cryptoMgr, err := SetupCrypto(ctx, bridge.matrix, cfg.Matrix.UserID, cfg.Matrix.RecoveryKey, dataPath, logger)
-	if err != nil {
-		return fmt.Errorf("setting up encryption: %w", err)
+	// Login to Matrix (required before crypto setup)
+	if err := bridge.Login(ctx); err != nil {
+		return fmt.Errorf("matrix login: %w", err)
 	}
-	if cryptoMgr != nil {
+
+	// Setup encryption (only if recovery key is provided)
+	var cryptoMgr *CryptoManager
+	if cfg.Matrix.RecoveryKey != "" {
+		cryptoMgr, err = SetupCrypto(ctx, bridge.matrix, bridge.UserID(), cfg.Matrix.RecoveryKey, dataPath, logger)
+		if err != nil {
+			return fmt.Errorf("setting up encryption: %w", err)
+		}
 		defer cryptoMgr.Close()
+	} else {
+		logger.Info("encryption disabled (no recovery key)")
 	}
 
 	// Run bridge
@@ -196,17 +204,14 @@ func runInit() error {
 	}
 
 	green.Print("    ▶ ")
-	fmt.Print("Matrix user ID [@bot:matrix.org]: ")
-	userID, _ := reader.ReadString('\n')
-	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		userID = "@bot:matrix.org"
-	}
+	fmt.Print("Matrix username: ")
+	username, _ := reader.ReadString('\n')
+	username = strings.TrimSpace(username)
 
 	green.Print("    ▶ ")
-	fmt.Print("Matrix access token: ")
-	accessToken, _ := reader.ReadString('\n')
-	accessToken = strings.TrimSpace(accessToken)
+	fmt.Print("Matrix password: ")
+	password, _ := reader.ReadString('\n')
+	password = strings.TrimSpace(password)
 
 	green.Print("    ▶ ")
 	fmt.Print("Matrix recovery key (optional, for E2EE): ")
@@ -232,9 +237,9 @@ func runInit() error {
 
 [matrix]
 homeserver = "%s"
-user_id = "%s"
-access_token = "%s"
-`, homeserver, userID, accessToken)
+username = "%s"
+password = "%s"
+`, homeserver, username, password)
 
 	if recoveryKey != "" {
 		config += fmt.Sprintf("recovery_key = \"%s\"\n", recoveryKey)
@@ -271,10 +276,7 @@ level = "info"
 	green.Printf("    ✓ Config written to %s\n", configPath)
 	fmt.Println()
 	fmt.Println("    Next steps:")
-	fmt.Println("    1. Get an access token from your Matrix account")
-	fmt.Println("       (Settings → Help & About → Advanced → Access Token)")
-	fmt.Println("    2. Update the config with your real credentials")
-	fmt.Println("    3. Run: fold-matrix")
+	fmt.Println("    1. Run: fold-matrix")
 	fmt.Println()
 
 	return nil

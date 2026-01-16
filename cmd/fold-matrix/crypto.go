@@ -6,11 +6,14 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
+	_ "github.com/mattn/go-sqlite3"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
 )
@@ -24,6 +27,7 @@ type CryptoManager struct {
 // SetupCrypto initializes E2EE for the Matrix client.
 // If recoveryKey is empty, encryption is still enabled but without cross-signing.
 // The dataDir is used to store the SQLite crypto database.
+// If a device ID mismatch is detected, the crypto database is automatically reset.
 func SetupCrypto(ctx context.Context, client *mautrix.Client, userID string, recoveryKey string, dataDir string, logger *slog.Logger) (*CryptoManager, error) {
 	// Ensure data directory exists
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
@@ -40,17 +44,14 @@ func SetupCrypto(ctx context.Context, client *mautrix.Client, userID string, rec
 	// Using nil would skip store encryption entirely (like gorp-rs does).
 	storeKey := deriveStoreKey(userID)
 
-	// Create crypto helper with SQLite database path.
-	// The cryptohelper will automatically create the necessary stores.
-	helper, err := cryptohelper.NewCryptoHelper(client, storeKey, dbPath)
+	// Try to create and init crypto helper, with auto-recovery on device ID mismatch
+	helper, err := initCryptoHelper(ctx, client, storeKey, dbPath, logger)
 	if err != nil {
-		return nil, fmt.Errorf("creating crypto helper: %w", err)
+		return nil, err
 	}
 
-	// Initialize the crypto helper
-	if err := helper.Init(ctx); err != nil {
-		return nil, fmt.Errorf("initializing crypto helper: %w", err)
-	}
+	// Wire up the crypto helper to the client for automatic encryption of outgoing messages
+	client.Crypto = helper
 
 	manager := &CryptoManager{
 		helper: helper,
@@ -132,4 +133,70 @@ func deriveStoreKey(userID string) []byte {
 	// This provides per-user isolation while being deterministic.
 	h := sha256.Sum256([]byte("fold-matrix-crypto:" + userID))
 	return h[:]
+}
+
+// initCryptoHelper creates and initializes the crypto helper, with auto-recovery
+// on device ID mismatch. This handles the case where a new login creates a new
+// device ID but the crypto store still has keys for the old device.
+func initCryptoHelper(ctx context.Context, client *mautrix.Client, storeKey []byte, dbPath string, logger *slog.Logger) (*cryptohelper.CryptoHelper, error) {
+	// Check for device ID mismatch BEFORE creating helper to avoid DB lock issues
+	if needsReset, err := checkDeviceIDMismatch(dbPath, client.DeviceID.String()); err != nil {
+		logger.Debug("could not check device ID", "error", err)
+	} else if needsReset {
+		logger.Warn("device ID mismatch detected, resetting crypto database before init")
+		if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("removing old crypto database: %w", err)
+		}
+		_ = os.Remove(dbPath + "-wal")
+		_ = os.Remove(dbPath + "-shm")
+		logger.Info("crypto database reset")
+	}
+
+	helper, err := cryptohelper.NewCryptoHelper(client, storeKey, dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("creating crypto helper: %w", err)
+	}
+
+	if err := helper.Init(ctx); err != nil {
+		return nil, fmt.Errorf("initializing crypto helper: %w", err)
+	}
+
+	return helper, nil
+}
+
+// checkDeviceIDMismatch opens the crypto database and checks if the stored device ID
+// matches the current client device ID. Returns true if DB exists and has a different device ID.
+func checkDeviceIDMismatch(dbPath string, currentDeviceID string) (bool, error) {
+	// Check if database exists
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return false, nil // No DB, no mismatch
+	}
+
+	// Open database directly to check stored device ID
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
+	// Query for stored device ID - mautrix stores it in crypto_account table
+	var storedDeviceID string
+	err = db.QueryRow("SELECT device_id FROM crypto_account LIMIT 1").Scan(&storedDeviceID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil // No account stored yet
+		}
+		return false, err
+	}
+
+	return storedDeviceID != currentDeviceID, nil
+}
+
+// isDeviceIDMismatch checks if the error is due to a device ID mismatch.
+func isDeviceIDMismatch(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "mismatching device ID")
 }

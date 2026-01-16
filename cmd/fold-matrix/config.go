@@ -22,8 +22,8 @@ type Config struct {
 
 type MatrixConfig struct {
 	Homeserver  string `toml:"homeserver"`
-	UserID      string `toml:"user_id"`
-	AccessToken string `toml:"access_token"`
+	Username    string `toml:"username"`
+	Password    string `toml:"password"`
 	RecoveryKey string `toml:"recovery_key"`
 }
 
@@ -81,14 +81,11 @@ func (c *Config) Validate() error {
 	if _, err := url.Parse(c.Matrix.Homeserver); err != nil {
 		return fmt.Errorf("matrix.homeserver is not a valid URL: %w", err)
 	}
-	if c.Matrix.UserID == "" {
-		return fmt.Errorf("matrix.user_id is required")
+	if c.Matrix.Username == "" {
+		return fmt.Errorf("matrix.username is required")
 	}
-	if !strings.HasPrefix(c.Matrix.UserID, "@") || !strings.Contains(c.Matrix.UserID, ":") {
-		return fmt.Errorf("matrix.user_id must be in format @user:server")
-	}
-	if c.Matrix.AccessToken == "" {
-		return fmt.Errorf("matrix.access_token is required")
+	if c.Matrix.Password == "" {
+		return fmt.Errorf("matrix.password is required")
 	}
 	if c.Gateway.URL == "" {
 		return fmt.Errorf("gateway.url is required")
