@@ -1,0 +1,44 @@
+# ABOUTME: Example configuration for fold-matrix bridge
+# ABOUTME: Copy to ~/.config/fold/matrix-bridge.toml and customize
+
+# Matrix homeserver connection
+[matrix]
+# Your Matrix homeserver URL
+homeserver = "https://matrix.org"
+
+# Bot user ID (must already exist)
+user_id = "@foldbot:matrix.org"
+
+# Access token for the bot account
+# Get this from Element: Settings > Help & About > Advanced > Access Token
+# Or use environment variable:
+access_token = "${MATRIX_ACCESS_TOKEN}"
+
+# Recovery key for E2EE (optional)
+# Enables decryption in encrypted rooms
+# Get this from Element: Settings > Security > Encryption > Secure Backup
+recovery_key = "${MATRIX_RECOVERY_KEY}"
+
+# fold-gateway connection
+[gateway]
+# Gateway HTTP API URL
+url = "http://localhost:8080"
+# For Tailscale: url = "http://fold-gateway.tailnet.ts.net"
+
+# Bridge behavior settings
+[bridge]
+# Only respond in these rooms (empty = all joined rooms)
+# Use room IDs like "!abc123:matrix.org"
+allowed_rooms = []
+
+# Require messages to start with this prefix (empty = respond to all)
+# Example: "!fold " - bot only responds to "!fold hello"
+command_prefix = ""
+
+# Show typing indicator while waiting for agent response
+typing_indicator = true
+
+# Logging configuration
+[logging]
+# Log level: debug, info, warn, error
+level = "info"
