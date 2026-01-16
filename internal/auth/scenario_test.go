@@ -45,6 +45,9 @@ func scenarioContextWithAuth(token string) context.Context {
 	return metadata.NewIncomingContext(context.Background(), md)
 }
 
+// scenarioTestSecret is a 32-byte secret that meets MinSecretLength requirement
+var scenarioTestSecret = []byte("scenario-test-secret-32-bytes!!!")
+
 func TestScenario_FullAuthFlow(t *testing.T) {
 	// 1. Create real SQLite store in temp dir
 	s := createTestStore(t)
@@ -73,8 +76,10 @@ func TestScenario_FullAuthFlow(t *testing.T) {
 	}
 
 	// 4. Generate a real JWT token
-	secret := []byte("test-secret-for-scenario-tests")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 	token, err := verifier.Generate(principalID, time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
@@ -160,8 +165,10 @@ func TestScenario_RevokedPrincipalDenied(t *testing.T) {
 	}
 
 	// 3. Generate valid JWT
-	secret := []byte("test-secret-for-scenario-tests")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 	token, err := verifier.Generate(principalID, time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
@@ -213,8 +220,10 @@ func TestScenario_ExpiredTokenRejected(t *testing.T) {
 	}
 
 	// 3. Generate expired JWT (negative duration)
-	secret := []byte("test-secret-for-scenario-tests")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 	token, err := verifier.Generate(principalID, -time.Hour) // Expired 1 hour ago
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
@@ -266,8 +275,10 @@ func TestScenario_PendingPrincipalDenied(t *testing.T) {
 	}
 
 	// 3. Generate valid JWT
-	secret := []byte("test-secret-for-scenario-tests")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 	token, err := verifier.Generate(principalID, time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
@@ -302,8 +313,10 @@ func TestScenario_PendingPrincipalDenied(t *testing.T) {
 func TestScenario_OnlineAndOfflineStatusesAllowed(t *testing.T) {
 	s := createTestStore(t)
 	ctx := context.Background()
-	secret := []byte("test-secret-for-scenario-tests")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	testCases := []struct {
 		name   string
@@ -364,8 +377,10 @@ func TestScenario_NonexistentPrincipal(t *testing.T) {
 	s := createTestStore(t)
 
 	// 2. Generate JWT for principal that doesn't exist
-	secret := []byte("test-secret-for-scenario-tests")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 	token, err := verifier.Generate("nonexistent-principal-id", time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
@@ -417,8 +432,10 @@ func TestScenario_PrincipalWithNoRoles(t *testing.T) {
 	}
 
 	// 3. Generate valid JWT
-	secret := []byte("test-secret-for-scenario-tests")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 	token, err := verifier.Generate(principalID, time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)

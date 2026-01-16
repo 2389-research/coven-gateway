@@ -39,8 +39,10 @@ func TestScenario_AdminGateFullFlow(t *testing.T) {
 	}
 
 	// 3. Generate real JWT
-	secret := []byte("admin-gate-scenario-test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 	token, err := verifier.Generate(principalID, time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
@@ -122,8 +124,10 @@ func TestScenario_NonAdminBlockedByGate(t *testing.T) {
 	}
 
 	// 3. Generate real JWT
-	secret := []byte("admin-gate-scenario-test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 	token, err := verifier.Generate(principalID, time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
@@ -205,8 +209,10 @@ func TestScenario_OwnerPassesAdminGate(t *testing.T) {
 	}
 
 	// 3. Generate real JWT
-	secret := []byte("admin-gate-scenario-test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 	token, err := verifier.Generate(principalID, time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
@@ -288,8 +294,10 @@ func TestScenario_NonAdminServiceBypassesGate(t *testing.T) {
 	}
 
 	// 3. Generate real JWT
-	secret := []byte("admin-gate-scenario-test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 	token, err := verifier.Generate(principalID, time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
@@ -362,8 +370,10 @@ func TestScenario_StreamAdminGateFullFlow(t *testing.T) {
 	}
 
 	// 3. Generate real JWT
-	secret := []byte("admin-gate-scenario-test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(scenarioTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 	token, err := verifier.Generate(principalID, time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)

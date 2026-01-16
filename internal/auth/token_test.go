@@ -9,9 +9,21 @@ import (
 	"time"
 )
 
+// testSecret is a 32-byte secret that meets MinSecretLength requirement
+var testSecret = []byte("test-secret-key-for-jwt-signing!")
+
+// mustNewJWTVerifier creates a JWTVerifier and fails the test if it errors
+func mustNewJWTVerifier(t *testing.T, secret []byte) *JWTVerifier {
+	t.Helper()
+	verifier, err := NewJWTVerifier(secret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
+	return verifier
+}
+
 func TestJWTVerifier_ValidToken(t *testing.T) {
-	secret := []byte("test-secret-key-for-jwt-signing")
-	verifier := NewJWTVerifier(secret)
+	verifier := mustNewJWTVerifier(t, testSecret)
 
 	principalID := "principal-123"
 	token, err := verifier.Generate(principalID, time.Hour)
@@ -30,8 +42,8 @@ func TestJWTVerifier_ValidToken(t *testing.T) {
 }
 
 func TestJWTVerifier_InvalidToken(t *testing.T) {
-	secret := []byte("test-secret-key-for-jwt-signing")
-	verifier := NewJWTVerifier(secret)
+	verifier := mustNewJWTVerifier(t, testSecret)
+	otherVerifier := mustNewJWTVerifier(t, []byte("different-secret-at-least-32bytes"))
 
 	tests := []struct {
 		name  string
@@ -53,7 +65,6 @@ func TestJWTVerifier_InvalidToken(t *testing.T) {
 			name: "wrong secret",
 			token: func() string {
 				// Generate with different secret
-				otherVerifier := NewJWTVerifier([]byte("different-secret"))
 				token, _ := otherVerifier.Generate("principal-123", time.Hour)
 				return token
 			}(),
@@ -78,8 +89,7 @@ func TestJWTVerifier_InvalidToken(t *testing.T) {
 }
 
 func TestJWTVerifier_ExpiredToken(t *testing.T) {
-	secret := []byte("test-secret-key-for-jwt-signing")
-	verifier := NewJWTVerifier(secret)
+	verifier := mustNewJWTVerifier(t, testSecret)
 
 	// Generate a token that expired 1 hour ago
 	token, err := verifier.Generate("principal-123", -time.Hour)
@@ -97,9 +107,38 @@ func TestJWTVerifier_ExpiredToken(t *testing.T) {
 	}
 }
 
+func TestJWTVerifier_WeakSecret(t *testing.T) {
+	// Test that weak secrets are rejected
+	weakSecrets := [][]byte{
+		nil,
+		{},
+		[]byte("short"),
+		[]byte("31-bytes-not-quite-enough-here"),
+	}
+
+	for _, secret := range weakSecrets {
+		_, err := NewJWTVerifier(secret)
+		if err == nil {
+			t.Errorf("NewJWTVerifier(%q) should have returned error for weak secret", secret)
+		}
+		if !errors.Is(err, ErrWeakSecret) {
+			t.Errorf("NewJWTVerifier(%q) error = %v, want ErrWeakSecret", secret, err)
+		}
+	}
+
+	// Test that exactly 32 bytes is accepted
+	exactSecret := []byte("exactly-32-bytes-secret-here!!!!")
+	if len(exactSecret) != 32 {
+		t.Fatalf("test setup error: secret is %d bytes, want 32", len(exactSecret))
+	}
+	_, err := NewJWTVerifier(exactSecret)
+	if err != nil {
+		t.Errorf("NewJWTVerifier() with 32-byte secret error = %v, want nil", err)
+	}
+}
+
 func TestJWTVerifier_Generate_CreatesValidToken(t *testing.T) {
-	secret := []byte("test-secret-key-for-jwt-signing")
-	verifier := NewJWTVerifier(secret)
+	verifier := mustNewJWTVerifier(t, testSecret)
 
 	principalID := "test-principal-456"
 	expiresIn := 5 * time.Minute
@@ -125,8 +164,7 @@ func TestJWTVerifier_Generate_CreatesValidToken(t *testing.T) {
 }
 
 func TestJWTVerifier_DifferentPrincipals(t *testing.T) {
-	secret := []byte("test-secret-key-for-jwt-signing")
-	verifier := NewJWTVerifier(secret)
+	verifier := mustNewJWTVerifier(t, testSecret)
 
 	principals := []string{"principal-1", "principal-2", "principal-3"}
 

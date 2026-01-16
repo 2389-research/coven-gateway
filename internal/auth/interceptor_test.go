@@ -16,6 +16,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// interceptorTestSecret is a 32-byte secret that meets MinSecretLength requirement
+var interceptorTestSecret = []byte("interceptor-test-secret-32bytes!")
+
 // mockPrincipalStore implements PrincipalStore for testing
 type mockPrincipalStore struct {
 	principal *store.Principal
@@ -54,8 +57,10 @@ func contextWithAuth(token string) context.Context {
 }
 
 func TestAuthInterceptor_ValidToken(t *testing.T) {
-	secret := []byte("test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(interceptorTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	principalID := "principal-123"
 	token, _ := verifier.Generate(principalID, time.Hour)
@@ -117,8 +122,10 @@ func TestAuthInterceptor_ValidToken(t *testing.T) {
 }
 
 func TestAuthInterceptor_MissingHeader(t *testing.T) {
-	secret := []byte("test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(interceptorTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	principals := &mockPrincipalStore{}
 	roles := &mockRoleStore{}
@@ -133,14 +140,14 @@ func TestAuthInterceptor_MissingHeader(t *testing.T) {
 		return nil, nil
 	}
 
-	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
-	if err == nil {
+	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	if interceptErr == nil {
 		t.Fatal("expected error, got nil")
 	}
 
-	st, ok := status.FromError(err)
+	st, ok := status.FromError(interceptErr)
 	if !ok {
-		t.Fatalf("expected gRPC status error, got %v", err)
+		t.Fatalf("expected gRPC status error, got %v", interceptErr)
 	}
 
 	if st.Code() != codes.Unauthenticated {
@@ -149,8 +156,10 @@ func TestAuthInterceptor_MissingHeader(t *testing.T) {
 }
 
 func TestAuthInterceptor_InvalidToken(t *testing.T) {
-	secret := []byte("test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(interceptorTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	principals := &mockPrincipalStore{}
 	roles := &mockRoleStore{}
@@ -164,14 +173,14 @@ func TestAuthInterceptor_InvalidToken(t *testing.T) {
 		return nil, nil
 	}
 
-	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
-	if err == nil {
+	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	if interceptErr == nil {
 		t.Fatal("expected error, got nil")
 	}
 
-	st, ok := status.FromError(err)
+	st, ok := status.FromError(interceptErr)
 	if !ok {
-		t.Fatalf("expected gRPC status error, got %v", err)
+		t.Fatalf("expected gRPC status error, got %v", interceptErr)
 	}
 
 	if st.Code() != codes.Unauthenticated {
@@ -180,8 +189,10 @@ func TestAuthInterceptor_InvalidToken(t *testing.T) {
 }
 
 func TestAuthInterceptor_PrincipalNotFound(t *testing.T) {
-	secret := []byte("test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(interceptorTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	token, _ := verifier.Generate("nonexistent-principal", time.Hour)
 
@@ -199,14 +210,14 @@ func TestAuthInterceptor_PrincipalNotFound(t *testing.T) {
 		return nil, nil
 	}
 
-	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
-	if err == nil {
+	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	if interceptErr == nil {
 		t.Fatal("expected error, got nil")
 	}
 
-	st, ok := status.FromError(err)
+	st, ok := status.FromError(interceptErr)
 	if !ok {
-		t.Fatalf("expected gRPC status error, got %v", err)
+		t.Fatalf("expected gRPC status error, got %v", interceptErr)
 	}
 
 	if st.Code() != codes.Unauthenticated {
@@ -215,8 +226,10 @@ func TestAuthInterceptor_PrincipalNotFound(t *testing.T) {
 }
 
 func TestAuthInterceptor_PrincipalRevoked(t *testing.T) {
-	secret := []byte("test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(interceptorTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	principalID := "revoked-principal"
 	token, _ := verifier.Generate(principalID, time.Hour)
@@ -239,14 +252,14 @@ func TestAuthInterceptor_PrincipalRevoked(t *testing.T) {
 		return nil, nil
 	}
 
-	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
-	if err == nil {
+	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	if interceptErr == nil {
 		t.Fatal("expected error, got nil")
 	}
 
-	st, ok := status.FromError(err)
+	st, ok := status.FromError(interceptErr)
 	if !ok {
-		t.Fatalf("expected gRPC status error, got %v", err)
+		t.Fatalf("expected gRPC status error, got %v", interceptErr)
 	}
 
 	if st.Code() != codes.PermissionDenied {
@@ -255,8 +268,10 @@ func TestAuthInterceptor_PrincipalRevoked(t *testing.T) {
 }
 
 func TestAuthInterceptor_PrincipalPending(t *testing.T) {
-	secret := []byte("test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(interceptorTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	principalID := "pending-principal"
 	token, _ := verifier.Generate(principalID, time.Hour)
@@ -279,14 +294,14 @@ func TestAuthInterceptor_PrincipalPending(t *testing.T) {
 		return nil, nil
 	}
 
-	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
-	if err == nil {
+	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	if interceptErr == nil {
 		t.Fatal("expected error, got nil")
 	}
 
-	st, ok := status.FromError(err)
+	st, ok := status.FromError(interceptErr)
 	if !ok {
-		t.Fatalf("expected gRPC status error, got %v", err)
+		t.Fatalf("expected gRPC status error, got %v", interceptErr)
 	}
 
 	if st.Code() != codes.PermissionDenied {
@@ -295,8 +310,10 @@ func TestAuthInterceptor_PrincipalPending(t *testing.T) {
 }
 
 func TestAuthInterceptor_AllowedStatuses(t *testing.T) {
-	secret := []byte("test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(interceptorTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	allowedStatuses := []store.PrincipalStatus{
 		store.PrincipalStatusApproved,
@@ -342,8 +359,10 @@ func TestAuthInterceptor_AllowedStatuses(t *testing.T) {
 }
 
 func TestAuthInterceptor_StoreError(t *testing.T) {
-	secret := []byte("test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(interceptorTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	principalID := "principal-123"
 	token, _ := verifier.Generate(principalID, time.Hour)
@@ -362,14 +381,14 @@ func TestAuthInterceptor_StoreError(t *testing.T) {
 		return nil, nil
 	}
 
-	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
-	if err == nil {
+	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	if interceptErr == nil {
 		t.Fatal("expected error, got nil")
 	}
 
-	st, ok := status.FromError(err)
+	st, ok := status.FromError(interceptErr)
 	if !ok {
-		t.Fatalf("expected gRPC status error, got %v", err)
+		t.Fatalf("expected gRPC status error, got %v", interceptErr)
 	}
 
 	if st.Code() != codes.Internal {
@@ -378,8 +397,10 @@ func TestAuthInterceptor_StoreError(t *testing.T) {
 }
 
 func TestAuthInterceptor_RoleStoreError(t *testing.T) {
-	secret := []byte("test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(interceptorTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	principalID := "principal-123"
 	token, _ := verifier.Generate(principalID, time.Hour)
@@ -404,14 +425,14 @@ func TestAuthInterceptor_RoleStoreError(t *testing.T) {
 		return nil, nil
 	}
 
-	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
-	if err == nil {
+	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	if interceptErr == nil {
 		t.Fatal("expected error, got nil")
 	}
 
-	st, ok := status.FromError(err)
+	st, ok := status.FromError(interceptErr)
 	if !ok {
-		t.Fatalf("expected gRPC status error, got %v", err)
+		t.Fatalf("expected gRPC status error, got %v", interceptErr)
 	}
 
 	if st.Code() != codes.Internal {
@@ -430,8 +451,10 @@ func (m *mockServerStream) Context() context.Context {
 }
 
 func TestStreamInterceptor_ValidToken(t *testing.T) {
-	secret := []byte("test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(interceptorTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	principalID := "principal-123"
 	token, _ := verifier.Generate(principalID, time.Hour)
@@ -462,9 +485,9 @@ func TestStreamInterceptor_ValidToken(t *testing.T) {
 		return nil
 	}
 
-	err := interceptor(nil, stream, &grpc.StreamServerInfo{}, handler)
-	if err != nil {
-		t.Fatalf("interceptor error = %v", err)
+	interceptErr := interceptor(nil, stream, &grpc.StreamServerInfo{}, handler)
+	if interceptErr != nil {
+		t.Fatalf("interceptor error = %v", interceptErr)
 	}
 
 	if !handlerCalled {
@@ -491,8 +514,10 @@ func TestStreamInterceptor_ValidToken(t *testing.T) {
 }
 
 func TestStreamInterceptor_MissingHeader(t *testing.T) {
-	secret := []byte("test-secret")
-	verifier := NewJWTVerifier(secret)
+	verifier, err := NewJWTVerifier(interceptorTestSecret)
+	if err != nil {
+		t.Fatalf("NewJWTVerifier() error = %v", err)
+	}
 
 	principals := &mockPrincipalStore{}
 	roles := &mockRoleStore{}
@@ -508,14 +533,14 @@ func TestStreamInterceptor_MissingHeader(t *testing.T) {
 		return nil
 	}
 
-	err := interceptor(nil, stream, &grpc.StreamServerInfo{}, handler)
-	if err == nil {
+	interceptErr := interceptor(nil, stream, &grpc.StreamServerInfo{}, handler)
+	if interceptErr == nil {
 		t.Fatal("expected error, got nil")
 	}
 
-	st, ok := status.FromError(err)
+	st, ok := status.FromError(interceptErr)
 	if !ok {
-		t.Fatalf("expected gRPC status error, got %v", err)
+		t.Fatalf("expected gRPC status error, got %v", interceptErr)
 	}
 
 	if st.Code() != codes.Unauthenticated {

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -17,7 +18,11 @@ var (
 	ErrPrincipalNotFound = errors.New("principal not found")
 	ErrDuplicatePubkey   = errors.New("duplicate pubkey fingerprint")
 	ErrInvalidStatus     = errors.New("invalid principal status")
+	ErrMetadataTooLarge  = errors.New("metadata exceeds 64KB limit")
 )
+
+// MaxMetadataSize is the maximum allowed size for metadata JSON (64KB)
+const MaxMetadataSize = 64 * 1024
 
 // PrincipalType represents the type of principal
 type PrincipalType string
@@ -92,6 +97,9 @@ func (s *SQLiteStore) CreatePrincipal(ctx context.Context, p *Principal) error {
 		data, err := json.Marshal(p.Metadata)
 		if err != nil {
 			return fmt.Errorf("marshaling metadata: %w", err)
+		}
+		if len(data) > MaxMetadataSize {
+			return ErrMetadataTooLarge
 		}
 		str := string(data)
 		metadataJSON = &str
@@ -384,20 +392,10 @@ func (s *SQLiteStore) scanPrincipalRow(rows *sql.Rows) (*Principal, error) {
 
 // isDuplicatePubkeyError checks if the error is a unique constraint violation for pubkey
 func isDuplicatePubkeyError(err error) bool {
-	// SQLite UNIQUE constraint error contains "UNIQUE constraint failed"
-	return err != nil && (containsStr(err.Error(), "UNIQUE constraint failed") &&
-		containsStr(err.Error(), "pubkey_fingerprint"))
-}
-
-func containsStr(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsStrHelper(s, substr))
-}
-
-func containsStrHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
+	if err == nil {
+		return false
 	}
-	return false
+	errStr := err.Error()
+	return strings.Contains(errStr, "UNIQUE constraint failed") &&
+		strings.Contains(errStr, "pubkey_fingerprint")
 }

@@ -327,6 +327,60 @@ func TestPrincipalStore_Count(t *testing.T) {
 	assert.Equal(t, 2, approved)
 }
 
+func TestPrincipalStore_Create_MetadataTooLarge(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	// Create metadata that exceeds 64KB when JSON encoded
+	largeData := make([]byte, MaxMetadataSize+1)
+	for i := range largeData {
+		largeData[i] = 'a'
+	}
+
+	p := &Principal{
+		ID:          "principal-large-metadata",
+		Type:        PrincipalTypeClient,
+		PubkeyFP:    "large1234large1234large1234large1234large1234large1234large1234",
+		DisplayName: "Large Metadata Client",
+		Status:      PrincipalStatusApproved,
+		CreatedAt:   time.Now().UTC().Truncate(time.Second),
+		Metadata:    map[string]any{"data": string(largeData)},
+	}
+
+	err := store.CreatePrincipal(ctx, p)
+	assert.ErrorIs(t, err, ErrMetadataTooLarge)
+}
+
+func TestPrincipalStore_Create_MetadataAtLimit(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	// Create metadata just under the limit
+	// Account for JSON overhead: {"data":"..."} = 10 chars overhead
+	smallerData := make([]byte, MaxMetadataSize-100)
+	for i := range smallerData {
+		smallerData[i] = 'a'
+	}
+
+	p := &Principal{
+		ID:          "principal-limit-metadata",
+		Type:        PrincipalTypeClient,
+		PubkeyFP:    "limit123limit123limit123limit123limit123limit123limit123limit12",
+		DisplayName: "Limit Metadata Client",
+		Status:      PrincipalStatusApproved,
+		CreatedAt:   time.Now().UTC().Truncate(time.Second),
+		Metadata:    map[string]any{"data": string(smallerData)},
+	}
+
+	err := store.CreatePrincipal(ctx, p)
+	require.NoError(t, err)
+
+	// Verify we can retrieve it
+	retrieved, err := store.GetPrincipal(ctx, "principal-limit-metadata")
+	require.NoError(t, err)
+	assert.NotNil(t, retrieved.Metadata)
+}
+
 // Helper functions for tests
 
 func generateTestID(prefix string, i int) string {
@@ -334,7 +388,8 @@ func generateTestID(prefix string, i int) string {
 }
 
 func generateTestFingerprint(i int) string {
-	// Generate a 64-char hex fingerprint
+	// Generate a 64-char hex fingerprint using valid hex digits
+	hexDigits := "0123456789abcdef"
 	base := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde"
-	return base + string(rune('0'+i))
+	return base + string(hexDigits[i%16])
 }

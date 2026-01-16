@@ -16,7 +16,11 @@ var (
 	ErrInvalidToken = errors.New("invalid token")
 	ErrExpiredToken = errors.New("token expired")
 	ErrMissingClaim = errors.New("missing required claim")
+	ErrWeakSecret   = errors.New("JWT secret must be at least 32 bytes")
 )
+
+// MinSecretLength is the minimum required length for JWT secrets (256 bits)
+const MinSecretLength = 32
 
 // TokenVerifier defines the interface for token verification
 type TokenVerifier interface {
@@ -28,9 +32,14 @@ type JWTVerifier struct {
 	secret []byte
 }
 
-// NewJWTVerifier creates a new JWT verifier with the given secret
-func NewJWTVerifier(secret []byte) *JWTVerifier {
-	return &JWTVerifier{secret: secret}
+// NewJWTVerifier creates a new JWT verifier with the given secret.
+// The secret must be at least 32 bytes (256 bits) for HS256 security.
+// Returns ErrWeakSecret if the secret is too short.
+func NewJWTVerifier(secret []byte) (*JWTVerifier, error) {
+	if len(secret) < MinSecretLength {
+		return nil, ErrWeakSecret
+	}
+	return &JWTVerifier{secret: secret}, nil
 }
 
 // Verify validates the token and extracts the principal ID from the "sub" claim
