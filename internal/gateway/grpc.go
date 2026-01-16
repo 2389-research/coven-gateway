@@ -37,6 +37,14 @@ func newFoldControlServer(gw *Gateway, logger *slog.Logger) *foldControlServer {
 // 3. Agent sends Heartbeat or MessageResponse messages
 // 4. Server sends SendMessage or Shutdown messages
 func (s *foldControlServer) AgentStream(stream pb.FoldControl_AgentStreamServer) error {
+	s.logger.Debug("AgentStream handler invoked, waiting for registration")
+
+	// Send headers immediately to unblock tonic clients waiting for response headers
+	// This is needed because grpc-go delays headers until first Send() by default
+	if err := stream.SendHeader(nil); err != nil {
+		s.logger.Error("failed to send initial headers", "error", err)
+	}
+
 	// Wait for registration message
 	msg, err := stream.Recv()
 	if err != nil {
