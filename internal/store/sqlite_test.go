@@ -477,6 +477,34 @@ func TestGetThreadByFrontendID_DifferentFrontends(t *testing.T) {
 	}
 }
 
+func TestCreateBinding(t *testing.T) {
+	store := newTestStore(t)
+	defer store.Close()
+
+	binding := &ChannelBinding{
+		FrontendName: "slack",
+		ChannelID:    "C0123456789",
+		AgentID:      "agent-uuid-123",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	err := store.CreateBinding(context.Background(), binding)
+	if err != nil {
+		t.Fatalf("CreateBinding failed: %v", err)
+	}
+
+	// Verify by reading back
+	got, err := store.GetBinding(context.Background(), "slack", "C0123456789")
+	if err != nil {
+		t.Fatalf("GetBinding failed: %v", err)
+	}
+
+	if got.AgentID != "agent-uuid-123" {
+		t.Errorf("AgentID = %q, want %q", got.AgentID, "agent-uuid-123")
+	}
+}
+
 // newTestStore creates a new SQLite store in a temporary directory for testing
 func newTestStore(t *testing.T) *SQLiteStore {
 	t.Helper()

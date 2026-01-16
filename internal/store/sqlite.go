@@ -384,13 +384,66 @@ func (s *SQLiteStore) GetAgentState(ctx context.Context, agentID string) ([]byte
 }
 
 // CreateBinding creates a new channel binding.
+// Returns an error if a binding already exists for this frontend/channel combination.
 func (s *SQLiteStore) CreateBinding(ctx context.Context, binding *ChannelBinding) error {
-	return errors.New("not implemented")
+	query := `
+		INSERT INTO channel_bindings (frontend, channel_id, agent_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?)
+	`
+
+	_, err := s.db.ExecContext(ctx, query,
+		binding.FrontendName,
+		binding.ChannelID,
+		binding.AgentID,
+		binding.CreatedAt.UTC().Format(time.RFC3339),
+		binding.UpdatedAt.UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		return fmt.Errorf("inserting binding: %w", err)
+	}
+
+	s.logger.Debug("created binding", "frontend", binding.FrontendName, "channel", binding.ChannelID, "agent", binding.AgentID)
+	return nil
 }
 
 // GetBinding retrieves a binding by frontend and channel ID.
+// Returns ErrNotFound if no binding exists.
 func (s *SQLiteStore) GetBinding(ctx context.Context, frontend, channelID string) (*ChannelBinding, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT frontend, channel_id, agent_id, created_at, updated_at
+		FROM channel_bindings
+		WHERE frontend = ? AND channel_id = ?
+	`
+
+	var binding ChannelBinding
+	var createdAtStr, updatedAtStr string
+
+	err := s.db.QueryRowContext(ctx, query, frontend, channelID).Scan(
+		&binding.FrontendName,
+		&binding.ChannelID,
+		&binding.AgentID,
+		&createdAtStr,
+		&updatedAtStr,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying binding: %w", err)
+	}
+
+	binding.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("parsing created_at: %w", err)
+	}
+
+	binding.UpdatedAt, err = time.Parse(time.RFC3339, updatedAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("parsing updated_at: %w", err)
+	}
+
+	return &binding, nil
 }
 
 // ListBindings returns all channel bindings.
