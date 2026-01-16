@@ -169,9 +169,22 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure thread exists in store
-	_, err = g.store.GetThread(r.Context(), threadID)
-	if errors.Is(err, store.ErrNotFound) {
+	// Ensure thread exists in store and update if found
+	existingThread, err := g.store.GetThread(r.Context(), threadID)
+	if err == nil {
+		// Thread exists - update timestamp if this is a frontend channel thread
+		if req.Frontend != "" && req.ChannelID != "" {
+			// Update thread if agent changed
+			if existingThread.AgentID != agentID {
+				g.logger.Info("thread agent changed", "thread_id", threadID, "old_agent", existingThread.AgentID, "new_agent", agentID)
+				existingThread.AgentID = agentID
+			}
+			existingThread.UpdatedAt = time.Now()
+			if updateErr := g.store.UpdateThread(r.Context(), existingThread); updateErr != nil {
+				g.logger.Debug("failed to update thread timestamp", "error", updateErr)
+			}
+		}
+	} else if errors.Is(err, store.ErrNotFound) {
 		// Create new thread
 		now := time.Now()
 		frontendName := req.Frontend
@@ -193,9 +206,14 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		if createErr := g.store.CreateThread(r.Context(), thread); createErr != nil {
 			g.logger.Error("failed to create thread", "error", createErr)
+			// Race condition: another request may have created it - try to get it
+			if retryThread, retryErr := g.store.GetThreadByFrontendID(r.Context(), frontendName, externalID); retryErr == nil {
+				threadID = retryThread.ID
+				g.logger.Debug("using thread created by concurrent request", "thread_id", threadID)
+			}
 			// Continue anyway - message persistence is best-effort
 		}
-	} else if err != nil {
+	} else {
 		g.logger.Error("failed to get thread", "error", err)
 		// Continue anyway - message persistence is best-effort
 	}

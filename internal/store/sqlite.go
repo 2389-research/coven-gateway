@@ -76,7 +76,7 @@ func (s *SQLiteStore) createSchema() error {
 			updated_at DATETIME NOT NULL
 		);
 
-		CREATE INDEX IF NOT EXISTS idx_threads_frontend_external
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_frontend_external
 			ON threads(frontend_name, external_id);
 
 		CREATE TABLE IF NOT EXISTS messages (
