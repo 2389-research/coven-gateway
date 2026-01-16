@@ -147,3 +147,38 @@ message DeleteBindingRequest {
 message DeleteBindingResponse {
   // Empty response indicates success
 }
+
+// ClientService provides client-facing operations for interacting with agents.
+// Requires authenticated principal (member role or higher).
+service ClientService {
+  rpc GetEvents(GetEventsRequest) returns (GetEventsResponse);
+}
+
+// Event represents a ledger event in conversation history
+message Event {
+  string id = 1;
+  string conversation_key = 2;
+  string direction = 3;           // "inbound_to_agent" or "outbound_from_agent"
+  string author = 4;
+  string timestamp = 5;           // ISO-8601
+  string type = 6;                // "message", "tool_call", "tool_result", "system", "error"
+  optional string text = 7;
+  optional string raw_transport = 8;
+  optional string raw_payload_ref = 9;
+  optional string actor_principal_id = 10;
+  optional string actor_member_id = 11;
+}
+
+message GetEventsRequest {
+  string conversation_key = 1;
+  optional string since = 2;      // ISO-8601
+  optional string until = 3;      // ISO-8601
+  optional int32 limit = 4;       // 1-500
+  optional string cursor = 5;
+}
+
+message GetEventsResponse {
+  repeated Event events = 1;
+  optional string next_cursor = 2;
+  bool has_more = 3;
+}
