@@ -505,6 +505,66 @@ func TestCreateBinding(t *testing.T) {
 	}
 }
 
+func TestListBindings(t *testing.T) {
+	store := newTestStore(t)
+	defer store.Close()
+	ctx := context.Background()
+
+	// Create two bindings
+	bindings := []*ChannelBinding{
+		{FrontendName: "slack", ChannelID: "C001", AgentID: "agent-1", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+		{FrontendName: "matrix", ChannelID: "!room:example.com", AgentID: "agent-2", CreatedAt: time.Now(), UpdatedAt: time.Now()},
+	}
+
+	for _, b := range bindings {
+		if err := store.CreateBinding(ctx, b); err != nil {
+			t.Fatalf("CreateBinding failed: %v", err)
+		}
+	}
+
+	got, err := store.ListBindings(ctx)
+	if err != nil {
+		t.Fatalf("ListBindings failed: %v", err)
+	}
+
+	if len(got) != 2 {
+		t.Errorf("got %d bindings, want 2", len(got))
+	}
+}
+
+func TestDeleteBinding(t *testing.T) {
+	store := newTestStore(t)
+	defer store.Close()
+	ctx := context.Background()
+
+	binding := &ChannelBinding{
+		FrontendName: "slack",
+		ChannelID:    "C001",
+		AgentID:      "agent-1",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	if err := store.CreateBinding(ctx, binding); err != nil {
+		t.Fatalf("CreateBinding failed: %v", err)
+	}
+
+	if err := store.DeleteBinding(ctx, "slack", "C001"); err != nil {
+		t.Fatalf("DeleteBinding failed: %v", err)
+	}
+
+	_, err := store.GetBinding(ctx, "slack", "C001")
+	if err != ErrNotFound {
+		t.Errorf("expected ErrNotFound after delete, got %v", err)
+	}
+
+	// Test deleting non-existent binding returns ErrNotFound
+	err = store.DeleteBinding(ctx, "nonexistent", "C999")
+	if err != ErrNotFound {
+		t.Errorf("expected ErrNotFound for non-existent binding, got %v", err)
+	}
+}
+
 // newTestStore creates a new SQLite store in a temporary directory for testing
 func newTestStore(t *testing.T) *SQLiteStore {
 	t.Helper()

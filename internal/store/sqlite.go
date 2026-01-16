@@ -6,7 +6,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -448,12 +447,65 @@ func (s *SQLiteStore) GetBinding(ctx context.Context, frontend, channelID string
 
 // ListBindings returns all channel bindings.
 func (s *SQLiteStore) ListBindings(ctx context.Context) ([]*ChannelBinding, error) {
-	return nil, errors.New("not implemented")
+	query := `
+		SELECT frontend, channel_id, agent_id, created_at, updated_at
+		FROM channel_bindings
+		ORDER BY frontend, channel_id
+	`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("querying bindings: %w", err)
+	}
+	defer rows.Close()
+
+	var bindings []*ChannelBinding
+	for rows.Next() {
+		var b ChannelBinding
+		var createdAtStr, updatedAtStr string
+
+		if err := rows.Scan(&b.FrontendName, &b.ChannelID, &b.AgentID, &createdAtStr, &updatedAtStr); err != nil {
+			return nil, fmt.Errorf("scanning binding: %w", err)
+		}
+
+		b.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parsing created_at: %w", err)
+		}
+		b.UpdatedAt, err = time.Parse(time.RFC3339, updatedAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parsing updated_at: %w", err)
+		}
+		bindings = append(bindings, &b)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating binding rows: %w", err)
+	}
+	return bindings, nil
 }
 
 // DeleteBinding removes a channel binding.
+// Returns ErrNotFound if the binding doesn't exist.
 func (s *SQLiteStore) DeleteBinding(ctx context.Context, frontend, channelID string) error {
-	return errors.New("not implemented")
+	query := `DELETE FROM channel_bindings WHERE frontend = ? AND channel_id = ?`
+
+	result, err := s.db.ExecContext(ctx, query, frontend, channelID)
+	if err != nil {
+		return fmt.Errorf("deleting binding: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	s.logger.Debug("deleted binding", "frontend", frontend, "channel", channelID)
+	return nil
 }
 
 // Ensure SQLiteStore implements Store interface
