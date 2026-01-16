@@ -131,39 +131,42 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve agent ID - either from direct specification or binding lookup
-	agentID := req.AgentID
-	if agentID == "" {
+	// Resolve agent ID and thread ID
+	var agentID, threadID string
+	if req.AgentID != "" {
+		// Direct agent ID specified
+		agentID = req.AgentID
+		threadID = req.ThreadID
+		if threadID == "" {
+			threadID = uuid.New().String()
+		}
+	} else {
 		// Must have frontend + channel_id for binding lookup
 		if req.Frontend == "" || req.ChannelID == "" {
 			g.sendJSONError(w, http.StatusBadRequest, "must specify agent_id or frontend+channel_id")
 			return
 		}
 
-		binding, err := g.store.GetBinding(r.Context(), req.Frontend, req.ChannelID)
-		if errors.Is(err, store.ErrNotFound) {
+		// Use bindingResolver for binding and thread lookup
+		resolver := &bindingResolver{store: g.store}
+		result, err := resolver.Resolve(r.Context(), req.Frontend, req.ChannelID, req.ThreadID)
+		if errors.Is(err, ErrChannelNotBound) {
 			g.sendJSONError(w, http.StatusBadRequest, "channel not bound to agent")
 			return
 		}
 		if err != nil {
-			g.logger.Error("failed to get binding", "error", err)
+			g.logger.Error("failed to resolve binding", "error", err)
 			g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
-		agentID = binding.AgentID
+		agentID = result.AgentID
+		threadID = result.ThreadID
 	}
 
 	// Verify agent exists and is online
 	if _, ok := g.agentManager.GetAgent(agentID); !ok {
 		g.sendJSONError(w, http.StatusServiceUnavailable, "agent unavailable")
 		return
-	}
-
-	// Get or create thread for message persistence
-	threadID := req.ThreadID
-	if threadID == "" {
-		// Generate a new thread ID if not provided
-		threadID = uuid.New().String()
 	}
 
 	// Ensure thread exists in store
@@ -406,6 +409,60 @@ func (g *Gateway) getSender() messageSender {
 		return g.mockSender
 	}
 	return g.agentManager
+}
+
+// ErrChannelNotBound is returned when a channel has no binding to an agent.
+var ErrChannelNotBound = errors.New("channel not bound to agent")
+
+// BindingResult contains the resolved thread and agent information.
+type BindingResult struct {
+	ThreadID string
+	AgentID  string
+}
+
+// bindingResolver handles looking up and creating bindings and threads.
+type bindingResolver struct {
+	store store.Store
+}
+
+// Resolve looks up a binding for the given frontend and channel.
+// If a threadID is provided, it uses that; otherwise it looks up an existing thread
+// by frontend/channel or generates a new thread ID.
+// Returns ErrChannelNotBound if no binding exists for the channel.
+func (r *bindingResolver) Resolve(ctx context.Context, frontend, channelID, threadID string) (*BindingResult, error) {
+	// Look up the binding
+	binding, err := r.store.GetBinding(ctx, frontend, channelID)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, ErrChannelNotBound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get binding: %w", err)
+	}
+
+	result := &BindingResult{
+		AgentID: binding.AgentID,
+	}
+
+	// If thread ID was provided, use it
+	if threadID != "" {
+		result.ThreadID = threadID
+		return result, nil
+	}
+
+	// Try to find existing thread by frontend/channel
+	thread, err := r.store.GetThreadByFrontendID(ctx, frontend, channelID)
+	if err == nil {
+		result.ThreadID = thread.ID
+		return result, nil
+	}
+
+	// No existing thread, generate a new ID
+	if errors.Is(err, store.ErrNotFound) {
+		result.ThreadID = uuid.New().String()
+		return result, nil
+	}
+
+	return nil, fmt.Errorf("failed to get thread: %w", err)
 }
 
 // handleBindings routes binding requests by HTTP method.

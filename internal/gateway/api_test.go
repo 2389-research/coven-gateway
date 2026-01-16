@@ -17,6 +17,7 @@ import (
 
 	"github.com/2389/fold-gateway/internal/agent"
 	"github.com/2389/fold-gateway/internal/config"
+	"github.com/2389/fold-gateway/internal/store"
 	pb "github.com/2389/fold-gateway/proto/fold"
 	"google.golang.org/grpc"
 )
@@ -756,5 +757,102 @@ func TestParseSendRequest_InvalidJSON(t *testing.T) {
 	}
 	if err.Error() != "invalid JSON body" {
 		t.Errorf("expected error 'invalid JSON body', got %q", err.Error())
+	}
+}
+
+// Tests for bindingResolver
+
+func TestResolveBinding_ExistingBinding(t *testing.T) {
+	s := store.NewMockStore()
+	ctx := context.Background()
+
+	// Setup existing thread
+	s.CreateThread(ctx, &store.Thread{ID: "existing-thread", FrontendName: "test", ExternalID: "channel-1", AgentID: "agent-1"})
+
+	// Setup existing binding
+	s.CreateBinding(ctx, &store.ChannelBinding{
+		FrontendName: "test",
+		ChannelID:    "channel-1",
+		AgentID:      "agent-1",
+	})
+
+	resolver := &bindingResolver{store: s}
+	result, err := resolver.Resolve(ctx, "test", "channel-1", "")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.ThreadID != "existing-thread" {
+		t.Errorf("expected thread ID 'existing-thread', got %q", result.ThreadID)
+	}
+	if result.AgentID != "agent-1" {
+		t.Errorf("expected agent ID 'agent-1', got %q", result.AgentID)
+	}
+}
+
+func TestResolveBinding_NoBinding(t *testing.T) {
+	s := store.NewMockStore()
+	ctx := context.Background()
+
+	resolver := &bindingResolver{store: s}
+	_, err := resolver.Resolve(ctx, "test", "unbound-channel", "")
+
+	if err == nil {
+		t.Fatal("expected error for unbound channel")
+	}
+	if err != ErrChannelNotBound {
+		t.Errorf("expected ErrChannelNotBound, got %v", err)
+	}
+}
+
+func TestResolveBinding_WithProvidedThreadID(t *testing.T) {
+	s := store.NewMockStore()
+	ctx := context.Background()
+
+	// Setup existing binding but no thread yet
+	s.CreateBinding(ctx, &store.ChannelBinding{
+		FrontendName: "test",
+		ChannelID:    "channel-1",
+		AgentID:      "agent-1",
+	})
+
+	resolver := &bindingResolver{store: s}
+	result, err := resolver.Resolve(ctx, "test", "channel-1", "provided-thread-id")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should use the provided thread ID
+	if result.ThreadID != "provided-thread-id" {
+		t.Errorf("expected thread ID 'provided-thread-id', got %q", result.ThreadID)
+	}
+	if result.AgentID != "agent-1" {
+		t.Errorf("expected agent ID 'agent-1', got %q", result.AgentID)
+	}
+}
+
+func TestResolveBinding_ExistingBindingNoThread(t *testing.T) {
+	s := store.NewMockStore()
+	ctx := context.Background()
+
+	// Setup existing binding but no thread
+	s.CreateBinding(ctx, &store.ChannelBinding{
+		FrontendName: "test",
+		ChannelID:    "channel-1",
+		AgentID:      "agent-1",
+	})
+
+	resolver := &bindingResolver{store: s}
+	result, err := resolver.Resolve(ctx, "test", "channel-1", "")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should generate a new thread ID (UUID format)
+	if result.ThreadID == "" {
+		t.Error("expected non-empty thread ID")
+	}
+	if result.AgentID != "agent-1" {
+		t.Errorf("expected agent ID 'agent-1', got %q", result.AgentID)
 	}
 }
