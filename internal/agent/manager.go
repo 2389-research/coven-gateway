@@ -48,10 +48,11 @@ func (m *Manager) Register(agent *Connection) error {
 	}
 
 	m.agents[agent.ID] = agent
-	m.logger.Info("agent registered",
+	m.logger.Info("=== AGENT CONNECTED ===",
 		"agent_id", agent.ID,
 		"name", agent.Name,
 		"capabilities", agent.Capabilities,
+		"total_agents", len(m.agents),
 	)
 	return nil
 }
@@ -63,9 +64,10 @@ func (m *Manager) Unregister(agentID string) {
 
 	if agent, exists := m.agents[agentID]; exists {
 		delete(m.agents, agentID)
-		m.logger.Info("agent unregistered",
+		m.logger.Info("=== AGENT DISCONNECTED ===",
 			"agent_id", agentID,
 			"name", agent.Name,
+			"total_agents", len(m.agents),
 		)
 	}
 }

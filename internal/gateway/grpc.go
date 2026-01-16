@@ -77,12 +77,6 @@ func (s *foldControlServer) AgentStream(stream pb.FoldControl_AgentStreamServer)
 	// Ensure we unregister on exit
 	defer s.gateway.agentManager.Unregister(conn.ID)
 
-	s.logger.Info("agent connected",
-		"agent_id", reg.GetAgentId(),
-		"name", reg.GetName(),
-		"capabilities", reg.GetCapabilities(),
-	)
-
 	// Send welcome message
 	welcome := &pb.ServerMessage{
 		Payload: &pb.ServerMessage_Welcome{
@@ -102,12 +96,12 @@ func (s *foldControlServer) AgentStream(stream pb.FoldControl_AgentStreamServer)
 		msg, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
-				s.logger.Info("agent disconnected (EOF)", "agent_id", conn.ID)
+				s.logger.Debug("agent stream EOF", "agent_id", conn.ID)
 				return nil
 			}
 			// Check for context cancellation
 			if status.Code(err) == codes.Canceled {
-				s.logger.Info("agent stream cancelled", "agent_id", conn.ID)
+				s.logger.Debug("agent stream cancelled", "agent_id", conn.ID)
 				return nil
 			}
 			s.logger.Error("receiving message", "error", err, "agent_id", conn.ID)
