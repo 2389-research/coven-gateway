@@ -90,6 +90,32 @@ The `FoldControl` service uses bidirectional streaming. Agents send `AgentMessag
 
 Response events flow: Thinking → Text chunks → ToolUse/ToolResult → Done/Error
 
+## Testing Patterns
+
+**Test organization:**
+
+- `internal/gateway/proto_contract_test.go` - Proto serialization round-trip tests (Go↔Rust compatibility)
+- `internal/store/store_test.go` - Store interface tests using real SQLite
+- `internal/store/mock_store.go` - Thread-safe in-memory MockStore for unit tests
+- `internal/gateway/api_test.go` - HTTP handler and extracted function tests
+
+**MockStore usage:**
+
+```go
+import "github.com/2389/fold-gateway/internal/store"
+
+func TestSomething(t *testing.T) {
+    mockStore := store.NewMockStore()
+    // mockStore implements store.Store interface
+}
+```
+
+**Extracted functions in api.go:**
+
+- `parseSendRequest(r io.Reader)` - Parse and validate JSON request body
+- `bindingResolver.Resolve(ctx, frontend, channelID, threadID)` - Resolve bindings to thread IDs
+- `formatSSEEvent(eventType, data string)` - Format SSE event strings
+
 ## Code Style
 
 - Use `slog` for structured logging (stdlib, not third-party)
