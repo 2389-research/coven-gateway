@@ -1,0 +1,102 @@
+// ABOUTME: Protocol buffer definitions for agent-server communication.
+// ABOUTME: Defines the bidirectional streaming protocol for fold control.
+
+syntax = "proto3";
+package fold;
+
+// Agent connects to server, receives commands, sends results
+service FoldControl {
+  // Agent registration - bidirectional stream for lifecycle
+  rpc AgentStream(stream AgentMessage) returns (stream ServerMessage);
+}
+
+// Messages from agent to server
+message AgentMessage {
+  oneof payload {
+    RegisterAgent register = 1;
+    MessageResponse response = 2;
+    Heartbeat heartbeat = 3;
+  }
+}
+
+// Agent registration
+message RegisterAgent {
+  string agent_id = 1;           // Unique agent identifier
+  string name = 2;               // Human-readable name
+  repeated string capabilities = 3;  // What this agent can do
+}
+
+// Response to a message request
+message MessageResponse {
+  string request_id = 1;         // Correlates with SendMessage
+  oneof event {
+    string thinking = 2;
+    string text = 3;
+    ToolUse tool_use = 4;
+    ToolResult tool_result = 5;
+    Done done = 6;
+    string error = 7;
+    FileData file = 8;
+  }
+}
+
+message ToolUse {
+  string id = 1;
+  string name = 2;
+  string input_json = 3;
+}
+
+message ToolResult {
+  string id = 1;
+  string output = 2;
+  bool is_error = 3;
+}
+
+message Done {
+  string full_response = 1;
+}
+
+message FileData {
+  string filename = 1;
+  string mime_type = 2;
+  bytes data = 3;
+}
+
+message Heartbeat {
+  int64 timestamp_ms = 1;
+}
+
+// Messages from server to agent
+message ServerMessage {
+  oneof payload {
+    Welcome welcome = 1;
+    SendMessage send_message = 2;
+    Shutdown shutdown = 3;
+  }
+}
+
+// Server acknowledges registration
+message Welcome {
+  string server_id = 1;
+  string agent_id = 2;  // Confirmed agent ID
+}
+
+// Server tells agent to process a message
+message SendMessage {
+  string request_id = 1;         // Unique request ID for correlation
+  string thread_id = 2;          // Conversation thread
+  string sender = 3;             // Who sent the message
+  string content = 4;            // Message content
+  repeated FileAttachment attachments = 5;
+}
+
+message FileAttachment {
+  string filename = 1;
+  string mime_type = 2;
+  bytes data = 3;
+}
+
+// Server tells agent to shut down
+message Shutdown {
+  string reason = 1;
+}
