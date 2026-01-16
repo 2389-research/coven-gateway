@@ -168,22 +168,22 @@ func (c *Connection) HandleMessage(msg *pb.AgentMessage) error
 
 #### 4. Router
 
-Routes messages to appropriate agents:
+Routes messages to appropriate agents using channel bindings:
 
 ```go
 type Router struct {
-    strategy RoutingStrategy
+    store store.Store
 }
 
-type RoutingStrategy interface {
-    SelectAgent(agents []*Connection, req *SendRequest) (*Connection, error)
-}
+// SelectAgent finds the agent for a request using channel bindings.
+// If agent_id is specified, uses that directly.
+// If frontend and channel_id are specified, looks up the binding.
+func (r *Router) SelectAgent(ctx context.Context, agents []*Connection, req *SendRequest) (*Connection, error)
 
-// Strategies:
-// - RoundRobin: distribute load evenly
-// - Affinity: same thread goes to same agent
-// - Capability: match required capabilities
-// - Random: random selection
+// Channel bindings provide sticky routing:
+// - Each frontend channel (e.g., Slack channel, Matrix room) binds to one agent
+// - All messages from that channel route to the same agent
+// - Bindings are stored in SQLite and managed via HTTP API
 ```
 
 #### 5. Frontend Interface
@@ -247,7 +247,7 @@ database:
   path: "./fold-gateway.db"
 
 routing:
-  strategy: "affinity"  # round_robin, affinity, capability, random
+  strategy: "binding"  # Channel binding routing
 
 agents:
   heartbeat_interval: "30s"
@@ -319,26 +319,43 @@ User         Slack        Gateway       Router        Agent         Claude
   │◀──message──│             │             │            │             │
 ```
 
-## Routing Strategies
+## Routing: Channel Bindings
 
-### 1. Round Robin
-Distributes messages evenly across all available agents. Simple but doesn't preserve thread context.
+The gateway uses channel bindings for sticky agent routing. Each frontend channel (Slack channel, Matrix room, etc.) is bound to a specific agent.
 
-### 2. Affinity (Recommended)
-Routes messages from the same thread to the same agent when possible. Falls back to round robin if the preferred agent is unavailable. Preserves conversation context within agents.
+### How It Works
 
-```go
-type AffinityRouter struct {
-    affinities map[string]string  // thread_id -> agent_id
-    mu         sync.RWMutex
-}
+1. **Binding Creation**: Admin creates a binding associating a frontend+channel_id with an agent_id
+2. **Message Routing**: When a message arrives with frontend and channel_id, the router looks up the binding
+3. **Sticky Routing**: All messages from that channel always go to the same agent
+4. **Direct Routing**: Messages can also specify agent_id directly to bypass binding lookup
+
+### Benefits
+
+- **Conversation Context**: Same agent handles all messages from a channel, preserving context
+- **Predictable Routing**: Users always talk to the same agent in a given channel
+- **Admin Control**: Bindings are explicitly managed, not automatic
+
+### API Endpoints
+
+```
+GET    /api/bindings                              # List all bindings
+POST   /api/bindings                              # Create a binding
+DELETE /api/bindings?frontend=X&channel_id=Y     # Delete a binding
 ```
 
-### 3. Capability-Based
-Routes based on required capabilities (e.g., "code", "image", "search"). Useful when agents have different tool configurations.
+### Database Schema
 
-### 4. Random
-Random selection. Useful for testing load distribution.
+```sql
+CREATE TABLE channel_bindings (
+    id TEXT PRIMARY KEY,
+    frontend TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(frontend, channel_id)
+);
+```
 
 ## Error Handling
 

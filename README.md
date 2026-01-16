@@ -77,7 +77,7 @@ cargo run -p fold-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 
 - **gRPC Agent Management**: Bidirectional streaming for agent registration and messaging
 - **HTTP API**: RESTful endpoints with Server-Sent Events for streaming responses
-- **Agent Routing**: Round-robin routing across connected agents
+- **Agent Routing**: Channel binding routing with sticky agent assignment
 - **SQLite Persistence**: Thread and message storage (pure Go, no CGO)
 - **TUI Client**: Interactive terminal client for testing
 - **Health Endpoints**: Liveness and readiness checks
@@ -86,7 +86,6 @@ cargo run -p fold-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 
 ### Planned
 
-- Affinity routing (same thread → same agent)
 - Slack/Matrix frontend integrations
 - Prometheus metrics
 - mTLS agent authentication
@@ -136,6 +135,23 @@ curl http://localhost:8080/health        # Liveness
 curl http://localhost:8080/health/ready  # Readiness (has agents)
 ```
 
+### Channel Bindings
+
+Bind frontend channels (Slack, Matrix, etc.) to specific agents for sticky routing.
+
+```bash
+# Create a binding (channel → agent)
+curl -X POST http://localhost:8080/api/bindings \
+  -H "Content-Type: application/json" \
+  -d '{"frontend":"slack","channel_id":"C0123456789","agent_id":"agent-uuid"}'
+
+# List all bindings
+curl http://localhost:8080/api/bindings
+
+# Delete a binding
+curl -X DELETE "http://localhost:8080/api/bindings?frontend=slack&channel_id=C0123456789"
+```
+
 ## Configuration
 
 ```yaml
@@ -147,7 +163,7 @@ database:
   path: "./fold-gateway.db"   # SQLite path (":memory:" for testing)
 
 routing:
-  strategy: "round_robin"     # round_robin, affinity (planned)
+  strategy: "binding"         # Channel binding routing
 
 agents:
   heartbeat_interval: "30s"

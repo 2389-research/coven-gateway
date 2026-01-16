@@ -111,7 +111,13 @@ Content-Type: application/json
 | `content` | string | **Yes** | Message content |
 | `sender` | string | No | Sender identifier |
 | `thread_id` | string | No | Conversation thread ID |
-| `agent_id` | string | No | Target specific agent (otherwise routed) |
+| `agent_id` | string | No | Target specific agent directly |
+| `frontend` | string | No | Frontend name (e.g., "slack", "matrix") for binding lookup |
+| `channel_id` | string | No | Channel ID within frontend for binding lookup |
+
+**Note:** You can specify agent routing in two ways:
+1. **Direct**: Set `agent_id` to route directly to a specific agent
+2. **Binding Lookup**: Set `frontend` and `channel_id` to look up the bound agent for that channel
 
 **Response (SSE Stream):**
 ```http
@@ -415,9 +421,11 @@ for line in response.iter_lines(decode_unicode=True):
 
 ### Agent Selection
 
-- If `agent_id` is omitted, the gateway routes to an available agent (round-robin)
-- If `agent_id` is specified, the message goes only to that agent
+- If `agent_id` is specified, the message goes directly to that agent
+- If `frontend` and `channel_id` are specified, the gateway looks up the channel binding to find the assigned agent
+- If no agent can be determined, an error is returned
 - Use `GET /api/agents` to discover available agents
+- Use channel bindings for sticky routing (same channel always routes to same agent)
 
 ### Connection Handling
 
@@ -430,3 +438,118 @@ for line in response.iter_lines(decode_unicode=True):
 - Request: `application/json`
 - SSE Response: `text/event-stream`
 - Error Response: `application/json`
+
+## Channel Bindings API
+
+Channel bindings associate frontend channels with specific agents for sticky routing.
+
+### GET /api/bindings
+
+List all channel bindings.
+
+**Response:**
+```json
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "frontend": "slack",
+    "channel_id": "C0123456789",
+    "agent_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+]
+```
+
+**Status Codes:**
+- `200`: Success (may be empty array)
+- `405`: Method not allowed
+
+### POST /api/bindings
+
+Create a new channel binding.
+
+**Request:**
+```json
+{
+  "frontend": "slack",
+  "channel_id": "C0123456789",
+  "agent_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+}
+```
+
+**Request Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `frontend` | string | **Yes** | Frontend name (e.g., "slack", "matrix") |
+| `channel_id` | string | **Yes** | Channel ID within the frontend |
+| `agent_id` | string | **Yes** | UUID of the agent to bind to |
+
+**Response:**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "frontend": "slack",
+  "channel_id": "C0123456789",
+  "agent_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+  "created_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**Status Codes:**
+- `201`: Created successfully
+- `400`: Bad request (missing fields, invalid JSON)
+- `409`: Conflict (binding already exists for this frontend/channel)
+- `405`: Method not allowed
+
+### DELETE /api/bindings
+
+Delete a channel binding.
+
+**Request:**
+```
+DELETE /api/bindings?frontend=slack&channel_id=C0123456789
+```
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `frontend` | string | **Yes** | Frontend name |
+| `channel_id` | string | **Yes** | Channel ID within the frontend |
+
+**Response:**
+```
+HTTP/1.1 204 No Content
+```
+
+**Status Codes:**
+- `204`: Deleted successfully
+- `400`: Bad request (missing parameters)
+- `404`: Binding not found
+- `405`: Method not allowed
+
+### Binding Examples
+
+```bash
+# Create a binding (Slack channel → agent)
+curl -X POST http://localhost:8080/api/bindings \
+  -H "Content-Type: application/json" \
+  -d '{"frontend":"slack","channel_id":"C0123456789","agent_id":"agent-uuid"}'
+
+# Create a binding (Matrix room → agent)
+curl -X POST http://localhost:8080/api/bindings \
+  -H "Content-Type: application/json" \
+  -d '{"frontend":"matrix","channel_id":"!room:matrix.org","agent_id":"agent-uuid"}'
+
+# List all bindings
+curl http://localhost:8080/api/bindings
+
+# Delete a binding
+curl -X DELETE "http://localhost:8080/api/bindings?frontend=slack&channel_id=C0123456789"
+
+# Send message using binding (looks up agent from binding)
+curl -N -X POST http://localhost:8080/api/send \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Hello!","frontend":"slack","channel_id":"C0123456789"}'
+```
