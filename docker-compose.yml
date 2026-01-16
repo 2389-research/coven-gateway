@@ -1,0 +1,22 @@
+# ABOUTME: Docker Compose configuration for running fold-gateway
+# ABOUTME: Mounts config and data directories for persistence
+
+services:
+  fold-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fold-gateway
+    ports:
+      - "50051:50051"  # gRPC
+      - "8080:8080"    # HTTP API
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

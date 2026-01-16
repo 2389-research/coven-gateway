@@ -1,0 +1,88 @@
+# ABOUTME: GoReleaser configuration for building and releasing fold-gateway binaries
+# ABOUTME: Builds for macOS (native) and Linux (via Zig cross-compilation) with CGO support
+
+version: 2
+
+project_name: fold-gateway
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  # Darwin builds use native CGO (macOS runner)
+  - id: darwin
+    main: ./cmd/fold-gateway
+    binary: fold-gateway
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=1
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+  # Linux builds use Zig for cross-compilation
+  - id: linux-amd64
+    main: ./cmd/fold-gateway
+    binary: fold-gateway
+    goos:
+      - linux
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+      - CC=zig cc -target x86_64-linux-musl
+      - CXX=zig c++ -target x86_64-linux-musl
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -linkmode=external -extldflags=-static
+
+  - id: linux-arm64
+    main: ./cmd/fold-gateway
+    binary: fold-gateway
+    goos:
+      - linux
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=zig cc -target aarch64-linux-musl
+      - CXX=zig c++ -target aarch64-linux-musl
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -linkmode=external -extldflags=-static
+
+archives:
+  - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE*
+      - README*
+      - config.example.yaml
+
+brews:
+  - repository:
+      owner: 2389-research
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/2389-research/fold-gateway"
+    description: "fold-gateway - Gateway server for AI agent orchestration"
+    install: |
+      bin.install "fold-gateway"
+    test: |
+      system "#{bin}/fold-gateway", "--help"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
