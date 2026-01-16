@@ -108,6 +108,62 @@ func (s *SQLiteStore) createSchema() error {
 			updated_at DATETIME NOT NULL,
 			PRIMARY KEY (frontend, channel_id)
 		);
+
+		CREATE TABLE IF NOT EXISTS principals (
+			principal_id       TEXT PRIMARY KEY,
+			type               TEXT NOT NULL,
+			pubkey_fingerprint TEXT NOT NULL UNIQUE,
+			display_name       TEXT NOT NULL,
+			status             TEXT NOT NULL,
+			created_at         TEXT NOT NULL,
+			last_seen          TEXT,
+			metadata_json      TEXT,
+
+			CHECK (type IN ('client', 'agent', 'pack')),
+			CHECK (status IN ('pending', 'approved', 'revoked', 'offline', 'online'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_principals_status ON principals(status);
+		CREATE INDEX IF NOT EXISTS idx_principals_type ON principals(type);
+		CREATE INDEX IF NOT EXISTS idx_principals_pubkey ON principals(pubkey_fingerprint);
+
+		CREATE TABLE IF NOT EXISTS roles (
+			subject_type TEXT NOT NULL,
+			subject_id   TEXT NOT NULL,
+			role         TEXT NOT NULL,
+			created_at   TEXT NOT NULL,
+
+			PRIMARY KEY (subject_type, subject_id, role),
+			CHECK (subject_type IN ('principal', 'member')),
+			CHECK (role IN ('owner', 'admin', 'member'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_roles_subject ON roles(subject_type, subject_id);
+
+		CREATE TABLE IF NOT EXISTS audit_log (
+			audit_id           TEXT PRIMARY KEY,
+			actor_principal_id TEXT NOT NULL,
+			actor_member_id    TEXT,
+			action             TEXT NOT NULL,
+			target_type        TEXT NOT NULL,
+			target_id          TEXT NOT NULL,
+			ts                 TEXT NOT NULL,
+			detail_json        TEXT,
+
+			CHECK (action IN (
+				'approve_principal',
+				'revoke_principal',
+				'grant_capability',
+				'revoke_capability',
+				'create_binding',
+				'update_binding',
+				'delete_binding'
+			))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts DESC);
+		CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_principal_id);
+		CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id);
 	`
 
 	_, err := s.db.Exec(schema)
