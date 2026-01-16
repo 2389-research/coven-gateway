@@ -4,6 +4,8 @@
 syntax = "proto3";
 package fold;
 
+import "google/protobuf/empty.proto";
+
 // Agent connects to server, receives commands, sends results
 service FoldControl {
   // Agent registration - bidirectional stream for lifecycle
@@ -152,6 +154,18 @@ message DeleteBindingResponse {
 // Requires authenticated principal (member role or higher).
 service ClientService {
   rpc GetEvents(GetEventsRequest) returns (GetEventsResponse);
+  rpc GetMe(google.protobuf.Empty) returns (MeResponse);
+}
+
+// MeResponse contains the authenticated principal's identity information
+message MeResponse {
+  string principal_id = 1;
+  string principal_type = 2;
+  string display_name = 3;
+  string status = 4;
+  repeated string roles = 5;
+  optional string member_id = 6;
+  optional string member_display_name = 7;
 }
 
 // Event represents a ledger event in conversation history

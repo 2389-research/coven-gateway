@@ -40,7 +40,7 @@ func createTestStore(t *testing.T) *store.SQLiteStore {
 // createClientService creates a ClientService with the given store
 func createClientService(t *testing.T, s *store.SQLiteStore) *ClientService {
 	t.Helper()
-	return NewClientService(s)
+	return NewClientService(s, s)
 }
 
 // createMemberContext creates a context with member auth for testing

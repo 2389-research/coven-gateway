@@ -19,15 +19,24 @@ type EventStore interface {
 	GetEvents(ctx context.Context, params store.GetEventsParams) (*store.GetEventsResult, error)
 }
 
+// PrincipalStore defines the store operations needed for principal retrieval
+type PrincipalStore interface {
+	GetPrincipal(ctx context.Context, id string) (*store.Principal, error)
+}
+
 // ClientService implements the ClientService gRPC service
 type ClientService struct {
 	pb.UnimplementedClientServiceServer
-	store EventStore
+	store      EventStore
+	principals PrincipalStore
 }
 
-// NewClientService creates a new ClientService with the given store
-func NewClientService(s EventStore) *ClientService {
-	return &ClientService{store: s}
+// NewClientService creates a new ClientService with the given stores
+func NewClientService(eventStore EventStore, principalStore PrincipalStore) *ClientService {
+	return &ClientService{
+		store:      eventStore,
+		principals: principalStore,
+	}
 }
 
 // GetEvents retrieves events for a conversation with optional filtering and pagination

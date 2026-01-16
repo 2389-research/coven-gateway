@@ -14,6 +14,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -347,6 +348,7 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	ClientService_GetEvents_FullMethodName = "/fold.ClientService/GetEvents"
+	ClientService_GetMe_FullMethodName     = "/fold.ClientService/GetMe"
 )
 
 // ClientServiceClient is the client API for ClientService service.
@@ -357,6 +359,7 @@ const (
 // Requires authenticated principal (member role or higher).
 type ClientServiceClient interface {
 	GetEvents(ctx context.Context, in *GetEventsRequest, opts ...grpc.CallOption) (*GetEventsResponse, error)
+	GetMe(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*MeResponse, error)
 }
 
 type clientServiceClient struct {
@@ -377,6 +380,16 @@ func (c *clientServiceClient) GetEvents(ctx context.Context, in *GetEventsReques
 	return out, nil
 }
 
+func (c *clientServiceClient) GetMe(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*MeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MeResponse)
+	err := c.cc.Invoke(ctx, ClientService_GetMe_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientServiceServer is the server API for ClientService service.
 // All implementations must embed UnimplementedClientServiceServer
 // for forward compatibility.
@@ -385,6 +398,7 @@ func (c *clientServiceClient) GetEvents(ctx context.Context, in *GetEventsReques
 // Requires authenticated principal (member role or higher).
 type ClientServiceServer interface {
 	GetEvents(context.Context, *GetEventsRequest) (*GetEventsResponse, error)
+	GetMe(context.Context, *emptypb.Empty) (*MeResponse, error)
 	mustEmbedUnimplementedClientServiceServer()
 }
 
@@ -397,6 +411,9 @@ type UnimplementedClientServiceServer struct{}
 
 func (UnimplementedClientServiceServer) GetEvents(context.Context, *GetEventsRequest) (*GetEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEvents not implemented")
+}
+func (UnimplementedClientServiceServer) GetMe(context.Context, *emptypb.Empty) (*MeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMe not implemented")
 }
 func (UnimplementedClientServiceServer) mustEmbedUnimplementedClientServiceServer() {}
 func (UnimplementedClientServiceServer) testEmbeddedByValue()                       {}
@@ -437,6 +454,24 @@ func _ClientService_GetEvents_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientService_GetMe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).GetMe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_GetMe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).GetMe(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientService_ServiceDesc is the grpc.ServiceDesc for ClientService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -447,6 +482,10 @@ var ClientService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetEvents",
 			Handler:    _ClientService_GetEvents_Handler,
+		},
+		{
+			MethodName: "GetMe",
+			Handler:    _ClientService_GetMe_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
