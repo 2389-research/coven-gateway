@@ -33,6 +33,14 @@ type BindingsResponse struct {
 	Bindings []Binding `json:"bindings"`
 }
 
+const banner = `
+  __       _     _                 _           _
+ / _| ___ | | __| |       __ _  __| |_ __ ___ (_)_ __
+| |_ / _ \| |/ _' |_____ / _' |/ _' | '_ ' _ \| | '_ \
+|  _| (_) | | (_| |_____| (_| | (_| | | | | | | | | | |
+|_|  \___/|_|\__,_|      \__,_|\__,_|_| |_| |_|_|_| |_|
+`
+
 func main() {
 	gateway := flag.String("gateway", getEnv("FOLD_GATEWAY_HTTP", "http://localhost:8080"), "Gateway HTTP URL")
 	watch := flag.Bool("watch", false, "Continuously watch gateway status")
@@ -50,10 +58,7 @@ func main() {
 }
 
 func printStatus(baseURL string) {
-	fmt.Println()
-	fmt.Println("  fold-admin")
-	fmt.Println("  ==========")
-	fmt.Println()
+	fmt.Print(banner)
 
 	// Health check
 	printHealth(baseURL)
