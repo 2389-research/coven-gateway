@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -94,6 +93,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 
 // Run starts the gateway servers and blocks until the context is cancelled.
 // It manages graceful shutdown of both GRPC and HTTP servers.
+// Returns nil on graceful shutdown (context cancelled), or an error if a server fails.
 func (g *Gateway) Run(ctx context.Context) error {
 	// Channel to collect errors from servers
 	errCh := make(chan error, 2)
@@ -149,26 +149,31 @@ func (g *Gateway) Run(ctx context.Context) error {
 	}()
 
 	// Wait for context cancellation or server error
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	var serverErr error
+	select {
+	case <-ctx.Done():
+		g.logger.Info("context cancelled, initiating shutdown")
+	case serverErr = <-errCh:
+		g.logger.Error("server error", "error", serverErr)
+		// Drain any additional errors (buffer size 2)
 		select {
-		case <-ctx.Done():
-			g.logger.Info("context cancelled, initiating shutdown")
-		case err := <-errCh:
-			g.logger.Error("server error", "error", err)
+		case additionalErr := <-errCh:
+			g.logger.Error("additional server error", "error", additionalErr)
+		default:
 		}
+	}
 
-		// Graceful shutdown - use short timeout since agent streams won't close gracefully
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+	// Graceful shutdown - use short timeout since agent streams won't close gracefully
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-		_ = g.Shutdown(shutdownCtx)
-	}()
+	shutdownErr := g.Shutdown(shutdownCtx)
 
-	wg.Wait()
-	return nil
+	// Return server error if one occurred, otherwise return shutdown error
+	if serverErr != nil {
+		return serverErr
+	}
+	return shutdownErr
 }
 
 // setupTailscaleListeners creates a tsnet server and returns listeners for gRPC and HTTP.
@@ -197,7 +202,9 @@ func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn n
 		Ephemeral: tsCfg.Ephemeral,
 	}
 
-	// Set auth key from config or env
+	// Set auth key if provided in config.
+	// Precedence: config value > TS_AUTHKEY env var > interactive login.
+	// If auth_key is empty, tsnet falls back to TS_AUTHKEY or prompts interactively.
 	if tsCfg.AuthKey != "" {
 		g.tsnetServer.AuthKey = tsCfg.AuthKey
 	}
@@ -219,6 +226,8 @@ func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn n
 	var tsAddr, dnsName string
 	if len(status.TailscaleIPs) > 0 {
 		tsAddr = status.TailscaleIPs[0].String()
+	} else {
+		g.logger.Warn("tailscale node has no IP addresses assigned")
 	}
 	if status.Self != nil {
 		dnsName = status.Self.DNSName
@@ -237,7 +246,9 @@ func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn n
 		return nil, nil, fmt.Errorf("listening on tailscale gRPC port: %w", err)
 	}
 
-	// Create HTTP listener - use Funnel if enabled, otherwise regular tailscale listen
+	// Create HTTP listener - use Funnel if enabled, otherwise regular tailscale listen.
+	// Funnel requires HTTPS on port 443 (Tailscale terminates TLS).
+	// Non-Funnel uses port 80 since traffic stays within the tailnet.
 	if tsCfg.Funnel {
 		g.logger.Info("enabling tailscale funnel on :443")
 		httpLn, err = g.tsnetServer.ListenFunnel("tcp", ":443")
