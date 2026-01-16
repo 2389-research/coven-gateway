@@ -19,6 +19,7 @@ import (
 	"github.com/2389/fold-gateway/internal/config"
 	"github.com/2389/fold-gateway/internal/store"
 	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
 
@@ -829,6 +830,13 @@ func TestResolveBinding_WithProvidedThreadID(t *testing.T) {
 	if result.AgentID != "agent-1" {
 		t.Errorf("expected agent ID 'agent-1', got %q", result.AgentID)
 	}
+}
+
+// Tests for formatSSEEvent
+
+func TestFormatSSEEvent(t *testing.T) {
+	event := formatSSEEvent("text", `{"content": "hello"}`)
+	assert.Equal(t, "event: text\ndata: {\"content\": \"hello\"}\n\n", event)
 }
 
 func TestResolveBinding_ExistingBindingNoThread(t *testing.T) {

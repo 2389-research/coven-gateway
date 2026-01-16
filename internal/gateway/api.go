@@ -358,6 +358,12 @@ func (g *Gateway) responseToSSEEvent(resp *agent.Response) SSEEvent {
 	}
 }
 
+// formatSSEEvent formats an SSE event as a string with the standard format:
+// event: <eventType>\ndata: <data>\n\n
+func formatSSEEvent(eventType, data string) string {
+	return fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, data)
+}
+
 // writeSSEEvent writes a single SSE event to the response writer.
 func (g *Gateway) writeSSEEvent(w http.ResponseWriter, event string, data interface{}) {
 	dataJSON, err := json.Marshal(data)
