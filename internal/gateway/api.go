@@ -124,6 +124,11 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Sender == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "sender is required")
+		return
+	}
+
 	// Resolve agent ID - either from direct specification or binding lookup
 	agentID := req.AgentID
 	if agentID == "" {
@@ -164,10 +169,19 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, store.ErrNotFound) {
 		// Create new thread
 		now := time.Now()
+		frontendName := req.Frontend
+		externalID := req.ChannelID
+		// Use sensible defaults for direct agent_id usage
+		if frontendName == "" {
+			frontendName = "direct"
+		}
+		if externalID == "" {
+			externalID = threadID
+		}
 		thread := &store.Thread{
 			ID:           threadID,
-			FrontendName: req.Frontend,
-			ExternalID:   req.ChannelID,
+			FrontendName: frontendName,
+			ExternalID:   externalID,
 			AgentID:      agentID,
 			CreatedAt:    now,
 			UpdatedAt:    now,
@@ -217,17 +231,19 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check streaming support before setting headers
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		g.logger.Error("streaming not supported")
+		g.sendJSONError(w, http.StatusInternalServerError, "streaming not supported")
+		return
+	}
+
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		g.logger.Error("streaming not supported")
-		return
-	}
 
 	// Stream responses and persist agent response
 	g.streamResponses(r.Context(), w, flusher, respChan, threadID, agentID)
@@ -236,8 +252,6 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 // streamResponses reads from the response channel and writes SSE events.
 // It also persists the agent's final response to the store.
 func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, respChan <-chan *agent.Response, threadID, agentID string) {
-	var fullResponse strings.Builder
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -250,25 +264,21 @@ func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, fl
 				return
 			}
 
-			// Accumulate text responses for persistence
-			if resp.Event == agent.EventText {
-				fullResponse.WriteString(resp.Text)
-			}
-
 			event := g.responseToSSEEvent(resp)
 			g.writeSSEEvent(w, event.Event, event.Data)
 			flusher.Flush()
 
 			if resp.Done {
-				// Save the agent's complete response
+				// Save the agent's complete response (Done event contains full_response)
 				agentMsg := &store.Message{
 					ID:        uuid.New().String(),
 					ThreadID:  threadID,
 					Sender:    "agent:" + agentID,
-					Content:   resp.Text, // Done event contains full response
+					Content:   resp.Text,
 					CreatedAt: time.Now(),
 				}
-				if err := g.store.SaveMessage(ctx, agentMsg); err != nil {
+				// Use background context since request context may be cancelled
+				if err := g.store.SaveMessage(context.Background(), agentMsg); err != nil {
 					g.logger.Error("failed to save agent message", "error", err)
 				}
 				return
@@ -291,6 +301,9 @@ func (g *Gateway) responseToSSEEvent(resp *agent.Response) SSEEvent {
 			Data:  map[string]string{"text": resp.Text},
 		}
 	case agent.EventToolUse:
+		if resp.ToolUse == nil {
+			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed tool_use event"}}
+		}
 		return SSEEvent{
 			Event: "tool_use",
 			Data: map[string]string{
@@ -300,6 +313,9 @@ func (g *Gateway) responseToSSEEvent(resp *agent.Response) SSEEvent {
 			},
 		}
 	case agent.EventToolResult:
+		if resp.ToolResult == nil {
+			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed tool_result event"}}
+		}
 		return SSEEvent{
 			Event: "tool_result",
 			Data: map[string]interface{}{
@@ -309,6 +325,9 @@ func (g *Gateway) responseToSSEEvent(resp *agent.Response) SSEEvent {
 			},
 		}
 	case agent.EventFile:
+		if resp.File == nil {
+			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed file event"}}
+		}
 		return SSEEvent{
 			Event: "file",
 			Data: map[string]string{
@@ -519,11 +538,23 @@ func (g *Gateway) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse optional limit parameter
-	limit := 50 // default
+	// Validate thread ID is a valid UUID
+	if _, err := uuid.Parse(threadID); err != nil {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid thread_id format")
+		return
+	}
+
+	// Parse optional limit parameter (default 50, max 1000)
+	limit := 50
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
-			limit = parsed
+		parsed, err := strconv.Atoi(limitStr)
+		if err != nil || parsed < 1 {
+			g.sendJSONError(w, http.StatusBadRequest, "limit must be a positive integer")
+			return
+		}
+		limit = parsed
+		if limit > 1000 {
+			limit = 1000
 		}
 	}
 
