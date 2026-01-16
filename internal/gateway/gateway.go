@@ -82,6 +82,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	mux.HandleFunc("/health/ready", gw.handleReady)
 	mux.HandleFunc("/api/agents", gw.handleListAgents)
 	mux.HandleFunc("/api/send", gw.handleSendMessage)
+	mux.HandleFunc("/api/bindings", gw.handleBindings)
 
 	gw.httpServer = &http.Server{
 		Addr:    cfg.Server.HTTPAddr,

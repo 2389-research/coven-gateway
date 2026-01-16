@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/2389/fold-gateway/internal/agent"
+	"github.com/2389/fold-gateway/internal/store"
 )
 
 // SendMessageRequest is the JSON request body for POST /api/send.
@@ -25,6 +27,28 @@ type AgentInfoResponse struct {
 	ID           string   `json:"id"`
 	Name         string   `json:"name"`
 	Capabilities []string `json:"capabilities"`
+}
+
+// CreateBindingRequest is the JSON request body for POST /api/bindings.
+type CreateBindingRequest struct {
+	Frontend  string `json:"frontend"`
+	ChannelID string `json:"channel_id"`
+	AgentID   string `json:"agent_id"`
+}
+
+// BindingResponse is the JSON response for binding operations.
+type BindingResponse struct {
+	Frontend    string `json:"frontend"`
+	ChannelID   string `json:"channel_id"`
+	AgentID     string `json:"agent_id"`
+	AgentName   string `json:"agent_name,omitempty"`
+	AgentOnline bool   `json:"agent_online"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// ListBindingsResponse is the JSON response for GET /api/bindings.
+type ListBindingsResponse struct {
+	Bindings []BindingResponse `json:"bindings"`
 }
 
 // SSEEvent represents a Server-Sent Event.
@@ -233,4 +257,128 @@ func (g *Gateway) getSender() messageSender {
 		return g.mockSender
 	}
 	return g.agentManager
+}
+
+// handleBindings routes binding requests by HTTP method.
+func (g *Gateway) handleBindings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		g.handleListBindings(w, r)
+	case http.MethodPost:
+		g.handleCreateBinding(w, r)
+	case http.MethodDelete:
+		g.handleDeleteBinding(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// handleListBindings handles GET /api/bindings.
+func (g *Gateway) handleListBindings(w http.ResponseWriter, r *http.Request) {
+	bindings, err := g.store.ListBindings(r.Context())
+	if err != nil {
+		g.sendJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response := ListBindingsResponse{
+		Bindings: make([]BindingResponse, len(bindings)),
+	}
+
+	for i, b := range bindings {
+		agentOnline := false
+		agentName := ""
+		if agent, ok := g.agentManager.GetAgent(b.AgentID); ok {
+			agentOnline = true
+			agentName = agent.Name
+		}
+
+		response.Bindings[i] = BindingResponse{
+			Frontend:    b.FrontendName,
+			ChannelID:   b.ChannelID,
+			AgentID:     b.AgentID,
+			AgentName:   agentName,
+			AgentOnline: agentOnline,
+			CreatedAt:   b.CreatedAt.Format(time.RFC3339),
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleCreateBinding handles POST /api/bindings.
+func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
+	var req CreateBindingRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.Frontend == "" || req.ChannelID == "" || req.AgentID == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "frontend, channel_id, and agent_id are required")
+		return
+	}
+
+	now := time.Now()
+	binding := &store.ChannelBinding{
+		FrontendName: req.Frontend,
+		ChannelID:    req.ChannelID,
+		AgentID:      req.AgentID,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	if err := g.store.CreateBinding(r.Context(), binding); err != nil {
+		// Check for duplicate
+		if existing, _ := g.store.GetBinding(r.Context(), req.Frontend, req.ChannelID); existing != nil {
+			g.sendJSONError(w, http.StatusConflict, "binding already exists")
+			return
+		}
+		g.sendJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	agentOnline := false
+	agentName := ""
+	if agent, ok := g.agentManager.GetAgent(req.AgentID); ok {
+		agentOnline = true
+		agentName = agent.Name
+	}
+
+	response := BindingResponse{
+		Frontend:    binding.FrontendName,
+		ChannelID:   binding.ChannelID,
+		AgentID:     binding.AgentID,
+		AgentName:   agentName,
+		AgentOnline: agentOnline,
+		CreatedAt:   binding.CreatedAt.Format(time.RFC3339),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleDeleteBinding handles DELETE /api/bindings?frontend=X&channel_id=Y.
+func (g *Gateway) handleDeleteBinding(w http.ResponseWriter, r *http.Request) {
+	frontend := r.URL.Query().Get("frontend")
+	channelID := r.URL.Query().Get("channel_id")
+
+	if frontend == "" || channelID == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "frontend and channel_id query params required")
+		return
+	}
+
+	err := g.store.DeleteBinding(r.Context(), frontend, channelID)
+	if err == store.ErrNotFound {
+		g.sendJSONError(w, http.StatusNotFound, "binding not found")
+		return
+	}
+	if err != nil {
+		g.sendJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
