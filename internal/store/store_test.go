@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -75,4 +76,73 @@ func TestStore_GetThread_NotFound(t *testing.T) {
 
 	_, err := store.GetThread(ctx, "nonexistent")
 	assert.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestStore_SaveMessage(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	// Create thread first
+	thread := &Thread{
+		ID:           "thread-123",
+		FrontendName: "test-frontend",
+		ExternalID:   "ext-123",
+		AgentID:      "agent-001",
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+	require.NoError(t, store.CreateThread(ctx, thread))
+
+	msg := &Message{
+		ID:        "msg-1",
+		ThreadID:  "thread-123",
+		Sender:    "user",
+		Content:   "Hello",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+	}
+
+	err := store.SaveMessage(ctx, msg)
+	require.NoError(t, err)
+
+	// Retrieve messages
+	messages, err := store.GetThreadMessages(ctx, "thread-123", 0)
+	require.NoError(t, err)
+	require.Len(t, messages, 1)
+	assert.Equal(t, "Hello", messages[0].Content)
+}
+
+func TestStore_GetThreadMessages_Order(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	thread := &Thread{
+		ID:           "thread-123",
+		FrontendName: "test-frontend",
+		ExternalID:   "ext-123",
+		AgentID:      "agent-001",
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+	require.NoError(t, store.CreateThread(ctx, thread))
+
+	// Save messages in order
+	for i, content := range []string{"first", "second", "third"} {
+		msg := &Message{
+			ID:        fmt.Sprintf("msg-%d", i),
+			ThreadID:  "thread-123",
+			Sender:    "user",
+			Content:   content,
+			CreatedAt: time.Now().UTC().Add(time.Duration(i) * time.Second).Truncate(time.Second),
+		}
+		require.NoError(t, store.SaveMessage(ctx, msg))
+	}
+
+	messages, err := store.GetThreadMessages(ctx, "thread-123", 0)
+	require.NoError(t, err)
+	require.Len(t, messages, 3)
+
+	// Should be in chronological order
+	assert.Equal(t, "first", messages[0].Content)
+	assert.Equal(t, "second", messages[1].Content)
+	assert.Equal(t, "third", messages[2].Content)
 }
