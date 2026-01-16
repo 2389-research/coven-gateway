@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/fatih/color"
@@ -191,79 +192,88 @@ func setupLogger(cfg config.LoggingConfig) *slog.Logger {
 		handler = slog.NewJSONHandler(os.Stdout, opts)
 	} else {
 		handler = &colorHandler{
-			handler: slog.NewTextHandler(os.Stdout, opts),
-			level:   level,
+			level: level,
 		}
 	}
 
 	return slog.New(handler)
 }
 
-// colorHandler wraps a slog.Handler to add colorized level output.
+// colorHandler provides colorized log output with thread-safe writes.
 type colorHandler struct {
-	handler slog.Handler
-	level   slog.Level
+	mu     sync.Mutex
+	level  slog.Level
+	attrs  []slog.Attr
+	groups []string
 }
 
-func (h *colorHandler) Enabled(ctx context.Context, level slog.Level) bool {
+func (h *colorHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= h.level
 }
 
-func (h *colorHandler) Handle(ctx context.Context, r slog.Record) error {
+func (h *colorHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	var buf strings.Builder
+
 	// Format timestamp
-	timeStr := r.Time.Format("15:04:05")
-	gray := color.New(color.FgHiBlack)
-	gray.Print(timeStr + " ")
+	buf.WriteString(color.HiBlackString(r.Time.Format("15:04:05") + " "))
 
 	// Colorize level
-	var levelColor *color.Color
-	var levelStr string
 	switch r.Level {
 	case slog.LevelDebug:
-		levelColor = color.New(color.FgMagenta)
-		levelStr = "DBG"
+		buf.WriteString(color.MagentaString("DBG "))
 	case slog.LevelInfo:
-		levelColor = color.New(color.FgCyan)
-		levelStr = "INF"
+		buf.WriteString(color.CyanString("INF "))
 	case slog.LevelWarn:
-		levelColor = color.New(color.FgYellow)
-		levelStr = "WRN"
+		buf.WriteString(color.YellowString("WRN "))
 	case slog.LevelError:
-		levelColor = color.New(color.FgRed, color.Bold)
-		levelStr = "ERR"
+		buf.WriteString(color.New(color.FgRed, color.Bold).Sprint("ERR "))
 	default:
-		levelColor = color.New(color.FgWhite)
-		levelStr = "???"
+		buf.WriteString("??? ")
 	}
-	levelColor.Printf("%-3s ", levelStr)
 
 	// Print message
-	fmt.Print(r.Message)
+	buf.WriteString(r.Message)
 
-	// Print attributes
+	// Print handler-level attrs first (from WithAttrs)
+	for _, a := range h.attrs {
+		buf.WriteString(color.HiBlackString(" " + a.Key + "="))
+		buf.WriteString(a.Value.String())
+	}
+
+	// Print record attrs
 	r.Attrs(func(a slog.Attr) bool {
-		gray.Print(" ")
-		gray.Print(a.Key)
-		gray.Print("=")
-		fmt.Print(a.Value.String())
+		buf.WriteString(color.HiBlackString(" " + a.Key + "="))
+		buf.WriteString(a.Value.String())
 		return true
 	})
 
-	fmt.Println()
+	buf.WriteString("\n")
+	fmt.Print(buf.String())
 	return nil
 }
 
 func (h *colorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	newAttrs := make([]slog.Attr, len(h.attrs), len(h.attrs)+len(attrs))
+	copy(newAttrs, h.attrs)
+	newAttrs = append(newAttrs, attrs...)
 	return &colorHandler{
-		handler: h.handler.WithAttrs(attrs),
-		level:   h.level,
+		level:  h.level,
+		attrs:  newAttrs,
+		groups: h.groups,
 	}
 }
 
 func (h *colorHandler) WithGroup(name string) slog.Handler {
+	newGroups := make([]string, len(h.groups), len(h.groups)+1)
+	copy(newGroups, h.groups)
+	newGroups = append(newGroups, name)
 	return &colorHandler{
-		handler: h.handler.WithGroup(name),
-		level:   h.level,
+		level:  h.level,
+		attrs:  h.attrs,
+		groups: newGroups,
 	}
 }
 
@@ -454,7 +464,12 @@ func prompt(reader *bufio.Reader, question, defaultVal string) string {
 		fmt.Printf("%s: ", question)
 	}
 
-	input, _ := reader.ReadString('\n')
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		// On EOF or error, return default
+		fmt.Println()
+		return defaultVal
+	}
 	input = strings.TrimSpace(input)
 
 	if input == "" {

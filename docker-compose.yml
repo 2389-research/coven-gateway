@@ -23,7 +23,7 @@ services:
       start_period: 10s
 
   # Tailscale mode: tsnet networking (no exposed ports needed)
-  # Usage: docker compose up fold-gateway-tailscale
+  # Usage: docker compose --profile tailscale up fold-gateway-tailscale
   fold-gateway-tailscale:
     build:
       context: .
@@ -38,12 +38,8 @@ services:
       - ./data:/app/data
       - tailscale-state:/app/tailscale  # Persist tsnet state
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s  # Longer start for Tailscale auth
+    # Note: No healthcheck - tsnet binds to Tailscale interface, not localhost.
+    # Check health via: curl http://fold-gateway.<tailnet>.ts.net/health
 
 volumes:
   tailscale-state:

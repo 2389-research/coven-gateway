@@ -50,5 +50,8 @@ USER app
 # Expose gRPC and HTTP ports
 EXPOSE 50051 8080
 
+# Set config path via environment variable
+ENV FOLD_CONFIG=/app/config.yaml
+
 # Default command
-CMD ["fold-gateway", "serve", "--config", "/app/config.yaml"]
+CMD ["fold-gateway", "serve"]
