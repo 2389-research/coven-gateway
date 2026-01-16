@@ -1,5 +1,5 @@
-// ABOUTME: Tests for the agent management layer including Manager, Connection, and Router.
-// ABOUTME: Validates registration, message routing, and response handling functionality.
+// ABOUTME: Tests for the agent management layer including Manager and Connection.
+// ABOUTME: Validates registration, message handling, and response functionality.
 
 package agent
 
@@ -45,69 +45,6 @@ func (m *mockStream) getSentMessages() []*pb.ServerMessage {
 	result := make([]*pb.ServerMessage, len(m.sentMessages))
 	copy(result, m.sentMessages)
 	return result
-}
-
-// TestRouterSelectAgent tests the round-robin router selection.
-func TestRouterSelectAgent(t *testing.T) {
-	t.Run("returns error when no agents available", func(t *testing.T) {
-		router := NewRouter()
-		agents := []*Connection{}
-
-		_, err := router.SelectAgent(agents)
-		if err == nil {
-			t.Error("expected error when no agents available")
-		}
-		if err != ErrNoAgentsAvailable {
-			t.Errorf("expected ErrNoAgentsAvailable, got %v", err)
-		}
-	})
-
-	t.Run("selects single agent", func(t *testing.T) {
-		router := NewRouter()
-		stream := newMockStream()
-		agent := NewConnection("agent-1", "Agent One", []string{"chat"}, stream, slog.Default())
-
-		selected, err := router.SelectAgent([]*Connection{agent})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if selected.ID != "agent-1" {
-			t.Errorf("expected agent-1, got %s", selected.ID)
-		}
-	})
-
-	t.Run("round-robin selects agents in order", func(t *testing.T) {
-		router := NewRouter()
-		stream1 := newMockStream()
-		stream2 := newMockStream()
-		stream3 := newMockStream()
-
-		agents := []*Connection{
-			NewConnection("agent-1", "Agent One", []string{"chat"}, stream1, slog.Default()),
-			NewConnection("agent-2", "Agent Two", []string{"chat"}, stream2, slog.Default()),
-			NewConnection("agent-3", "Agent Three", []string{"chat"}, stream3, slog.Default()),
-		}
-
-		// First cycle
-		selected1, _ := router.SelectAgent(agents)
-		selected2, _ := router.SelectAgent(agents)
-		selected3, _ := router.SelectAgent(agents)
-		// Second cycle should wrap around
-		selected4, _ := router.SelectAgent(agents)
-
-		if selected1.ID != "agent-1" {
-			t.Errorf("first selection: expected agent-1, got %s", selected1.ID)
-		}
-		if selected2.ID != "agent-2" {
-			t.Errorf("second selection: expected agent-2, got %s", selected2.ID)
-		}
-		if selected3.ID != "agent-3" {
-			t.Errorf("third selection: expected agent-3, got %s", selected3.ID)
-		}
-		if selected4.ID != "agent-1" {
-			t.Errorf("fourth selection (wrap): expected agent-1, got %s", selected4.ID)
-		}
-	})
 }
 
 // TestConnectionSend tests sending messages through a connection.
@@ -346,25 +283,48 @@ func TestManagerListAgents(t *testing.T) {
 
 // TestManagerSendMessage tests sending messages through the manager.
 func TestManagerSendMessage(t *testing.T) {
-	t.Run("returns error when no agents available", func(t *testing.T) {
+	t.Run("returns error when agent_id is missing", func(t *testing.T) {
+		manager := NewManager(slog.Default())
+		stream := newMockStream()
+		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
+		manager.Register(conn)
+
+		req := &SendRequest{
+			ThreadID: "thread-1",
+			Sender:   "user@test.com",
+			Content:  "Hello",
+			// AgentID is intentionally not set
+		}
+
+		_, err := manager.SendMessage(context.Background(), req)
+		if err == nil {
+			t.Error("expected error when agent_id is missing")
+		}
+		if err.Error() != "agent_id is required" {
+			t.Errorf("expected 'agent_id is required' error, got %v", err)
+		}
+	})
+
+	t.Run("returns error when specified agent not found", func(t *testing.T) {
 		manager := NewManager(slog.Default())
 
 		req := &SendRequest{
 			ThreadID: "thread-1",
 			Sender:   "user@test.com",
 			Content:  "Hello",
+			AgentID:  "nonexistent-agent",
 		}
 
 		_, err := manager.SendMessage(context.Background(), req)
 		if err == nil {
-			t.Error("expected error when no agents available")
+			t.Error("expected error when agent not found")
 		}
-		if err != ErrNoAgentsAvailable {
-			t.Errorf("expected ErrNoAgentsAvailable, got %v", err)
+		if err != ErrAgentNotFound {
+			t.Errorf("expected ErrAgentNotFound, got %v", err)
 		}
 	})
 
-	t.Run("sends message to selected agent and returns response channel", func(t *testing.T) {
+	t.Run("sends message to specified agent and returns response channel", func(t *testing.T) {
 		manager := NewManager(slog.Default())
 		stream := newMockStream()
 		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
@@ -374,6 +334,7 @@ func TestManagerSendMessage(t *testing.T) {
 			ThreadID: "thread-1",
 			Sender:   "user@test.com",
 			Content:  "Hello, agent!",
+			AgentID:  "agent-1",
 		}
 
 		respChan, err := manager.SendMessage(context.Background(), req)
@@ -415,6 +376,7 @@ func TestManagerSendMessage(t *testing.T) {
 			ThreadID: "thread-1",
 			Sender:   "user@test.com",
 			Content:  "Here is a file",
+			AgentID:  "agent-1",
 			Attachments: []Attachment{
 				{
 					Filename: "test.txt",
@@ -454,6 +416,7 @@ func TestManagerSendMessage(t *testing.T) {
 			ThreadID: "thread-1",
 			Sender:   "user@test.com",
 			Content:  "Hello",
+			AgentID:  "agent-1",
 		}
 
 		manager.SendMessage(context.Background(), req)
@@ -476,9 +439,9 @@ func TestManagerSendMessage(t *testing.T) {
 	})
 }
 
-// TestManagerSendMessageToSpecificAgent tests sending to a specific agent by ID.
-func TestManagerSendMessageToSpecificAgent(t *testing.T) {
-	t.Run("sends to specific agent when agent_id is set", func(t *testing.T) {
+// TestManagerSendMessageTargeting tests sending to a specific agent by ID with multiple agents.
+func TestManagerSendMessageTargeting(t *testing.T) {
+	t.Run("sends to specific agent when multiple agents available", func(t *testing.T) {
 		manager := NewManager(slog.Default())
 		stream1 := newMockStream()
 		stream2 := newMockStream()
@@ -508,53 +471,6 @@ func TestManagerSendMessageToSpecificAgent(t *testing.T) {
 		}
 		if len(sent2) != 1 {
 			t.Errorf("expected 1 message to agent-2, got %d", len(sent2))
-		}
-	})
-
-	t.Run("returns error when specified agent not found", func(t *testing.T) {
-		manager := NewManager(slog.Default())
-		stream := newMockStream()
-		conn := NewConnection("agent-1", "Agent One", []string{"chat"}, stream, slog.Default())
-		manager.Register(conn)
-
-		req := &SendRequest{
-			ThreadID: "thread-1",
-			Sender:   "user@test.com",
-			Content:  "Hello",
-			AgentID:  "nonexistent-agent",
-		}
-
-		_, err := manager.SendMessage(context.Background(), req)
-		if err == nil {
-			t.Error("expected error when agent not found")
-		}
-		if err != ErrAgentNotFound {
-			t.Errorf("expected ErrAgentNotFound, got %v", err)
-		}
-	})
-
-	t.Run("uses router when agent_id is empty", func(t *testing.T) {
-		manager := NewManager(slog.Default())
-		stream := newMockStream()
-		conn := NewConnection("agent-1", "Agent One", []string{"chat"}, stream, slog.Default())
-		manager.Register(conn)
-
-		req := &SendRequest{
-			ThreadID: "thread-1",
-			Sender:   "user@test.com",
-			Content:  "Hello",
-			AgentID:  "", // No specific agent, use router
-		}
-
-		_, err := manager.SendMessage(context.Background(), req)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		// Verify message was sent (router picked the only available agent)
-		sent := stream.getSentMessages()
-		if len(sent) != 1 {
-			t.Errorf("expected 1 message, got %d", len(sent))
 		}
 	})
 }

@@ -143,13 +143,9 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		AgentID:  agentID,
 	}
 
-	// Send message to an agent (optionally targeted if AgentID is set)
+	// Send message to the specified agent
 	respChan, err := sender.SendMessage(r.Context(), sendReq)
 	if err != nil {
-		if errors.Is(err, agent.ErrNoAgentsAvailable) {
-			g.sendJSONError(w, http.StatusServiceUnavailable, "no agents available")
-			return
-		}
 		if errors.Is(err, agent.ErrAgentNotFound) {
 			g.sendJSONError(w, http.StatusNotFound, "agent not found")
 			return

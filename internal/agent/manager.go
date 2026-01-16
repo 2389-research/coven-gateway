@@ -6,6 +6,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 
@@ -24,7 +25,6 @@ var ErrAgentNotFound = errors.New("agent not found")
 type Manager struct {
 	agents map[string]*Connection
 	mu     sync.RWMutex
-	router *Router
 	logger *slog.Logger
 }
 
@@ -32,7 +32,6 @@ type Manager struct {
 func NewManager(logger *slog.Logger) *Manager {
 	return &Manager{
 		agents: make(map[string]*Connection),
-		router: NewRouter(),
 		logger: logger,
 	}
 }
@@ -72,34 +71,17 @@ func (m *Manager) Unregister(agentID string) {
 	}
 }
 
-// SendMessage routes a message to an available agent and returns a channel for responses.
+// SendMessage routes a message to a specified agent and returns a channel for responses.
 // The channel will receive Response events until a Done or Error event is sent.
-// If req.AgentID is specified, the message is sent to that specific agent.
+// AgentID is required - the caller must specify which agent should receive the message.
 func (m *Manager) SendMessage(ctx context.Context, req *SendRequest) (<-chan *Response, error) {
-	var agent *Connection
+	if req.AgentID == "" {
+		return nil, fmt.Errorf("agent_id is required")
+	}
 
-	// If a specific agent is requested, use that one
-	if req.AgentID != "" {
-		var ok bool
-		agent, ok = m.GetAgent(req.AgentID)
-		if !ok {
-			return nil, ErrAgentNotFound
-		}
-	} else {
-		// Get snapshot of available agents
-		m.mu.RLock()
-		agents := make([]*Connection, 0, len(m.agents))
-		for _, a := range m.agents {
-			agents = append(agents, a)
-		}
-		m.mu.RUnlock()
-
-		// Select an agent via the router
-		var err error
-		agent, err = m.router.SelectAgent(agents)
-		if err != nil {
-			return nil, err
-		}
+	agent, ok := m.GetAgent(req.AgentID)
+	if !ok {
+		return nil, ErrAgentNotFound
 	}
 
 	// Generate a unique request ID
@@ -272,7 +254,7 @@ type SendRequest struct {
 	Sender      string
 	Content     string
 	Attachments []Attachment
-	AgentID     string // If specified, send to this specific agent; otherwise use router
+	AgentID     string // Required: specifies which agent should handle this request
 }
 
 // Attachment represents a file attached to a message.
