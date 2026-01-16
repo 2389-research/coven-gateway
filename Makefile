@@ -1,14 +1,25 @@
 # ABOUTME: Build and development commands for fold-gateway
 # ABOUTME: Handles proto generation, building, and testing
 
-.PHONY: all build proto clean test lint fmt run
+.PHONY: all build build-gateway build-matrix build-admin build-tui proto clean test lint fmt run
 
 # Default target
 all: proto build
 
-# Build the binary
-build:
+# Build all binaries
+build: build-gateway build-matrix build-admin build-tui
+
+build-gateway:
 	go build -o bin/fold-gateway ./cmd/fold-gateway
+
+build-matrix:
+	go build -tags goolm -o bin/fold-matrix ./cmd/fold-matrix
+
+build-admin:
+	go build -o bin/fold-admin ./cmd/fold-admin
+
+build-tui:
+	go build -o bin/fold-tui ./cmd/fold-tui
 
 # Generate protobuf code from shared proto
 proto:
