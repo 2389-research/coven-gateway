@@ -107,6 +107,17 @@ func (g *Gateway) handleListAgents(w http.ResponseWriter, r *http.Request) {
 // It accepts a JSON body with the message content and streams responses via SSE.
 // If agent_id is specified, the message is sent to that specific agent.
 // Messages are persisted to the store for history retrieval.
+//
+// Responsibilities (for strangler pattern decomposition):
+//  1. Parse JSON body - decode SendMessageRequest from request body
+//  2. Validate required fields - ensure content and sender are present
+//  3. Resolve agent ID - look up via binding (frontend+channel_id) or use direct agent_id
+//  4. Verify agent online - check agent exists and is available
+//  5. Get or create thread - ensure thread exists for message persistence
+//  6. Save user message - persist the incoming message to store
+//  7. Send message via manager - dispatch to agent through SendMessage
+//  8. Setup SSE streaming - verify flusher support, set SSE headers
+//  9. Stream responses as SSE - delegate to streamResponses helper
 func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
