@@ -138,12 +138,8 @@ func (g *Gateway) Run(ctx context.Context) error {
 			g.logger.Error("server error", "error", err)
 		}
 
-		// Graceful shutdown - use heartbeat timeout if set, otherwise default to 30s
-		shutdownTimeout := g.config.Agents.HeartbeatTimeout
-		if shutdownTimeout == 0 {
-			shutdownTimeout = 30 * time.Second
-		}
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		// Graceful shutdown - use short timeout since agent streams won't close gracefully
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		_ = g.Shutdown(shutdownCtx)
