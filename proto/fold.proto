@@ -100,3 +100,50 @@ message FileAttachment {
 message Shutdown {
   string reason = 1;
 }
+
+// AdminService provides administrative operations for managing the gateway.
+// All methods require admin or owner role (enforced by RequireAdmin interceptor).
+service AdminService {
+  rpc ListBindings(ListBindingsRequest) returns (ListBindingsResponse);
+  rpc CreateBinding(CreateBindingRequest) returns (Binding);
+  rpc UpdateBinding(UpdateBindingRequest) returns (Binding);
+  rpc DeleteBinding(DeleteBindingRequest) returns (DeleteBindingResponse);
+}
+
+// Binding represents a channel-to-agent mapping for message routing
+message Binding {
+  string id = 1;
+  string frontend = 2;
+  string channel_id = 3;
+  string agent_id = 4;
+  string created_at = 5;  // ISO-8601
+  optional string created_by = 6;
+}
+
+message ListBindingsRequest {
+  optional string frontend = 1;
+  optional string agent_id = 2;
+}
+
+message ListBindingsResponse {
+  repeated Binding bindings = 1;
+}
+
+message CreateBindingRequest {
+  string frontend = 1;
+  string channel_id = 2;
+  string agent_id = 3;
+}
+
+message UpdateBindingRequest {
+  string id = 1;
+  string agent_id = 2;
+}
+
+message DeleteBindingRequest {
+  string id = 1;
+}
+
+message DeleteBindingResponse {
+  // Empty response indicates success
+}

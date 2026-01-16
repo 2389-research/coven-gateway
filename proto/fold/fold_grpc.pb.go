@@ -122,3 +122,225 @@ var FoldControl_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "fold.proto",
 }
+
+const (
+	AdminService_ListBindings_FullMethodName  = "/fold.AdminService/ListBindings"
+	AdminService_CreateBinding_FullMethodName = "/fold.AdminService/CreateBinding"
+	AdminService_UpdateBinding_FullMethodName = "/fold.AdminService/UpdateBinding"
+	AdminService_DeleteBinding_FullMethodName = "/fold.AdminService/DeleteBinding"
+)
+
+// AdminServiceClient is the client API for AdminService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// AdminService provides administrative operations for managing the gateway.
+// All methods require admin or owner role (enforced by RequireAdmin interceptor).
+type AdminServiceClient interface {
+	ListBindings(ctx context.Context, in *ListBindingsRequest, opts ...grpc.CallOption) (*ListBindingsResponse, error)
+	CreateBinding(ctx context.Context, in *CreateBindingRequest, opts ...grpc.CallOption) (*Binding, error)
+	UpdateBinding(ctx context.Context, in *UpdateBindingRequest, opts ...grpc.CallOption) (*Binding, error)
+	DeleteBinding(ctx context.Context, in *DeleteBindingRequest, opts ...grpc.CallOption) (*DeleteBindingResponse, error)
+}
+
+type adminServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAdminServiceClient(cc grpc.ClientConnInterface) AdminServiceClient {
+	return &adminServiceClient{cc}
+}
+
+func (c *adminServiceClient) ListBindings(ctx context.Context, in *ListBindingsRequest, opts ...grpc.CallOption) (*ListBindingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBindingsResponse)
+	err := c.cc.Invoke(ctx, AdminService_ListBindings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) CreateBinding(ctx context.Context, in *CreateBindingRequest, opts ...grpc.CallOption) (*Binding, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Binding)
+	err := c.cc.Invoke(ctx, AdminService_CreateBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) UpdateBinding(ctx context.Context, in *UpdateBindingRequest, opts ...grpc.CallOption) (*Binding, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Binding)
+	err := c.cc.Invoke(ctx, AdminService_UpdateBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) DeleteBinding(ctx context.Context, in *DeleteBindingRequest, opts ...grpc.CallOption) (*DeleteBindingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteBindingResponse)
+	err := c.cc.Invoke(ctx, AdminService_DeleteBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AdminServiceServer is the server API for AdminService service.
+// All implementations must embed UnimplementedAdminServiceServer
+// for forward compatibility.
+//
+// AdminService provides administrative operations for managing the gateway.
+// All methods require admin or owner role (enforced by RequireAdmin interceptor).
+type AdminServiceServer interface {
+	ListBindings(context.Context, *ListBindingsRequest) (*ListBindingsResponse, error)
+	CreateBinding(context.Context, *CreateBindingRequest) (*Binding, error)
+	UpdateBinding(context.Context, *UpdateBindingRequest) (*Binding, error)
+	DeleteBinding(context.Context, *DeleteBindingRequest) (*DeleteBindingResponse, error)
+	mustEmbedUnimplementedAdminServiceServer()
+}
+
+// UnimplementedAdminServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAdminServiceServer struct{}
+
+func (UnimplementedAdminServiceServer) ListBindings(context.Context, *ListBindingsRequest) (*ListBindingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBindings not implemented")
+}
+func (UnimplementedAdminServiceServer) CreateBinding(context.Context, *CreateBindingRequest) (*Binding, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateBinding not implemented")
+}
+func (UnimplementedAdminServiceServer) UpdateBinding(context.Context, *UpdateBindingRequest) (*Binding, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateBinding not implemented")
+}
+func (UnimplementedAdminServiceServer) DeleteBinding(context.Context, *DeleteBindingRequest) (*DeleteBindingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteBinding not implemented")
+}
+func (UnimplementedAdminServiceServer) mustEmbedUnimplementedAdminServiceServer() {}
+func (UnimplementedAdminServiceServer) testEmbeddedByValue()                      {}
+
+// UnsafeAdminServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AdminServiceServer will
+// result in compilation errors.
+type UnsafeAdminServiceServer interface {
+	mustEmbedUnimplementedAdminServiceServer()
+}
+
+func RegisterAdminServiceServer(s grpc.ServiceRegistrar, srv AdminServiceServer) {
+	// If the following call panics, it indicates UnimplementedAdminServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AdminService_ServiceDesc, srv)
+}
+
+func _AdminService_ListBindings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBindingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).ListBindings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_ListBindings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).ListBindings(ctx, req.(*ListBindingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_CreateBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateBindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).CreateBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_CreateBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).CreateBinding(ctx, req.(*CreateBindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_UpdateBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateBindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).UpdateBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_UpdateBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).UpdateBinding(ctx, req.(*UpdateBindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_DeleteBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteBindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).DeleteBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_DeleteBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).DeleteBinding(ctx, req.(*DeleteBindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AdminService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "fold.AdminService",
+	HandlerType: (*AdminServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListBindings",
+			Handler:    _AdminService_ListBindings_Handler,
+		},
+		{
+			MethodName: "CreateBinding",
+			Handler:    _AdminService_CreateBinding_Handler,
+		},
+		{
+			MethodName: "UpdateBinding",
+			Handler:    _AdminService_UpdateBinding_Handler,
+		},
+		{
+			MethodName: "DeleteBinding",
+			Handler:    _AdminService_DeleteBinding_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "fold.proto",
+}
