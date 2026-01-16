@@ -120,7 +120,7 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			g.logger.Error("failed to get binding", "error", err)
-			g.sendJSONError(w, http.StatusInternalServerError, err.Error())
+			g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		agentID = binding.AgentID
@@ -146,15 +146,16 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	// Send message to an agent (optionally targeted if AgentID is set)
 	respChan, err := sender.SendMessage(r.Context(), sendReq)
 	if err != nil {
-		if err == agent.ErrNoAgentsAvailable {
+		if errors.Is(err, agent.ErrNoAgentsAvailable) {
 			g.sendJSONError(w, http.StatusServiceUnavailable, "no agents available")
 			return
 		}
-		if err == agent.ErrAgentNotFound {
+		if errors.Is(err, agent.ErrAgentNotFound) {
 			g.sendJSONError(w, http.StatusNotFound, "agent not found")
 			return
 		}
-		g.sendJSONError(w, http.StatusInternalServerError, err.Error())
+		g.logger.Error("failed to send message", "error", err)
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -309,7 +310,7 @@ func (g *Gateway) handleListBindings(w http.ResponseWriter, r *http.Request) {
 	bindings, err := g.store.ListBindings(r.Context())
 	if err != nil {
 		g.logger.Error("failed to list bindings", "error", err)
-		g.sendJSONError(w, http.StatusInternalServerError, err.Error())
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -368,7 +369,7 @@ func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		g.logger.Error("failed to create binding", "error", err)
-		g.sendJSONError(w, http.StatusInternalServerError, err.Error())
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -410,7 +411,7 @@ func (g *Gateway) handleDeleteBinding(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		g.logger.Error("failed to delete binding", "error", err, "frontend", frontend, "channel_id", channelID)
-		g.sendJSONError(w, http.StatusInternalServerError, err.Error())
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
