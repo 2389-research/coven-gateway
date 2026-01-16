@@ -24,9 +24,6 @@ server:
 database:
   path: "./test.db"
 
-routing:
-  strategy: "affinity"
-
 agents:
   heartbeat_interval: "30s"
   heartbeat_timeout: "90s"
@@ -80,11 +77,6 @@ metrics:
 	// Verify database config
 	if cfg.Database.Path != "./test.db" {
 		t.Errorf("Database.Path = %q, want %q", cfg.Database.Path, "./test.db")
-	}
-
-	// Verify routing config
-	if cfg.Routing.Strategy != "affinity" {
-		t.Errorf("Routing.Strategy = %q, want %q", cfg.Routing.Strategy, "affinity")
 	}
 
 	// Verify agents config with duration parsing
@@ -163,9 +155,6 @@ server:
 database:
   path: "./test.db"
 
-routing:
-  strategy: "affinity"
-
 agents:
   heartbeat_interval: "30s"
   heartbeat_timeout: "90s"
@@ -231,9 +220,6 @@ server:
 database:
   path: "./test.db"
 
-routing:
-  strategy: "affinity"
-
 agents:
   heartbeat_interval: "30s"
   heartbeat_timeout: "90s"
@@ -289,9 +275,6 @@ server:
 
 database:
   path: "./test.db"
-
-routing:
-  strategy: "affinity"
 
 agents:
   heartbeat_interval: "1m30s"
@@ -386,9 +369,6 @@ server:
 database:
   path: "./test.db"
 
-routing:
-  strategy: "affinity"
-
 agents:
   heartbeat_interval: "invalid-duration"
   heartbeat_timeout: "90s"
@@ -442,8 +422,6 @@ server:
   http_addr: "0.0.0.0:8080"
 database:
   path: "./test.db"
-routing:
-  strategy: "affinity"
 `,
 			wantErrSubstr: "server.grpc_addr is required",
 		},
@@ -455,8 +433,6 @@ server:
   http_addr: ""
 database:
   path: "./test.db"
-routing:
-  strategy: "affinity"
 `,
 			wantErrSubstr: "server.http_addr is required",
 		},
@@ -468,23 +444,8 @@ server:
   http_addr: "0.0.0.0:8080"
 database:
   path: ""
-routing:
-  strategy: "affinity"
 `,
 			wantErrSubstr: "database.path is required",
-		},
-		{
-			name: "missing routing strategy",
-			configContent: `
-server:
-  grpc_addr: "0.0.0.0:50051"
-  http_addr: "0.0.0.0:8080"
-database:
-  path: "./test.db"
-routing:
-  strategy: ""
-`,
-			wantErrSubstr: "routing.strategy is required",
 		},
 	}
 
@@ -506,68 +467,6 @@ routing:
 
 			if !strings.Contains(err.Error(), tt.wantErrSubstr) {
 				t.Errorf("Load() error = %q, want error containing %q", err.Error(), tt.wantErrSubstr)
-			}
-		})
-	}
-}
-
-func TestLoad_InvalidRoutingStrategy(t *testing.T) {
-	tests := []struct {
-		name     string
-		strategy string
-	}{
-		{name: "typo", strategy: "round-robin"},
-		{name: "unknown", strategy: "unknown_strategy"},
-		{name: "partial", strategy: "round"},
-		{name: "uppercase", strategy: "AFFINITY"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
-			configPath := filepath.Join(tmpDir, "config.yaml")
-
-			configContent := `
-server:
-  grpc_addr: "0.0.0.0:50051"
-  http_addr: "0.0.0.0:8080"
-database:
-  path: "./test.db"
-routing:
-  strategy: "` + tt.strategy + `"
-`
-			err := os.WriteFile(configPath, []byte(configContent), 0644)
-			if err != nil {
-				t.Fatalf("failed to write test config: %v", err)
-			}
-
-			_, err = Load(configPath)
-			if err == nil {
-				t.Errorf("Load() expected error for invalid strategy %q, got nil", tt.strategy)
-				return
-			}
-
-			if !strings.Contains(err.Error(), "invalid") {
-				t.Errorf("Load() error = %q, want error containing 'invalid'", err.Error())
-			}
-		})
-	}
-}
-
-func TestValidate_ValidStrategies(t *testing.T) {
-	validStrategies := []string{"round_robin", "affinity", "capability", "random"}
-
-	for _, strategy := range validStrategies {
-		t.Run(strategy, func(t *testing.T) {
-			cfg := &Config{
-				Server:   ServerConfig{GRPCAddr: "0.0.0.0:50051", HTTPAddr: "0.0.0.0:8080"},
-				Database: DatabaseConfig{Path: "./test.db"},
-				Routing:  RoutingConfig{Strategy: strategy},
-			}
-
-			err := cfg.Validate()
-			if err != nil {
-				t.Errorf("Validate() unexpected error for strategy %q: %v", strategy, err)
 			}
 		})
 	}
@@ -637,7 +536,6 @@ func TestValidate_TailscaleConfig(t *testing.T) {
 				Server:    ServerConfig{GRPCAddr: "", HTTPAddr: ""},
 				Tailscale: TailscaleConfig{Enabled: true, Hostname: "fold-gateway"},
 				Database:  DatabaseConfig{Path: "./test.db"},
-				Routing:   RoutingConfig{Strategy: "round_robin"},
 			},
 			wantErr: false,
 		},
@@ -647,7 +545,6 @@ func TestValidate_TailscaleConfig(t *testing.T) {
 				Server:    ServerConfig{GRPCAddr: "", HTTPAddr: ""},
 				Tailscale: TailscaleConfig{Enabled: true, Hostname: ""},
 				Database:  DatabaseConfig{Path: "./test.db"},
-				Routing:   RoutingConfig{Strategy: "round_robin"},
 			},
 			wantErr:       true,
 			wantErrSubstr: "tailscale.hostname is required",
@@ -658,7 +555,6 @@ func TestValidate_TailscaleConfig(t *testing.T) {
 				Server:    ServerConfig{GRPCAddr: "", HTTPAddr: ""},
 				Tailscale: TailscaleConfig{Enabled: false, Hostname: "fold-gateway"},
 				Database:  DatabaseConfig{Path: "./test.db"},
-				Routing:   RoutingConfig{Strategy: "round_robin"},
 			},
 			wantErr:       true,
 			wantErrSubstr: "server.grpc_addr is required",
@@ -676,7 +572,6 @@ func TestValidate_TailscaleConfig(t *testing.T) {
 					Funnel:    true,
 				},
 				Database: DatabaseConfig{Path: "./test.db"},
-				Routing:  RoutingConfig{Strategy: "round_robin"},
 			},
 			wantErr: false,
 		},

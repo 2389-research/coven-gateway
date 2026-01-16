@@ -17,7 +17,6 @@ type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Tailscale TailscaleConfig `yaml:"tailscale"`
 	Database  DatabaseConfig  `yaml:"database"`
-	Routing   RoutingConfig   `yaml:"routing"`
 	Agents    AgentsConfig    `yaml:"agents"`
 	Frontends FrontendsConfig `yaml:"frontends"`
 	Logging   LoggingConfig   `yaml:"logging"`
@@ -43,11 +42,6 @@ type ServerConfig struct {
 // DatabaseConfig holds database configuration
 type DatabaseConfig struct {
 	Path string `yaml:"path"`
-}
-
-// RoutingConfig holds routing strategy configuration
-type RoutingConfig struct {
-	Strategy string `yaml:"strategy"`
 }
 
 // AgentsConfig holds agent-related timing configuration
@@ -141,14 +135,6 @@ func expandEnvVars(s string) string {
 	})
 }
 
-// validRoutingStrategies defines the allowed routing strategy values
-var validRoutingStrategies = map[string]bool{
-	"round_robin": true,
-	"affinity":    true,
-	"capability":  true,
-	"random":      true,
-}
-
 // Validate checks that all required configuration fields are present and valid.
 // Returns an error describing the first validation failure encountered.
 func (c *Config) Validate() error {
@@ -169,14 +155,6 @@ func (c *Config) Validate() error {
 
 	if c.Database.Path == "" {
 		return fmt.Errorf("database.path is required")
-	}
-
-	if c.Routing.Strategy == "" {
-		return fmt.Errorf("routing.strategy is required")
-	}
-
-	if !validRoutingStrategies[c.Routing.Strategy] {
-		return fmt.Errorf("routing.strategy %q is invalid; must be one of: round_robin, affinity, capability, random", c.Routing.Strategy)
 	}
 
 	return nil

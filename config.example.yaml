@@ -27,10 +27,6 @@ database:
   # SQLite database path
   path: "./fold-gateway.db"
 
-routing:
-  # Routing strategy: round_robin, affinity, capability, random
-  strategy: "affinity"
-
 agents:
   # How often agents should send heartbeats
   heartbeat_interval: "30s"

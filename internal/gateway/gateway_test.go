@@ -47,9 +47,6 @@ func testConfig(t *testing.T) *config.Config {
 		Database: config.DatabaseConfig{
 			Path: ":memory:",
 		},
-		Routing: config.RoutingConfig{
-			Strategy: "round_robin",
-		},
 		Agents: config.AgentsConfig{
 			HeartbeatInterval:    30 * time.Second,
 			HeartbeatTimeout:     90 * time.Second,
