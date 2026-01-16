@@ -10,8 +10,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // EventType represents SSE event types from the gateway.
@@ -63,7 +65,16 @@ type GatewayClient struct {
 func NewGatewayClient(baseURL string) *GatewayClient {
 	return &GatewayClient{
 		baseURL: strings.TrimSuffix(baseURL, "/"),
-		client:  &http.Client{},
+		client: &http.Client{
+			Transport: &http.Transport{
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).DialContext,
+				TLSHandshakeTimeout: 10 * time.Second,
+			},
+			// No overall timeout - SSE streams can be long-lived
+		},
 	}
 }
 
@@ -105,7 +116,7 @@ func (g *GatewayClient) handleErrorResponse(resp *http.Response) error {
 	body, _ := io.ReadAll(resp.Body)
 
 	// Try to parse as JSON error
-	if resp.Header.Get("Content-Type") == "application/json" {
+	if strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 		var errResp ErrorEventData
 		if json.Unmarshal(body, &errResp) == nil && errResp.Error != "" {
 			return fmt.Errorf("gateway error (%d): %s", resp.StatusCode, errResp.Error)
@@ -171,9 +182,13 @@ func (g *GatewayClient) parseSSEStream(ctx context.Context, body io.Reader, onEv
 			continue
 		}
 
-		// Parse data
+		// Parse data (SSE spec says single space after colon is optional but common)
 		if strings.HasPrefix(line, "data:") {
-			dataLines = append(dataLines, strings.TrimPrefix(line, "data:"))
+			data := strings.TrimPrefix(line, "data:")
+			if strings.HasPrefix(data, " ") {
+				data = data[1:] // Remove optional leading space per SSE spec
+			}
+			dataLines = append(dataLines, data)
 			continue
 		}
 	}

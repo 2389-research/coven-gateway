@@ -26,6 +26,10 @@ type Bridge struct {
 
 	// Track rooms we're actively processing to avoid duplicate handling
 	processing sync.Map
+
+	// ctx is the parent context for message processing goroutines
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewBridge creates a new Matrix bridge.
@@ -55,6 +59,10 @@ func (b *Bridge) Run(ctx context.Context) error {
 		"gateway", b.config.Gateway.URL,
 	)
 
+	// Store context for message processing goroutines
+	b.ctx, b.cancel = context.WithCancel(ctx)
+	defer b.cancel()
+
 	// Register event handler for messages
 	syncer := b.matrix.Syncer.(*mautrix.DefaultSyncer)
 	syncer.OnEventType(event.EventMessage, b.handleMessageEvent)
@@ -62,13 +70,9 @@ func (b *Bridge) Run(ctx context.Context) error {
 	// Start syncing
 	b.logger.Info("connecting to matrix homeserver")
 
-	// Run sync in background
-	syncCtx, syncCancel := context.WithCancel(ctx)
-	defer syncCancel()
-
 	syncErr := make(chan error, 1)
 	go func() {
-		syncErr <- b.matrix.SyncWithContext(syncCtx)
+		syncErr <- b.matrix.SyncWithContext(b.ctx)
 	}()
 
 	b.logger.Info("matrix bridge running")
@@ -77,7 +81,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		b.logger.Info("shutting down matrix bridge")
-		syncCancel()
+		b.cancel()
 		return nil
 	case err := <-syncErr:
 		return fmt.Errorf("matrix sync failed: %w", err)
@@ -131,7 +135,8 @@ func (b *Bridge) handleMessageEvent(ctx context.Context, evt *event.Event) {
 	)
 
 	// Process message in goroutine to not block sync
-	go b.processMessage(context.Background(), evt.RoomID, evt.Sender, msgBody)
+	// Use bridge context for graceful shutdown support
+	go b.processMessage(b.ctx, evt.RoomID, evt.Sender, msgBody)
 }
 
 // processMessage sends the message to gateway and streams response back.
@@ -140,8 +145,7 @@ func (b *Bridge) processMessage(ctx context.Context, roomID id.RoomID, sender id
 
 	// Check if we're already processing a message in this room
 	if _, loaded := b.processing.LoadOrStore(roomStr, true); loaded {
-		b.logger.Debug("already processing message in room, queuing", "room", roomStr)
-		// For simplicity, just skip - could implement proper queueing later
+		b.logger.Debug("already processing message in room, dropping", "room", roomStr)
 		return
 	}
 	defer b.processing.Delete(roomStr)
@@ -241,12 +245,13 @@ func (b *Bridge) sendMessage(roomID id.RoomID, text string) {
 	}
 }
 
-// truncate shortens a string to the given max length, adding "..." if truncated.
+// truncate shortens a string to the given max rune count, adding "..." if truncated.
 func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "..."
+	return string(runes[:maxLen]) + "..."
 }
 
 // parseJSON unmarshals JSON from a string into the given value.
