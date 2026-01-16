@@ -17,6 +17,9 @@ import (
 // ErrAgentAlreadyRegistered indicates an agent with the same ID is already connected.
 var ErrAgentAlreadyRegistered = errors.New("agent already registered")
 
+// ErrAgentNotFound indicates the specified agent was not found.
+var ErrAgentNotFound = errors.New("agent not found")
+
 // Manager coordinates all connected agents and routes messages to them.
 type Manager struct {
 	agents map[string]*Connection
@@ -69,19 +72,32 @@ func (m *Manager) Unregister(agentID string) {
 
 // SendMessage routes a message to an available agent and returns a channel for responses.
 // The channel will receive Response events until a Done or Error event is sent.
+// If req.AgentID is specified, the message is sent to that specific agent.
 func (m *Manager) SendMessage(ctx context.Context, req *SendRequest) (<-chan *Response, error) {
-	// Get snapshot of available agents
-	m.mu.RLock()
-	agents := make([]*Connection, 0, len(m.agents))
-	for _, agent := range m.agents {
-		agents = append(agents, agent)
-	}
-	m.mu.RUnlock()
+	var agent *Connection
 
-	// Select an agent via the router
-	agent, err := m.router.SelectAgent(agents)
-	if err != nil {
-		return nil, err
+	// If a specific agent is requested, use that one
+	if req.AgentID != "" {
+		var ok bool
+		agent, ok = m.GetAgent(req.AgentID)
+		if !ok {
+			return nil, ErrAgentNotFound
+		}
+	} else {
+		// Get snapshot of available agents
+		m.mu.RLock()
+		agents := make([]*Connection, 0, len(m.agents))
+		for _, a := range m.agents {
+			agents = append(agents, a)
+		}
+		m.mu.RUnlock()
+
+		// Select an agent via the router
+		var err error
+		agent, err = m.router.SelectAgent(agents)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Generate a unique request ID
@@ -254,6 +270,7 @@ type SendRequest struct {
 	Sender      string
 	Content     string
 	Attachments []Attachment
+	AgentID     string // If specified, send to this specific agent; otherwise use router
 }
 
 // Attachment represents a file attached to a message.

@@ -17,6 +17,14 @@ type SendMessageRequest struct {
 	ThreadID string `json:"thread_id,omitempty"`
 	Sender   string `json:"sender"`
 	Content  string `json:"content"`
+	AgentID  string `json:"agent_id,omitempty"`
+}
+
+// AgentInfoResponse is the JSON response for GET /api/agents.
+type AgentInfoResponse struct {
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Capabilities []string `json:"capabilities"`
 }
 
 // SSEEvent represents a Server-Sent Event.
@@ -25,8 +33,33 @@ type SSEEvent struct {
 	Data  interface{} `json:"data"`
 }
 
+// handleListAgents handles GET /api/agents requests.
+// It returns a JSON array of all connected agents.
+func (g *Gateway) handleListAgents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	sender := g.getSender()
+	agents := sender.ListAgents()
+
+	response := make([]AgentInfoResponse, len(agents))
+	for i, a := range agents {
+		response[i] = AgentInfoResponse{
+			ID:           a.ID,
+			Name:         a.Name,
+			Capabilities: a.Capabilities,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 // handleSendMessage handles POST /api/send requests.
 // It accepts a JSON body with the message content and streams responses via SSE.
+// If agent_id is specified, the message is sent to that specific agent.
 func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -52,13 +85,18 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		ThreadID: req.ThreadID,
 		Sender:   req.Sender,
 		Content:  req.Content,
+		AgentID:  req.AgentID,
 	}
 
-	// Send message to an agent
+	// Send message to an agent (optionally targeted if AgentID is set)
 	respChan, err := sender.SendMessage(r.Context(), sendReq)
 	if err != nil {
 		if err == agent.ErrNoAgentsAvailable {
 			g.sendJSONError(w, http.StatusServiceUnavailable, "no agents available")
+			return
+		}
+		if err == agent.ErrAgentNotFound {
+			g.sendJSONError(w, http.StatusNotFound, "agent not found")
 			return
 		}
 		g.sendJSONError(w, http.StatusInternalServerError, err.Error())

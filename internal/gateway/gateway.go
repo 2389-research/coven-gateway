@@ -77,6 +77,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", gw.handleHealth)
 	mux.HandleFunc("/health/ready", gw.handleReady)
+	mux.HandleFunc("/api/agents", gw.handleListAgents)
 	mux.HandleFunc("/api/send", gw.handleSendMessage)
 
 	gw.httpServer = &http.Server{

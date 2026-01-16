@@ -23,6 +23,14 @@ type sendRequest struct {
 	ThreadID string `json:"thread_id,omitempty"`
 	Sender   string `json:"sender"`
 	Content  string `json:"content"`
+	AgentID  string `json:"agent_id,omitempty"`
+}
+
+// agentInfo is the JSON response from GET /api/agents.
+type agentInfo struct {
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Capabilities []string `json:"capabilities"`
 }
 
 // sseEvent is a parsed Server-Sent Event.
@@ -39,7 +47,7 @@ func main() {
 	flag.Parse()
 
 	fmt.Printf("fold-tui connected to %s\n", *server)
-	fmt.Println("Type a message and press Enter. Ctrl+C to quit.")
+	fmt.Println("Type a message and press Enter. /help for commands. Ctrl+C to quit.")
 	fmt.Println()
 
 	// Setup context with signal handling for graceful shutdown
@@ -57,10 +65,15 @@ func main() {
 
 func run(ctx context.Context, server, sender, threadID string) error {
 	scanner := bufio.NewScanner(os.Stdin)
+	var selectedAgentID string
 
 	for {
-		// Print prompt
-		fmt.Print("> ")
+		// Print prompt (include agent ID if one is selected)
+		if selectedAgentID != "" {
+			fmt.Printf("[%s]> ", selectedAgentID)
+		} else {
+			fmt.Print("> ")
+		}
 
 		// Read input with context awareness
 		inputCh := make(chan string, 1)
@@ -101,20 +114,99 @@ func run(ctx context.Context, server, sender, threadID string) error {
 			return nil
 		}
 
+		// Check for /agents command
+		if input == "/agents" {
+			if err := listAgents(ctx, server); err != nil {
+				fmt.Printf("[error] %v\n", err)
+			}
+			fmt.Println()
+			continue
+		}
+
+		// Check for /use command
+		if strings.HasPrefix(input, "/use") {
+			args := strings.TrimSpace(strings.TrimPrefix(input, "/use"))
+			if args == "" {
+				// Clear agent selection
+				selectedAgentID = ""
+				fmt.Println("Cleared agent selection, using router")
+			} else {
+				// Set agent selection
+				selectedAgentID = args
+				fmt.Printf("Now using %s\n", selectedAgentID)
+			}
+			fmt.Println()
+			continue
+		}
+
+		// Check for /help command
+		if input == "/help" {
+			printHelp()
+			fmt.Println()
+			continue
+		}
+
 		// Send message and stream response
-		if err := sendMessage(ctx, server, sender, threadID, input); err != nil {
+		if err := sendMessage(ctx, server, sender, threadID, selectedAgentID, input); err != nil {
 			fmt.Printf("[error] %v\n", err)
 		}
 		fmt.Println()
 	}
 }
 
-func sendMessage(ctx context.Context, server, sender, threadID, content string) error {
+// printHelp displays available commands.
+func printHelp() {
+	fmt.Println("Commands:")
+	fmt.Println("  /agents        List connected agents")
+	fmt.Println("  /use <id>      Set default agent for messages")
+	fmt.Println("  /use           Clear agent selection, use router")
+	fmt.Println("  /help          Show this help")
+	fmt.Println("  /quit          Exit the TUI")
+}
+
+// listAgents fetches and displays connected agents.
+func listAgents(ctx context.Context, server string) error {
+	url := fmt.Sprintf("%s/api/agents", server)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("fetching agents: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned status %d", resp.StatusCode)
+	}
+
+	var agents []agentInfo
+	if err := json.NewDecoder(resp.Body).Decode(&agents); err != nil {
+		return fmt.Errorf("parsing response: %w", err)
+	}
+
+	if len(agents) == 0 {
+		fmt.Println("No agents connected")
+		return nil
+	}
+
+	fmt.Println("Connected agents:")
+	for _, a := range agents {
+		caps := strings.Join(a.Capabilities, ", ")
+		fmt.Printf("  %s: %s [%s]\n", a.ID, a.Name, caps)
+	}
+	return nil
+}
+
+func sendMessage(ctx context.Context, server, sender, threadID, agentID, content string) error {
 	// Build request body
 	reqBody := sendRequest{
 		ThreadID: threadID,
 		Sender:   sender,
 		Content:  content,
+		AgentID:  agentID,
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
