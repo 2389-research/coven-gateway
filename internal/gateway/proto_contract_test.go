@@ -10,16 +10,32 @@ import (
 	pb "github.com/2389/fold-gateway/proto/fold"
 )
 
-// Ensure imports are used (will be removed when actual tests are added)
-var (
-	_ = assert.Equal
-	_ = require.NoError
-	_ = proto.Marshal
-	_ pb.AgentMessage
-)
+// TestProtoContract_RegisterAgent verifies RegisterAgent message serializes
+// and deserializes correctly, ensuring Go and Rust see identical bytes.
+func TestProtoContract_RegisterAgent(t *testing.T) {
+	original := &pb.AgentMessage{
+		Payload: &pb.AgentMessage_Register{
+			Register: &pb.RegisterAgent{
+				AgentId:      "agent-123",
+				Name:         "test-agent",
+				Capabilities: []string{"code", "chat"},
+			},
+		},
+	}
 
-func TestProtoContractPlaceholder(t *testing.T) {
-	// Placeholder test to verify imports compile correctly.
-	// Real tests will be added in subsequent tasks.
-	t.Log("Proto contract test file initialized")
+	// Serialize
+	data, err := proto.Marshal(original)
+	require.NoError(t, err)
+
+	// Deserialize
+	decoded := &pb.AgentMessage{}
+	err = proto.Unmarshal(data, decoded)
+	require.NoError(t, err)
+
+	// Verify
+	reg := decoded.GetRegister()
+	require.NotNil(t, reg)
+	assert.Equal(t, "agent-123", reg.GetAgentId())
+	assert.Equal(t, "test-agent", reg.GetName())
+	assert.Equal(t, []string{"code", "chat"}, reg.GetCapabilities())
 }
