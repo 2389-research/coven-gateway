@@ -337,3 +337,168 @@ func newTestGatewayWithMockManager(t *testing.T) *Gateway {
 
 	return gw
 }
+
+func TestBindingsCRUD(t *testing.T) {
+	gw := newTestGateway(t)
+
+	// Create a binding
+	createReq := `{"frontend":"slack","channel_id":"C001","agent_id":"test-agent"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(createReq))
+	w := httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("create binding: got status %d, want %d. Body: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+
+	// List bindings
+	req = httptest.NewRequest(http.MethodGet, "/api/bindings", nil)
+	w = httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("list bindings: got status %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var listResp ListBindingsResponse
+	if err := json.NewDecoder(w.Body).Decode(&listResp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(listResp.Bindings) != 1 {
+		t.Errorf("got %d bindings, want 1", len(listResp.Bindings))
+	}
+
+	// Delete binding
+	req = httptest.NewRequest(http.MethodDelete, "/api/bindings?frontend=slack&channel_id=C001", nil)
+	w = httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("delete binding: got status %d, want %d", w.Code, http.StatusNoContent)
+	}
+
+	// Verify deleted
+	req = httptest.NewRequest(http.MethodGet, "/api/bindings", nil)
+	w = httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if err := json.NewDecoder(w.Body).Decode(&listResp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(listResp.Bindings) != 0 {
+		t.Errorf("got %d bindings after delete, want 0", len(listResp.Bindings))
+	}
+}
+
+func TestBindingsValidation(t *testing.T) {
+	gw := newTestGateway(t)
+
+	tests := []struct {
+		name    string
+		body    string
+		wantErr string
+	}{
+		{
+			name:    "missing frontend",
+			body:    `{"channel_id":"C001","agent_id":"test-agent"}`,
+			wantErr: "frontend, channel_id, and agent_id are required",
+		},
+		{
+			name:    "missing channel_id",
+			body:    `{"frontend":"slack","agent_id":"test-agent"}`,
+			wantErr: "frontend, channel_id, and agent_id are required",
+		},
+		{
+			name:    "missing agent_id",
+			body:    `{"frontend":"slack","channel_id":"C001"}`,
+			wantErr: "frontend, channel_id, and agent_id are required",
+		},
+		{
+			name:    "empty body",
+			body:    `{}`,
+			wantErr: "frontend, channel_id, and agent_id are required",
+		},
+		{
+			name:    "invalid json",
+			body:    `not json`,
+			wantErr: "invalid JSON body",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(tt.body))
+			w := httptest.NewRecorder()
+			gw.handleBindings(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("got status %d, want %d", w.Code, http.StatusBadRequest)
+			}
+
+			var errResp map[string]string
+			if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+				t.Fatalf("decode error response: %v", err)
+			}
+
+			if errResp["error"] != tt.wantErr {
+				t.Errorf("got error %q, want %q", errResp["error"], tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBindingsDuplicate(t *testing.T) {
+	gw := newTestGateway(t)
+
+	// Create first binding
+	createReq := `{"frontend":"slack","channel_id":"C001","agent_id":"test-agent"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(createReq))
+	w := httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("first create: got status %d, want %d. Body: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+
+	// Try to create duplicate binding
+	req = httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(createReq))
+	w = httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("duplicate create: got status %d, want %d. Body: %s", w.Code, http.StatusConflict, w.Body.String())
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+
+	if errResp["error"] != "binding already exists" {
+		t.Errorf("got error %q, want %q", errResp["error"], "binding already exists")
+	}
+}
+
+func TestBindingsNotFound(t *testing.T) {
+	gw := newTestGateway(t)
+
+	// Try to delete non-existent binding
+	req := httptest.NewRequest(http.MethodDelete, "/api/bindings?frontend=slack&channel_id=NONEXISTENT", nil)
+	w := httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("delete non-existent: got status %d, want %d. Body: %s", w.Code, http.StatusNotFound, w.Body.String())
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+
+	if errResp["error"] != "binding not found" {
+		t.Errorf("got error %q, want %q", errResp["error"], "binding not found")
+	}
+}
