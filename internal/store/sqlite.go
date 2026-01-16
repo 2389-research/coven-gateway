@@ -185,6 +185,20 @@ func (s *SQLiteStore) createSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_ledger_conversation ON ledger_events(conversation_key, timestamp);
 		CREATE INDEX IF NOT EXISTS idx_ledger_actor ON ledger_events(actor_principal_id);
 		CREATE INDEX IF NOT EXISTS idx_ledger_timestamp ON ledger_events(timestamp);
+
+		CREATE TABLE IF NOT EXISTS bindings (
+			binding_id TEXT PRIMARY KEY,
+			frontend   TEXT NOT NULL,
+			channel_id TEXT NOT NULL,
+			agent_id   TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			created_by TEXT,
+
+			UNIQUE(frontend, channel_id)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_bindings_frontend ON bindings(frontend);
+		CREATE INDEX IF NOT EXISTS idx_bindings_agent ON bindings(agent_id);
 	`
 
 	_, err := s.db.Exec(schema)
