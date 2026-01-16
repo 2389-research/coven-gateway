@@ -17,10 +17,16 @@ type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Tailscale TailscaleConfig `yaml:"tailscale"`
 	Database  DatabaseConfig  `yaml:"database"`
+	Auth      AuthConfig      `yaml:"auth"`
 	Agents    AgentsConfig    `yaml:"agents"`
 	Frontends FrontendsConfig `yaml:"frontends"`
 	Logging   LoggingConfig   `yaml:"logging"`
 	Metrics   MetricsConfig   `yaml:"metrics"`
+}
+
+// AuthConfig holds authentication configuration
+type AuthConfig struct {
+	JWTSecret string `yaml:"jwt_secret"`
 }
 
 // TailscaleConfig holds Tailscale tsnet configuration

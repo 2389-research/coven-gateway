@@ -16,7 +16,10 @@ import (
 	"google.golang.org/grpc"
 	"tailscale.com/tsnet"
 
+	"github.com/2389/fold-gateway/internal/admin"
 	"github.com/2389/fold-gateway/internal/agent"
+	"github.com/2389/fold-gateway/internal/auth"
+	"github.com/2389/fold-gateway/internal/client"
 	"github.com/2389/fold-gateway/internal/config"
 	"github.com/2389/fold-gateway/internal/dedupe"
 	"github.com/2389/fold-gateway/internal/store"
@@ -63,12 +66,39 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	// Create agent manager
 	agentMgr := agent.NewManager(logger.With("component", "agent-manager"))
 
-	// Create gRPC server
-	grpcServer := grpc.NewServer()
-
 	// Create dedupe cache for bridge message deduplication
 	// TTL of 5 minutes, max size 100,000 entries
 	dedupeCache := dedupe.New(5*time.Minute, 100_000)
+
+	// Create gRPC server with auth interceptors if JWT secret is configured
+	var grpcServer *grpc.Server
+	if cfg.Auth.JWTSecret != "" {
+		// Create JWT verifier
+		verifier, err := auth.NewJWTVerifier([]byte(cfg.Auth.JWTSecret))
+		if err != nil {
+			return nil, fmt.Errorf("creating JWT verifier: %w", err)
+		}
+
+		// Create store adapter for auth interceptors
+		sqlStore := s.(*store.SQLiteStore)
+
+		// Create gRPC server with auth interceptors
+		grpcServer = grpc.NewServer(
+			grpc.ChainUnaryInterceptor(
+				auth.UnaryInterceptor(sqlStore, sqlStore, verifier),
+				auth.RequireAdmin(),
+			),
+			grpc.ChainStreamInterceptor(
+				auth.StreamInterceptor(sqlStore, sqlStore, verifier),
+				auth.RequireAdminStream(),
+			),
+		)
+		logger.Info("auth interceptors enabled")
+	} else {
+		// No auth - create plain gRPC server
+		grpcServer = grpc.NewServer()
+		logger.Warn("auth disabled - no jwt_secret configured")
+	}
 
 	// Create gateway
 	gw := &Gateway{
@@ -81,9 +111,17 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		dedupe:       dedupeCache,
 	}
 
-	// Register FoldControl service
+	// Register FoldControl service (agent streaming - no auth required for now)
 	foldService := newFoldControlServer(gw, logger.With("component", "grpc"))
 	pb.RegisterFoldControlServer(grpcServer, foldService)
+
+	// Register AdminService and ClientService
+	sqliteStore := s.(*store.SQLiteStore)
+	adminService := admin.NewAdminService(sqliteStore)
+	pb.RegisterAdminServiceServer(grpcServer, adminService)
+
+	clientService := client.NewClientServiceWithDedupe(sqliteStore, sqliteStore, dedupeCache)
+	pb.RegisterClientServiceServer(grpcServer, clientService)
 
 	// Create HTTP server for health checks and API
 	mux := http.NewServeMux()
