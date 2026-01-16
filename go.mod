@@ -3,6 +3,7 @@ module github.com/2389/fold-gateway
 go 1.25.5
 
 require (
+	github.com/BurntSushi/toml v1.5.0
 	github.com/fatih/color v1.18.0
 	github.com/google/uuid v1.6.0
 	google.golang.org/grpc v1.78.0

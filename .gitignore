@@ -1,5 +1,8 @@
 # Build artifacts
 bin/
+/fold-matrix
+/fold-gateway
+/fold-tui
 
 # Local config (use config.example.yaml as template)
 config.yaml
