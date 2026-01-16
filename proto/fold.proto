@@ -155,6 +155,22 @@ message DeleteBindingResponse {
 service ClientService {
   rpc GetEvents(GetEventsRequest) returns (GetEventsResponse);
   rpc GetMe(google.protobuf.Empty) returns (MeResponse);
+  rpc SendMessage(ClientSendMessageRequest) returns (ClientSendMessageResponse);
+}
+
+// ClientSendMessageRequest is the request for direct client message sending.
+// The idempotency_key is required and must be unique per message to prevent duplicates.
+message ClientSendMessageRequest {
+  string conversation_key = 1;
+  string content = 2;
+  repeated FileAttachment attachments = 3;
+  string idempotency_key = 4;  // required, 1-100 chars
+}
+
+// ClientSendMessageResponse is the response for direct client message sending.
+message ClientSendMessageResponse {
+  string status = 1;  // "accepted" or "duplicate"
+  string message_id = 2;  // assigned message ID (empty for duplicates)
 }
 
 // MeResponse contains the authenticated principal's identity information

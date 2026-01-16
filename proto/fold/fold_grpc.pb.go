@@ -347,8 +347,9 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ClientService_GetEvents_FullMethodName = "/fold.ClientService/GetEvents"
-	ClientService_GetMe_FullMethodName     = "/fold.ClientService/GetMe"
+	ClientService_GetEvents_FullMethodName   = "/fold.ClientService/GetEvents"
+	ClientService_GetMe_FullMethodName       = "/fold.ClientService/GetMe"
+	ClientService_SendMessage_FullMethodName = "/fold.ClientService/SendMessage"
 )
 
 // ClientServiceClient is the client API for ClientService service.
@@ -360,6 +361,7 @@ const (
 type ClientServiceClient interface {
 	GetEvents(ctx context.Context, in *GetEventsRequest, opts ...grpc.CallOption) (*GetEventsResponse, error)
 	GetMe(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*MeResponse, error)
+	SendMessage(ctx context.Context, in *ClientSendMessageRequest, opts ...grpc.CallOption) (*ClientSendMessageResponse, error)
 }
 
 type clientServiceClient struct {
@@ -390,6 +392,16 @@ func (c *clientServiceClient) GetMe(ctx context.Context, in *emptypb.Empty, opts
 	return out, nil
 }
 
+func (c *clientServiceClient) SendMessage(ctx context.Context, in *ClientSendMessageRequest, opts ...grpc.CallOption) (*ClientSendMessageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClientSendMessageResponse)
+	err := c.cc.Invoke(ctx, ClientService_SendMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientServiceServer is the server API for ClientService service.
 // All implementations must embed UnimplementedClientServiceServer
 // for forward compatibility.
@@ -399,6 +411,7 @@ func (c *clientServiceClient) GetMe(ctx context.Context, in *emptypb.Empty, opts
 type ClientServiceServer interface {
 	GetEvents(context.Context, *GetEventsRequest) (*GetEventsResponse, error)
 	GetMe(context.Context, *emptypb.Empty) (*MeResponse, error)
+	SendMessage(context.Context, *ClientSendMessageRequest) (*ClientSendMessageResponse, error)
 	mustEmbedUnimplementedClientServiceServer()
 }
 
@@ -414,6 +427,9 @@ func (UnimplementedClientServiceServer) GetEvents(context.Context, *GetEventsReq
 }
 func (UnimplementedClientServiceServer) GetMe(context.Context, *emptypb.Empty) (*MeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetMe not implemented")
+}
+func (UnimplementedClientServiceServer) SendMessage(context.Context, *ClientSendMessageRequest) (*ClientSendMessageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendMessage not implemented")
 }
 func (UnimplementedClientServiceServer) mustEmbedUnimplementedClientServiceServer() {}
 func (UnimplementedClientServiceServer) testEmbeddedByValue()                       {}
@@ -472,6 +488,24 @@ func _ClientService_GetMe_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientService_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClientSendMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).SendMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_SendMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).SendMessage(ctx, req.(*ClientSendMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientService_ServiceDesc is the grpc.ServiceDesc for ClientService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -486,6 +520,10 @@ var ClientService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMe",
 			Handler:    _ClientService_GetMe_Handler,
+		},
+		{
+			MethodName: "SendMessage",
+			Handler:    _ClientService_SendMessage_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -29,6 +29,7 @@ type ClientService struct {
 	pb.UnimplementedClientServiceServer
 	store      EventStore
 	principals PrincipalStore
+	dedupe     DedupeCache
 }
 
 // NewClientService creates a new ClientService with the given stores
