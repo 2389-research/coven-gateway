@@ -16,6 +16,7 @@ type MockStore struct {
 	messages    map[string][]*Message      // keyed by threadID
 	bindings    map[string]*ChannelBinding // keyed by "frontend:channelID"
 	agentState  map[string][]byte          // keyed by agentID
+	events      map[string]*LedgerEvent    // keyed by event ID
 }
 
 // NewMockStore creates a new MockStore.
@@ -26,6 +27,7 @@ func NewMockStore() *MockStore {
 		messages:    make(map[string][]*Message),
 		bindings:    make(map[string]*ChannelBinding),
 		agentState:  make(map[string][]byte),
+		events:      make(map[string]*LedgerEvent),
 	}
 }
 
@@ -221,6 +223,73 @@ func (m *MockStore) DeleteBinding(ctx context.Context, frontend, channelID strin
 
 	delete(m.bindings, key)
 	return nil
+}
+
+// SaveEvent stores a ledger event.
+func (m *MockStore) SaveEvent(ctx context.Context, event *LedgerEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Make a copy to avoid external modification
+	e := *event
+	m.events[e.ID] = &e
+
+	return nil
+}
+
+// GetEvent retrieves a ledger event by ID.
+func (m *MockStore) GetEvent(ctx context.Context, id string) (*LedgerEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	e, ok := m.events[id]
+	if !ok {
+		return nil, ErrEventNotFound
+	}
+
+	// Return a copy
+	result := *e
+	return &result, nil
+}
+
+// ListEventsByConversation retrieves events for a conversation key.
+func (m *MockStore) ListEventsByConversation(ctx context.Context, conversationKey string, limit int) ([]*LedgerEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*LedgerEvent
+	for _, e := range m.events {
+		if e.ConversationKey == conversationKey {
+			eventCopy := *e
+			result = append(result, &eventCopy)
+		}
+	}
+
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+
+	return result, nil
+}
+
+// ListEventsByActor retrieves events by actor principal ID.
+func (m *MockStore) ListEventsByActor(ctx context.Context, principalID string, limit int) ([]*LedgerEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*LedgerEvent
+	for _, e := range m.events {
+		if e.ActorPrincipalID != nil && *e.ActorPrincipalID == principalID {
+			eventCopy := *e
+			result = append(result, &eventCopy)
+		}
+	}
+
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+
+	return result, nil
 }
 
 // Close is a no-op for MockStore.

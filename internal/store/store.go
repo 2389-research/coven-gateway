@@ -62,6 +62,12 @@ type Store interface {
 	ListBindings(ctx context.Context) ([]*ChannelBinding, error)
 	DeleteBinding(ctx context.Context, frontend, channelID string) error
 
+	// Ledger events
+	SaveEvent(ctx context.Context, event *LedgerEvent) error
+	GetEvent(ctx context.Context, id string) (*LedgerEvent, error)
+	ListEventsByConversation(ctx context.Context, conversationKey string, limit int) ([]*LedgerEvent, error)
+	ListEventsByActor(ctx context.Context, principalID string, limit int) ([]*LedgerEvent, error)
+
 	// Close releases any resources held by the store
 	Close() error
 }

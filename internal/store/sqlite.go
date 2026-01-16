@@ -164,6 +164,27 @@ func (s *SQLiteStore) createSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts DESC);
 		CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_principal_id);
 		CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id);
+
+		CREATE TABLE IF NOT EXISTS ledger_events (
+			event_id           TEXT PRIMARY KEY,
+			conversation_key   TEXT NOT NULL,
+			direction          TEXT NOT NULL,
+			author             TEXT NOT NULL,
+			timestamp          TEXT NOT NULL,
+			type               TEXT NOT NULL,
+			text               TEXT,
+			raw_transport      TEXT,
+			raw_payload_ref    TEXT,
+			actor_principal_id TEXT,
+			actor_member_id    TEXT,
+
+			CHECK (direction IN ('inbound_to_agent', 'outbound_from_agent')),
+			CHECK (type IN ('message', 'tool_call', 'tool_result', 'system', 'error'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_ledger_conversation ON ledger_events(conversation_key, timestamp);
+		CREATE INDEX IF NOT EXISTS idx_ledger_actor ON ledger_events(actor_principal_id);
+		CREATE INDEX IF NOT EXISTS idx_ledger_timestamp ON ledger_events(timestamp);
 	`
 
 	_, err := s.db.Exec(schema)
