@@ -17,7 +17,7 @@ repos:
         name: go vet
         description: Run go vet to check for suspicious constructs
         entry: go vet
-        args: ["./..."]
+        args: ["-tags=goolm", "./..."]
         language: system
         pass_filenames: false
 
@@ -25,7 +25,7 @@ repos:
         name: go test
         description: Run go test for all packages (short mode with race detection)
         entry: go test
-        args: ["-race", "-short", "-timeout=120s", "./..."]
+        args: ["-tags=goolm", "-race", "-short", "-timeout=120s", "./..."]
         language: system
         pass_filenames: false
 
