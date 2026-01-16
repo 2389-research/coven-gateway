@@ -31,6 +31,15 @@ type Message struct {
 	CreatedAt time.Time
 }
 
+// ChannelBinding represents a sticky assignment of a frontend channel to an agent
+type ChannelBinding struct {
+	FrontendName string
+	ChannelID    string
+	AgentID      string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 // Store defines the interface for thread and message persistence
 type Store interface {
 	// Threads
@@ -46,6 +55,12 @@ type Store interface {
 	// Agent state (optional, for future use)
 	SaveAgentState(ctx context.Context, agentID string, state []byte) error
 	GetAgentState(ctx context.Context, agentID string) ([]byte, error)
+
+	// Channel bindings
+	CreateBinding(ctx context.Context, binding *ChannelBinding) error
+	GetBinding(ctx context.Context, frontend, channelID string) (*ChannelBinding, error)
+	ListBindings(ctx context.Context) ([]*ChannelBinding, error)
+	DeleteBinding(ctx context.Context, frontend, channelID string) error
 
 	// Close releases any resources held by the store
 	Close() error

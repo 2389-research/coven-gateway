@@ -6,6 +6,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -371,6 +372,26 @@ func (s *SQLiteStore) GetAgentState(ctx context.Context, agentID string) ([]byte
 	}
 
 	return state, nil
+}
+
+// CreateBinding creates a new channel binding.
+func (s *SQLiteStore) CreateBinding(ctx context.Context, binding *ChannelBinding) error {
+	return errors.New("not implemented")
+}
+
+// GetBinding retrieves a binding by frontend and channel ID.
+func (s *SQLiteStore) GetBinding(ctx context.Context, frontend, channelID string) (*ChannelBinding, error) {
+	return nil, errors.New("not implemented")
+}
+
+// ListBindings returns all channel bindings.
+func (s *SQLiteStore) ListBindings(ctx context.Context) ([]*ChannelBinding, error) {
+	return nil, errors.New("not implemented")
+}
+
+// DeleteBinding removes a channel binding.
+func (s *SQLiteStore) DeleteBinding(ctx context.Context, frontend, channelID string) error {
+	return errors.New("not implemented")
 }
 
 // Ensure SQLiteStore implements Store interface
