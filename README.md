@@ -1,6 +1,6 @@
 # fold-gateway
 
-Production control plane for [fold](https://github.com/2389-research/fold) agents. Manages agent connections via gRPC, routes messages from frontends to agents, and streams responses back in real-time.
+Production control plane for [fold](https://github.com/2389-research/fold-agent) agents. Manages agent connections via gRPC, routes messages from frontends to agents, and streams responses back in real-time.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -31,7 +31,7 @@ Production control plane for [fold](https://github.com/2389-research/fold) agent
 
 - Go 1.22+
 - Protocol Buffers compiler (`protoc`)
-- A running [fold-agent](https://github.com/2389-research/fold)
+- A running [fold-agent](https://github.com/2389-research/fold-agent)
 
 ### Build
 
@@ -43,9 +43,11 @@ cd fold-gateway
 # Build (regenerates proto and compiles)
 make
 
-# Or just build without proto regeneration
+# Or build individual binaries without proto regeneration
 go build -o bin/fold-gateway ./cmd/fold-gateway
 go build -o bin/fold-tui ./cmd/fold-tui
+go build -o bin/fold-admin ./cmd/fold-admin
+go build -o bin/fold-matrix ./cmd/fold-matrix
 ```
 
 ### Configure
@@ -83,10 +85,11 @@ cargo run -p fold-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 - **Health Endpoints**: Liveness and readiness checks
 - **Graceful Shutdown**: Clean termination with configurable timeout
 - **Tailscale Integration**: Run as a node on your tailnet via [tsnet](https://tailscale.com/kb/1244/tsnet)
+- **Matrix Bridge**: Standalone bridge (fold-matrix) connecting Matrix rooms to agents with E2EE support
 
 ### Planned
 
-- Slack/Matrix frontend integrations
+- Slack frontend integration
 - Prometheus metrics
 - mTLS agent authentication
 
@@ -96,20 +99,23 @@ cargo run -p fold-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 
 ```bash
 # Start the gateway server
-./bin/fold-gateway serve [--config path/to/config.yaml]
+./bin/fold-gateway serve
+# Config via: FOLD_CONFIG=path/to/config.yaml or ~/.config/fold/gateway.yaml
 
 # Check gateway health
-./bin/fold-gateway health [--addr http://localhost:8080]
+./bin/fold-gateway health
+# Uses config file for gateway address
 
 # List connected agents
-./bin/fold-gateway agents [--addr http://localhost:8080]
+./bin/fold-gateway agents
+# Uses config file for gateway address
 ```
 
 ### TUI Client
 
 ```bash
 # Connect to gateway
-./bin/fold-tui [--server http://localhost:8080]
+./bin/fold-tui [-server http://localhost:8080]
 
 # Inside TUI:
 #   Type message + Enter  → Send to agent
@@ -118,6 +124,41 @@ cargo run -p fold-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 #   /help                 → Show commands
 #   Ctrl+C                → Exit
 ```
+
+### Admin CLI
+
+```bash
+# Monitor gateway status
+./bin/fold-admin [-gateway http://localhost:8080]
+
+# Watch mode (continuous updates)
+./bin/fold-admin -watch
+
+# Set refresh interval
+./bin/fold-admin -watch -interval 5s
+```
+
+The admin CLI displays:
+- Connected agents with capabilities
+- Channel bindings and their status
+- Agent online/offline state
+
+### Matrix Bridge
+
+Standalone bridge connecting Matrix rooms to fold agents:
+
+```bash
+# Run the Matrix bridge
+./bin/fold-matrix
+
+# Uses separate config file: config.toml (see cmd/fold-matrix/config.example.toml)
+```
+
+Features:
+- End-to-end encryption (E2EE) support
+- Password-based login
+- Self-healing crypto store
+- Room-specific agent bindings via gateway API
 
 ### HTTP API
 
@@ -161,9 +202,6 @@ server:
 
 database:
   path: "./fold-gateway.db"   # SQLite path (":memory:" for testing)
-
-routing:
-  strategy: "binding"         # Channel binding routing
 
 agents:
   heartbeat_interval: "30s"
@@ -226,10 +264,10 @@ cargo run -p fold-agent -- \
 
 ```bash
 # TUI connects using MagicDNS
-./bin/fold-tui --server http://fold-gateway.tailnet-xxx.ts.net
+./bin/fold-tui -server http://fold-gateway.tailnet-xxx.ts.net
 
 # Or use Tailscale IP
-./bin/fold-tui --server http://100.x.y.z
+./bin/fold-tui -server http://100.x.y.z
 ```
 
 ### Funnel (Public Access)
@@ -254,9 +292,8 @@ fold-gateway/
 │   └── fold-tui/         # Interactive TUI client
 ├── internal/
 │   ├── agent/            # Agent connection management
-│   │   ├── manager.go    # Connection registry and message routing
-│   │   ├── connection.go # Single agent stream handler
-│   │   └── router.go     # Routing strategy implementation
+│   │   ├── manager.go    # Connection registry, message routing, and channel bindings
+│   │   └── connection.go # Single agent stream handler
 │   ├── config/           # YAML configuration loading
 │   ├── gateway/          # Main orchestrator
 │   │   ├── gateway.go    # Server lifecycle management
@@ -295,7 +332,7 @@ go test ./internal/agent/...
 
 ### Proto Generation
 
-Requires the fold repo checked out as a sibling:
+Requires the fold-agent repo checked out as a sibling:
 
 ```bash
 # Install protoc plugins (one time)
@@ -304,6 +341,25 @@ make proto-deps
 # Regenerate proto
 make proto
 ```
+
+### Makefile Targets
+
+| Target | Description |
+|--------|-------------|
+| `make` | Generate proto + build all binaries (default) |
+| `make build` | Build all binaries |
+| `make build-gateway` | Build fold-gateway only |
+| `make build-tui` | Build fold-tui only |
+| `make build-admin` | Build fold-admin only |
+| `make build-matrix` | Build fold-matrix only |
+| `make proto` | Generate protobuf code |
+| `make proto-deps` | Install protoc plugins (one-time) |
+| `make test` | Run all tests |
+| `make lint` | Run golangci-lint |
+| `make fmt` | Format code with go fmt |
+| `make clean` | Remove build artifacts |
+| `make run` | Build and run gateway |
+| `make dev` | Development mode instructions |
 
 ### Pre-commit Hooks
 
@@ -354,5 +410,5 @@ MIT
 
 ## Related Projects
 
-- [fold](https://github.com/2389-research/fold) - The fold agent framework (Rust)
+- [fold-agent](https://github.com/2389-research/fold-agent) - The fold agent framework (Rust)
 - [mux](https://github.com/2389-research/mux-rs) - Claude API streaming library

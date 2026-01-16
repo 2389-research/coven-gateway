@@ -553,3 +553,54 @@ curl -N -X POST http://localhost:8080/api/send \
   -H "Content-Type: application/json" \
   -d '{"content":"Hello!","frontend":"slack","channel_id":"C0123456789"}'
 ```
+
+## Thread History API
+
+### GET /api/threads/{id}/messages
+
+Get message history for a specific thread.
+
+**Request:**
+```http
+GET /api/threads/{thread-id}/messages?limit=50 HTTP/1.1
+```
+
+**Query Parameters:**
+- `limit` (optional): Maximum messages to return (default: 100)
+
+**Response:**
+```json
+{
+  "thread_id": "550e8400-e29b-41d4-a716-446655440000",
+  "messages": [
+    {
+      "id": "msg-uuid-1",
+      "thread_id": "550e8400-e29b-41d4-a716-446655440000",
+      "sender": "user@example.com",
+      "content": "Hello!",
+      "created_at": "2024-01-15T10:30:00Z"
+    },
+    {
+      "id": "msg-uuid-2",
+      "thread_id": "550e8400-e29b-41d4-a716-446655440000",
+      "sender": "agent",
+      "content": "Hello! How can I help you?",
+      "created_at": "2024-01-15T10:30:05Z"
+    }
+  ]
+}
+```
+
+**Status Codes:**
+- `200`: Success
+- `404`: Thread not found
+- `405`: Method not allowed
+
+**Example:**
+```bash
+# Get thread messages
+curl http://localhost:8080/api/threads/550e8400-e29b-41d4-a716-446655440000/messages
+
+# Get last 10 messages
+curl "http://localhost:8080/api/threads/550e8400-e29b-41d4-a716-446655440000/messages?limit=10"
+```

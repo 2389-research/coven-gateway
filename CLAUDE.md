@@ -25,10 +25,10 @@ See SPEC.md for full details. Key components:
 
 ```
 cmd/fold-gateway/main.go     - Entry point
+cmd/fold-matrix/             - Matrix bridge (standalone)
 internal/gateway/gateway.go  - Main orchestrator
-internal/agent/manager.go    - Agent connection management
-internal/agent/router.go     - Message routing
-internal/frontend/           - Slack, Matrix, Web frontends
+internal/agent/manager.go    - Agent connection management and routing
+internal/agent/connection.go - Individual agent stream handler
 internal/store/              - SQLite persistence
 internal/config/             - Configuration
 ```

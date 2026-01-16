@@ -85,9 +85,8 @@ fold-gateway/
 │       └── main.go           # Entry point
 ├── internal/
 │   ├── agent/
-│   │   ├── manager.go        # Agent connection management
-│   │   ├── connection.go     # Single agent connection handler
-│   │   └── router.go         # Message routing logic
+│   │   ├── manager.go        # Agent connection management and routing
+│   │   └── connection.go     # Single agent connection handler
 │   ├── frontend/
 │   │   ├── frontend.go       # Frontend interface
 │   │   ├── slack/
@@ -245,9 +244,6 @@ server:
 
 database:
   path: "./fold-gateway.db"
-
-routing:
-  strategy: "binding"  # Channel binding routing
 
 agents:
   heartbeat_interval: "30s"

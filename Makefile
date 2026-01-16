@@ -31,8 +31,8 @@ proto:
 		--go-grpc_out=. \
 		--go-grpc_opt=module=github.com/2389/fold-gateway \
 		--go-grpc_opt=Mfold.proto=github.com/2389/fold-gateway/proto/fold \
-		-I ../fold/proto \
-		../fold/proto/fold.proto
+		-I ../fold-agent/proto \
+		../fold-agent/proto/fold.proto
 
 # Install protoc plugins (run once)
 proto-deps:
