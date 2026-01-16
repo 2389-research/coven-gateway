@@ -32,6 +32,9 @@ type Gateway struct {
 
 	// serverID identifies this gateway instance
 	serverID string
+
+	// mockSender is used for testing to inject a mock message sender
+	mockSender messageSender
 }
 
 // New creates a new Gateway instance with the given configuration.
@@ -70,10 +73,11 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	foldService := newFoldControlServer(gw, logger.With("component", "grpc"))
 	pb.RegisterFoldControlServer(grpcServer, foldService)
 
-	// Create HTTP server for health checks
+	// Create HTTP server for health checks and API
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", gw.handleHealth)
 	mux.HandleFunc("/health/ready", gw.handleReady)
+	mux.HandleFunc("/api/send", gw.handleSendMessage)
 
 	gw.httpServer = &http.Server{
 		Addr:    cfg.Server.HTTPAddr,
