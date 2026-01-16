@@ -9,7 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/2389/fold-gateway/internal/agent"
 	"github.com/2389/fold-gateway/internal/store"
@@ -54,6 +58,21 @@ type ListBindingsResponse struct {
 	Bindings []BindingResponse `json:"bindings"`
 }
 
+// MessageResponse is the JSON response for message history.
+type MessageResponse struct {
+	ID        string `json:"id"`
+	ThreadID  string `json:"thread_id"`
+	Sender    string `json:"sender"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"created_at"`
+}
+
+// ThreadMessagesResponse is the JSON response for GET /api/threads/{id}/messages.
+type ThreadMessagesResponse struct {
+	ThreadID string            `json:"thread_id"`
+	Messages []MessageResponse `json:"messages"`
+}
+
 // SSEEvent represents a Server-Sent Event.
 type SSEEvent struct {
 	Event string      `json:"event"`
@@ -87,6 +106,7 @@ func (g *Gateway) handleListAgents(w http.ResponseWriter, r *http.Request) {
 // handleSendMessage handles POST /api/send requests.
 // It accepts a JSON body with the message content and streams responses via SSE.
 // If agent_id is specified, the message is sent to that specific agent.
+// Messages are persisted to the store for history retrieval.
 func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -132,12 +152,54 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get or create thread for message persistence
+	threadID := req.ThreadID
+	if threadID == "" {
+		// Generate a new thread ID if not provided
+		threadID = uuid.New().String()
+	}
+
+	// Ensure thread exists in store
+	_, err := g.store.GetThread(r.Context(), threadID)
+	if errors.Is(err, store.ErrNotFound) {
+		// Create new thread
+		now := time.Now()
+		thread := &store.Thread{
+			ID:           threadID,
+			FrontendName: req.Frontend,
+			ExternalID:   req.ChannelID,
+			AgentID:      agentID,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+		if createErr := g.store.CreateThread(r.Context(), thread); createErr != nil {
+			g.logger.Error("failed to create thread", "error", createErr)
+			// Continue anyway - message persistence is best-effort
+		}
+	} else if err != nil {
+		g.logger.Error("failed to get thread", "error", err)
+		// Continue anyway - message persistence is best-effort
+	}
+
+	// Save the user's message
+	userMsg := &store.Message{
+		ID:        uuid.New().String(),
+		ThreadID:  threadID,
+		Sender:    req.Sender,
+		Content:   req.Content,
+		CreatedAt: time.Now(),
+	}
+	if err := g.store.SaveMessage(r.Context(), userMsg); err != nil {
+		g.logger.Error("failed to save user message", "error", err)
+		// Continue anyway - message persistence is best-effort
+	}
+
 	// Use mock sender if set (for testing), otherwise use agent manager
 	sender := g.getSender()
 
 	// Create the send request
 	sendReq := &agent.SendRequest{
-		ThreadID: req.ThreadID,
+		ThreadID: threadID,
 		Sender:   req.Sender,
 		Content:  req.Content,
 		AgentID:  agentID,
@@ -167,12 +229,15 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Stream responses
-	g.streamResponses(r.Context(), w, flusher, respChan)
+	// Stream responses and persist agent response
+	g.streamResponses(r.Context(), w, flusher, respChan, threadID, agentID)
 }
 
 // streamResponses reads from the response channel and writes SSE events.
-func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, respChan <-chan *agent.Response) {
+// It also persists the agent's final response to the store.
+func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, respChan <-chan *agent.Response, threadID, agentID string) {
+	var fullResponse strings.Builder
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -185,11 +250,27 @@ func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, fl
 				return
 			}
 
+			// Accumulate text responses for persistence
+			if resp.Event == agent.EventText {
+				fullResponse.WriteString(resp.Text)
+			}
+
 			event := g.responseToSSEEvent(resp)
 			g.writeSSEEvent(w, event.Event, event.Data)
 			flusher.Flush()
 
 			if resp.Done {
+				// Save the agent's complete response
+				agentMsg := &store.Message{
+					ID:        uuid.New().String(),
+					ThreadID:  threadID,
+					Sender:    "agent:" + agentID,
+					Content:   resp.Text, // Done event contains full response
+					CreatedAt: time.Now(),
+				}
+				if err := g.store.SaveMessage(ctx, agentMsg); err != nil {
+					g.logger.Error("failed to save agent message", "error", err)
+				}
 				return
 			}
 		}
@@ -412,4 +493,76 @@ func (g *Gateway) handleDeleteBinding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleThreadMessages handles GET /api/threads/{id}/messages requests.
+// Returns the message history for a thread, optionally limited by ?limit=N.
+func (g *Gateway) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract thread ID from path: /api/threads/{id}/messages
+	path := r.URL.Path
+	prefix := "/api/threads/"
+	suffix := "/messages"
+
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	threadID := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
+	if threadID == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "thread_id is required")
+		return
+	}
+
+	// Parse optional limit parameter
+	limit := 50 // default
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	// Verify thread exists
+	_, err := g.store.GetThread(r.Context(), threadID)
+	if errors.Is(err, store.ErrNotFound) {
+		g.sendJSONError(w, http.StatusNotFound, "thread not found")
+		return
+	}
+	if err != nil {
+		g.logger.Error("failed to get thread", "error", err)
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	// Get messages
+	messages, err := g.store.GetThreadMessages(r.Context(), threadID, limit)
+	if err != nil {
+		g.logger.Error("failed to get messages", "error", err)
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	// Build response
+	response := ThreadMessagesResponse{
+		ThreadID: threadID,
+		Messages: make([]MessageResponse, len(messages)),
+	}
+
+	for i, msg := range messages {
+		response.Messages[i] = MessageResponse{
+			ID:        msg.ID,
+			ThreadID:  msg.ThreadID,
+			Sender:    msg.Sender,
+			Content:   msg.Content,
+			CreatedAt: msg.CreatedAt.Format(time.RFC3339),
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
