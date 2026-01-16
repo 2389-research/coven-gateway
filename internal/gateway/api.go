@@ -6,6 +6,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -277,6 +278,7 @@ func (g *Gateway) handleBindings(w http.ResponseWriter, r *http.Request) {
 func (g *Gateway) handleListBindings(w http.ResponseWriter, r *http.Request) {
 	bindings, err := g.store.ListBindings(r.Context())
 	if err != nil {
+		g.logger.Error("failed to list bindings", "error", err)
 		g.sendJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -335,6 +337,7 @@ func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 			g.sendJSONError(w, http.StatusConflict, "binding already exists")
 			return
 		}
+		g.logger.Error("failed to create binding", "error", err)
 		g.sendJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -371,11 +374,12 @@ func (g *Gateway) handleDeleteBinding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := g.store.DeleteBinding(r.Context(), frontend, channelID)
-	if err == store.ErrNotFound {
+	if errors.Is(err, store.ErrNotFound) {
 		g.sendJSONError(w, http.StatusNotFound, "binding not found")
 		return
 	}
 	if err != nil {
+		g.logger.Error("failed to delete binding", "error", err, "frontend", frontend, "channel_id", channelID)
 		g.sendJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
