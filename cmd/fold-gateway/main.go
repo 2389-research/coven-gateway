@@ -127,12 +127,29 @@ func runServe(ctx context.Context) error {
 
 	// Startup info
 	green := color.New(color.FgGreen)
+	yellow := color.New(color.FgYellow)
+
 	green.Print("    ▶ ")
 	fmt.Printf("Config:    %s\n", configPath)
 	green.Print("    ▶ ")
 	fmt.Printf("gRPC:      %s\n", cfg.Server.GRPCAddr)
 	green.Print("    ▶ ")
 	fmt.Printf("HTTP:      %s\n", cfg.Server.HTTPAddr)
+
+	// Tailscale status
+	if cfg.Tailscale.Enabled {
+		green.Print("    ▶ ")
+		fmt.Printf("Tailscale: ")
+		cyan.Print(cfg.Tailscale.Hostname)
+		if cfg.Tailscale.Funnel {
+			yellow.Print(" [funnel]")
+		}
+		if cfg.Tailscale.Ephemeral {
+			gray.Print(" (ephemeral)")
+		}
+		fmt.Println()
+	}
+
 	fmt.Println()
 
 	logger.Info("starting fold-gateway",
