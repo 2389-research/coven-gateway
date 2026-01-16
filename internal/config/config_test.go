@@ -623,3 +623,81 @@ func TestExpandEnvVars(t *testing.T) {
 		})
 	}
 }
+
+func TestValidate_TailscaleConfig(t *testing.T) {
+	tests := []struct {
+		name          string
+		cfg           Config
+		wantErr       bool
+		wantErrSubstr string
+	}{
+		{
+			name: "tailscale enabled allows empty server addresses",
+			cfg: Config{
+				Server:    ServerConfig{GRPCAddr: "", HTTPAddr: ""},
+				Tailscale: TailscaleConfig{Enabled: true, Hostname: "fold-gateway"},
+				Database:  DatabaseConfig{Path: "./test.db"},
+				Routing:   RoutingConfig{Strategy: "round_robin"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "tailscale enabled requires hostname",
+			cfg: Config{
+				Server:    ServerConfig{GRPCAddr: "", HTTPAddr: ""},
+				Tailscale: TailscaleConfig{Enabled: true, Hostname: ""},
+				Database:  DatabaseConfig{Path: "./test.db"},
+				Routing:   RoutingConfig{Strategy: "round_robin"},
+			},
+			wantErr:       true,
+			wantErrSubstr: "tailscale.hostname is required",
+		},
+		{
+			name: "tailscale disabled requires server addresses",
+			cfg: Config{
+				Server:    ServerConfig{GRPCAddr: "", HTTPAddr: ""},
+				Tailscale: TailscaleConfig{Enabled: false, Hostname: "fold-gateway"},
+				Database:  DatabaseConfig{Path: "./test.db"},
+				Routing:   RoutingConfig{Strategy: "round_robin"},
+			},
+			wantErr:       true,
+			wantErrSubstr: "server.grpc_addr is required",
+		},
+		{
+			name: "tailscale with all options set",
+			cfg: Config{
+				Server: ServerConfig{GRPCAddr: "", HTTPAddr: ""},
+				Tailscale: TailscaleConfig{
+					Enabled:   true,
+					Hostname:  "fold-gateway",
+					AuthKey:   "tskey-auth-xxx",
+					StateDir:  "/tmp/ts-state",
+					Ephemeral: true,
+					Funnel:    true,
+				},
+				Database: DatabaseConfig{Path: "./test.db"},
+				Routing:  RoutingConfig{Strategy: "round_robin"},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("Validate() expected error containing %q, got nil", tt.wantErrSubstr)
+					return
+				}
+				if !strings.Contains(err.Error(), tt.wantErrSubstr) {
+					t.Errorf("Validate() error = %q, want error containing %q", err.Error(), tt.wantErrSubstr)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Validate() unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}

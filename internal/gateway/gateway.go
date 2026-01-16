@@ -103,6 +103,13 @@ func (g *Gateway) Run(ctx context.Context) error {
 
 	// Setup listeners - either via Tailscale or regular TCP
 	if g.config.Tailscale.Enabled {
+		// Warn if server addresses are configured but will be ignored
+		if g.config.Server.GRPCAddr != "" || g.config.Server.HTTPAddr != "" {
+			g.logger.Warn("server.grpc_addr and server.http_addr are ignored when tailscale is enabled",
+				"grpc_addr", g.config.Server.GRPCAddr,
+				"http_addr", g.config.Server.HTTPAddr,
+			)
+		}
 		grpcListener, httpListener, err = g.setupTailscaleListeners(ctx)
 		if err != nil {
 			return fmt.Errorf("setting up tailscale: %w", err)
@@ -171,7 +178,10 @@ func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn n
 	// Determine state directory
 	stateDir := tsCfg.StateDir
 	if stateDir == "" {
-		homeDir, _ := os.UserHomeDir()
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot determine home directory for tailscale state (set tailscale.state_dir explicitly): %w", err)
+		}
 		stateDir = filepath.Join(homeDir, ".local", "share", "fold-gateway", "tailscale")
 	}
 
@@ -201,19 +211,23 @@ func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn n
 	// Start and wait for tailscale to be ready
 	status, err := g.tsnetServer.Up(ctx)
 	if err != nil {
+		_ = g.tsnetServer.Close() // Cleanup partially initialized server
 		return nil, nil, fmt.Errorf("starting tailscale: %w", err)
 	}
 
 	// Log tailscale address info
-	var tsAddr string
+	var tsAddr, dnsName string
 	if len(status.TailscaleIPs) > 0 {
 		tsAddr = status.TailscaleIPs[0].String()
+	}
+	if status.Self != nil {
+		dnsName = status.Self.DNSName
 	}
 
 	g.logger.Info("tailscale node ready",
 		"hostname", tsCfg.Hostname,
 		"tailscale_ip", tsAddr,
-		"dns_name", status.Self.DNSName,
+		"dns_name", dnsName,
 	)
 
 	// Create gRPC listener on port 50051
