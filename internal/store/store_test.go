@@ -146,3 +146,56 @@ func TestStore_GetThreadMessages_Order(t *testing.T) {
 	assert.Equal(t, "second", messages[1].Content)
 	assert.Equal(t, "third", messages[2].Content)
 }
+
+func TestStore_CreateBinding(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC().Truncate(time.Second)
+	binding := &ChannelBinding{
+		FrontendName: "matrix",
+		ChannelID:    "!room:server.com",
+		AgentID:      "agent-1",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	err := store.CreateBinding(ctx, binding)
+	require.NoError(t, err)
+
+	// Retrieve it
+	retrieved, err := store.GetBinding(ctx, "matrix", "!room:server.com")
+	require.NoError(t, err)
+	assert.Equal(t, "matrix", retrieved.FrontendName)
+	assert.Equal(t, "!room:server.com", retrieved.ChannelID)
+	assert.Equal(t, "agent-1", retrieved.AgentID)
+}
+
+func TestStore_CreateBinding_Duplicate(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC().Truncate(time.Second)
+	binding := &ChannelBinding{
+		FrontendName: "matrix",
+		ChannelID:    "!room:server.com",
+		AgentID:      "agent-1",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	err := store.CreateBinding(ctx, binding)
+	require.NoError(t, err)
+
+	// Duplicate should fail (PRIMARY KEY constraint)
+	err = store.CreateBinding(ctx, binding)
+	assert.Error(t, err, "duplicate binding should fail")
+}
+
+func TestStore_GetBinding_NotFound(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	_, err := store.GetBinding(ctx, "matrix", "nonexistent")
+	assert.ErrorIs(t, err, ErrNotFound)
+}
