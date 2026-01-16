@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -124,19 +125,9 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req SendMessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		g.sendJSONError(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	if req.Content == "" {
-		g.sendJSONError(w, http.StatusBadRequest, "content is required")
-		return
-	}
-
-	if req.Sender == "" {
-		g.sendJSONError(w, http.StatusBadRequest, "sender is required")
+	req, err := parseSendRequest(r.Body)
+	if err != nil {
+		g.sendJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -176,7 +167,7 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ensure thread exists in store
-	_, err := g.store.GetThread(r.Context(), threadID)
+	_, err = g.store.GetThread(r.Context(), threadID)
 	if errors.Is(err, store.ErrNotFound) {
 		// Create new thread
 		now := time.Now()
@@ -381,6 +372,25 @@ func (g *Gateway) sendJSONError(w http.ResponseWriter, status int, message strin
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
+// parseSendRequest parses and validates a SendMessageRequest from the given reader.
+// Returns an error if the JSON is invalid or required fields (content, sender) are missing.
+func parseSendRequest(r io.Reader) (*SendMessageRequest, error) {
+	var req SendMessageRequest
+	if err := json.NewDecoder(r).Decode(&req); err != nil {
+		return nil, errors.New("invalid JSON body")
+	}
+
+	if req.Content == "" {
+		return nil, errors.New("content is required")
+	}
+
+	if req.Sender == "" {
+		return nil, errors.New("sender is required")
+	}
+
+	return &req, nil
 }
 
 // messageSender is an interface for sending messages to agents.

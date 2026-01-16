@@ -661,3 +661,100 @@ func TestBindingsNotFound(t *testing.T) {
 		t.Errorf("got error %q, want %q", errResp["error"], "binding not found")
 	}
 }
+
+// Tests for parseSendRequest
+
+func TestParseSendRequest_Valid(t *testing.T) {
+	body := `{"content": "hello", "sender": "user@test.com"}`
+	req, err := parseSendRequest(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if req.Content != "hello" {
+		t.Errorf("expected content 'hello', got %q", req.Content)
+	}
+	if req.Sender != "user@test.com" {
+		t.Errorf("expected sender 'user@test.com', got %q", req.Sender)
+	}
+}
+
+func TestParseSendRequest_AllFields(t *testing.T) {
+	body := `{"content": "hello", "sender": "user@test.com", "thread_id": "abc123", "agent_id": "agent1", "frontend": "slack", "channel_id": "C001"}`
+	req, err := parseSendRequest(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if req.Content != "hello" {
+		t.Errorf("expected content 'hello', got %q", req.Content)
+	}
+	if req.Sender != "user@test.com" {
+		t.Errorf("expected sender 'user@test.com', got %q", req.Sender)
+	}
+	if req.ThreadID != "abc123" {
+		t.Errorf("expected thread_id 'abc123', got %q", req.ThreadID)
+	}
+	if req.AgentID != "agent1" {
+		t.Errorf("expected agent_id 'agent1', got %q", req.AgentID)
+	}
+	if req.Frontend != "slack" {
+		t.Errorf("expected frontend 'slack', got %q", req.Frontend)
+	}
+	if req.ChannelID != "C001" {
+		t.Errorf("expected channel_id 'C001', got %q", req.ChannelID)
+	}
+}
+
+func TestParseSendRequest_MissingContent(t *testing.T) {
+	body := `{"sender": "user@test.com"}`
+	_, err := parseSendRequest(strings.NewReader(body))
+	if err == nil {
+		t.Fatal("expected error for missing content")
+	}
+	if err.Error() != "content is required" {
+		t.Errorf("expected error 'content is required', got %q", err.Error())
+	}
+}
+
+func TestParseSendRequest_EmptyContent(t *testing.T) {
+	body := `{"content": "", "sender": "user@test.com"}`
+	_, err := parseSendRequest(strings.NewReader(body))
+	if err == nil {
+		t.Fatal("expected error for empty content")
+	}
+	if err.Error() != "content is required" {
+		t.Errorf("expected error 'content is required', got %q", err.Error())
+	}
+}
+
+func TestParseSendRequest_MissingSender(t *testing.T) {
+	body := `{"content": "hello"}`
+	_, err := parseSendRequest(strings.NewReader(body))
+	if err == nil {
+		t.Fatal("expected error for missing sender")
+	}
+	if err.Error() != "sender is required" {
+		t.Errorf("expected error 'sender is required', got %q", err.Error())
+	}
+}
+
+func TestParseSendRequest_EmptySender(t *testing.T) {
+	body := `{"content": "hello", "sender": ""}`
+	_, err := parseSendRequest(strings.NewReader(body))
+	if err == nil {
+		t.Fatal("expected error for empty sender")
+	}
+	if err.Error() != "sender is required" {
+		t.Errorf("expected error 'sender is required', got %q", err.Error())
+	}
+}
+
+func TestParseSendRequest_InvalidJSON(t *testing.T) {
+	body := `not valid json`
+	_, err := parseSendRequest(strings.NewReader(body))
+	if err == nil {
+		t.Fatal("expected error for invalid JSON")
+	}
+	if err.Error() != "invalid JSON body" {
+		t.Errorf("expected error 'invalid JSON body', got %q", err.Error())
+	}
+}
