@@ -12,12 +12,47 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
 	"github.com/2389/fold-gateway/internal/config"
 	"github.com/2389/fold-gateway/internal/gateway"
 )
+
+// getConfigPath returns the path to the gateway config file.
+// Priority: FOLD_CONFIG env var > XDG_CONFIG_HOME/fold/gateway.yaml > ~/.config/fold/gateway.yaml
+func getConfigPath() string {
+	if envPath := os.Getenv("FOLD_CONFIG"); envPath != "" {
+		return envPath
+	}
+
+	configDir := os.Getenv("XDG_CONFIG_HOME")
+	if configDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "gateway.yaml" // fallback
+		}
+		configDir = filepath.Join(homeDir, ".config")
+	}
+
+	return filepath.Join(configDir, "fold", "gateway.yaml")
+}
+
+// getDataPath returns the path to the fold data directory.
+// Priority: XDG_DATA_HOME/fold > ~/.local/share/fold
+func getDataPath() string {
+	dataDir := os.Getenv("XDG_DATA_HOME")
+	if dataDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "data" // fallback
+		}
+		dataDir = filepath.Join(homeDir, ".local", "share")
+	}
+
+	return filepath.Join(dataDir, "fold")
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -56,11 +91,7 @@ func main() {
 }
 
 func runServe(ctx context.Context) error {
-	// Determine config path
-	configPath := os.Getenv("FOLD_CONFIG")
-	if configPath == "" {
-		configPath = "config.yaml"
-	}
+	configPath := getConfigPath()
 
 	// Load configuration
 	cfg, err := config.Load(configPath)
@@ -116,11 +147,7 @@ func setupLogger(cfg config.LoggingConfig) *slog.Logger {
 }
 
 func runHealth(ctx context.Context) error {
-	// Get HTTP address from config or use default
-	configPath := os.Getenv("FOLD_CONFIG")
-	if configPath == "" {
-		configPath = "config.yaml"
-	}
+	configPath := getConfigPath()
 
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -149,11 +176,7 @@ func runHealth(ctx context.Context) error {
 }
 
 func runAgents(ctx context.Context) error {
-	// Get HTTP address from config or use default
-	configPath := os.Getenv("FOLD_CONFIG")
-	if configPath == "" {
-		configPath = "config.yaml"
-	}
+	configPath := getConfigPath()
 
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -190,8 +213,13 @@ func runInit() error {
 	fmt.Println("=================================")
 	fmt.Println()
 
+	// Default paths
+	defaultConfigPath := getConfigPath()
+	defaultDataPath := getDataPath()
+	defaultDbPath := filepath.Join(defaultDataPath, "gateway.db")
+
 	// Output filename
-	outputFile := prompt(reader, "Config file path", "config.yaml")
+	outputFile := prompt(reader, "Config file path", defaultConfigPath)
 
 	// Check if file exists
 	if _, err := os.Stat(outputFile); err == nil {
@@ -209,7 +237,7 @@ func runInit() error {
 
 	// Database
 	fmt.Println("\n--- Database Configuration ---")
-	dbPath := prompt(reader, "SQLite database path", "data/fold.db")
+	dbPath := prompt(reader, "SQLite database path", defaultDbPath)
 
 	// Tailscale
 	fmt.Println("\n--- Tailscale Configuration ---")
@@ -273,12 +301,25 @@ func runInit() error {
 	cfg.WriteString("  enabled: false\n")
 	cfg.WriteString("  path: \"/metrics\"\n")
 
+	// Ensure config directory exists
+	configDir := filepath.Dir(outputFile)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("creating config directory: %w", err)
+	}
+
 	// Write config file
 	if err := os.WriteFile(outputFile, []byte(cfg.String()), 0644); err != nil {
 		return fmt.Errorf("writing config file: %w", err)
 	}
 
+	// Ensure data directory exists
+	dataDir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("creating data directory: %w", err)
+	}
+
 	fmt.Printf("\nConfig written to %s\n", outputFile)
+	fmt.Printf("Data directory: %s\n", dataDir)
 	fmt.Println("\nTo start the server:")
 	fmt.Printf("  fold-gateway serve\n")
 
