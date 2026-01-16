@@ -1,70 +1,98 @@
-# fold-gateway
+# CLAUDE.md
 
-Production control plane for fold agents, written in Go.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Context
+## Project Overview
 
-This is the Go implementation of the fold control server. It replaces the test TUI server in `../fold/crates/fold-server` with a production-ready gateway that supports:
+fold-gateway is the production control plane for fold agents. It manages fold-agent connections via gRPC, routes messages from frontends (HTTP clients, Matrix) to agents, and streams responses back in real-time.
 
-- Multiple fold-agent connections via GRPC
-- Slack and Matrix frontend integrations
-- Message routing with affinity (same thread -> same agent)
-- Thread persistence in SQLite
+The fold-agent is a separate Rust project at `../fold-agent` that connects to this gateway. The shared protobuf definition is at `../fold-agent/proto/fold.proto`.
 
-## Related Projects
+## Build Commands
 
-- `../fold` - Rust workspace containing:
-  - `fold-core` - Core library for Claude interaction
-  - `fold-agent` - GRPC client that connects to this gateway
-  - `fold-server` - Test TUI server (reference implementation)
-- `../fold/proto/fold.proto` - GRPC protocol definition (shared)
+```bash
+make                    # Generate proto + build all binaries
+make build              # Build all binaries (without proto regen)
+make proto              # Regenerate protobuf from ../fold-agent/proto/fold.proto
+make proto-deps         # Install protoc plugins (one-time)
+```
+
+Individual binaries:
+```bash
+go build -o bin/fold-gateway ./cmd/fold-gateway
+go build -o bin/fold-tui ./cmd/fold-tui
+go build -o bin/fold-admin ./cmd/fold-admin
+go build -tags goolm -o bin/fold-matrix ./cmd/fold-matrix  # requires goolm tag
+```
+
+## Testing
+
+```bash
+go test ./...                           # All tests
+go test -race ./...                     # With race detection
+go test ./internal/agent/...            # Single package
+go test -v -run TestSendMessage ./...   # Single test
+```
+
+## Lint & Format
+
+```bash
+go fmt ./...
+golangci-lint run
+```
+
+## Running
+
+```bash
+cp config.example.yaml config.yaml      # Copy config template
+./bin/fold-gateway serve                # Start gateway (uses FOLD_CONFIG or ~/.config/fold/gateway.yaml)
+./bin/fold-tui                          # Interactive TUI client
+./bin/fold-admin -watch                 # Monitor status
+```
 
 ## Architecture
 
-See SPEC.md for full details. Key components:
-
 ```
-cmd/fold-gateway/main.go     - Entry point
-cmd/fold-matrix/             - Matrix bridge (standalone)
-internal/gateway/gateway.go  - Main orchestrator
-internal/agent/manager.go    - Agent connection management and routing
-internal/agent/connection.go - Individual agent stream handler
-internal/store/              - SQLite persistence
-internal/config/             - Configuration
-```
-
-## Development
-
-```bash
-# Generate protobuf
-protoc --go_out=. --go-grpc_out=. ../fold/proto/fold.proto
-
-# Run
-go run ./cmd/fold-gateway serve --config config.yaml
-
-# Test with fold-agent
-cd ../fold && cargo run -p fold-agent -- --server http://127.0.0.1:50051
+                      ┌─────────────────────────────────────────┐
+                      │              fold-gateway               │
+                      │                                         │
+  HTTP Clients ─────► │  api.go ──► Manager ──► Connection(s)   │ ◄──── fold-agent(s)
+  (SSE streaming)     │             │                           │       (gRPC stream)
+                      │             ▼                           │
+                      │          Store (SQLite)                 │
+                      └─────────────────────────────────────────┘
 ```
 
-## Commands
+**Key internal packages:**
 
-```bash
-# Format
-go fmt ./...
+- `internal/gateway/` - Orchestrator: Gateway struct owns gRPC server, HTTP server, agent manager, and store
+- `internal/agent/` - Manager tracks connected agents, Connection handles individual agent streams and pending request/response correlation
+- `internal/store/` - SQLite persistence for threads, messages, and channel bindings
 
-# Lint
-golangci-lint run
+**Message flow:**
 
-# Test
-go test ./...
+1. HTTP client POSTs to `/api/send` with JSON body
+2. `api.go` looks up agent (via binding or direct ID)
+3. Manager.SendMessage creates request, sends via Connection's gRPC stream
+4. Connection correlates responses by request_id, forwards to response channel
+5. `api.go` streams responses as SSE events to client
 
-# Build
-go build -o bin/fold-gateway ./cmd/fold-gateway
-```
+**Binaries:**
+
+- `fold-gateway` - Main server (gRPC + HTTP)
+- `fold-tui` - Interactive terminal client for testing
+- `fold-admin` - CLI for monitoring gateway status
+- `fold-matrix` - Standalone Matrix bridge (separate config: config.toml)
+
+## gRPC Protocol
+
+The `FoldControl` service uses bidirectional streaming. Agents send `AgentMessage` (register, heartbeat, response events), gateway sends `ServerMessage` (welcome, send_message, shutdown).
+
+Response events flow: Thinking → Text chunks → ToolUse/ToolResult → Done/Error
 
 ## Code Style
 
-- Use `slog` for structured logging (stdlib)
-- Context propagation for cancellation
-- Prefer interfaces for testability
-- Error wrapping with `fmt.Errorf("...: %w", err)`
+- Use `slog` for structured logging (stdlib, not third-party)
+- Context propagation for cancellation throughout
+- Interfaces for testability (Store, messageSender)
+- Error wrapping: `fmt.Errorf("context: %w", err)`
