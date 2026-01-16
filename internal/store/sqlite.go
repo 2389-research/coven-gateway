@@ -100,6 +100,15 @@ func (s *SQLiteStore) createSchema() error {
 			state BLOB NOT NULL,
 			updated_at DATETIME NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS channel_bindings (
+			frontend TEXT NOT NULL,
+			channel_id TEXT NOT NULL,
+			agent_id TEXT NOT NULL,
+			created_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL,
+			PRIMARY KEY (frontend, channel_id)
+		);
 	`
 
 	_, err := s.db.Exec(schema)
