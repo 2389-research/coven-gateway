@@ -17,10 +17,12 @@ import (
 
 // SendMessageRequest is the JSON request body for POST /api/send.
 type SendMessageRequest struct {
-	ThreadID string `json:"thread_id,omitempty"`
-	Sender   string `json:"sender"`
-	Content  string `json:"content"`
-	AgentID  string `json:"agent_id,omitempty"`
+	ThreadID  string `json:"thread_id,omitempty"`
+	Sender    string `json:"sender"`
+	Content   string `json:"content"`
+	AgentID   string `json:"agent_id,omitempty"`
+	Frontend  string `json:"frontend,omitempty"`
+	ChannelID string `json:"channel_id,omitempty"`
 }
 
 // AgentInfoResponse is the JSON response for GET /api/agents.
@@ -102,6 +104,34 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve agent ID - either from direct specification or binding lookup
+	agentID := req.AgentID
+	if agentID == "" {
+		// Must have frontend + channel_id for binding lookup
+		if req.Frontend == "" || req.ChannelID == "" {
+			g.sendJSONError(w, http.StatusBadRequest, "must specify agent_id or frontend+channel_id")
+			return
+		}
+
+		binding, err := g.store.GetBinding(r.Context(), req.Frontend, req.ChannelID)
+		if errors.Is(err, store.ErrNotFound) {
+			g.sendJSONError(w, http.StatusBadRequest, "channel not bound to agent")
+			return
+		}
+		if err != nil {
+			g.logger.Error("failed to get binding", "error", err)
+			g.sendJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		agentID = binding.AgentID
+	}
+
+	// Verify agent exists and is online
+	if _, ok := g.agentManager.GetAgent(agentID); !ok {
+		g.sendJSONError(w, http.StatusServiceUnavailable, "agent unavailable")
+		return
+	}
+
 	// Use mock sender if set (for testing), otherwise use agent manager
 	sender := g.getSender()
 
@@ -110,7 +140,7 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		ThreadID: req.ThreadID,
 		Sender:   req.Sender,
 		Content:  req.Content,
-		AgentID:  req.AgentID,
+		AgentID:  agentID,
 	}
 
 	// Send message to an agent (optionally targeted if AgentID is set)

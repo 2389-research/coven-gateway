@@ -17,14 +17,18 @@ import (
 
 	"github.com/2389/fold-gateway/internal/agent"
 	"github.com/2389/fold-gateway/internal/config"
+	pb "github.com/2389/fold-gateway/proto/fold"
+	"google.golang.org/grpc"
 )
 
 func TestHandleSendMessage_NoAgents(t *testing.T) {
 	gw := newTestGateway(t)
 
+	// With agent_id specified but agent not available, should get "agent unavailable"
 	reqBody := SendMessageRequest{
 		Sender:  "test-user",
 		Content: "Hello",
+		AgentID: "some-agent",
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -43,7 +47,37 @@ func TestHandleSendMessage_NoAgents(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
 		t.Fatalf("failed to decode error response: %v", err)
 	}
-	if errResp["error"] != "no agents available" {
+	if errResp["error"] != "agent unavailable" {
+		t.Errorf("unexpected error message: %s", errResp["error"])
+	}
+}
+
+func TestHandleSendMessage_MissingAgentContext(t *testing.T) {
+	gw := newTestGateway(t)
+
+	// Without agent_id and without frontend+channel_id, should get validation error
+	reqBody := SendMessageRequest{
+		Sender:  "test-user",
+		Content: "Hello",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	gw.handleSendMessage(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	// Check error response
+	var errResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if errResp["error"] != "must specify agent_id or frontend+channel_id" {
 		t.Errorf("unexpected error message: %s", errResp["error"])
 	}
 }
@@ -103,6 +137,7 @@ func TestHandleSendMessage_SSEHeaders(t *testing.T) {
 	reqBody := SendMessageRequest{
 		Sender:  "test-user",
 		Content: "Hello",
+		AgentID: "test-agent",
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -231,6 +266,8 @@ func TestHandleSendMessage_WithAgentID(t *testing.T) {
 func TestHandleSendMessage_AgentNotFound(t *testing.T) {
 	gw := newTestGatewayWithMockManager(t)
 
+	// Requesting a nonexistent agent should return 503 "agent unavailable"
+	// since we now check agent availability before routing
 	reqBody := SendMessageRequest{
 		Sender:  "test-user",
 		Content: "Hello",
@@ -244,15 +281,123 @@ func TestHandleSendMessage_AgentNotFound(t *testing.T) {
 
 	gw.handleSendMessage(rec, req)
 
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
 	}
 
 	var errResp map[string]string
 	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
 		t.Fatalf("failed to decode error response: %v", err)
 	}
-	if errResp["error"] != "agent not found" {
+	if errResp["error"] != "agent unavailable" {
+		t.Errorf("unexpected error message: %s", errResp["error"])
+	}
+}
+
+func TestHandleSendMessage_BindingLookup(t *testing.T) {
+	gw := newTestGatewayWithMockManager(t)
+
+	// Create a binding for slack/C001 -> test-agent
+	createReq := `{"frontend":"slack","channel_id":"C001","agent_id":"test-agent"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(createReq))
+	w := httptest.NewRecorder()
+	gw.handleBindings(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("failed to create binding: %s", w.Body.String())
+	}
+
+	// Send message using frontend+channel_id (should resolve via binding)
+	reqBody := SendMessageRequest{
+		Sender:    "test-user",
+		Content:   "Hello via binding",
+		Frontend:  "slack",
+		ChannelID: "C001",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req = httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	gw.handleSendMessage(rec, req)
+
+	// Should succeed and set SSE headers
+	if rec.Header().Get("Content-Type") != "text/event-stream" {
+		t.Errorf("expected Content-Type text/event-stream, got %s", rec.Header().Get("Content-Type"))
+	}
+}
+
+func TestHandleSendMessage_BindingNotFound(t *testing.T) {
+	gw := newTestGatewayWithMockManager(t)
+
+	// Send message for unbound channel
+	reqBody := SendMessageRequest{
+		Sender:    "test-user",
+		Content:   "Hello",
+		Frontend:  "slack",
+		ChannelID: "UNBOUND",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	gw.handleSendMessage(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if errResp["error"] != "channel not bound to agent" {
+		t.Errorf("unexpected error message: %s", errResp["error"])
+	}
+}
+
+func TestHandleSendMessage_BoundAgentOffline(t *testing.T) {
+	gw := newTestGateway(t)
+
+	// Create a binding for a nonexistent agent
+	createReq := `{"frontend":"slack","channel_id":"C001","agent_id":"offline-agent"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(createReq))
+	w := httptest.NewRecorder()
+	gw.handleBindings(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("failed to create binding: %s", w.Body.String())
+	}
+
+	// Send message - binding exists but agent is offline
+	reqBody := SendMessageRequest{
+		Sender:    "test-user",
+		Content:   "Hello",
+		Frontend:  "slack",
+		ChannelID: "C001",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req = httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	gw.handleSendMessage(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if errResp["error"] != "agent unavailable" {
 		t.Errorf("unexpected error message: %s", errResp["error"])
 	}
 }
@@ -297,6 +442,14 @@ func (m *mockAgentManager) ListAgents() []*agent.AgentInfo {
 	return []*agent.AgentInfo{{ID: "test-agent", Name: "Test", Capabilities: []string{"chat", "code"}}}
 }
 
+// testMockStream implements pb.FoldControl_AgentStreamServer for testing.
+type testMockStream struct {
+	grpc.ServerStream
+}
+
+func (m *testMockStream) Send(msg *pb.ServerMessage) error { return nil }
+func (m *testMockStream) Recv() (*pb.AgentMessage, error)  { return nil, nil }
+
 func newTestGatewayWithMockManager(t *testing.T) *Gateway {
 	t.Helper()
 
@@ -310,11 +463,17 @@ func newTestGatewayWithMockManager(t *testing.T) *Gateway {
 		},
 	}
 
-	logger := slog.New(slog.NewTextHandler(nil, nil))
+	logger := slog.Default()
 
 	gw, err := New(cfg, logger)
 	if err != nil {
 		t.Fatalf("failed to create gateway: %v", err)
+	}
+
+	// Register a test agent with the real agent manager so GetAgent succeeds
+	conn := agent.NewConnection("test-agent", "Test", []string{"chat", "code"}, &testMockStream{}, logger)
+	if err := gw.agentManager.Register(conn); err != nil {
+		t.Fatalf("failed to register test agent: %v", err)
 	}
 
 	// Replace with mock manager that returns a controllable channel
