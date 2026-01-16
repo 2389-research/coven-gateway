@@ -1,8 +1,8 @@
-# ABOUTME: Docker Compose configuration for running fold-gateway
+# ABOUTME: Docker Compose configuration for fold-gateway and fold-matrix
 # ABOUTME: Supports both direct TCP and Tailscale (tsnet) modes
 
 services:
-  # Standard mode: direct TCP ports
+  # fold-gateway: gRPC server for agents, HTTP API for frontends
   fold-gateway:
     build:
       context: .
@@ -41,5 +41,24 @@ services:
     # Note: No healthcheck - tsnet binds to Tailscale interface, not localhost.
     # Check health via: curl http://fold-gateway.<tailnet>.ts.net/health
 
+  # fold-matrix: Matrix bridge that connects Matrix rooms to fold-gateway
+  fold-matrix:
+    build:
+      context: .
+      dockerfile: Dockerfile.matrix
+    container_name: fold-matrix
+    depends_on:
+      fold-gateway:
+        condition: service_healthy
+    environment:
+      - MATRIX_USERNAME=${MATRIX_USERNAME:-}
+      - MATRIX_PASSWORD=${MATRIX_PASSWORD:-}
+      - MATRIX_RECOVERY_KEY=${MATRIX_RECOVERY_KEY:-}
+    volumes:
+      - ./config.matrix.toml:/app/config.toml:ro
+      - matrix-crypto:/app/data  # Persist E2EE crypto store
+    restart: unless-stopped
+
 volumes:
   tailscale-state:
+  matrix-crypto:
