@@ -59,12 +59,43 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}} -linkmode=external -extldflags=-static
 
+  # fold-matrix bridge (pure Go with goolm, no CGO needed)
+  - id: fold-matrix
+    main: ./cmd/fold-matrix
+    binary: fold-matrix
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+      - -tags=goolm
+    ldflags:
+      - -s -w
+
 archives:
-  - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: gateway
+    builds:
+      - darwin
+      - linux-amd64
+      - linux-arm64
+    name_template: "fold-gateway_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE*
       - README*
       - config.example.yaml
+
+  - id: matrix
+    builds:
+      - fold-matrix
+    name_template: "fold-matrix_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE*
+      - cmd/fold-matrix/config.example.toml
 
 brews:
   - repository:
