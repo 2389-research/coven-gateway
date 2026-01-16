@@ -16,9 +16,24 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/fatih/color"
+
 	"github.com/2389/fold-gateway/internal/config"
 	"github.com/2389/fold-gateway/internal/gateway"
 )
+
+// Version is set by goreleaser at build time.
+var version = "dev"
+
+const banner = `
+    ╭─────────────────────────────────────╮
+    │                                     │
+    │   ┏━╸┏━┓╻  ╺┳┓   ┏━╸┏━┓╺┳╸┏━╸╻ ╻   │
+    │   ┣╸ ┃ ┃┃   ┃┃   ┃╺┓┣━┫ ┃ ┣╸ ┃╻┃   │
+    │   ╹  ┗━┛┗━╸╺┻┛   ┗━┛╹ ╹ ╹ ┗━╸┗┻┛   │
+    │                                     │
+    ╰─────────────────────────────────────╯
+`
 
 // getConfigPath returns the path to the gateway config file.
 // Priority: FOLD_CONFIG env var > XDG_CONFIG_HOME/fold/gateway.yaml > ~/.config/fold/gateway.yaml
@@ -93,6 +108,14 @@ func main() {
 func runServe(ctx context.Context) error {
 	configPath := getConfigPath()
 
+	// Print banner
+	cyan := color.New(color.FgCyan)
+	cyan.Print(banner)
+
+	// Version info
+	gray := color.New(color.FgHiBlack)
+	gray.Printf("    version: %s\n\n", version)
+
 	// Load configuration
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -101,6 +124,16 @@ func runServe(ctx context.Context) error {
 
 	// Setup logger
 	logger := setupLogger(cfg.Logging)
+
+	// Startup info
+	green := color.New(color.FgGreen)
+	green.Print("    ▶ ")
+	fmt.Printf("Config:    %s\n", configPath)
+	green.Print("    ▶ ")
+	fmt.Printf("gRPC:      %s\n", cfg.Server.GRPCAddr)
+	green.Print("    ▶ ")
+	fmt.Printf("HTTP:      %s\n", cfg.Server.HTTPAddr)
+	fmt.Println()
 
 	logger.Info("starting fold-gateway",
 		"config", configPath,
@@ -140,10 +173,81 @@ func setupLogger(cfg config.LoggingConfig) *slog.Logger {
 	if cfg.Format == "json" {
 		handler = slog.NewJSONHandler(os.Stdout, opts)
 	} else {
-		handler = slog.NewTextHandler(os.Stdout, opts)
+		handler = &colorHandler{
+			handler: slog.NewTextHandler(os.Stdout, opts),
+			level:   level,
+		}
 	}
 
 	return slog.New(handler)
+}
+
+// colorHandler wraps a slog.Handler to add colorized level output.
+type colorHandler struct {
+	handler slog.Handler
+	level   slog.Level
+}
+
+func (h *colorHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= h.level
+}
+
+func (h *colorHandler) Handle(ctx context.Context, r slog.Record) error {
+	// Format timestamp
+	timeStr := r.Time.Format("15:04:05")
+	gray := color.New(color.FgHiBlack)
+	gray.Print(timeStr + " ")
+
+	// Colorize level
+	var levelColor *color.Color
+	var levelStr string
+	switch r.Level {
+	case slog.LevelDebug:
+		levelColor = color.New(color.FgMagenta)
+		levelStr = "DBG"
+	case slog.LevelInfo:
+		levelColor = color.New(color.FgCyan)
+		levelStr = "INF"
+	case slog.LevelWarn:
+		levelColor = color.New(color.FgYellow)
+		levelStr = "WRN"
+	case slog.LevelError:
+		levelColor = color.New(color.FgRed, color.Bold)
+		levelStr = "ERR"
+	default:
+		levelColor = color.New(color.FgWhite)
+		levelStr = "???"
+	}
+	levelColor.Printf("%-3s ", levelStr)
+
+	// Print message
+	fmt.Print(r.Message)
+
+	// Print attributes
+	r.Attrs(func(a slog.Attr) bool {
+		gray.Print(" ")
+		gray.Print(a.Key)
+		gray.Print("=")
+		fmt.Print(a.Value.String())
+		return true
+	})
+
+	fmt.Println()
+	return nil
+}
+
+func (h *colorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &colorHandler{
+		handler: h.handler.WithAttrs(attrs),
+		level:   h.level,
+	}
+}
+
+func (h *colorHandler) WithGroup(name string) slog.Handler {
+	return &colorHandler{
+		handler: h.handler.WithGroup(name),
+		level:   h.level,
+	}
 }
 
 func runHealth(ctx context.Context) error {
