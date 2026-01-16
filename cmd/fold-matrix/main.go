@@ -112,9 +112,9 @@ func run() error {
 		return fmt.Errorf("creating bridge: %w", err)
 	}
 
-	// Setup encryption if recovery key provided
+	// Setup encryption
 	ctx := context.Background()
-	cryptoMgr, err := SetupCrypto(ctx, bridge.matrix, cfg.Matrix.RecoveryKey, dataPath, logger)
+	cryptoMgr, err := SetupCrypto(ctx, bridge.matrix, cfg.Matrix.UserID, cfg.Matrix.RecoveryKey, dataPath, logger)
 	if err != nil {
 		return fmt.Errorf("setting up encryption: %w", err)
 	}

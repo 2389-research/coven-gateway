@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log/slog"
 	"os"
@@ -24,19 +25,21 @@ type CryptoManager struct {
 // SetupCrypto initializes E2EE for the Matrix client.
 // If recoveryKey is empty, encryption is still enabled but without cross-signing.
 // The dataDir is used to store the SQLite crypto database.
-func SetupCrypto(ctx context.Context, client *mautrix.Client, recoveryKey string, dataDir string, logger *slog.Logger) (*CryptoManager, error) {
+func SetupCrypto(ctx context.Context, client *mautrix.Client, userID string, recoveryKey string, dataDir string, logger *slog.Logger) (*CryptoManager, error) {
 	// Ensure data directory exists
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		return nil, fmt.Errorf("creating data directory: %w", err)
 	}
 
-	dbPath := filepath.Join(dataDir, "matrix-crypto.db")
-	logger.Info("setting up encryption", "db", dbPath)
+	// Include user ID in db path for isolation (like gorp-rs)
+	userSlug := slugify(userID)
+	dbPath := filepath.Join(dataDir, fmt.Sprintf("matrix-crypto-%s.db", userSlug))
+	logger.Info("setting up encryption", "db", dbPath, "user", userSlug)
 
-	// Use a stable encryption key for the crypto store.
-	// In production, this should ideally come from secure storage.
-	// This key encrypts the Olm account data at rest.
-	storeKey := []byte("fold-matrix-store-key")
+	// Derive store key from user ID for per-user isolation.
+	// This ensures each user's crypto store has a unique encryption key.
+	// Using nil would skip store encryption entirely (like gorp-rs does).
+	storeKey := deriveStoreKey(userID)
 
 	// Create crypto helper with SQLite database path.
 	// The cryptohelper will automatically create the necessary stores.
@@ -102,4 +105,33 @@ func (cm *CryptoManager) Close() error {
 		return cm.helper.Close()
 	}
 	return nil
+}
+
+// slugify converts a Matrix user ID to a filesystem-safe string.
+// Example: @foldbot:matrix.org -> foldbot_matrix.org
+func slugify(userID string) string {
+	// Remove leading @ and replace : with _
+	s := userID
+	if len(s) > 0 && s[0] == '@' {
+		s = s[1:]
+	}
+	result := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_' {
+			result = append(result, c)
+		} else if c == ':' {
+			result = append(result, '_')
+		}
+	}
+	return string(result)
+}
+
+// deriveStoreKey creates a deterministic store encryption key from user ID.
+// This ensures each user has a unique key without requiring external secrets.
+func deriveStoreKey(userID string) []byte {
+	// Use SHA-256 to derive a 32-byte key from the user ID.
+	// This provides per-user isolation while being deterministic.
+	h := sha256.Sum256([]byte("fold-matrix-crypto:" + userID))
+	return h[:]
 }
