@@ -219,3 +219,377 @@ func TestEventStore_ListEventsByActor(t *testing.T) {
 func strPtr(s string) *string {
 	return &s
 }
+
+// GetEvents tests - TDD tests for the History Store feature
+
+func TestGetEvents_Basic(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	convKey := "test:conversation:basic"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	// Create 5 events
+	for i := 0; i < 5; i++ {
+		event := &LedgerEvent{
+			ID:              generateTestID("basic-event", i),
+			ConversationKey: convKey,
+			Direction:       EventDirectionInbound,
+			Author:          "user",
+			Timestamp:       baseTime.Add(time.Duration(i) * time.Second),
+			Type:            EventTypeMessage,
+			Text:            strPtr("Message " + string(rune('A'+i))),
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	// Fetch events with default params
+	result, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Len(t, result.Events, 5)
+	assert.False(t, result.HasMore)
+	assert.Empty(t, result.NextCursor)
+
+	// Verify chronological order
+	for i := 1; i < len(result.Events); i++ {
+		assert.True(t, result.Events[i-1].Timestamp.Before(result.Events[i].Timestamp) ||
+			result.Events[i-1].Timestamp.Equal(result.Events[i].Timestamp))
+	}
+}
+
+func TestGetEvents_Empty(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	result, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: "nonexistent:conversation",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Len(t, result.Events, 0)
+	assert.False(t, result.HasMore)
+	assert.Empty(t, result.NextCursor)
+}
+
+func TestGetEvents_WithSince(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	convKey := "test:conversation:since"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	// Create 5 events at 1-second intervals
+	for i := 0; i < 5; i++ {
+		event := &LedgerEvent{
+			ID:              generateTestID("since-event", i),
+			ConversationKey: convKey,
+			Direction:       EventDirectionInbound,
+			Author:          "user",
+			Timestamp:       baseTime.Add(time.Duration(i) * time.Second),
+			Type:            EventTypeMessage,
+			Text:            strPtr("Message " + string(rune('A'+i))),
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	// Fetch events since the 3rd event (index 2)
+	since := baseTime.Add(2 * time.Second)
+	result, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+		Since:           &since,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Len(t, result.Events, 3) // Events at t+2s, t+3s, t+4s
+	assert.False(t, result.HasMore)
+}
+
+func TestGetEvents_WithUntil(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	convKey := "test:conversation:until"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	// Create 5 events at 1-second intervals
+	for i := 0; i < 5; i++ {
+		event := &LedgerEvent{
+			ID:              generateTestID("until-event", i),
+			ConversationKey: convKey,
+			Direction:       EventDirectionInbound,
+			Author:          "user",
+			Timestamp:       baseTime.Add(time.Duration(i) * time.Second),
+			Type:            EventTypeMessage,
+			Text:            strPtr("Message " + string(rune('A'+i))),
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	// Fetch events until the 3rd event (index 2)
+	until := baseTime.Add(2 * time.Second)
+	result, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+		Until:           &until,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Len(t, result.Events, 3) // Events at t+0s, t+1s, t+2s
+	assert.False(t, result.HasMore)
+}
+
+func TestGetEvents_WithBoth(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	convKey := "test:conversation:both"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	// Create 5 events at 1-second intervals
+	for i := 0; i < 5; i++ {
+		event := &LedgerEvent{
+			ID:              generateTestID("both-event", i),
+			ConversationKey: convKey,
+			Direction:       EventDirectionInbound,
+			Author:          "user",
+			Timestamp:       baseTime.Add(time.Duration(i) * time.Second),
+			Type:            EventTypeMessage,
+			Text:            strPtr("Message " + string(rune('A'+i))),
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	// Fetch events between 1s and 3s
+	since := baseTime.Add(1 * time.Second)
+	until := baseTime.Add(3 * time.Second)
+	result, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+		Since:           &since,
+		Until:           &until,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Len(t, result.Events, 3) // Events at t+1s, t+2s, t+3s
+	assert.False(t, result.HasMore)
+}
+
+func TestGetEvents_Pagination_FirstPage(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	convKey := "test:conversation:pagination"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	// Create 10 events
+	for i := 0; i < 10; i++ {
+		event := &LedgerEvent{
+			ID:              generateTestID("page-event", i),
+			ConversationKey: convKey,
+			Direction:       EventDirectionInbound,
+			Author:          "user",
+			Timestamp:       baseTime.Add(time.Duration(i) * time.Second),
+			Type:            EventTypeMessage,
+			Text:            strPtr("Message " + string(rune('A'+i))),
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	// Fetch first page of 3
+	result, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+		Limit:           3,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Len(t, result.Events, 3)
+	assert.True(t, result.HasMore)
+	assert.NotEmpty(t, result.NextCursor)
+
+	// Verify we got the first 3 events (chronologically)
+	assert.Equal(t, "page-event-a", result.Events[0].ID)
+	assert.Equal(t, "page-event-b", result.Events[1].ID)
+	assert.Equal(t, "page-event-c", result.Events[2].ID)
+}
+
+func TestGetEvents_Pagination_SecondPage(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	convKey := "test:conversation:pagination2"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	// Create 10 events
+	for i := 0; i < 10; i++ {
+		event := &LedgerEvent{
+			ID:              generateTestID("page2-event", i),
+			ConversationKey: convKey,
+			Direction:       EventDirectionInbound,
+			Author:          "user",
+			Timestamp:       baseTime.Add(time.Duration(i) * time.Second),
+			Type:            EventTypeMessage,
+			Text:            strPtr("Message " + string(rune('A'+i))),
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	// Fetch first page
+	result1, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+		Limit:           3,
+	})
+	require.NoError(t, err)
+	require.True(t, result1.HasMore)
+	require.NotEmpty(t, result1.NextCursor)
+
+	// Fetch second page using cursor
+	result2, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+		Limit:           3,
+		Cursor:          result1.NextCursor,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result2)
+	assert.Len(t, result2.Events, 3)
+	assert.True(t, result2.HasMore)
+	assert.NotEmpty(t, result2.NextCursor)
+
+	// Verify we got events 4-6 (indices 3, 4, 5)
+	assert.Equal(t, "page2-event-d", result2.Events[0].ID)
+	assert.Equal(t, "page2-event-e", result2.Events[1].ID)
+	assert.Equal(t, "page2-event-f", result2.Events[2].ID)
+}
+
+func TestGetEvents_Pagination_LastPage(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	convKey := "test:conversation:lastpage"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	// Create 5 events
+	for i := 0; i < 5; i++ {
+		event := &LedgerEvent{
+			ID:              generateTestID("last-event", i),
+			ConversationKey: convKey,
+			Direction:       EventDirectionInbound,
+			Author:          "user",
+			Timestamp:       baseTime.Add(time.Duration(i) * time.Second),
+			Type:            EventTypeMessage,
+			Text:            strPtr("Message " + string(rune('A'+i))),
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	// Fetch first page of 3
+	result1, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+		Limit:           3,
+	})
+	require.NoError(t, err)
+	require.True(t, result1.HasMore)
+
+	// Fetch second (last) page
+	result2, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+		Limit:           3,
+		Cursor:          result1.NextCursor,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result2)
+	assert.Len(t, result2.Events, 2) // Only 2 events remaining
+	assert.False(t, result2.HasMore)
+	assert.Empty(t, result2.NextCursor)
+}
+
+func TestGetEvents_LimitCapped(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	convKey := "test:conversation:limitcap"
+
+	// Test that limit is capped to 500
+	result, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+		Limit:           1000, // exceeds max
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	// Even though limit was 1000, it should be capped to 500
+	// Since we have no events, we just verify no error
+}
+
+func TestGetEvents_InvalidCursor(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	convKey := "test:conversation:badcursor"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	// Create an event so we have something to query
+	event := &LedgerEvent{
+		ID:              "bad-cursor-event",
+		ConversationKey: convKey,
+		Direction:       EventDirectionInbound,
+		Author:          "user",
+		Timestamp:       baseTime,
+		Type:            EventTypeMessage,
+		Text:            strPtr("Test"),
+	}
+	require.NoError(t, store.SaveEvent(ctx, event))
+
+	// Test with invalid cursor (not valid base64)
+	_, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+		Cursor:          "not-valid-base64!!!",
+	})
+	assert.Error(t, err)
+
+	// Test with valid base64 but invalid format
+	_, err = store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+		Cursor:          "dGVzdA==", // "test" in base64, missing pipe separator
+	})
+	assert.Error(t, err)
+}
+
+func TestGetEvents_RequiresConversationKey(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	_, err := store.GetEvents(ctx, GetEventsParams{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "conversation_key required")
+}
+
+func TestGetEvents_DefaultLimit(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	convKey := "test:conversation:defaultlimit"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	// Create 60 events (more than default 50)
+	for i := 0; i < 60; i++ {
+		event := &LedgerEvent{
+			ID:              generateTestID("deflim-event", i),
+			ConversationKey: convKey,
+			Direction:       EventDirectionInbound,
+			Author:          "user",
+			Timestamp:       baseTime.Add(time.Duration(i) * time.Second),
+			Type:            EventTypeMessage,
+			Text:            strPtr("Message"),
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	// Fetch with no limit specified (should default to 50)
+	result, err := store.GetEvents(ctx, GetEventsParams{
+		ConversationKey: convKey,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Len(t, result.Events, 50)
+	assert.True(t, result.HasMore)
+}

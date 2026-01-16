@@ -5,6 +5,8 @@ package store
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -287,6 +289,91 @@ func (m *MockStore) ListEventsByActor(ctx context.Context, principalID string, l
 
 	if limit > 0 && len(result) > limit {
 		result = result[:limit]
+	}
+
+	return result, nil
+}
+
+// GetEvents retrieves events for a conversation with pagination support.
+func (m *MockStore) GetEvents(ctx context.Context, p GetEventsParams) (*GetEventsResult, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Validate required params
+	if p.ConversationKey == "" {
+		return nil, fmt.Errorf("conversation_key required")
+	}
+
+	// Apply default and cap limit
+	if p.Limit <= 0 {
+		p.Limit = 50
+	}
+	if p.Limit > 500 {
+		p.Limit = 500
+	}
+
+	// Collect matching events
+	var matching []LedgerEvent
+	for _, e := range m.events {
+		if e.ConversationKey != p.ConversationKey {
+			continue
+		}
+		if p.Since != nil && e.Timestamp.Before(*p.Since) {
+			continue
+		}
+		if p.Until != nil && e.Timestamp.After(*p.Until) {
+			continue
+		}
+		eventCopy := *e
+		matching = append(matching, eventCopy)
+	}
+
+	// Sort by timestamp, then event_id
+	sort.Slice(matching, func(i, j int) bool {
+		if matching[i].Timestamp.Equal(matching[j].Timestamp) {
+			return matching[i].ID < matching[j].ID
+		}
+		return matching[i].Timestamp.Before(matching[j].Timestamp)
+	})
+
+	// Apply cursor
+	if p.Cursor != "" {
+		cursorTS, cursorID, err := decodeCursor(p.Cursor)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cursor: %w", err)
+		}
+		// Find events after cursor
+		startIdx := 0
+		for i, e := range matching {
+			if e.Timestamp.After(cursorTS) || (e.Timestamp.Equal(cursorTS) && e.ID > cursorID) {
+				startIdx = i
+				break
+			}
+			startIdx = i + 1
+		}
+		if startIdx < len(matching) {
+			matching = matching[startIdx:]
+		} else {
+			matching = nil
+		}
+	}
+
+	// Determine if there are more results
+	hasMore := len(matching) > p.Limit
+	if hasMore {
+		matching = matching[:p.Limit]
+	}
+
+	// Build result
+	result := &GetEventsResult{
+		Events:  matching,
+		HasMore: hasMore,
+	}
+
+	// Set next cursor if there are more results
+	if hasMore && len(matching) > 0 {
+		lastEvent := matching[len(matching)-1]
+		result.NextCursor = encodeCursor(lastEvent.Timestamp, lastEvent.ID)
 	}
 
 	return result, nil
