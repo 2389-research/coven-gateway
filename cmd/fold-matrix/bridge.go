@@ -4,14 +4,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/renderer/html"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -277,13 +282,23 @@ func (b *Bridge) setTyping(roomID id.RoomID, typing bool) {
 	}
 }
 
-// sendMessage sends a text message to a room.
+// sendMessage sends a markdown message to a room, converting to HTML for Matrix.
 func (b *Bridge) sendMessage(roomID id.RoomID, text string) {
 	// Use a longer timeout for sending messages (they can be large)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, err := b.matrix.SendText(ctx, roomID, text)
+	// Convert markdown to HTML for Matrix formatted messages
+	htmlBody := markdownToHTML(text)
+
+	content := &event.MessageEventContent{
+		MsgType:       event.MsgText,
+		Body:          text, // Plain text fallback
+		Format:        event.FormatHTML,
+		FormattedBody: htmlBody,
+	}
+
+	_, err := b.matrix.SendMessageEvent(ctx, roomID, event.EventMessage, content)
 	if err != nil {
 		b.logger.Error("failed to send message", "room", roomID.String(), "error", err)
 	}
@@ -301,4 +316,22 @@ func truncate(s string, maxLen int) string {
 // parseJSON unmarshals JSON from a string into the given value.
 func parseJSON(data string, v interface{}) error {
 	return json.Unmarshal([]byte(data), v)
+}
+
+// markdownToHTML converts markdown text to HTML for Matrix messages.
+func markdownToHTML(text string) string {
+	var buf bytes.Buffer
+	md := goldmark.New(
+		goldmark.WithExtensions(
+			extension.GFM, // GitHub Flavored Markdown (tables, strikethrough, etc.)
+		),
+		goldmark.WithRendererOptions(
+			html.WithHardWraps(), // Convert newlines to <br>
+		),
+	)
+	if err := md.Convert([]byte(text), &buf); err != nil {
+		// On error, return escaped text
+		return template.HTMLEscapeString(text)
+	}
+	return buf.String()
 }
