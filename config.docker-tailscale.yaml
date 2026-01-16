@@ -1,0 +1,35 @@
+# ABOUTME: Example config for running fold-gateway in Docker with Tailscale
+# ABOUTME: Copy to config.yaml and set TS_AUTHKEY in environment
+
+# Server addresses not needed - tsnet handles networking
+server:
+  grpc_addr: ""
+  http_addr: ""
+
+tailscale:
+  enabled: true
+  hostname: "fold-gateway"
+  # Auth key via environment: TS_AUTHKEY
+  auth_key: ""
+  # Docker volume mount point for state persistence
+  state_dir: "/app/tailscale"
+  # Set true if you don't need the node to persist after container stops
+  ephemeral: false
+  # Set true to expose HTTP API publicly via Tailscale Funnel
+  funnel: false
+
+database:
+  path: "/app/data/gateway.db"
+
+agents:
+  heartbeat_interval: "30s"
+  heartbeat_timeout: "90s"
+  reconnect_grace_period: "5m"
+
+logging:
+  level: "info"
+  format: "text"
+
+metrics:
+  enabled: true
+  path: "/metrics"

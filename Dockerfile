@@ -28,6 +28,7 @@ FROM debian:bookworm-slim
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -41,8 +42,8 @@ COPY --from=builder /fold-gateway /usr/local/bin/fold-gateway
 # Copy example config
 COPY config.example.yaml /app/config.example.yaml
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data && chown -R app:app /app
+# Create data and tailscale directories
+RUN mkdir -p /app/data /app/tailscale && chown -R app:app /app
 
 USER app
 

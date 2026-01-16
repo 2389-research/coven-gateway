@@ -1,7 +1,8 @@
 # ABOUTME: Docker Compose configuration for running fold-gateway
-# ABOUTME: Mounts config and data directories for persistence
+# ABOUTME: Supports both direct TCP and Tailscale (tsnet) modes
 
 services:
+  # Standard mode: direct TCP ports
   fold-gateway:
     build:
       context: .
@@ -20,3 +21,29 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # Tailscale mode: tsnet networking (no exposed ports needed)
+  # Usage: docker compose up fold-gateway-tailscale
+  fold-gateway-tailscale:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fold-gateway-ts
+    profiles:
+      - tailscale
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY:-}  # Set via env or .env file
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+      - tailscale-state:/app/tailscale  # Persist tsnet state
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s  # Longer start for Tailscale auth
+
+volumes:
+  tailscale-state:
