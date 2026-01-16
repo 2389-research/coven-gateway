@@ -106,6 +106,10 @@ func run() error {
 	}
 	fmt.Println()
 
+	// Setup graceful shutdown context first - all operations should respect it
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
 	// Create bridge
 	bridge, err := NewBridge(cfg, logger)
 	if err != nil {
@@ -113,7 +117,6 @@ func run() error {
 	}
 
 	// Setup encryption
-	ctx := context.Background()
 	cryptoMgr, err := SetupCrypto(ctx, bridge.matrix, cfg.Matrix.UserID, cfg.Matrix.RecoveryKey, dataPath, logger)
 	if err != nil {
 		return fmt.Errorf("setting up encryption: %w", err)
@@ -121,10 +124,6 @@ func run() error {
 	if cryptoMgr != nil {
 		defer cryptoMgr.Close()
 	}
-
-	// Setup graceful shutdown
-	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
 
 	// Run bridge
 	logger.Info("starting bridge")

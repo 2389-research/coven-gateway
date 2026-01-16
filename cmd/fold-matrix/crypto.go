@@ -17,9 +17,8 @@ import (
 
 // CryptoManager handles Matrix E2EE setup and lifecycle.
 type CryptoManager struct {
-	helper      *cryptohelper.CryptoHelper
-	recoveryKey string
-	logger      *slog.Logger
+	helper *cryptohelper.CryptoHelper
+	logger *slog.Logger
 }
 
 // SetupCrypto initializes E2EE for the Matrix client.
@@ -54,14 +53,13 @@ func SetupCrypto(ctx context.Context, client *mautrix.Client, userID string, rec
 	}
 
 	manager := &CryptoManager{
-		helper:      helper,
-		recoveryKey: recoveryKey,
-		logger:      logger,
+		helper: helper,
+		logger: logger,
 	}
 
 	// If recovery key is provided, verify with it for cross-signing
 	if recoveryKey != "" {
-		if err := manager.verifyWithRecoveryKey(ctx); err != nil {
+		if err := manager.verifyWithRecoveryKey(ctx, recoveryKey); err != nil {
 			// Log the error but don't fail - encryption still works without cross-signing
 			logger.Warn("failed to verify with recovery key", "error", err)
 			logger.Info("encryption enabled without cross-signing verification")
@@ -75,9 +73,9 @@ func SetupCrypto(ctx context.Context, client *mautrix.Client, userID string, rec
 	return manager, nil
 }
 
-// verifyWithRecoveryKey attempts to verify the device using the configured recovery key.
+// verifyWithRecoveryKey attempts to verify the device using the provided recovery key.
 // This enables cross-signing verification with other devices.
-func (cm *CryptoManager) verifyWithRecoveryKey(ctx context.Context) error {
+func (cm *CryptoManager) verifyWithRecoveryKey(ctx context.Context, recoveryKey string) error {
 	machine := cm.helper.Machine()
 	if machine == nil {
 		return fmt.Errorf("crypto machine not initialized")
@@ -86,7 +84,7 @@ func (cm *CryptoManager) verifyWithRecoveryKey(ctx context.Context) error {
 	cm.logger.Info("verifying device with recovery key")
 
 	// Use the Olm machine's recovery key verification
-	if err := machine.VerifyWithRecoveryKey(ctx, cm.recoveryKey); err != nil {
+	if err := machine.VerifyWithRecoveryKey(ctx, recoveryKey); err != nil {
 		return fmt.Errorf("recovery key verification failed: %w", err)
 	}
 

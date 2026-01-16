@@ -129,10 +129,35 @@ func (g *GatewayClient) handleErrorResponse(resp *http.Response) error {
 // parseSSEStream reads SSE events from the response body.
 func (g *GatewayClient) parseSSEStream(ctx context.Context, body io.Reader, onEvent func(SSEEvent)) (string, error) {
 	scanner := bufio.NewScanner(body)
+	// Increase buffer size to handle large AI responses (up to 10MB)
+	scanner.Buffer(make([]byte, 64*1024), 10*1024*1024)
 
 	var eventType EventType
 	var dataLines []string
 	var fullResponse string
+
+	// processEvent handles a complete SSE event
+	processEvent := func() {
+		if eventType == "" || len(dataLines) == 0 {
+			return
+		}
+		event := SSEEvent{
+			Type: eventType,
+			Data: strings.Join(dataLines, "\n"),
+		}
+
+		// Extract full response from done event
+		if eventType == EventDone {
+			var data TextEventData
+			if json.Unmarshal([]byte(event.Data), &data) == nil {
+				fullResponse = data.FullResponse
+			}
+		}
+
+		if onEvent != nil {
+			onEvent(event)
+		}
+	}
 
 	for scanner.Scan() {
 		select {
@@ -145,32 +170,14 @@ func (g *GatewayClient) parseSSEStream(ctx context.Context, body io.Reader, onEv
 
 		// Empty line signals end of event
 		if line == "" {
-			if eventType != "" && len(dataLines) > 0 {
-				event := SSEEvent{
-					Type: eventType,
-					Data: strings.Join(dataLines, "\n"),
-				}
-
-				// Extract full response from done event
-				if eventType == EventDone {
-					var data TextEventData
-					if json.Unmarshal([]byte(event.Data), &data) == nil {
-						fullResponse = data.FullResponse
-					}
-				}
-
-				// Check for error event
-				if eventType == EventError {
-					var data ErrorEventData
-					if json.Unmarshal([]byte(event.Data), &data) == nil {
-						return "", fmt.Errorf("agent error: %s", data.Error)
-					}
-				}
-
-				if onEvent != nil {
-					onEvent(event)
+			// Check for error event before processing
+			if eventType == EventError && len(dataLines) > 0 {
+				var data ErrorEventData
+				if json.Unmarshal([]byte(strings.Join(dataLines, "\n")), &data) == nil {
+					return "", fmt.Errorf("agent error: %s", data.Error)
 				}
 			}
+			processEvent()
 			eventType = ""
 			dataLines = nil
 			continue
@@ -196,6 +203,9 @@ func (g *GatewayClient) parseSSEStream(ctx context.Context, body io.Reader, onEv
 	if err := scanner.Err(); err != nil {
 		return fullResponse, fmt.Errorf("reading SSE stream: %w", err)
 	}
+
+	// Process any remaining buffered event (if stream closed without trailing newline)
+	processEvent()
 
 	return fullResponse, nil
 }

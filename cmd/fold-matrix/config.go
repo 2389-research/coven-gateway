@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -71,19 +72,34 @@ func expandEnvVars(s string) string {
 	})
 }
 
-// Validate checks that required config fields are present.
+// Validate checks that required config fields are present and valid.
 func (c *Config) Validate() error {
 	if c.Matrix.Homeserver == "" {
 		return fmt.Errorf("matrix.homeserver is required")
 	}
+	// Validate homeserver URL
+	if _, err := url.Parse(c.Matrix.Homeserver); err != nil {
+		return fmt.Errorf("matrix.homeserver is not a valid URL: %w", err)
+	}
 	if c.Matrix.UserID == "" {
 		return fmt.Errorf("matrix.user_id is required")
+	}
+	if !strings.HasPrefix(c.Matrix.UserID, "@") || !strings.Contains(c.Matrix.UserID, ":") {
+		return fmt.Errorf("matrix.user_id must be in format @user:server")
 	}
 	if c.Matrix.AccessToken == "" {
 		return fmt.Errorf("matrix.access_token is required")
 	}
 	if c.Gateway.URL == "" {
 		return fmt.Errorf("gateway.url is required")
+	}
+	// Validate gateway URL
+	u, err := url.Parse(c.Gateway.URL)
+	if err != nil {
+		return fmt.Errorf("gateway.url is not a valid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("gateway.url must use http or https scheme")
 	}
 	return nil
 }

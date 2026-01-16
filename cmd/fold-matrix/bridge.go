@@ -64,7 +64,10 @@ func (b *Bridge) Run(ctx context.Context) error {
 	defer b.cancel()
 
 	// Register event handler for messages
-	syncer := b.matrix.Syncer.(*mautrix.DefaultSyncer)
+	syncer, ok := b.matrix.Syncer.(*mautrix.DefaultSyncer)
+	if !ok {
+		return fmt.Errorf("unexpected syncer type: %T", b.matrix.Syncer)
+	}
 	syncer.OnEventType(event.EventMessage, b.handleMessageEvent)
 
 	// Start syncing
@@ -225,13 +228,22 @@ func (b *Bridge) isRoomAllowed(roomID string) bool {
 	return false
 }
 
+// typingTimeout is the duration the typing indicator shows (30 seconds).
+const typingTimeout = 30 * time.Second
+
+// networkTimeout is the timeout for Matrix API calls.
+const networkTimeout = 10 * time.Second
+
 // setTyping sends typing indicator to room.
 func (b *Bridge) setTyping(roomID id.RoomID, typing bool) {
-	var timeout int64
+	var timeout time.Duration
 	if typing {
-		timeout = 30000 // 30 seconds
+		timeout = typingTimeout
 	}
-	_, err := b.matrix.UserTyping(context.Background(), roomID, typing, time.Duration(timeout)*time.Millisecond)
+	// Use a timeout context to avoid hanging during shutdown or network issues
+	ctx, cancel := context.WithTimeout(context.Background(), networkTimeout)
+	defer cancel()
+	_, err := b.matrix.UserTyping(ctx, roomID, typing, timeout)
 	if err != nil {
 		b.logger.Debug("failed to set typing indicator", "room", roomID.String(), "error", err)
 	}
@@ -239,7 +251,10 @@ func (b *Bridge) setTyping(roomID id.RoomID, typing bool) {
 
 // sendMessage sends a text message to a room.
 func (b *Bridge) sendMessage(roomID id.RoomID, text string) {
-	_, err := b.matrix.SendText(context.Background(), roomID, text)
+	// Use a longer timeout for sending messages (they can be large)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_, err := b.matrix.SendText(ctx, roomID, text)
 	if err != nil {
 		b.logger.Error("failed to send message", "room", roomID.String(), "error", err)
 	}
