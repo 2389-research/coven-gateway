@@ -1,45 +1,19 @@
 # ABOUTME: Docker Compose configuration for fold-gateway and fold-matrix
-# ABOUTME: Supports both direct TCP and Tailscale (tsnet) modes
+# ABOUTME: Uses Tailscale (tsnet) for networking
 
 services:
-  # fold-gateway: gRPC server for agents, HTTP API for frontends
   fold-gateway:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: fold-gateway
-    ports:
-      - "50051:50051"  # gRPC
-      - "8080:8080"    # HTTP API
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./data:/app/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # Tailscale mode: tsnet networking (no exposed ports needed)
-  # Usage: docker compose --profile tailscale up fold-gateway-tailscale
-  fold-gateway-tailscale:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: fold-gateway-ts
-    profiles:
-      - tailscale
     environment:
-      - TS_AUTHKEY=${TS_AUTHKEY:-}  # Set via env or .env file
+      - TS_AUTHKEY=${TS_AUTHKEY:-}
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data
-      - tailscale-state:/app/tailscale  # Persist tsnet state
+      - tailscale-state:/app/tailscale
     restart: unless-stopped
-    # Note: No healthcheck - tsnet binds to Tailscale interface, not localhost.
-    # Check health via: curl http://fold-gateway.<tailnet>.ts.net/health
 
   # fold-matrix: Matrix bridge that connects Matrix rooms to fold-gateway
   fold-matrix:
@@ -48,8 +22,7 @@ services:
       dockerfile: Dockerfile.matrix
     container_name: fold-matrix
     depends_on:
-      fold-gateway:
-        condition: service_healthy
+      - fold-gateway
     environment:
       - MATRIX_USERNAME=${MATRIX_USERNAME:-}
       - MATRIX_PASSWORD=${MATRIX_PASSWORD:-}
