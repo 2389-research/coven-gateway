@@ -16,23 +16,22 @@ services:
       - tailscale-state:/app/tailscale
     restart: unless-stopped
 
-  # fold-matrix: Matrix bridge that connects Matrix rooms to fold-gateway
-  fold-matrix:
-    build:
-      context: .
-      dockerfile: Dockerfile.matrix
-    container_name: fold-matrix
-    depends_on:
-      - fold-gateway
-    environment:
-      - MATRIX_USERNAME=${MATRIX_USERNAME:-}
-      - MATRIX_PASSWORD=${MATRIX_PASSWORD:-}
-      - MATRIX_RECOVERY_KEY=${MATRIX_RECOVERY_KEY:-}
-    volumes:
-      - ./config.matrix.toml:/app/config.toml:ro
-      - matrix-crypto:/app/data  # Persist E2EE crypto store
-    restart: unless-stopped
+  # fold-matrix: Matrix bridge (disabled for now)
+  # fold-matrix:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.matrix
+  #   container_name: fold-matrix
+  #   depends_on:
+  #     - fold-gateway
+  #   environment:
+  #     - MATRIX_USERNAME=${MATRIX_USERNAME:-}
+  #     - MATRIX_PASSWORD=${MATRIX_PASSWORD:-}
+  #     - MATRIX_RECOVERY_KEY=${MATRIX_RECOVERY_KEY:-}
+  #   volumes:
+  #     - ./config.matrix.toml:/app/config.toml:ro
+  #     - matrix-crypto:/app/data
+  #   restart: unless-stopped
 
 volumes:
   tailscale-state:
-  matrix-crypto:
