@@ -325,12 +325,16 @@ func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn n
 		Ephemeral: tsCfg.Ephemeral,
 	}
 
-	// Set auth key if provided in config.
-	// Precedence: config value > TS_AUTHKEY env var > interactive login.
-	// If auth_key is empty, tsnet falls back to TS_AUTHKEY or prompts interactively.
-	if tsCfg.AuthKey != "" {
-		g.tsnetServer.AuthKey = tsCfg.AuthKey
+	// Set auth key - required for non-interactive (container) deployments.
+	// Precedence: config value > TS_AUTHKEY env var.
+	authKey := tsCfg.AuthKey
+	if authKey == "" {
+		authKey = os.Getenv("TS_AUTHKEY")
 	}
+	if authKey == "" {
+		return nil, nil, fmt.Errorf("tailscale auth key required: set auth_key in config or TS_AUTHKEY environment variable (get one at https://login.tailscale.com/admin/settings/keys)")
+	}
+	g.tsnetServer.AuthKey = authKey
 
 	g.logger.Info("starting tailscale node",
 		"hostname", tsCfg.Hostname,
