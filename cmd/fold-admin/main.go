@@ -778,13 +778,13 @@ func cmdInviteCreate(args []string) error {
 	}
 
 	// Default base URL
-	// FOLD_GATEWAY_HOST is preferred; derives HTTPS URL
-	// Falls back to legacy FOLD_ADMIN_URL for backwards compatibility
+	// FOLD_GATEWAY_URL takes full URL, or FOLD_GATEWAY_HOST derives http:// URL
+	// (use http:// for tailnet-only; WireGuard already encrypts)
 	if baseURL == "" {
-		if url := os.Getenv("FOLD_ADMIN_URL"); url != "" {
+		if url := os.Getenv("FOLD_GATEWAY_URL"); url != "" {
 			baseURL = url
 		} else if host := os.Getenv("FOLD_GATEWAY_HOST"); host != "" {
-			baseURL = "https://" + host
+			baseURL = "http://" + host
 		} else {
 			baseURL = "http://localhost:8080"
 		}
