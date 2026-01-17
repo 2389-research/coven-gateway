@@ -23,6 +23,9 @@ const (
 	AuditCreateBinding    AuditAction = "create_binding"
 	AuditUpdateBinding    AuditAction = "update_binding"
 	AuditDeleteBinding    AuditAction = "delete_binding"
+	AuditCreateToken      AuditAction = "create_token"
+	AuditCreatePrincipal  AuditAction = "create_principal"
+	AuditDeletePrincipal  AuditAction = "delete_principal"
 )
 
 // ValidAuditActions lists all valid audit actions
@@ -34,6 +37,9 @@ var ValidAuditActions = []AuditAction{
 	AuditCreateBinding,
 	AuditUpdateBinding,
 	AuditDeleteBinding,
+	AuditCreateToken,
+	AuditCreatePrincipal,
+	AuditDeletePrincipal,
 }
 
 // AuditEntry represents a single audit log entry

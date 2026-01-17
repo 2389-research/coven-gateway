@@ -1,5 +1,5 @@
 // ABOUTME: TUI client for interacting with fold-gateway agents via HTTP API.
-// ABOUTME: Provides readline-style input and SSE streaming output.
+// ABOUTME: Provides readline-style input and SSE streaming output with JWT auth.
 
 package main
 
@@ -14,9 +14,36 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 )
+
+// getToken returns the JWT token from FOLD_TOKEN env var or ~/.config/fold/token file
+func getToken() string {
+	// Check env var first
+	if token := os.Getenv("FOLD_TOKEN"); token != "" {
+		return token
+	}
+
+	// Try to read from token file
+	configDir := os.Getenv("XDG_CONFIG_HOME")
+	if configDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		configDir = filepath.Join(homeDir, ".config")
+	}
+
+	tokenPath := filepath.Join(configDir, "fold", "token")
+	data, err := os.ReadFile(tokenPath)
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(data))
+}
 
 // sendRequest is the JSON body sent to POST /api/send.
 type sendRequest struct {
@@ -47,6 +74,11 @@ func main() {
 	flag.Parse()
 
 	fmt.Printf("fold-tui connected to %s\n", *server)
+	if getToken() != "" {
+		fmt.Println("Auth: JWT token configured (FOLD_TOKEN)")
+	} else {
+		fmt.Println("Auth: none (set FOLD_TOKEN for authentication)")
+	}
 	fmt.Println("Type a message and press Enter. /help for commands. Ctrl+C to quit.")
 	fmt.Println()
 
@@ -172,6 +204,11 @@ func listAgents(ctx context.Context, server string) error {
 		return fmt.Errorf("creating request: %w", err)
 	}
 
+	// Add auth header if token is configured
+	if token := getToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("fetching agents: %w", err)
@@ -221,6 +258,11 @@ func sendMessage(ctx context.Context, server, sender, threadID, agentID, content
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
+
+	// Add auth header if token is configured
+	if token := getToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	// Send request
 	resp, err := http.DefaultClient.Do(req)

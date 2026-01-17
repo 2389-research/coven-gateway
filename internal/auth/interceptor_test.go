@@ -35,6 +35,16 @@ func (m *mockPrincipalStore) GetPrincipal(ctx context.Context, id string) (*stor
 	return nil, store.ErrPrincipalNotFound
 }
 
+func (m *mockPrincipalStore) GetPrincipalByPubkey(ctx context.Context, fingerprint string) (*store.Principal, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	if m.principal != nil && m.principal.PubkeyFP == fingerprint {
+		return m.principal, nil
+	}
+	return nil, store.ErrPrincipalNotFound
+}
+
 // mockRoleStore implements RoleStore for testing
 type mockRoleStore struct {
 	roles []store.RoleName
@@ -77,7 +87,7 @@ func TestAuthInterceptor_ValidToken(t *testing.T) {
 		roles: []store.RoleName{store.RoleAdmin},
 	}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil)
 
 	ctx := contextWithAuth(token)
 	handlerCalled := false
@@ -130,7 +140,7 @@ func TestAuthInterceptor_MissingHeader(t *testing.T) {
 	principals := &mockPrincipalStore{}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil)
 
 	// Context without authorization header
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.New(map[string]string{}))
@@ -164,7 +174,7 @@ func TestAuthInterceptor_InvalidToken(t *testing.T) {
 	principals := &mockPrincipalStore{}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil)
 
 	ctx := contextWithAuth("invalid-token")
 
@@ -201,7 +211,7 @@ func TestAuthInterceptor_PrincipalNotFound(t *testing.T) {
 	}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil)
 
 	ctx := contextWithAuth(token)
 
@@ -243,7 +253,7 @@ func TestAuthInterceptor_PrincipalRevoked(t *testing.T) {
 	}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil)
 
 	ctx := contextWithAuth(token)
 
@@ -285,7 +295,7 @@ func TestAuthInterceptor_PrincipalPending(t *testing.T) {
 	}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil)
 
 	ctx := contextWithAuth(token)
 
@@ -337,7 +347,7 @@ func TestAuthInterceptor_AllowedStatuses(t *testing.T) {
 				roles: []store.RoleName{store.RoleMember},
 			}
 
-			interceptor := UnaryInterceptor(principals, roles, verifier)
+			interceptor := UnaryInterceptor(principals, roles, verifier, nil)
 			ctx := contextWithAuth(token)
 
 			handlerCalled := false
@@ -372,7 +382,7 @@ func TestAuthInterceptor_StoreError(t *testing.T) {
 	}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil)
 
 	ctx := contextWithAuth(token)
 
@@ -416,7 +426,7 @@ func TestAuthInterceptor_RoleStoreError(t *testing.T) {
 		err: errors.New("failed to list roles"),
 	}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil)
 
 	ctx := contextWithAuth(token)
 
@@ -471,7 +481,7 @@ func TestStreamInterceptor_ValidToken(t *testing.T) {
 		roles: []store.RoleName{store.RoleAdmin},
 	}
 
-	interceptor := StreamInterceptor(principals, roles, verifier)
+	interceptor := StreamInterceptor(principals, roles, verifier, nil)
 
 	ctx := contextWithAuth(token)
 	stream := &mockServerStream{ctx: ctx}
@@ -522,7 +532,7 @@ func TestStreamInterceptor_MissingHeader(t *testing.T) {
 	principals := &mockPrincipalStore{}
 	roles := &mockRoleStore{}
 
-	interceptor := StreamInterceptor(principals, roles, verifier)
+	interceptor := StreamInterceptor(principals, roles, verifier, nil)
 
 	// Context without authorization header
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.New(map[string]string{}))

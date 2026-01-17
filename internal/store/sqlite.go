@@ -157,7 +157,8 @@ func (s *SQLiteStore) createSchema() error {
 				'revoke_capability',
 				'create_binding',
 				'update_binding',
-				'delete_binding'
+				'delete_binding',
+				'create_token'
 			))
 		);
 
@@ -199,6 +200,54 @@ func (s *SQLiteStore) createSchema() error {
 
 		CREATE INDEX IF NOT EXISTS idx_bindings_frontend ON bindings(frontend);
 		CREATE INDEX IF NOT EXISTS idx_bindings_agent ON bindings(agent_id);
+
+		-- Admin users (humans who manage the system via web UI)
+		CREATE TABLE IF NOT EXISTS admin_users (
+			id TEXT PRIMARY KEY,
+			username TEXT UNIQUE NOT NULL,
+			password_hash TEXT,
+			display_name TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username);
+
+		-- Admin sessions (cookie-based)
+		CREATE TABLE IF NOT EXISTS admin_sessions (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+			created_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_admin_sessions_user ON admin_sessions(user_id);
+		CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);
+
+		-- Admin invite links (for signup)
+		CREATE TABLE IF NOT EXISTS admin_invites (
+			id TEXT PRIMARY KEY,
+			created_by TEXT REFERENCES admin_users(id),
+			created_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL,
+			used_at TEXT,
+			used_by TEXT REFERENCES admin_users(id)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_admin_invites_expires ON admin_invites(expires_at);
+
+		-- WebAuthn credentials for passkeys
+		CREATE TABLE IF NOT EXISTS webauthn_credentials (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+			credential_id BLOB UNIQUE NOT NULL,
+			public_key BLOB NOT NULL,
+			attestation_type TEXT,
+			transports TEXT,
+			sign_count INTEGER DEFAULT 0,
+			created_at TEXT NOT NULL
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id);
 	`
 
 	_, err := s.db.Exec(schema)

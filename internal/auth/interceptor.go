@@ -1,4 +1,4 @@
-// ABOUTME: gRPC interceptors for authenticating requests using JWT tokens
+// ABOUTME: gRPC interceptors for authenticating requests using JWT or SSH keys
 // ABOUTME: Extracts auth from metadata and populates context for handlers
 
 package auth
@@ -18,6 +18,7 @@ import (
 // PrincipalStore defines the interface for retrieving principals
 type PrincipalStore interface {
 	GetPrincipal(ctx context.Context, id string) (*store.Principal, error)
+	GetPrincipalByPubkey(ctx context.Context, fingerprint string) (*store.Principal, error)
 }
 
 // RoleStore defines the interface for retrieving roles
@@ -26,14 +27,14 @@ type RoleStore interface {
 }
 
 // UnaryInterceptor returns a gRPC unary interceptor that authenticates requests
-func UnaryInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier) grpc.UnaryServerInterceptor {
+func UnaryInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req interface{},
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
-		authCtx, err := extractAuth(ctx, principals, roles, tokens)
+		authCtx, err := extractAuth(ctx, principals, roles, tokens, sshVerifier)
 		if err != nil {
 			return nil, err
 		}
@@ -44,14 +45,14 @@ func UnaryInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVe
 }
 
 // StreamInterceptor returns a gRPC stream interceptor that authenticates requests
-func StreamInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier) grpc.StreamServerInterceptor {
+func StreamInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier) grpc.StreamServerInterceptor {
 	return func(
 		srv interface{},
 		ss grpc.ServerStream,
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		authCtx, err := extractAuth(ss.Context(), principals, roles, tokens)
+		authCtx, err := extractAuth(ss.Context(), principals, roles, tokens, sshVerifier)
 		if err != nil {
 			return err
 		}
@@ -76,47 +77,98 @@ func (w *wrappedServerStream) Context() context.Context {
 }
 
 // extractAuth performs the authentication flow:
-// 1. Get token from metadata: "authorization: Bearer <token>"
-// 2. Verify token, extract principal_id
-// 3. Lookup principal (return UNAUTHENTICATED if not found)
-// 4. Check status: allow approved/online/offline, deny pending/revoked (PERMISSION_DENIED)
-// 5. Lookup roles
-// 6. Build AuthContext
-func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore, tokens TokenVerifier) (*AuthContext, error) {
-	// Step 1: Get token from metadata
+// For SSH auth (agents):
+//  1. Extract SSH headers (x-ssh-pubkey, x-ssh-signature, x-ssh-timestamp, x-ssh-nonce)
+//  2. Verify signature over "timestamp|nonce"
+//  3. Compute fingerprint and lookup principal by pubkey
+//
+// For JWT auth (clients):
+//  1. Get token from metadata: "authorization: Bearer <token>"
+//  2. Verify token, extract principal_id
+//  3. Lookup principal by ID
+//
+// Common steps:
+//  4. Check status: allow approved/online/offline, deny pending/revoked (PERMISSION_DENIED)
+//  5. Lookup roles
+//  6. Build AuthContext
+func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier) (*AuthContext, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "missing metadata")
 	}
 
-	authHeaders := md.Get("authorization")
-	if len(authHeaders) == 0 {
-		return nil, status.Error(codes.Unauthenticated, "missing authorization header")
-	}
+	var principal *store.Principal
+	var principalID string
 
-	authHeader := authHeaders[0]
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return nil, status.Error(codes.Unauthenticated, "invalid authorization header format")
-	}
-
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-
-	// Step 2: Verify token, extract principal_id
-	principalID, err := tokens.Verify(tokenString)
-	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "invalid or expired token")
-	}
-
-	// Step 3: Lookup principal
-	principal, err := principals.GetPrincipal(ctx, principalID)
-	if err != nil {
-		if errors.Is(err, store.ErrPrincipalNotFound) {
-			return nil, status.Error(codes.Unauthenticated, "principal not found")
+	// Try SSH auth first (for agents)
+	if sshReq := ExtractSSHAuthFromMetadata(md); sshReq != nil {
+		if sshVerifier == nil {
+			return nil, status.Error(codes.Unauthenticated, "SSH authentication not configured")
 		}
-		return nil, status.Errorf(codes.Internal, "failed to lookup principal: %v", err)
+
+		// Validate all required fields are present
+		if sshReq.Pubkey == "" {
+			return nil, status.Error(codes.Unauthenticated, "missing SSH public key")
+		}
+		if sshReq.Signature == "" {
+			return nil, status.Error(codes.Unauthenticated, "missing SSH signature")
+		}
+		if sshReq.Timestamp == 0 {
+			return nil, status.Error(codes.Unauthenticated, "missing SSH timestamp")
+		}
+		if sshReq.Nonce == "" {
+			return nil, status.Error(codes.Unauthenticated, "missing SSH nonce")
+		}
+
+		// Verify the SSH signature
+		fingerprint, err := sshVerifier.Verify(sshReq)
+		if err != nil {
+			return nil, status.Errorf(codes.Unauthenticated, "SSH auth failed: %v", err)
+		}
+
+		// Lookup principal by fingerprint
+		p, err := principals.GetPrincipalByPubkey(ctx, fingerprint)
+		if err != nil {
+			if errors.Is(err, store.ErrPrincipalNotFound) {
+				return nil, status.Error(codes.Unauthenticated, "unknown public key")
+			}
+			return nil, status.Errorf(codes.Internal, "failed to lookup principal: %v", err)
+		}
+		principal = p
+		principalID = p.ID
+	} else {
+		// Fall back to JWT auth (for clients)
+		authHeaders := md.Get("authorization")
+		if len(authHeaders) == 0 {
+			return nil, status.Error(codes.Unauthenticated, "missing authorization header")
+		}
+
+		authHeader := authHeaders[0]
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			return nil, status.Error(codes.Unauthenticated, "invalid authorization header format")
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+		// Verify token, extract principal_id
+		pid, err := tokens.Verify(tokenString)
+		if err != nil {
+			return nil, status.Error(codes.Unauthenticated, "invalid or expired token")
+		}
+		principalID = pid
+
+		// Lookup principal by ID
+		p, err := principals.GetPrincipal(ctx, principalID)
+		if err != nil {
+			if errors.Is(err, store.ErrPrincipalNotFound) {
+				return nil, status.Error(codes.Unauthenticated, "principal not found")
+			}
+			return nil, status.Errorf(codes.Internal, "failed to lookup principal: %v", err)
+		}
+		principal = p
 	}
 
-	// Step 4: Check status - allow approved/online/offline, deny pending/revoked
+	// Check status - allow approved/online/offline, deny pending/revoked
 	switch principal.Status {
 	case store.PrincipalStatusApproved, store.PrincipalStatusOnline, store.PrincipalStatusOffline:
 		// allowed
@@ -128,7 +180,7 @@ func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore
 		return nil, status.Errorf(codes.Internal, "unknown principal status: %s", principal.Status)
 	}
 
-	// Step 5: Lookup roles
+	// Lookup roles
 	roleNames, err := roles.ListRoles(ctx, store.RoleSubjectPrincipal, principalID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to lookup roles: %v", err)
@@ -140,7 +192,7 @@ func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore
 		roleStrings[i] = string(r)
 	}
 
-	// Step 6: Build AuthContext
+	// Build AuthContext
 	authCtx := &AuthContext{
 		PrincipalID:   principalID,
 		PrincipalType: string(principal.Type),

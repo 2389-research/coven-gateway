@@ -1,0 +1,591 @@
+// ABOUTME: Admin web UI package for fold-gateway management
+// ABOUTME: Provides authentication, session management, and admin routes
+
+package webadmin
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
+	"errors"
+	"log/slog"
+	"net/http"
+	"regexp"
+	"time"
+
+	"github.com/2389/fold-gateway/internal/agent"
+	"github.com/2389/fold-gateway/internal/store"
+	"golang.org/x/crypto/bcrypt"
+)
+
+// Username validation regex: alphanumeric + underscores, 3-32 characters
+var usernameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{2,31}$`)
+
+const (
+	// SessionCookieName is the name of the session cookie
+	SessionCookieName = "fold_admin_session"
+
+	// CSRFCookieName is the name of the CSRF token cookie
+	CSRFCookieName = "fold_admin_csrf"
+
+	// SessionDuration is how long sessions last
+	SessionDuration = 7 * 24 * time.Hour // 7 days
+
+	// InviteDuration is how long invite links are valid
+	InviteDuration = 24 * time.Hour
+)
+
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const userContextKey contextKey = "admin_user"
+const csrfContextKey contextKey = "csrf_token"
+
+// Config holds admin UI configuration
+type Config struct {
+	// BaseURL is the external URL for generating invite links
+	BaseURL string
+}
+
+// Admin handles admin UI routes and authentication
+type Admin struct {
+	store   store.AdminStore
+	manager *agent.Manager
+	config  Config
+	logger  *slog.Logger
+}
+
+// New creates a new Admin handler
+func New(adminStore store.AdminStore, manager *agent.Manager, cfg Config) *Admin {
+	return &Admin{
+		store:   adminStore,
+		manager: manager,
+		config:  cfg,
+		logger:  slog.Default().With("component", "admin"),
+	}
+}
+
+// RegisterRoutes registers all admin routes on the given mux
+func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
+	// Public routes (no auth required)
+	mux.HandleFunc("GET /admin/login", a.handleLoginPage)
+	mux.HandleFunc("POST /admin/login", a.handleLogin)
+	mux.HandleFunc("GET /admin/invite/{token}", a.handleInvitePage)
+	mux.HandleFunc("POST /admin/invite/{token}", a.handleInviteSignup)
+
+	// Protected routes (auth required)
+	mux.HandleFunc("GET /admin/", a.requireAuth(a.handleDashboard))
+	mux.HandleFunc("GET /admin", a.requireAuth(a.handleDashboard))
+	mux.HandleFunc("POST /admin/logout", a.requireAuth(a.handleLogout))
+
+	// Agent management
+	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsList))
+	mux.HandleFunc("POST /admin/agents/{id}/approve", a.requireAuth(a.handleAgentApprove))
+	mux.HandleFunc("POST /admin/agents/{id}/revoke", a.requireAuth(a.handleAgentRevoke))
+
+	// Invite management
+	mux.HandleFunc("POST /admin/invites/create", a.requireAuth(a.handleCreateInvite))
+
+	a.logger.Info("admin routes registered")
+}
+
+// requireAuth wraps a handler to require authentication
+func (a *Admin) requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, err := a.getUserFromSession(r)
+		if err != nil {
+			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+			return
+		}
+
+		// Add user to context
+		ctx := context.WithValue(r.Context(), userContextKey, user)
+		next(w, r.WithContext(ctx))
+	}
+}
+
+// getUserFromSession retrieves the authenticated user from the session cookie
+func (a *Admin) getUserFromSession(r *http.Request) (*store.AdminUser, error) {
+	cookie, err := r.Cookie(SessionCookieName)
+	if err != nil {
+		return nil, err
+	}
+
+	session, err := a.store.GetAdminSession(r.Context(), cookie.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := a.store.GetAdminUser(r.Context(), session.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+// getUserFromContext retrieves the authenticated user from the request context
+func getUserFromContext(r *http.Request) *store.AdminUser {
+	user, _ := r.Context().Value(userContextKey).(*store.AdminUser)
+	return user
+}
+
+// getCSRFToken retrieves the CSRF token from the request context
+func getCSRFToken(r *http.Request) string {
+	token, _ := r.Context().Value(csrfContextKey).(string)
+	return token
+}
+
+// ensureCSRFToken generates a CSRF token if not present and adds it to context
+func (a *Admin) ensureCSRFToken(w http.ResponseWriter, r *http.Request) (*http.Request, string) {
+	// Try to get existing token from cookie
+	cookie, err := r.Cookie(CSRFCookieName)
+	if err == nil && cookie.Value != "" {
+		ctx := context.WithValue(r.Context(), csrfContextKey, cookie.Value)
+		return r.WithContext(ctx), cookie.Value
+	}
+
+	// Generate new token
+	token, err := generateSecureToken(32)
+	if err != nil {
+		a.logger.Error("failed to generate CSRF token", "error", err)
+		token = "" // Will fail validation, but won't crash
+	}
+
+	// Set cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     CSRFCookieName,
+		Value:    token,
+		Path:     "/admin",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	ctx := context.WithValue(r.Context(), csrfContextKey, token)
+	return r.WithContext(ctx), token
+}
+
+// validateCSRF checks the CSRF token from form against cookie
+func (a *Admin) validateCSRF(r *http.Request) bool {
+	cookie, err := r.Cookie(CSRFCookieName)
+	if err != nil || cookie.Value == "" {
+		return false
+	}
+
+	formToken := r.FormValue("csrf_token")
+	if formToken == "" {
+		// Also check header for htmx requests
+		formToken = r.Header.Get("X-CSRF-Token")
+	}
+
+	return formToken != "" && formToken == cookie.Value
+}
+
+// createSession creates a new session for a user and sets the cookie
+func (a *Admin) createSession(w http.ResponseWriter, r *http.Request, userID string) error {
+	sessionID, err := generateSecureToken(32)
+	if err != nil {
+		return err
+	}
+
+	session := &store.AdminSession{
+		ID:        sessionID,
+		UserID:    userID,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(SessionDuration),
+	}
+
+	if err := a.store.CreateAdminSession(r.Context(), session); err != nil {
+		return err
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     SessionCookieName,
+		Value:    sessionID,
+		Path:     "/admin",
+		Expires:  session.ExpiresAt,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	return nil
+}
+
+// handleLoginPage renders the login page
+func (a *Admin) handleLoginPage(w http.ResponseWriter, r *http.Request) {
+	// If already logged in, redirect to dashboard
+	if _, err := a.getUserFromSession(r); err == nil {
+		http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+		return
+	}
+
+	// Ensure CSRF token is set
+	r, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderLoginPage(w, "", csrfToken)
+}
+
+// handleLogin processes login form submission
+func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderLoginPage(w, "Invalid form data", csrfToken)
+		return
+	}
+
+	// Validate CSRF token
+	if !a.validateCSRF(r) {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderLoginPage(w, "Invalid request, please try again", csrfToken)
+		return
+	}
+
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+
+	if username == "" || password == "" {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderLoginPage(w, "Username and password required", csrfToken)
+		return
+	}
+
+	user, err := a.store.GetAdminUserByUsername(r.Context(), username)
+
+	// Use a dummy hash for timing-safe comparison when user doesn't exist
+	// This prevents timing attacks that could enumerate valid usernames
+	dummyHash := "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+	hashToCompare := dummyHash
+
+	if err != nil {
+		if errors.Is(err, store.ErrAdminUserNotFound) {
+			// Do a dummy bcrypt comparison to maintain constant timing
+			_ = bcrypt.CompareHashAndPassword([]byte(dummyHash), []byte(password))
+			_, csrfToken := a.ensureCSRFToken(w, r)
+			a.renderLoginPage(w, "Invalid username or password", csrfToken)
+			return
+		}
+		a.logger.Error("failed to get user", "error", err)
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderLoginPage(w, "An error occurred", csrfToken)
+		return
+	}
+
+	// Check password
+	if user.PasswordHash == "" {
+		// Do a dummy bcrypt comparison to maintain constant timing
+		_ = bcrypt.CompareHashAndPassword([]byte(dummyHash), []byte(password))
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderLoginPage(w, "Password login not enabled for this account", csrfToken)
+		return
+	}
+
+	hashToCompare = user.PasswordHash
+	if err := bcrypt.CompareHashAndPassword([]byte(hashToCompare), []byte(password)); err != nil {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderLoginPage(w, "Invalid username or password", csrfToken)
+		return
+	}
+
+	// Create session
+	if err := a.createSession(w, r, user.ID); err != nil {
+		a.logger.Error("failed to create session", "error", err)
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderLoginPage(w, "An error occurred", csrfToken)
+		return
+	}
+
+	a.logger.Info("admin login successful", "username", username)
+	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+}
+
+// handleLogout logs out the current user
+func (a *Admin) handleLogout(w http.ResponseWriter, r *http.Request) {
+	// Parse form to get CSRF token
+	if err := r.ParseForm(); err == nil {
+		// Validate CSRF - but don't block logout if invalid (security trade-off)
+		if !a.validateCSRF(r) {
+			a.logger.Warn("logout request with invalid CSRF token")
+		}
+	}
+
+	cookie, err := r.Cookie(SessionCookieName)
+	if err == nil {
+		_ = a.store.DeleteAdminSession(r.Context(), cookie.Value)
+	}
+
+	// Clear session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     SessionCookieName,
+		Value:    "",
+		Path:     "/admin",
+		MaxAge:   -1,
+		HttpOnly: true,
+	})
+
+	// Clear CSRF cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     CSRFCookieName,
+		Value:    "",
+		Path:     "/admin",
+		MaxAge:   -1,
+		HttpOnly: true,
+	})
+
+	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+}
+
+// handleInvitePage renders the signup page for an invite link
+func (a *Admin) handleInvitePage(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	if token == "" {
+		http.Error(w, "Invalid invite link", http.StatusBadRequest)
+		return
+	}
+
+	// Ensure CSRF token is set
+	r, csrfToken := a.ensureCSRFToken(w, r)
+
+	invite, err := a.store.GetAdminInvite(r.Context(), token)
+	if err != nil {
+		if errors.Is(err, store.ErrAdminInviteNotFound) {
+			a.renderInvitePage(w, token, "Invalid invite link", csrfToken)
+			return
+		}
+		a.logger.Error("failed to get invite", "error", err)
+		a.renderInvitePage(w, token, "An error occurred", csrfToken)
+		return
+	}
+
+	if invite.UsedAt != nil {
+		a.renderInvitePage(w, token, "This invite has already been used", csrfToken)
+		return
+	}
+
+	if time.Now().After(invite.ExpiresAt) {
+		a.renderInvitePage(w, token, "This invite has expired", csrfToken)
+		return
+	}
+
+	a.renderInvitePage(w, token, "", csrfToken)
+}
+
+// handleInviteSignup processes the signup form from an invite link
+func (a *Admin) handleInviteSignup(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	if token == "" {
+		http.Error(w, "Invalid invite link", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderInvitePage(w, token, "Invalid form data", csrfToken)
+		return
+	}
+
+	// Validate CSRF token
+	if !a.validateCSRF(r) {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderInvitePage(w, token, "Invalid request, please try again", csrfToken)
+		return
+	}
+
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+	displayName := r.FormValue("display_name")
+
+	if username == "" || password == "" {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderInvitePage(w, token, "Username and password required", csrfToken)
+		return
+	}
+
+	// Validate username format
+	if errMsg := validateUsername(username); errMsg != "" {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderInvitePage(w, token, errMsg, csrfToken)
+		return
+	}
+
+	if len(password) < 8 {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderInvitePage(w, token, "Password must be at least 8 characters", csrfToken)
+		return
+	}
+
+	if displayName == "" {
+		displayName = username
+	}
+
+	// Verify invite is still valid
+	invite, err := a.store.GetAdminInvite(r.Context(), token)
+	if err != nil {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderInvitePage(w, token, "Invalid invite link", csrfToken)
+		return
+	}
+
+	if invite.UsedAt != nil {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderInvitePage(w, token, "This invite has already been used", csrfToken)
+		return
+	}
+
+	if time.Now().After(invite.ExpiresAt) {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderInvitePage(w, token, "This invite has expired", csrfToken)
+		return
+	}
+
+	// Hash password
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		a.logger.Error("failed to hash password", "error", err)
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderInvitePage(w, token, "An error occurred", csrfToken)
+		return
+	}
+
+	// Create user
+	userID, err := generateSecureToken(16)
+	if err != nil {
+		a.logger.Error("failed to generate user ID", "error", err)
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderInvitePage(w, token, "An error occurred", csrfToken)
+		return
+	}
+
+	user := &store.AdminUser{
+		ID:           userID,
+		Username:     username,
+		PasswordHash: string(hash),
+		DisplayName:  displayName,
+		CreatedAt:    time.Now(),
+	}
+
+	if err := a.store.CreateAdminUser(r.Context(), user); err != nil {
+		if errors.Is(err, store.ErrUsernameExists) {
+			_, csrfToken := a.ensureCSRFToken(w, r)
+			a.renderInvitePage(w, token, "Username already taken", csrfToken)
+			return
+		}
+		a.logger.Error("failed to create user", "error", err)
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderInvitePage(w, token, "An error occurred", csrfToken)
+		return
+	}
+
+	// Mark invite as used
+	if err := a.store.UseAdminInvite(r.Context(), token, userID); err != nil {
+		a.logger.Error("failed to mark invite as used", "error", err)
+		// User was created, so continue
+	}
+
+	// Create session and log in
+	if err := a.createSession(w, r, userID); err != nil {
+		a.logger.Error("failed to create session", "error", err)
+		// Redirect to login instead
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		return
+	}
+
+	a.logger.Info("admin user created via invite", "username", username, "invite", token)
+	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+}
+
+// handleDashboard renders the main admin dashboard
+func (a *Admin) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	r, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderDashboard(w, user, csrfToken)
+}
+
+// handleAgentsList returns the agents list (htmx partial)
+func (a *Admin) handleAgentsList(w http.ResponseWriter, r *http.Request) {
+	// TODO: Get agents from manager and principals from store
+	a.renderAgentsList(w)
+}
+
+// handleAgentApprove approves a pending agent
+func (a *Admin) handleAgentApprove(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement
+	http.Error(w, "Not implemented", http.StatusNotImplemented)
+}
+
+// handleAgentRevoke revokes an agent
+func (a *Admin) handleAgentRevoke(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement
+	http.Error(w, "Not implemented", http.StatusNotImplemented)
+}
+
+// handleCreateInvite creates a new invite link
+func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
+	// Validate CSRF (htmx sends via header)
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	user := getUserFromContext(r)
+
+	token, err := generateSecureToken(32)
+	if err != nil {
+		a.logger.Error("failed to generate invite token", "error", err)
+		http.Error(w, "Failed to create invite", http.StatusInternalServerError)
+		return
+	}
+
+	invite := &store.AdminInvite{
+		ID:        token,
+		CreatedBy: user.ID,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(InviteDuration),
+	}
+
+	if err := a.store.CreateAdminInvite(r.Context(), invite); err != nil {
+		a.logger.Error("failed to create invite", "error", err)
+		http.Error(w, "Failed to create invite", http.StatusInternalServerError)
+		return
+	}
+
+	inviteURL := a.config.BaseURL + "/admin/invite/" + token
+	a.logger.Info("created admin invite", "created_by", user.Username, "token", token)
+
+	// Return the invite URL using template for proper escaping
+	a.renderInviteCreated(w, inviteURL)
+}
+
+// generateSecureToken generates a cryptographically secure random token
+func generateSecureToken(bytes int) (string, error) {
+	b := make([]byte, bytes)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// generateBase64Token generates a URL-safe base64 token
+func generateBase64Token(bytes int) (string, error) {
+	b := make([]byte, bytes)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+// validateUsername checks if username meets requirements
+// Returns an error message or empty string if valid
+func validateUsername(username string) string {
+	if len(username) < 3 {
+		return "Username must be at least 3 characters"
+	}
+	if len(username) > 32 {
+		return "Username must be at most 32 characters"
+	}
+	if !usernameRegex.MatchString(username) {
+		return "Username must start with a letter and contain only letters, numbers, and underscores"
+	}
+	return ""
+}

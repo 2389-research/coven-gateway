@@ -125,10 +125,14 @@ var FoldControl_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AdminService_ListBindings_FullMethodName  = "/fold.AdminService/ListBindings"
-	AdminService_CreateBinding_FullMethodName = "/fold.AdminService/CreateBinding"
-	AdminService_UpdateBinding_FullMethodName = "/fold.AdminService/UpdateBinding"
-	AdminService_DeleteBinding_FullMethodName = "/fold.AdminService/DeleteBinding"
+	AdminService_ListBindings_FullMethodName    = "/fold.AdminService/ListBindings"
+	AdminService_CreateBinding_FullMethodName   = "/fold.AdminService/CreateBinding"
+	AdminService_UpdateBinding_FullMethodName   = "/fold.AdminService/UpdateBinding"
+	AdminService_DeleteBinding_FullMethodName   = "/fold.AdminService/DeleteBinding"
+	AdminService_CreateToken_FullMethodName     = "/fold.AdminService/CreateToken"
+	AdminService_ListPrincipals_FullMethodName  = "/fold.AdminService/ListPrincipals"
+	AdminService_CreatePrincipal_FullMethodName = "/fold.AdminService/CreatePrincipal"
+	AdminService_DeletePrincipal_FullMethodName = "/fold.AdminService/DeletePrincipal"
 )
 
 // AdminServiceClient is the client API for AdminService service.
@@ -142,6 +146,12 @@ type AdminServiceClient interface {
 	CreateBinding(ctx context.Context, in *CreateBindingRequest, opts ...grpc.CallOption) (*Binding, error)
 	UpdateBinding(ctx context.Context, in *UpdateBindingRequest, opts ...grpc.CallOption) (*Binding, error)
 	DeleteBinding(ctx context.Context, in *DeleteBindingRequest, opts ...grpc.CallOption) (*DeleteBindingResponse, error)
+	// Token management
+	CreateToken(ctx context.Context, in *CreateTokenRequest, opts ...grpc.CallOption) (*CreateTokenResponse, error)
+	// Principal management
+	ListPrincipals(ctx context.Context, in *ListPrincipalsRequest, opts ...grpc.CallOption) (*ListPrincipalsResponse, error)
+	CreatePrincipal(ctx context.Context, in *CreatePrincipalRequest, opts ...grpc.CallOption) (*Principal, error)
+	DeletePrincipal(ctx context.Context, in *DeletePrincipalRequest, opts ...grpc.CallOption) (*DeletePrincipalResponse, error)
 }
 
 type adminServiceClient struct {
@@ -192,6 +202,46 @@ func (c *adminServiceClient) DeleteBinding(ctx context.Context, in *DeleteBindin
 	return out, nil
 }
 
+func (c *adminServiceClient) CreateToken(ctx context.Context, in *CreateTokenRequest, opts ...grpc.CallOption) (*CreateTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateTokenResponse)
+	err := c.cc.Invoke(ctx, AdminService_CreateToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) ListPrincipals(ctx context.Context, in *ListPrincipalsRequest, opts ...grpc.CallOption) (*ListPrincipalsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPrincipalsResponse)
+	err := c.cc.Invoke(ctx, AdminService_ListPrincipals_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) CreatePrincipal(ctx context.Context, in *CreatePrincipalRequest, opts ...grpc.CallOption) (*Principal, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Principal)
+	err := c.cc.Invoke(ctx, AdminService_CreatePrincipal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) DeletePrincipal(ctx context.Context, in *DeletePrincipalRequest, opts ...grpc.CallOption) (*DeletePrincipalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeletePrincipalResponse)
+	err := c.cc.Invoke(ctx, AdminService_DeletePrincipal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminServiceServer is the server API for AdminService service.
 // All implementations must embed UnimplementedAdminServiceServer
 // for forward compatibility.
@@ -203,6 +253,12 @@ type AdminServiceServer interface {
 	CreateBinding(context.Context, *CreateBindingRequest) (*Binding, error)
 	UpdateBinding(context.Context, *UpdateBindingRequest) (*Binding, error)
 	DeleteBinding(context.Context, *DeleteBindingRequest) (*DeleteBindingResponse, error)
+	// Token management
+	CreateToken(context.Context, *CreateTokenRequest) (*CreateTokenResponse, error)
+	// Principal management
+	ListPrincipals(context.Context, *ListPrincipalsRequest) (*ListPrincipalsResponse, error)
+	CreatePrincipal(context.Context, *CreatePrincipalRequest) (*Principal, error)
+	DeletePrincipal(context.Context, *DeletePrincipalRequest) (*DeletePrincipalResponse, error)
 	mustEmbedUnimplementedAdminServiceServer()
 }
 
@@ -224,6 +280,18 @@ func (UnimplementedAdminServiceServer) UpdateBinding(context.Context, *UpdateBin
 }
 func (UnimplementedAdminServiceServer) DeleteBinding(context.Context, *DeleteBindingRequest) (*DeleteBindingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteBinding not implemented")
+}
+func (UnimplementedAdminServiceServer) CreateToken(context.Context, *CreateTokenRequest) (*CreateTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateToken not implemented")
+}
+func (UnimplementedAdminServiceServer) ListPrincipals(context.Context, *ListPrincipalsRequest) (*ListPrincipalsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPrincipals not implemented")
+}
+func (UnimplementedAdminServiceServer) CreatePrincipal(context.Context, *CreatePrincipalRequest) (*Principal, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreatePrincipal not implemented")
+}
+func (UnimplementedAdminServiceServer) DeletePrincipal(context.Context, *DeletePrincipalRequest) (*DeletePrincipalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeletePrincipal not implemented")
 }
 func (UnimplementedAdminServiceServer) mustEmbedUnimplementedAdminServiceServer() {}
 func (UnimplementedAdminServiceServer) testEmbeddedByValue()                      {}
@@ -318,6 +386,78 @@ func _AdminService_DeleteBinding_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_CreateToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).CreateToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_CreateToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).CreateToken(ctx, req.(*CreateTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_ListPrincipals_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPrincipalsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).ListPrincipals(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_ListPrincipals_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).ListPrincipals(ctx, req.(*ListPrincipalsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_CreatePrincipal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreatePrincipalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).CreatePrincipal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_CreatePrincipal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).CreatePrincipal(ctx, req.(*CreatePrincipalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_DeletePrincipal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeletePrincipalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).DeletePrincipal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_DeletePrincipal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).DeletePrincipal(ctx, req.(*DeletePrincipalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -340,6 +480,22 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteBinding",
 			Handler:    _AdminService_DeleteBinding_Handler,
+		},
+		{
+			MethodName: "CreateToken",
+			Handler:    _AdminService_CreateToken_Handler,
+		},
+		{
+			MethodName: "ListPrincipals",
+			Handler:    _AdminService_ListPrincipals_Handler,
+		},
+		{
+			MethodName: "CreatePrincipal",
+			Handler:    _AdminService_CreatePrincipal_Handler,
+		},
+		{
+			MethodName: "DeletePrincipal",
+			Handler:    _AdminService_DeletePrincipal_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

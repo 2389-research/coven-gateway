@@ -38,9 +38,51 @@ echo "  Database: $DB_PATH"
 # Remove old test DB
 rm -f "$DB_PATH"
 
-# The gateway will create the schema, but we need to seed data first
-# Create a minimal schema for seeding
+# Create the full schema that matches the gateway's sqlite.go createSchema()
 sqlite3 "$DB_PATH" <<'SQL'
+-- Threads table
+CREATE TABLE IF NOT EXISTS threads (
+    id TEXT PRIMARY KEY,
+    frontend_name TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_frontend_external
+    ON threads(frontend_name, external_id);
+
+-- Messages table
+CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL,
+    sender TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY (thread_id) REFERENCES threads(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
+CREATE INDEX IF NOT EXISTS idx_messages_thread_created ON messages(thread_id, created_at);
+
+-- Agent state table
+CREATE TABLE IF NOT EXISTS agent_state (
+    agent_id TEXT PRIMARY KEY,
+    state BLOB NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+-- Channel bindings table
+CREATE TABLE IF NOT EXISTS channel_bindings (
+    frontend TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    PRIMARY KEY (frontend, channel_id)
+);
+
 -- Principals table
 CREATE TABLE IF NOT EXISTS principals (
     principal_id       TEXT PRIMARY KEY,
@@ -50,8 +92,15 @@ CREATE TABLE IF NOT EXISTS principals (
     status             TEXT NOT NULL,
     created_at         TEXT NOT NULL,
     last_seen          TEXT,
-    metadata_json      TEXT
+    metadata_json      TEXT,
+
+    CHECK (type IN ('client', 'agent', 'pack')),
+    CHECK (status IN ('pending', 'approved', 'revoked', 'offline', 'online'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_principals_status ON principals(status);
+CREATE INDEX IF NOT EXISTS idx_principals_type ON principals(type);
+CREATE INDEX IF NOT EXISTS idx_principals_pubkey ON principals(pubkey_fingerprint);
 
 -- Roles table
 CREATE TABLE IF NOT EXISTS roles (
@@ -59,8 +108,13 @@ CREATE TABLE IF NOT EXISTS roles (
     subject_id   TEXT NOT NULL,
     role         TEXT NOT NULL,
     created_at   TEXT NOT NULL,
-    PRIMARY KEY (subject_type, subject_id, role)
+
+    PRIMARY KEY (subject_type, subject_id, role),
+    CHECK (subject_type IN ('principal', 'member')),
+    CHECK (role IN ('owner', 'admin', 'member'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_roles_subject ON roles(subject_type, subject_id);
 
 -- Audit log table
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -71,58 +125,59 @@ CREATE TABLE IF NOT EXISTS audit_log (
     target_type        TEXT NOT NULL,
     target_id          TEXT NOT NULL,
     ts                 TEXT NOT NULL,
-    detail_json        TEXT
+    detail_json        TEXT,
+
+    CHECK (action IN (
+        'approve_principal',
+        'revoke_principal',
+        'grant_capability',
+        'revoke_capability',
+        'create_binding',
+        'update_binding',
+        'delete_binding'
+    ))
 );
 
--- Bindings table (using the schema the gateway expects)
-CREATE TABLE IF NOT EXISTS channel_bindings (
-    id         TEXT PRIMARY KEY,
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_principal_id);
+CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id);
+
+-- Ledger events table
+CREATE TABLE IF NOT EXISTS ledger_events (
+    event_id           TEXT PRIMARY KEY,
+    conversation_key   TEXT NOT NULL,
+    direction          TEXT NOT NULL,
+    author             TEXT NOT NULL,
+    timestamp          TEXT NOT NULL,
+    type               TEXT NOT NULL,
+    text               TEXT,
+    raw_transport      TEXT,
+    raw_payload_ref    TEXT,
+    actor_principal_id TEXT,
+    actor_member_id    TEXT,
+
+    CHECK (direction IN ('inbound_to_agent', 'outbound_from_agent')),
+    CHECK (type IN ('message', 'tool_call', 'tool_result', 'system', 'error'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_ledger_conversation ON ledger_events(conversation_key, timestamp);
+CREATE INDEX IF NOT EXISTS idx_ledger_actor ON ledger_events(actor_principal_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_timestamp ON ledger_events(timestamp);
+
+-- Bindings table (v2 admin API)
+CREATE TABLE IF NOT EXISTS bindings (
+    binding_id TEXT PRIMARY KEY,
     frontend   TEXT NOT NULL,
     channel_id TEXT NOT NULL,
     agent_id   TEXT NOT NULL,
     created_at TEXT NOT NULL,
     created_by TEXT,
+
     UNIQUE(frontend, channel_id)
 );
 
--- Create additional tables the gateway needs
-CREATE TABLE IF NOT EXISTS threads (
-    id TEXT PRIMARY KEY,
-    frontend TEXT NOT NULL,
-    frontend_thread_id TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    UNIQUE(frontend, frontend_thread_id)
-);
-
-CREATE TABLE IF NOT EXISTS messages (
-    id TEXT PRIMARY KEY,
-    thread_id TEXT NOT NULL,
-    direction TEXT NOT NULL,
-    author TEXT NOT NULL,
-    content TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
-    FOREIGN KEY (thread_id) REFERENCES threads(id)
-);
-
-CREATE TABLE IF NOT EXISTS agent_state (
-    agent_id TEXT PRIMARY KEY,
-    state_json TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS ledger_events (
-    id TEXT PRIMARY KEY,
-    conversation_key TEXT NOT NULL,
-    direction TEXT NOT NULL,
-    author TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
-    type TEXT NOT NULL,
-    text TEXT,
-    raw_transport TEXT,
-    raw_payload_ref TEXT,
-    actor_principal_id TEXT,
-    actor_member_id TEXT
-);
+CREATE INDEX IF NOT EXISTS idx_bindings_frontend ON bindings(frontend);
+CREATE INDEX IF NOT EXISTS idx_bindings_agent ON bindings(agent_id);
 SQL
 
 echo -e "  ${GREEN}✓ Database schema created${NC}"

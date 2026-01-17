@@ -268,6 +268,10 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
+	// Send initial "started" event with thread_id so client can track the conversation
+	g.writeSSEEvent(w, "started", map[string]string{"thread_id": threadID})
+	flusher.Flush()
+
 	// Stream responses and persist agent response
 	g.streamResponses(r.Context(), w, flusher, respChan, threadID, agentID)
 }

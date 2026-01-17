@@ -207,6 +207,30 @@ func (s *SQLiteStore) UpdatePrincipalLastSeen(ctx context.Context, id string, t 
 	return nil
 }
 
+// DeletePrincipal removes a principal by ID. Returns ErrPrincipalNotFound if
+// the principal does not exist. Note: associated roles in the roles table are
+// not automatically deleted and should be removed separately if needed.
+func (s *SQLiteStore) DeletePrincipal(ctx context.Context, id string) error {
+	query := `DELETE FROM principals WHERE principal_id = ?`
+
+	result, err := s.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("deleting principal: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrPrincipalNotFound
+	}
+
+	s.logger.Debug("deleted principal", "id", id)
+	return nil
+}
+
 // ListPrincipals returns principals matching the filter criteria
 func (s *SQLiteStore) ListPrincipals(ctx context.Context, f PrincipalFilter) ([]Principal, error) {
 	// Apply defaults

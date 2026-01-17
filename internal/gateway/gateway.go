@@ -23,6 +23,7 @@ import (
 	"github.com/2389/fold-gateway/internal/config"
 	"github.com/2389/fold-gateway/internal/dedupe"
 	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/fold-gateway/internal/webadmin"
 	pb "github.com/2389/fold-gateway/proto/fold"
 )
 
@@ -72,28 +73,34 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 
 	// Create gRPC server with auth interceptors if JWT secret is configured
 	var grpcServer *grpc.Server
+	var jwtVerifier *auth.JWTVerifier // Stored for token generation
 	if cfg.Auth.JWTSecret != "" {
-		// Create JWT verifier
-		verifier, err := auth.NewJWTVerifier([]byte(cfg.Auth.JWTSecret))
+		// Create JWT verifier for client auth
+		var err error
+		jwtVerifier, err = auth.NewJWTVerifier([]byte(cfg.Auth.JWTSecret))
 		if err != nil {
 			return nil, fmt.Errorf("creating JWT verifier: %w", err)
 		}
+
+		// Create SSH verifier for agent auth
+		sshVerifier := auth.NewSSHVerifier()
 
 		// Create store adapter for auth interceptors
 		sqlStore := s.(*store.SQLiteStore)
 
 		// Create gRPC server with auth interceptors
+		// Supports both JWT (clients) and SSH key (agents) authentication
 		grpcServer = grpc.NewServer(
 			grpc.ChainUnaryInterceptor(
-				auth.UnaryInterceptor(sqlStore, sqlStore, verifier),
+				auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier),
 				auth.RequireAdmin(),
 			),
 			grpc.ChainStreamInterceptor(
-				auth.StreamInterceptor(sqlStore, sqlStore, verifier),
+				auth.StreamInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier),
 				auth.RequireAdminStream(),
 			),
 		)
-		logger.Info("auth interceptors enabled")
+		logger.Info("auth interceptors enabled (JWT + SSH)")
 	} else {
 		// No auth - create plain gRPC server
 		grpcServer = grpc.NewServer()
@@ -117,20 +124,71 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 
 	// Register AdminService and ClientService
 	sqliteStore := s.(*store.SQLiteStore)
-	adminService := admin.NewAdminService(sqliteStore)
-	pb.RegisterAdminServiceServer(grpcServer, adminService)
+	if jwtVerifier != nil {
+		// Use PrincipalService which supports token and principal management
+		principalService := admin.NewPrincipalService(sqliteStore, jwtVerifier)
+		pb.RegisterAdminServiceServer(grpcServer, principalService)
+	} else {
+		// Use basic AdminService without token/principal management
+		adminService := admin.NewAdminService(sqliteStore)
+		pb.RegisterAdminServiceServer(grpcServer, adminService)
+	}
 
 	clientService := client.NewClientServiceWithDedupe(sqliteStore, sqliteStore, dedupeCache)
 	pb.RegisterClientServiceServer(grpcServer, clientService)
 
 	// Create HTTP server for health checks and API
 	mux := http.NewServeMux()
+
+	// Health endpoints - no auth required
 	mux.HandleFunc("/health", gw.handleHealth)
 	mux.HandleFunc("/health/ready", gw.handleReady)
-	mux.HandleFunc("/api/agents", gw.handleListAgents)
-	mux.HandleFunc("/api/send", gw.handleSendMessage)
-	mux.HandleFunc("/api/bindings", gw.handleBindings)
-	mux.HandleFunc("/api/threads/", gw.handleThreadMessages)
+
+	// API endpoints - auth required if JWT secret is configured
+	if cfg.Auth.JWTSecret != "" {
+		// Create JWT verifier for HTTP (reuse logic from gRPC)
+		httpVerifier, err := auth.NewJWTVerifier([]byte(cfg.Auth.JWTSecret))
+		if err != nil {
+			return nil, fmt.Errorf("creating HTTP JWT verifier: %w", err)
+		}
+
+		// Create auth middleware
+		authMiddleware := auth.HTTPAuthMiddleware(sqliteStore, sqliteStore, httpVerifier)
+		adminMiddleware := auth.RequireAdminHTTP()
+
+		// Protected endpoints - any authenticated user
+		mux.Handle("/api/agents", authMiddleware(http.HandlerFunc(gw.handleListAgents)))
+		mux.Handle("/api/send", authMiddleware(http.HandlerFunc(gw.handleSendMessage)))
+		mux.Handle("/api/threads/", authMiddleware(http.HandlerFunc(gw.handleThreadMessages)))
+
+		// Admin endpoints - requires admin role for mutations
+		// GET is allowed for any authenticated user, POST/DELETE require admin
+		mux.Handle("/api/bindings", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost || r.Method == http.MethodDelete {
+				adminMiddleware(http.HandlerFunc(gw.handleBindings)).ServeHTTP(w, r)
+			} else {
+				gw.handleBindings(w, r)
+			}
+		})))
+
+		logger.Info("HTTP auth middleware enabled")
+	} else {
+		// No auth - register handlers directly
+		mux.HandleFunc("/api/agents", gw.handleListAgents)
+		mux.HandleFunc("/api/send", gw.handleSendMessage)
+		mux.HandleFunc("/api/bindings", gw.handleBindings)
+		mux.HandleFunc("/api/threads/", gw.handleThreadMessages)
+		logger.Warn("HTTP auth disabled - no jwt_secret configured")
+	}
+
+	// Register web admin UI routes
+	// The admin UI has its own session-based auth (separate from JWT)
+	webAdminCfg := webadmin.Config{
+		BaseURL: "http://" + cfg.Server.HTTPAddr,
+	}
+	webAdmin := webadmin.New(sqliteStore, gw.agentManager, webAdminCfg)
+	webAdmin.RegisterRoutes(mux)
+	logger.Info("admin web UI enabled at /admin/")
 
 	gw.httpServer = &http.Server{
 		Addr:    cfg.Server.HTTPAddr,

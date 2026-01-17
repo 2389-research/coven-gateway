@@ -110,6 +110,14 @@ service AdminService {
   rpc CreateBinding(CreateBindingRequest) returns (Binding);
   rpc UpdateBinding(UpdateBindingRequest) returns (Binding);
   rpc DeleteBinding(DeleteBindingRequest) returns (DeleteBindingResponse);
+
+  // Token management
+  rpc CreateToken(CreateTokenRequest) returns (CreateTokenResponse);
+
+  // Principal management
+  rpc ListPrincipals(ListPrincipalsRequest) returns (ListPrincipalsResponse);
+  rpc CreatePrincipal(CreatePrincipalRequest) returns (Principal);
+  rpc DeletePrincipal(DeletePrincipalRequest) returns (DeletePrincipalResponse);
 }
 
 // Binding represents a channel-to-agent mapping for message routing
@@ -147,6 +155,53 @@ message DeleteBindingRequest {
 }
 
 message DeleteBindingResponse {
+  // Empty response indicates success
+}
+
+// Token management messages
+message CreateTokenRequest {
+  string principal_id = 1;      // Principal to create token for
+  int64 ttl_seconds = 2;        // Token lifetime in seconds (default: 30 days)
+}
+
+message CreateTokenResponse {
+  string token = 1;             // The generated JWT token
+  string expires_at = 2;        // ISO-8601 expiration timestamp
+}
+
+// Principal management messages
+message Principal {
+  string id = 1;
+  string type = 2;              // "client", "agent", "pack"
+  string display_name = 3;
+  string status = 4;            // "pending", "approved", "online", "offline", "revoked"
+  optional string pubkey_fp = 5; // SSH public key fingerprint (for agents)
+  string created_at = 6;        // ISO-8601
+  repeated string roles = 7;
+}
+
+message ListPrincipalsRequest {
+  optional string type = 1;     // Filter by type
+  optional string status = 2;   // Filter by status
+}
+
+message ListPrincipalsResponse {
+  repeated Principal principals = 1;
+}
+
+message CreatePrincipalRequest {
+  string type = 1;              // "client" or "agent"
+  string display_name = 2;
+  optional string pubkey = 3;   // Full SSH public key (for agents)
+  optional string pubkey_fp = 4; // Or just the fingerprint
+  repeated string roles = 5;    // Roles to assign (e.g., "member")
+}
+
+message DeletePrincipalRequest {
+  string id = 1;
+}
+
+message DeletePrincipalResponse {
   // Empty response indicates success
 }
 

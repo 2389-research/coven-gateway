@@ -381,6 +381,37 @@ func TestPrincipalStore_Create_MetadataAtLimit(t *testing.T) {
 	assert.NotNil(t, retrieved.Metadata)
 }
 
+func TestDeletePrincipal_Success(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	// Create a principal
+	p := &Principal{
+		ID:          "principal-to-delete",
+		Type:        PrincipalTypeClient,
+		DisplayName: "To Be Deleted",
+		Status:      PrincipalStatusApproved,
+		CreatedAt:   time.Now().UTC(),
+	}
+	require.NoError(t, store.CreatePrincipal(ctx, p))
+
+	// Delete it
+	err := store.DeletePrincipal(ctx, "principal-to-delete")
+	require.NoError(t, err)
+
+	// Verify it's gone
+	_, err = store.GetPrincipal(ctx, "principal-to-delete")
+	assert.ErrorIs(t, err, ErrPrincipalNotFound)
+}
+
+func TestDeletePrincipal_NotFound(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	err := store.DeletePrincipal(ctx, "nonexistent")
+	assert.ErrorIs(t, err, ErrPrincipalNotFound)
+}
+
 // Helper functions for tests
 
 func generateTestID(prefix string, i int) string {
