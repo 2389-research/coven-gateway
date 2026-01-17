@@ -21,6 +21,7 @@ COPY . .
 
 # Build with CGO enabled for SQLite
 RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /fold-gateway ./cmd/fold-gateway
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /fold-admin ./cmd/fold-admin
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
@@ -36,8 +37,9 @@ RUN useradd --create-home --shell /bin/bash app
 
 WORKDIR /app
 
-# Copy binary from builder
+# Copy binaries from builder
 COPY --from=builder /fold-gateway /usr/local/bin/fold-gateway
+COPY --from=builder /fold-admin /usr/local/bin/fold-admin
 
 # Copy example config
 COPY config.example.yaml /app/config.example.yaml
