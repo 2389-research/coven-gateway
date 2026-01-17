@@ -8,11 +8,16 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
+
+	"github.com/go-webauthn/webauthn/webauthn"
 
 	"github.com/2389/fold-gateway/internal/agent"
 	"github.com/2389/fold-gateway/internal/store"
@@ -48,21 +53,59 @@ type Config struct {
 	BaseURL string
 }
 
+// FullStore combines AdminStore with thread/message/principal operations
+type FullStore interface {
+	store.AdminStore
+
+	// Threads
+	ListThreads(ctx context.Context, limit int) ([]*store.Thread, error)
+	GetThread(ctx context.Context, id string) (*store.Thread, error)
+	GetThreadMessages(ctx context.Context, threadID string, limit int) ([]*store.Message, error)
+
+	// Principals
+	ListPrincipals(ctx context.Context, filter store.PrincipalFilter) ([]store.Principal, error)
+	CountPrincipals(ctx context.Context, filter store.PrincipalFilter) (int, error)
+	GetPrincipal(ctx context.Context, id string) (*store.Principal, error)
+	UpdatePrincipalStatus(ctx context.Context, id string, status store.PrincipalStatus) error
+	DeletePrincipal(ctx context.Context, id string) error
+}
+
 // Admin handles admin UI routes and authentication
 type Admin struct {
-	store   store.AdminStore
-	manager *agent.Manager
-	config  Config
-	logger  *slog.Logger
+	store            FullStore
+	manager          *agent.Manager
+	config           Config
+	logger           *slog.Logger
+	webauthn         *webauthn.WebAuthn
+	webauthnSessions *webAuthnSessionStore
+	chatHub          *chatHub
 }
 
 // New creates a new Admin handler
-func New(adminStore store.AdminStore, manager *agent.Manager, cfg Config) *Admin {
-	return &Admin{
-		store:   adminStore,
+func New(fullStore FullStore, manager *agent.Manager, cfg Config) *Admin {
+	a := &Admin{
+		store:   fullStore,
 		manager: manager,
 		config:  cfg,
 		logger:  slog.Default().With("component", "admin"),
+		chatHub: newChatHub(),
+	}
+
+	// Initialize WebAuthn (errors are logged but don't prevent startup)
+	if err := a.initWebAuthn(); err != nil {
+		a.logger.Warn("failed to initialize WebAuthn, passkey login disabled", "error", err)
+	}
+
+	return a
+}
+
+// Close cleans up admin resources
+func (a *Admin) Close() {
+	if a.webauthnSessions != nil {
+		a.webauthnSessions.Close()
+	}
+	if a.chatHub != nil {
+		a.chatHub.Close()
 	}
 }
 
@@ -79,13 +122,39 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin", a.requireAuth(a.handleDashboard))
 	mux.HandleFunc("POST /admin/logout", a.requireAuth(a.handleLogout))
 
+	// Stats (htmx partials)
+	mux.HandleFunc("GET /admin/stats/agents", a.requireAuth(a.handleStatsAgents))
+
 	// Agent management
 	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsList))
 	mux.HandleFunc("POST /admin/agents/{id}/approve", a.requireAuth(a.handleAgentApprove))
 	mux.HandleFunc("POST /admin/agents/{id}/revoke", a.requireAuth(a.handleAgentRevoke))
 
+	// Principals management
+	mux.HandleFunc("GET /admin/principals", a.requireAuth(a.handlePrincipalsPage))
+	mux.HandleFunc("GET /admin/principals/list", a.requireAuth(a.handlePrincipalsList))
+	mux.HandleFunc("POST /admin/principals/{id}/approve", a.requireAuth(a.handlePrincipalApprove))
+	mux.HandleFunc("POST /admin/principals/{id}/revoke", a.requireAuth(a.handlePrincipalRevoke))
+	mux.HandleFunc("DELETE /admin/principals/{id}", a.requireAuth(a.handlePrincipalDelete))
+
+	// Threads and history
+	mux.HandleFunc("GET /admin/threads", a.requireAuth(a.handleThreadsPage))
+	mux.HandleFunc("GET /admin/threads/{id}", a.requireAuth(a.handleThreadDetail))
+	mux.HandleFunc("GET /admin/threads/{id}/messages", a.requireAuth(a.handleThreadMessages))
+
+	// Chat with agents
+	mux.HandleFunc("GET /admin/chat/{id}", a.requireAuth(a.handleChatPage))
+	mux.HandleFunc("POST /admin/chat/{id}/send", a.requireAuth(a.handleChatSend))
+	mux.HandleFunc("GET /admin/chat/{id}/stream", a.requireAuth(a.handleChatStream))
+
 	// Invite management
 	mux.HandleFunc("POST /admin/invites/create", a.requireAuth(a.handleCreateInvite))
+
+	// WebAuthn/Passkey routes
+	mux.HandleFunc("POST /admin/webauthn/register/begin", a.requireAuth(a.handleWebAuthnRegisterBegin))
+	mux.HandleFunc("POST /admin/webauthn/register/finish", a.requireAuth(a.handleWebAuthnRegisterFinish))
+	mux.HandleFunc("POST /admin/webauthn/login/begin", a.handleWebAuthnLoginBegin)
+	mux.HandleFunc("POST /admin/webauthn/login/finish", a.handleWebAuthnLoginFinish)
 
 	a.logger.Info("admin routes registered")
 }
@@ -256,7 +325,6 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// Use a dummy hash for timing-safe comparison when user doesn't exist
 	// This prevents timing attacks that could enumerate valid usernames
 	dummyHash := "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
-	hashToCompare := dummyHash
 
 	if err != nil {
 		if errors.Is(err, store.ErrAdminUserNotFound) {
@@ -281,8 +349,7 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashToCompare = user.PasswordHash
-	if err := bcrypt.CompareHashAndPassword([]byte(hashToCompare), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		_, csrfToken := a.ensureCSRFToken(w, r)
 		a.renderLoginPage(w, "Invalid username or password", csrfToken)
 		return
@@ -502,22 +569,77 @@ func (a *Admin) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	a.renderDashboard(w, user, csrfToken)
 }
 
+// handleStatsAgents returns connected agent count (htmx partial)
+func (a *Admin) handleStatsAgents(w http.ResponseWriter, r *http.Request) {
+	count := 0
+	if a.manager != nil {
+		count = len(a.manager.ListAgents())
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, "%d", count)
+}
+
 // handleAgentsList returns the agents list (htmx partial)
 func (a *Admin) handleAgentsList(w http.ResponseWriter, r *http.Request) {
-	// TODO: Get agents from manager and principals from store
 	a.renderAgentsList(w)
 }
 
-// handleAgentApprove approves a pending agent
+// handleAgentApprove approves a pending agent principal
 func (a *Admin) handleAgentApprove(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement
-	http.Error(w, "Not implemented", http.StatusNotImplemented)
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	agentID := r.PathValue("id")
+	if agentID == "" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Find the principal by looking for an agent with matching ID
+	// The agent ID might be the principal ID or we need to search
+	if err := a.store.UpdatePrincipalStatus(r.Context(), agentID, store.PrincipalStatusApproved); err != nil {
+		if errors.Is(err, store.ErrPrincipalNotFound) {
+			http.Error(w, "Agent not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to approve agent", "error", err, "agent_id", agentID)
+		http.Error(w, "Failed to approve agent", http.StatusInternalServerError)
+		return
+	}
+
+	a.logger.Info("agent approved", "agent_id", agentID)
+	// Return updated agents list
+	a.renderAgentsList(w)
 }
 
-// handleAgentRevoke revokes an agent
+// handleAgentRevoke revokes an agent principal
 func (a *Admin) handleAgentRevoke(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement
-	http.Error(w, "Not implemented", http.StatusNotImplemented)
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	agentID := r.PathValue("id")
+	if agentID == "" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
+		return
+	}
+
+	if err := a.store.UpdatePrincipalStatus(r.Context(), agentID, store.PrincipalStatusRevoked); err != nil {
+		if errors.Is(err, store.ErrPrincipalNotFound) {
+			http.Error(w, "Agent not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to revoke agent", "error", err, "agent_id", agentID)
+		http.Error(w, "Failed to revoke agent", http.StatusInternalServerError)
+		return
+	}
+
+	a.logger.Info("agent revoked", "agent_id", agentID)
+	// Return updated agents list
+	a.renderAgentsList(w)
 }
 
 // handleCreateInvite creates a new invite link
@@ -555,6 +677,391 @@ func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 
 	// Return the invite URL using template for proper escaping
 	a.renderInviteCreated(w, inviteURL)
+}
+
+// =============================================================================
+// Principals Handlers
+// =============================================================================
+
+// handlePrincipalsPage renders the principals management page
+func (a *Admin) handlePrincipalsPage(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderPrincipalsPage(w, user, csrfToken)
+}
+
+// handlePrincipalsList returns the principals list (htmx partial)
+func (a *Admin) handlePrincipalsList(w http.ResponseWriter, r *http.Request) {
+	// Parse query params for filtering
+	typeFilter := r.URL.Query().Get("type")
+	statusFilter := r.URL.Query().Get("status")
+
+	filter := store.PrincipalFilter{
+		Limit: 100,
+	}
+
+	if typeFilter != "" {
+		t := store.PrincipalType(typeFilter)
+		filter.Type = &t
+	}
+	if statusFilter != "" {
+		s := store.PrincipalStatus(statusFilter)
+		filter.Status = &s
+	}
+
+	principals, err := a.store.ListPrincipals(r.Context(), filter)
+	if err != nil {
+		a.logger.Error("failed to list principals", "error", err)
+		http.Error(w, "Failed to load principals", http.StatusInternalServerError)
+		return
+	}
+
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderPrincipalsList(w, principals, csrfToken)
+}
+
+// handlePrincipalApprove approves a pending principal
+func (a *Admin) handlePrincipalApprove(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	principalID := r.PathValue("id")
+	if principalID == "" {
+		http.Error(w, "Principal ID required", http.StatusBadRequest)
+		return
+	}
+
+	if err := a.store.UpdatePrincipalStatus(r.Context(), principalID, store.PrincipalStatusApproved); err != nil {
+		if errors.Is(err, store.ErrPrincipalNotFound) {
+			http.Error(w, "Principal not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to approve principal", "error", err, "principal_id", principalID)
+		http.Error(w, "Failed to approve principal", http.StatusInternalServerError)
+		return
+	}
+
+	a.logger.Info("principal approved", "principal_id", principalID)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(`<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">approved</span>`))
+}
+
+// handlePrincipalRevoke revokes a principal
+func (a *Admin) handlePrincipalRevoke(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	principalID := r.PathValue("id")
+	if principalID == "" {
+		http.Error(w, "Principal ID required", http.StatusBadRequest)
+		return
+	}
+
+	if err := a.store.UpdatePrincipalStatus(r.Context(), principalID, store.PrincipalStatusRevoked); err != nil {
+		if errors.Is(err, store.ErrPrincipalNotFound) {
+			http.Error(w, "Principal not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to revoke principal", "error", err, "principal_id", principalID)
+		http.Error(w, "Failed to revoke principal", http.StatusInternalServerError)
+		return
+	}
+
+	a.logger.Info("principal revoked", "principal_id", principalID)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(`<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">revoked</span>`))
+}
+
+// handlePrincipalDelete deletes a principal
+func (a *Admin) handlePrincipalDelete(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	principalID := r.PathValue("id")
+	if principalID == "" {
+		http.Error(w, "Principal ID required", http.StatusBadRequest)
+		return
+	}
+
+	if err := a.store.DeletePrincipal(r.Context(), principalID); err != nil {
+		if errors.Is(err, store.ErrPrincipalNotFound) {
+			http.Error(w, "Principal not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to delete principal", "error", err, "principal_id", principalID)
+		http.Error(w, "Failed to delete principal", http.StatusInternalServerError)
+		return
+	}
+
+	a.logger.Info("principal deleted", "principal_id", principalID)
+	w.WriteHeader(http.StatusOK)
+}
+
+// =============================================================================
+// Threads Handlers
+// =============================================================================
+
+// handleThreadsPage renders the threads list page
+func (a *Admin) handleThreadsPage(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+
+	// Load threads from store
+	threads, err := a.store.ListThreads(r.Context(), 100)
+	if err != nil {
+		a.logger.Error("failed to list threads", "error", err)
+		threads = nil // Show empty state on error
+	}
+
+	a.renderThreadsPageWithData(w, user, threads, csrfToken)
+}
+
+// handleThreadDetail renders a single thread with its messages
+func (a *Admin) handleThreadDetail(w http.ResponseWriter, r *http.Request) {
+	threadID := r.PathValue("id")
+	if threadID == "" {
+		http.Error(w, "Thread ID required", http.StatusBadRequest)
+		return
+	}
+
+	thread, err := a.store.GetThread(r.Context(), threadID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Thread not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to get thread", "error", err, "thread_id", threadID)
+		http.Error(w, "Failed to load thread", http.StatusInternalServerError)
+		return
+	}
+
+	messages, err := a.store.GetThreadMessages(r.Context(), threadID, 100)
+	if err != nil {
+		a.logger.Error("failed to get thread messages", "error", err, "thread_id", threadID)
+		http.Error(w, "Failed to load messages", http.StatusInternalServerError)
+		return
+	}
+
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderThreadDetail(w, user, thread, messages, csrfToken)
+}
+
+// handleThreadMessages returns messages for a thread (htmx partial)
+func (a *Admin) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
+	threadID := r.PathValue("id")
+	if threadID == "" {
+		http.Error(w, "Thread ID required", http.StatusBadRequest)
+		return
+	}
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 50
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
+			limit = l
+		}
+	}
+
+	messages, err := a.store.GetThreadMessages(r.Context(), threadID, limit)
+	if err != nil {
+		a.logger.Error("failed to get thread messages", "error", err, "thread_id", threadID)
+		http.Error(w, "Failed to load messages", http.StatusInternalServerError)
+		return
+	}
+
+	a.renderMessagesList(w, messages)
+}
+
+// =============================================================================
+// Chat Handlers
+// =============================================================================
+
+// handleChatPage renders the chat interface for an agent
+func (a *Admin) handleChatPage(w http.ResponseWriter, r *http.Request) {
+	agentID := r.PathValue("id")
+	if agentID == "" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Verify agent exists and is connected
+	var agentName string
+	var connected bool
+	if a.manager != nil {
+		for _, info := range a.manager.ListAgents() {
+			if info.ID == agentID {
+				agentName = info.Name
+				connected = true
+				break
+			}
+		}
+	}
+
+	if agentName == "" {
+		agentName = agentID // Fallback to ID if not found
+	}
+
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderChatPage(w, user, agentID, agentName, connected, csrfToken)
+}
+
+// handleChatSend sends a message to an agent
+func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	agentID := r.PathValue("id")
+	if agentID == "" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	message := r.FormValue("message")
+	if message == "" {
+		http.Error(w, "Message required", http.StatusBadRequest)
+		return
+	}
+
+	// Send message to agent via manager
+	if a.manager == nil {
+		http.Error(w, "Agent manager not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Get the current user for session tracking
+	user := getUserFromContext(r)
+	if user == nil {
+		http.Error(w, "Not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	// Ensure chat session exists
+	a.chatHub.getOrCreateSession(agentID, user.ID)
+
+	// Create send request
+	sendReq := &agent.SendRequest{
+		ThreadID: "admin-chat-" + agentID + "-" + user.ID, // Use a consistent thread ID for admin chat
+		Sender:   user.Username,
+		Content:  message,
+		AgentID:  agentID,
+	}
+
+	// Send message to agent
+	respChan, err := a.manager.SendMessage(r.Context(), sendReq)
+	if err != nil {
+		a.logger.Error("failed to send message to agent", "error", err, "agent_id", agentID)
+		if err == agent.ErrAgentNotFound {
+			http.Error(w, "Agent not connected", http.StatusNotFound)
+		} else {
+			http.Error(w, "Failed to send message", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Pipe agent responses to the chat hub in a goroutine
+	go a.chatHub.pipeAgentResponses(r.Context(), agentID, user.ID, respChan)
+
+	a.logger.Debug("message sent to agent", "agent_id", agentID, "user", user.Username)
+
+	// Return success - responses will stream via /stream endpoint
+	response := map[string]string{
+		"status":   "sent",
+		"agent_id": agentID,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleChatStream handles SSE streaming of chat responses
+func (a *Admin) handleChatStream(w http.ResponseWriter, r *http.Request) {
+	agentID := r.PathValue("id")
+	if agentID == "" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Get the current user for session tracking
+	user := getUserFromContext(r)
+	if user == nil {
+		http.Error(w, "Not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Get or create chat session
+	session := a.chatHub.getOrCreateSession(agentID, user.ID)
+
+	// Send initial connection event
+	fmt.Fprintf(w, "event: connected\ndata: {\"agent_id\": %q}\n\n", agentID)
+	flusher.Flush()
+
+	// Create heartbeat ticker to keep connection alive
+	heartbeat := time.NewTicker(30 * time.Second)
+	defer heartbeat.Stop()
+
+	// Stream messages until client disconnects
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+
+		case <-session.ctx.Done():
+			// Session was closed
+			return
+
+		case <-heartbeat.C:
+			// Send SSE comment as heartbeat to detect dead connections
+			fmt.Fprint(w, ": heartbeat\n\n")
+			flusher.Flush()
+
+		case msg, ok := <-session.messages:
+			if !ok {
+				// Channel closed, session ended
+				return
+			}
+
+			// Encode message as JSON
+			data, err := json.Marshal(msg)
+			if err != nil {
+				a.logger.Error("failed to marshal chat message", "error", err)
+				continue
+			}
+
+			// Send SSE event based on message type
+			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", msg.Type, data)
+			flusher.Flush()
+
+			// If done or error, we can optionally end the stream
+			// But keep it open for subsequent messages in the same session
+		}
+	}
 }
 
 // generateSecureToken generates a cryptographically secure random token

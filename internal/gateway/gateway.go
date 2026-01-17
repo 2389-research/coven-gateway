@@ -183,12 +183,28 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 
 	// Register web admin UI routes
 	// The admin UI has its own session-based auth (separate from JWT)
+	webAdminBaseURL := cfg.WebAdmin.BaseURL
+	if webAdminBaseURL == "" {
+		// Auto-detect based on deployment mode
+		if cfg.Tailscale.Enabled {
+			// With Tailscale, construct URL from hostname
+			// Note: Full DNS name (hostname.tailnet.ts.net) isn't known until tsnet starts,
+			// but the hostname is good enough for WebAuthn RPID extraction
+			scheme := "http"
+			if cfg.Tailscale.Funnel {
+				scheme = "https"
+			}
+			webAdminBaseURL = scheme + "://" + cfg.Tailscale.Hostname
+		} else {
+			webAdminBaseURL = "http://" + cfg.Server.HTTPAddr
+		}
+	}
 	webAdminCfg := webadmin.Config{
-		BaseURL: "http://" + cfg.Server.HTTPAddr,
+		BaseURL: webAdminBaseURL,
 	}
 	webAdmin := webadmin.New(sqliteStore, gw.agentManager, webAdminCfg)
 	webAdmin.RegisterRoutes(mux)
-	logger.Info("admin web UI enabled at /admin/")
+	logger.Info("admin web UI enabled at /admin/", "base_url", webAdminBaseURL)
 
 	gw.httpServer = &http.Server{
 		Addr:    cfg.Server.HTTPAddr,

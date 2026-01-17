@@ -399,6 +399,65 @@ func (s *SQLiteStore) UpdateThread(ctx context.Context, thread *Thread) error {
 	return nil
 }
 
+// ListThreads retrieves threads ordered by most recent activity.
+// If limit is 0 or negative, a default limit of 100 is used.
+func (s *SQLiteStore) ListThreads(ctx context.Context, limit int) ([]*Thread, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	query := `
+		SELECT id, frontend_name, external_id, agent_id, created_at, updated_at
+		FROM threads
+		ORDER BY updated_at DESC
+		LIMIT ?
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("querying threads: %w", err)
+	}
+	defer rows.Close()
+
+	var threads []*Thread
+	for rows.Next() {
+		var thread Thread
+		var createdAtStr, updatedAtStr string
+
+		if err := rows.Scan(
+			&thread.ID,
+			&thread.FrontendName,
+			&thread.ExternalID,
+			&thread.AgentID,
+			&createdAtStr,
+			&updatedAtStr,
+		); err != nil {
+			return nil, fmt.Errorf("scanning thread row: %w", err)
+		}
+
+		thread.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parsing created_at: %w", err)
+		}
+
+		thread.UpdatedAt, err = time.Parse(time.RFC3339, updatedAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parsing updated_at: %w", err)
+		}
+
+		threads = append(threads, &thread)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating thread rows: %w", err)
+	}
+
+	return threads, nil
+}
+
 // SaveMessage saves a message to the database
 func (s *SQLiteStore) SaveMessage(ctx context.Context, msg *Message) error {
 	query := `

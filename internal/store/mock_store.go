@@ -101,6 +101,42 @@ func (m *MockStore) UpdateThread(ctx context.Context, thread *Thread) error {
 	return nil
 }
 
+// ListThreads retrieves threads ordered by most recent activity.
+func (m *MockStore) ListThreads(ctx context.Context, limit int) ([]*Thread, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	// Collect all threads
+	threads := make([]*Thread, 0, len(m.threads))
+	for _, t := range m.threads {
+		threadCopy := *t
+		threads = append(threads, &threadCopy)
+	}
+
+	// Sort by UpdatedAt descending
+	for i := 0; i < len(threads)-1; i++ {
+		for j := i + 1; j < len(threads); j++ {
+			if threads[j].UpdatedAt.After(threads[i].UpdatedAt) {
+				threads[i], threads[j] = threads[j], threads[i]
+			}
+		}
+	}
+
+	// Apply limit
+	if len(threads) > limit {
+		threads = threads[:limit]
+	}
+
+	return threads, nil
+}
+
 // SaveMessage stores a message.
 func (m *MockStore) SaveMessage(ctx context.Context, msg *Message) error {
 	m.mu.Lock()

@@ -47,6 +47,7 @@ type Store interface {
 	GetThread(ctx context.Context, id string) (*Thread, error)
 	GetThreadByFrontendID(ctx context.Context, frontendName, externalID string) (*Thread, error)
 	UpdateThread(ctx context.Context, thread *Thread) error
+	ListThreads(ctx context.Context, limit int) ([]*Thread, error)
 
 	// Messages (for audit/history)
 	SaveMessage(ctx context.Context, msg *Message) error

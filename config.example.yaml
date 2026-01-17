@@ -66,3 +66,10 @@ metrics:
   enabled: true
   # Metrics endpoint path
   path: "/metrics"
+
+webadmin:
+  # External URL for admin UI (used for invite links and WebAuthn)
+  # If not set, auto-detected from server.http_addr or tailscale.hostname
+  # For tsnet with Funnel: https://fold-gateway.your-tailnet.ts.net
+  # For tsnet without Funnel: http://fold-gateway (internal tailnet access)
+  base_url: ""
