@@ -39,7 +39,16 @@ func main() {
 	}
 
 	// Get config from environment or token file
-	grpcAddr := getEnv("FOLD_GATEWAY_GRPC", "localhost:50051")
+	// FOLD_GATEWAY_HOST is preferred; derives gRPC and HTTP URLs
+	// Falls back to legacy FOLD_GATEWAY_GRPC for backwards compatibility
+	grpcAddr := os.Getenv("FOLD_GATEWAY_GRPC")
+	if grpcAddr == "" {
+		if host := os.Getenv("FOLD_GATEWAY_HOST"); host != "" {
+			grpcAddr = host + ":50051"
+		} else {
+			grpcAddr = "localhost:50051"
+		}
+	}
 	token := getToken()
 
 	cmd := os.Args[1]
@@ -96,8 +105,12 @@ func printUsage() {
 	fmt.Println("  invite create           Generate an admin web UI invite link")
 	fmt.Println()
 	yellow.Println("Environment:")
-	fmt.Println("  FOLD_GATEWAY_GRPC       Gateway gRPC address (default: localhost:50051)")
+	fmt.Println("  FOLD_GATEWAY_HOST       Gateway hostname (derives gRPC :50051 and HTTPS URLs)")
 	fmt.Println("  FOLD_TOKEN              JWT authentication token (required)")
+	fmt.Println()
+	yellow.Println("Legacy (overrides FOLD_GATEWAY_HOST if set):")
+	fmt.Println("  FOLD_GATEWAY_GRPC       Gateway gRPC address (default: localhost:50051)")
+	fmt.Println("  FOLD_ADMIN_URL          Gateway admin URL (default: http://localhost:8080)")
 	fmt.Println()
 	yellow.Println("Examples:")
 	fmt.Println("  export FOLD_TOKEN=\"eyJhbG...\"")
@@ -760,8 +773,16 @@ func cmdInviteCreate(args []string) error {
 	}
 
 	// Default base URL
+	// FOLD_GATEWAY_HOST is preferred; derives HTTPS URL
+	// Falls back to legacy FOLD_ADMIN_URL for backwards compatibility
 	if baseURL == "" {
-		baseURL = getEnv("FOLD_ADMIN_URL", "http://localhost:8080")
+		if url := os.Getenv("FOLD_ADMIN_URL"); url != "" {
+			baseURL = url
+		} else if host := os.Getenv("FOLD_GATEWAY_HOST"); host != "" {
+			baseURL = "https://" + host
+		} else {
+			baseURL = "http://localhost:8080"
+		}
 	}
 
 	// Open database
