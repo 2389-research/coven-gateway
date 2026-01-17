@@ -30,6 +30,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -47,7 +48,9 @@ COPY config.example.yaml /app/config.example.yaml
 # Create data and tailscale directories
 RUN mkdir -p /app/data /app/tailscale && chown -R app:app /app
 
-USER app
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Expose gRPC and HTTP ports
 EXPOSE 50051 8080
@@ -55,5 +58,6 @@ EXPOSE 50051 8080
 # Set config path via environment variable
 ENV FOLD_CONFIG=/app/config.yaml
 
-# Default command
+# Entrypoint fixes volume permissions then drops to app user
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["fold-gateway", "serve"]
