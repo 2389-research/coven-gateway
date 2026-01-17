@@ -5,6 +5,8 @@ package store
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -16,6 +18,7 @@ type MockStore struct {
 	messages    map[string][]*Message      // keyed by threadID
 	bindings    map[string]*ChannelBinding // keyed by "frontend:channelID"
 	agentState  map[string][]byte          // keyed by agentID
+	events      map[string]*LedgerEvent    // keyed by event ID
 }
 
 // NewMockStore creates a new MockStore.
@@ -26,6 +29,7 @@ func NewMockStore() *MockStore {
 		messages:    make(map[string][]*Message),
 		bindings:    make(map[string]*ChannelBinding),
 		agentState:  make(map[string][]byte),
+		events:      make(map[string]*LedgerEvent),
 	}
 }
 
@@ -95,6 +99,42 @@ func (m *MockStore) UpdateThread(ctx context.Context, thread *Thread) error {
 	m.threads[t.ID] = &t
 
 	return nil
+}
+
+// ListThreads retrieves threads ordered by most recent activity.
+func (m *MockStore) ListThreads(ctx context.Context, limit int) ([]*Thread, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	// Collect all threads
+	threads := make([]*Thread, 0, len(m.threads))
+	for _, t := range m.threads {
+		threadCopy := *t
+		threads = append(threads, &threadCopy)
+	}
+
+	// Sort by UpdatedAt descending
+	for i := 0; i < len(threads)-1; i++ {
+		for j := i + 1; j < len(threads); j++ {
+			if threads[j].UpdatedAt.After(threads[i].UpdatedAt) {
+				threads[i], threads[j] = threads[j], threads[i]
+			}
+		}
+	}
+
+	// Apply limit
+	if len(threads) > limit {
+		threads = threads[:limit]
+	}
+
+	return threads, nil
 }
 
 // SaveMessage stores a message.
@@ -221,6 +261,158 @@ func (m *MockStore) DeleteBinding(ctx context.Context, frontend, channelID strin
 
 	delete(m.bindings, key)
 	return nil
+}
+
+// SaveEvent stores a ledger event.
+func (m *MockStore) SaveEvent(ctx context.Context, event *LedgerEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Make a copy to avoid external modification
+	e := *event
+	m.events[e.ID] = &e
+
+	return nil
+}
+
+// GetEvent retrieves a ledger event by ID.
+func (m *MockStore) GetEvent(ctx context.Context, id string) (*LedgerEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	e, ok := m.events[id]
+	if !ok {
+		return nil, ErrEventNotFound
+	}
+
+	// Return a copy
+	result := *e
+	return &result, nil
+}
+
+// ListEventsByConversation retrieves events for a conversation key.
+func (m *MockStore) ListEventsByConversation(ctx context.Context, conversationKey string, limit int) ([]*LedgerEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*LedgerEvent
+	for _, e := range m.events {
+		if e.ConversationKey == conversationKey {
+			eventCopy := *e
+			result = append(result, &eventCopy)
+		}
+	}
+
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+
+	return result, nil
+}
+
+// ListEventsByActor retrieves events by actor principal ID.
+func (m *MockStore) ListEventsByActor(ctx context.Context, principalID string, limit int) ([]*LedgerEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*LedgerEvent
+	for _, e := range m.events {
+		if e.ActorPrincipalID != nil && *e.ActorPrincipalID == principalID {
+			eventCopy := *e
+			result = append(result, &eventCopy)
+		}
+	}
+
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+
+	return result, nil
+}
+
+// GetEvents retrieves events for a conversation with pagination support.
+func (m *MockStore) GetEvents(ctx context.Context, p GetEventsParams) (*GetEventsResult, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Validate required params
+	if p.ConversationKey == "" {
+		return nil, fmt.Errorf("conversation_key required")
+	}
+
+	// Apply default and cap limit
+	if p.Limit <= 0 {
+		p.Limit = 50
+	}
+	if p.Limit > 500 {
+		p.Limit = 500
+	}
+
+	// Collect matching events
+	var matching []LedgerEvent
+	for _, e := range m.events {
+		if e.ConversationKey != p.ConversationKey {
+			continue
+		}
+		if p.Since != nil && e.Timestamp.Before(*p.Since) {
+			continue
+		}
+		if p.Until != nil && e.Timestamp.After(*p.Until) {
+			continue
+		}
+		eventCopy := *e
+		matching = append(matching, eventCopy)
+	}
+
+	// Sort by timestamp, then event_id
+	sort.Slice(matching, func(i, j int) bool {
+		if matching[i].Timestamp.Equal(matching[j].Timestamp) {
+			return matching[i].ID < matching[j].ID
+		}
+		return matching[i].Timestamp.Before(matching[j].Timestamp)
+	})
+
+	// Apply cursor
+	if p.Cursor != "" {
+		cursorTS, cursorID, err := decodeCursor(p.Cursor)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cursor: %w", err)
+		}
+		// Find events after cursor
+		startIdx := 0
+		for i, e := range matching {
+			if e.Timestamp.After(cursorTS) || (e.Timestamp.Equal(cursorTS) && e.ID > cursorID) {
+				startIdx = i
+				break
+			}
+			startIdx = i + 1
+		}
+		if startIdx < len(matching) {
+			matching = matching[startIdx:]
+		} else {
+			matching = nil
+		}
+	}
+
+	// Determine if there are more results
+	hasMore := len(matching) > p.Limit
+	if hasMore {
+		matching = matching[:p.Limit]
+	}
+
+	// Build result
+	result := &GetEventsResult{
+		Events:  matching,
+		HasMore: hasMore,
+	}
+
+	// Set next cursor if there are more results
+	if hasMore && len(matching) > 0 {
+		lastEvent := matching[len(matching)-1]
+		result.NextCursor = encodeCursor(lastEvent.Timestamp, lastEvent.ID)
+	}
+
+	return result, nil
 }
 
 // Close is a no-op for MockStore.

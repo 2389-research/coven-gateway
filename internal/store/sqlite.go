@@ -108,6 +108,146 @@ func (s *SQLiteStore) createSchema() error {
 			updated_at DATETIME NOT NULL,
 			PRIMARY KEY (frontend, channel_id)
 		);
+
+		CREATE TABLE IF NOT EXISTS principals (
+			principal_id       TEXT PRIMARY KEY,
+			type               TEXT NOT NULL,
+			pubkey_fingerprint TEXT NOT NULL UNIQUE,
+			display_name       TEXT NOT NULL,
+			status             TEXT NOT NULL,
+			created_at         TEXT NOT NULL,
+			last_seen          TEXT,
+			metadata_json      TEXT,
+
+			CHECK (type IN ('client', 'agent', 'pack')),
+			CHECK (status IN ('pending', 'approved', 'revoked', 'offline', 'online'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_principals_status ON principals(status);
+		CREATE INDEX IF NOT EXISTS idx_principals_type ON principals(type);
+		CREATE INDEX IF NOT EXISTS idx_principals_pubkey ON principals(pubkey_fingerprint);
+
+		CREATE TABLE IF NOT EXISTS roles (
+			subject_type TEXT NOT NULL,
+			subject_id   TEXT NOT NULL,
+			role         TEXT NOT NULL,
+			created_at   TEXT NOT NULL,
+
+			PRIMARY KEY (subject_type, subject_id, role),
+			CHECK (subject_type IN ('principal', 'member')),
+			CHECK (role IN ('owner', 'admin', 'member'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_roles_subject ON roles(subject_type, subject_id);
+
+		CREATE TABLE IF NOT EXISTS audit_log (
+			audit_id           TEXT PRIMARY KEY,
+			actor_principal_id TEXT NOT NULL,
+			actor_member_id    TEXT,
+			action             TEXT NOT NULL,
+			target_type        TEXT NOT NULL,
+			target_id          TEXT NOT NULL,
+			ts                 TEXT NOT NULL,
+			detail_json        TEXT,
+
+			CHECK (action IN (
+				'approve_principal',
+				'revoke_principal',
+				'grant_capability',
+				'revoke_capability',
+				'create_binding',
+				'update_binding',
+				'delete_binding',
+				'create_token'
+			))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts DESC);
+		CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_principal_id);
+		CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id);
+
+		CREATE TABLE IF NOT EXISTS ledger_events (
+			event_id           TEXT PRIMARY KEY,
+			conversation_key   TEXT NOT NULL,
+			direction          TEXT NOT NULL,
+			author             TEXT NOT NULL,
+			timestamp          TEXT NOT NULL,
+			type               TEXT NOT NULL,
+			text               TEXT,
+			raw_transport      TEXT,
+			raw_payload_ref    TEXT,
+			actor_principal_id TEXT,
+			actor_member_id    TEXT,
+
+			CHECK (direction IN ('inbound_to_agent', 'outbound_from_agent')),
+			CHECK (type IN ('message', 'tool_call', 'tool_result', 'system', 'error'))
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_ledger_conversation ON ledger_events(conversation_key, timestamp);
+		CREATE INDEX IF NOT EXISTS idx_ledger_actor ON ledger_events(actor_principal_id);
+		CREATE INDEX IF NOT EXISTS idx_ledger_timestamp ON ledger_events(timestamp);
+
+		CREATE TABLE IF NOT EXISTS bindings (
+			binding_id TEXT PRIMARY KEY,
+			frontend   TEXT NOT NULL,
+			channel_id TEXT NOT NULL,
+			agent_id   TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			created_by TEXT,
+
+			UNIQUE(frontend, channel_id)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_bindings_frontend ON bindings(frontend);
+		CREATE INDEX IF NOT EXISTS idx_bindings_agent ON bindings(agent_id);
+
+		-- Admin users (humans who manage the system via web UI)
+		CREATE TABLE IF NOT EXISTS admin_users (
+			id TEXT PRIMARY KEY,
+			username TEXT UNIQUE NOT NULL,
+			password_hash TEXT,
+			display_name TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username);
+
+		-- Admin sessions (cookie-based)
+		CREATE TABLE IF NOT EXISTS admin_sessions (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+			created_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_admin_sessions_user ON admin_sessions(user_id);
+		CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);
+
+		-- Admin invite links (for signup)
+		CREATE TABLE IF NOT EXISTS admin_invites (
+			id TEXT PRIMARY KEY,
+			created_by TEXT REFERENCES admin_users(id),
+			created_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL,
+			used_at TEXT,
+			used_by TEXT REFERENCES admin_users(id)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_admin_invites_expires ON admin_invites(expires_at);
+
+		-- WebAuthn credentials for passkeys
+		CREATE TABLE IF NOT EXISTS webauthn_credentials (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+			credential_id BLOB UNIQUE NOT NULL,
+			public_key BLOB NOT NULL,
+			attestation_type TEXT,
+			transports TEXT,
+			sign_count INTEGER DEFAULT 0,
+			created_at TEXT NOT NULL
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id);
 	`
 
 	_, err := s.db.Exec(schema)
@@ -257,6 +397,65 @@ func (s *SQLiteStore) UpdateThread(ctx context.Context, thread *Thread) error {
 
 	s.logger.Debug("updated thread", "id", thread.ID)
 	return nil
+}
+
+// ListThreads retrieves threads ordered by most recent activity.
+// If limit is 0 or negative, a default limit of 100 is used.
+func (s *SQLiteStore) ListThreads(ctx context.Context, limit int) ([]*Thread, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	query := `
+		SELECT id, frontend_name, external_id, agent_id, created_at, updated_at
+		FROM threads
+		ORDER BY updated_at DESC
+		LIMIT ?
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("querying threads: %w", err)
+	}
+	defer rows.Close()
+
+	var threads []*Thread
+	for rows.Next() {
+		var thread Thread
+		var createdAtStr, updatedAtStr string
+
+		if err := rows.Scan(
+			&thread.ID,
+			&thread.FrontendName,
+			&thread.ExternalID,
+			&thread.AgentID,
+			&createdAtStr,
+			&updatedAtStr,
+		); err != nil {
+			return nil, fmt.Errorf("scanning thread row: %w", err)
+		}
+
+		thread.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parsing created_at: %w", err)
+		}
+
+		thread.UpdatedAt, err = time.Parse(time.RFC3339, updatedAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parsing updated_at: %w", err)
+		}
+
+		threads = append(threads, &thread)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating thread rows: %w", err)
+	}
+
+	return threads, nil
 }
 
 // SaveMessage saves a message to the database

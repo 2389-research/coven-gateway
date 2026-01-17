@@ -16,9 +16,14 @@ import (
 	"google.golang.org/grpc"
 	"tailscale.com/tsnet"
 
+	"github.com/2389/fold-gateway/internal/admin"
 	"github.com/2389/fold-gateway/internal/agent"
+	"github.com/2389/fold-gateway/internal/auth"
+	"github.com/2389/fold-gateway/internal/client"
 	"github.com/2389/fold-gateway/internal/config"
+	"github.com/2389/fold-gateway/internal/dedupe"
 	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/fold-gateway/internal/webadmin"
 	pb "github.com/2389/fold-gateway/proto/fold"
 )
 
@@ -35,6 +40,9 @@ type Gateway struct {
 
 	// serverID identifies this gateway instance
 	serverID string
+
+	// dedupe is used to prevent duplicate bridge message processing
+	dedupe *dedupe.Cache
 
 	// mockSender is used for testing to inject a mock message sender
 	mockSender messageSender
@@ -59,8 +67,45 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	// Create agent manager
 	agentMgr := agent.NewManager(logger.With("component", "agent-manager"))
 
-	// Create gRPC server
-	grpcServer := grpc.NewServer()
+	// Create dedupe cache for bridge message deduplication
+	// TTL of 5 minutes, max size 100,000 entries
+	dedupeCache := dedupe.New(5*time.Minute, 100_000)
+
+	// Create gRPC server with auth interceptors if JWT secret is configured
+	var grpcServer *grpc.Server
+	var jwtVerifier *auth.JWTVerifier // Stored for token generation
+	if cfg.Auth.JWTSecret != "" {
+		// Create JWT verifier for client auth
+		var err error
+		jwtVerifier, err = auth.NewJWTVerifier([]byte(cfg.Auth.JWTSecret))
+		if err != nil {
+			return nil, fmt.Errorf("creating JWT verifier: %w", err)
+		}
+
+		// Create SSH verifier for agent auth
+		sshVerifier := auth.NewSSHVerifier()
+
+		// Create store adapter for auth interceptors
+		sqlStore := s.(*store.SQLiteStore)
+
+		// Create gRPC server with auth interceptors
+		// Supports both JWT (clients) and SSH key (agents) authentication
+		grpcServer = grpc.NewServer(
+			grpc.ChainUnaryInterceptor(
+				auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier),
+				auth.RequireAdmin(),
+			),
+			grpc.ChainStreamInterceptor(
+				auth.StreamInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier),
+				auth.RequireAdminStream(),
+			),
+		)
+		logger.Info("auth interceptors enabled (JWT + SSH)")
+	} else {
+		// No auth - create plain gRPC server
+		grpcServer = grpc.NewServer()
+		logger.Warn("auth disabled - no jwt_secret configured")
+	}
 
 	// Create gateway
 	gw := &Gateway{
@@ -70,20 +115,96 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		grpcServer:   grpcServer,
 		logger:       logger.With("component", "gateway"),
 		serverID:     generateServerID(),
+		dedupe:       dedupeCache,
 	}
 
-	// Register FoldControl service
+	// Register FoldControl service (agent streaming - no auth required for now)
 	foldService := newFoldControlServer(gw, logger.With("component", "grpc"))
 	pb.RegisterFoldControlServer(grpcServer, foldService)
 
+	// Register AdminService and ClientService
+	sqliteStore := s.(*store.SQLiteStore)
+	if jwtVerifier != nil {
+		// Use PrincipalService which supports token and principal management
+		principalService := admin.NewPrincipalService(sqliteStore, jwtVerifier)
+		pb.RegisterAdminServiceServer(grpcServer, principalService)
+	} else {
+		// Use basic AdminService without token/principal management
+		adminService := admin.NewAdminService(sqliteStore)
+		pb.RegisterAdminServiceServer(grpcServer, adminService)
+	}
+
+	clientService := client.NewClientServiceWithDedupe(sqliteStore, sqliteStore, dedupeCache)
+	pb.RegisterClientServiceServer(grpcServer, clientService)
+
 	// Create HTTP server for health checks and API
 	mux := http.NewServeMux()
+
+	// Health endpoints - no auth required
 	mux.HandleFunc("/health", gw.handleHealth)
 	mux.HandleFunc("/health/ready", gw.handleReady)
-	mux.HandleFunc("/api/agents", gw.handleListAgents)
-	mux.HandleFunc("/api/send", gw.handleSendMessage)
-	mux.HandleFunc("/api/bindings", gw.handleBindings)
-	mux.HandleFunc("/api/threads/", gw.handleThreadMessages)
+
+	// API endpoints - auth required if JWT secret is configured
+	if cfg.Auth.JWTSecret != "" {
+		// Create JWT verifier for HTTP (reuse logic from gRPC)
+		httpVerifier, err := auth.NewJWTVerifier([]byte(cfg.Auth.JWTSecret))
+		if err != nil {
+			return nil, fmt.Errorf("creating HTTP JWT verifier: %w", err)
+		}
+
+		// Create auth middleware
+		authMiddleware := auth.HTTPAuthMiddleware(sqliteStore, sqliteStore, httpVerifier)
+		adminMiddleware := auth.RequireAdminHTTP()
+
+		// Protected endpoints - any authenticated user
+		mux.Handle("/api/agents", authMiddleware(http.HandlerFunc(gw.handleListAgents)))
+		mux.Handle("/api/send", authMiddleware(http.HandlerFunc(gw.handleSendMessage)))
+		mux.Handle("/api/threads/", authMiddleware(http.HandlerFunc(gw.handleThreadMessages)))
+
+		// Admin endpoints - requires admin role for mutations
+		// GET is allowed for any authenticated user, POST/DELETE require admin
+		mux.Handle("/api/bindings", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost || r.Method == http.MethodDelete {
+				adminMiddleware(http.HandlerFunc(gw.handleBindings)).ServeHTTP(w, r)
+			} else {
+				gw.handleBindings(w, r)
+			}
+		})))
+
+		logger.Info("HTTP auth middleware enabled")
+	} else {
+		// No auth - register handlers directly
+		mux.HandleFunc("/api/agents", gw.handleListAgents)
+		mux.HandleFunc("/api/send", gw.handleSendMessage)
+		mux.HandleFunc("/api/bindings", gw.handleBindings)
+		mux.HandleFunc("/api/threads/", gw.handleThreadMessages)
+		logger.Warn("HTTP auth disabled - no jwt_secret configured")
+	}
+
+	// Register web admin UI routes
+	// The admin UI has its own session-based auth (separate from JWT)
+	webAdminBaseURL := cfg.WebAdmin.BaseURL
+	if webAdminBaseURL == "" {
+		// Auto-detect based on deployment mode
+		if cfg.Tailscale.Enabled {
+			// With Tailscale, construct URL from hostname
+			// Note: Full DNS name (hostname.tailnet.ts.net) isn't known until tsnet starts,
+			// but the hostname is good enough for WebAuthn RPID extraction
+			scheme := "http"
+			if cfg.Tailscale.Funnel {
+				scheme = "https"
+			}
+			webAdminBaseURL = scheme + "://" + cfg.Tailscale.Hostname
+		} else {
+			webAdminBaseURL = "http://" + cfg.Server.HTTPAddr
+		}
+	}
+	webAdminCfg := webadmin.Config{
+		BaseURL: webAdminBaseURL,
+	}
+	webAdmin := webadmin.New(sqliteStore, gw.agentManager, webAdminCfg)
+	webAdmin.RegisterRoutes(mux)
+	logger.Info("admin web UI enabled at /admin/", "base_url", webAdminBaseURL)
 
 	gw.httpServer = &http.Server{
 		Addr:    cfg.Server.HTTPAddr,
@@ -302,6 +423,11 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	// Close store
 	if err := g.store.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("store close: %w", err))
+	}
+
+	// Close dedupe cache (stops background cleanup goroutine)
+	if g.dedupe != nil {
+		g.dedupe.Close()
 	}
 
 	if len(errs) > 0 {

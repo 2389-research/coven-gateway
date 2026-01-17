@@ -14,6 +14,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -120,5 +121,567 @@ var FoldControl_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
+	Metadata: "fold.proto",
+}
+
+const (
+	AdminService_ListBindings_FullMethodName    = "/fold.AdminService/ListBindings"
+	AdminService_CreateBinding_FullMethodName   = "/fold.AdminService/CreateBinding"
+	AdminService_UpdateBinding_FullMethodName   = "/fold.AdminService/UpdateBinding"
+	AdminService_DeleteBinding_FullMethodName   = "/fold.AdminService/DeleteBinding"
+	AdminService_CreateToken_FullMethodName     = "/fold.AdminService/CreateToken"
+	AdminService_ListPrincipals_FullMethodName  = "/fold.AdminService/ListPrincipals"
+	AdminService_CreatePrincipal_FullMethodName = "/fold.AdminService/CreatePrincipal"
+	AdminService_DeletePrincipal_FullMethodName = "/fold.AdminService/DeletePrincipal"
+)
+
+// AdminServiceClient is the client API for AdminService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// AdminService provides administrative operations for managing the gateway.
+// All methods require admin or owner role (enforced by RequireAdmin interceptor).
+type AdminServiceClient interface {
+	ListBindings(ctx context.Context, in *ListBindingsRequest, opts ...grpc.CallOption) (*ListBindingsResponse, error)
+	CreateBinding(ctx context.Context, in *CreateBindingRequest, opts ...grpc.CallOption) (*Binding, error)
+	UpdateBinding(ctx context.Context, in *UpdateBindingRequest, opts ...grpc.CallOption) (*Binding, error)
+	DeleteBinding(ctx context.Context, in *DeleteBindingRequest, opts ...grpc.CallOption) (*DeleteBindingResponse, error)
+	// Token management
+	CreateToken(ctx context.Context, in *CreateTokenRequest, opts ...grpc.CallOption) (*CreateTokenResponse, error)
+	// Principal management
+	ListPrincipals(ctx context.Context, in *ListPrincipalsRequest, opts ...grpc.CallOption) (*ListPrincipalsResponse, error)
+	CreatePrincipal(ctx context.Context, in *CreatePrincipalRequest, opts ...grpc.CallOption) (*Principal, error)
+	DeletePrincipal(ctx context.Context, in *DeletePrincipalRequest, opts ...grpc.CallOption) (*DeletePrincipalResponse, error)
+}
+
+type adminServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAdminServiceClient(cc grpc.ClientConnInterface) AdminServiceClient {
+	return &adminServiceClient{cc}
+}
+
+func (c *adminServiceClient) ListBindings(ctx context.Context, in *ListBindingsRequest, opts ...grpc.CallOption) (*ListBindingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBindingsResponse)
+	err := c.cc.Invoke(ctx, AdminService_ListBindings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) CreateBinding(ctx context.Context, in *CreateBindingRequest, opts ...grpc.CallOption) (*Binding, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Binding)
+	err := c.cc.Invoke(ctx, AdminService_CreateBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) UpdateBinding(ctx context.Context, in *UpdateBindingRequest, opts ...grpc.CallOption) (*Binding, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Binding)
+	err := c.cc.Invoke(ctx, AdminService_UpdateBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) DeleteBinding(ctx context.Context, in *DeleteBindingRequest, opts ...grpc.CallOption) (*DeleteBindingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteBindingResponse)
+	err := c.cc.Invoke(ctx, AdminService_DeleteBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) CreateToken(ctx context.Context, in *CreateTokenRequest, opts ...grpc.CallOption) (*CreateTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateTokenResponse)
+	err := c.cc.Invoke(ctx, AdminService_CreateToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) ListPrincipals(ctx context.Context, in *ListPrincipalsRequest, opts ...grpc.CallOption) (*ListPrincipalsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPrincipalsResponse)
+	err := c.cc.Invoke(ctx, AdminService_ListPrincipals_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) CreatePrincipal(ctx context.Context, in *CreatePrincipalRequest, opts ...grpc.CallOption) (*Principal, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Principal)
+	err := c.cc.Invoke(ctx, AdminService_CreatePrincipal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) DeletePrincipal(ctx context.Context, in *DeletePrincipalRequest, opts ...grpc.CallOption) (*DeletePrincipalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeletePrincipalResponse)
+	err := c.cc.Invoke(ctx, AdminService_DeletePrincipal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AdminServiceServer is the server API for AdminService service.
+// All implementations must embed UnimplementedAdminServiceServer
+// for forward compatibility.
+//
+// AdminService provides administrative operations for managing the gateway.
+// All methods require admin or owner role (enforced by RequireAdmin interceptor).
+type AdminServiceServer interface {
+	ListBindings(context.Context, *ListBindingsRequest) (*ListBindingsResponse, error)
+	CreateBinding(context.Context, *CreateBindingRequest) (*Binding, error)
+	UpdateBinding(context.Context, *UpdateBindingRequest) (*Binding, error)
+	DeleteBinding(context.Context, *DeleteBindingRequest) (*DeleteBindingResponse, error)
+	// Token management
+	CreateToken(context.Context, *CreateTokenRequest) (*CreateTokenResponse, error)
+	// Principal management
+	ListPrincipals(context.Context, *ListPrincipalsRequest) (*ListPrincipalsResponse, error)
+	CreatePrincipal(context.Context, *CreatePrincipalRequest) (*Principal, error)
+	DeletePrincipal(context.Context, *DeletePrincipalRequest) (*DeletePrincipalResponse, error)
+	mustEmbedUnimplementedAdminServiceServer()
+}
+
+// UnimplementedAdminServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAdminServiceServer struct{}
+
+func (UnimplementedAdminServiceServer) ListBindings(context.Context, *ListBindingsRequest) (*ListBindingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBindings not implemented")
+}
+func (UnimplementedAdminServiceServer) CreateBinding(context.Context, *CreateBindingRequest) (*Binding, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateBinding not implemented")
+}
+func (UnimplementedAdminServiceServer) UpdateBinding(context.Context, *UpdateBindingRequest) (*Binding, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateBinding not implemented")
+}
+func (UnimplementedAdminServiceServer) DeleteBinding(context.Context, *DeleteBindingRequest) (*DeleteBindingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteBinding not implemented")
+}
+func (UnimplementedAdminServiceServer) CreateToken(context.Context, *CreateTokenRequest) (*CreateTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateToken not implemented")
+}
+func (UnimplementedAdminServiceServer) ListPrincipals(context.Context, *ListPrincipalsRequest) (*ListPrincipalsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPrincipals not implemented")
+}
+func (UnimplementedAdminServiceServer) CreatePrincipal(context.Context, *CreatePrincipalRequest) (*Principal, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreatePrincipal not implemented")
+}
+func (UnimplementedAdminServiceServer) DeletePrincipal(context.Context, *DeletePrincipalRequest) (*DeletePrincipalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeletePrincipal not implemented")
+}
+func (UnimplementedAdminServiceServer) mustEmbedUnimplementedAdminServiceServer() {}
+func (UnimplementedAdminServiceServer) testEmbeddedByValue()                      {}
+
+// UnsafeAdminServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AdminServiceServer will
+// result in compilation errors.
+type UnsafeAdminServiceServer interface {
+	mustEmbedUnimplementedAdminServiceServer()
+}
+
+func RegisterAdminServiceServer(s grpc.ServiceRegistrar, srv AdminServiceServer) {
+	// If the following call panics, it indicates UnimplementedAdminServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AdminService_ServiceDesc, srv)
+}
+
+func _AdminService_ListBindings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBindingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).ListBindings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_ListBindings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).ListBindings(ctx, req.(*ListBindingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_CreateBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateBindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).CreateBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_CreateBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).CreateBinding(ctx, req.(*CreateBindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_UpdateBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateBindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).UpdateBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_UpdateBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).UpdateBinding(ctx, req.(*UpdateBindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_DeleteBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteBindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).DeleteBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_DeleteBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).DeleteBinding(ctx, req.(*DeleteBindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_CreateToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).CreateToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_CreateToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).CreateToken(ctx, req.(*CreateTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_ListPrincipals_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPrincipalsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).ListPrincipals(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_ListPrincipals_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).ListPrincipals(ctx, req.(*ListPrincipalsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_CreatePrincipal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreatePrincipalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).CreatePrincipal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_CreatePrincipal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).CreatePrincipal(ctx, req.(*CreatePrincipalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_DeletePrincipal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeletePrincipalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).DeletePrincipal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_DeletePrincipal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).DeletePrincipal(ctx, req.(*DeletePrincipalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AdminService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "fold.AdminService",
+	HandlerType: (*AdminServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListBindings",
+			Handler:    _AdminService_ListBindings_Handler,
+		},
+		{
+			MethodName: "CreateBinding",
+			Handler:    _AdminService_CreateBinding_Handler,
+		},
+		{
+			MethodName: "UpdateBinding",
+			Handler:    _AdminService_UpdateBinding_Handler,
+		},
+		{
+			MethodName: "DeleteBinding",
+			Handler:    _AdminService_DeleteBinding_Handler,
+		},
+		{
+			MethodName: "CreateToken",
+			Handler:    _AdminService_CreateToken_Handler,
+		},
+		{
+			MethodName: "ListPrincipals",
+			Handler:    _AdminService_ListPrincipals_Handler,
+		},
+		{
+			MethodName: "CreatePrincipal",
+			Handler:    _AdminService_CreatePrincipal_Handler,
+		},
+		{
+			MethodName: "DeletePrincipal",
+			Handler:    _AdminService_DeletePrincipal_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "fold.proto",
+}
+
+const (
+	ClientService_GetEvents_FullMethodName   = "/fold.ClientService/GetEvents"
+	ClientService_GetMe_FullMethodName       = "/fold.ClientService/GetMe"
+	ClientService_SendMessage_FullMethodName = "/fold.ClientService/SendMessage"
+)
+
+// ClientServiceClient is the client API for ClientService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// ClientService provides client-facing operations for interacting with agents.
+// Requires authenticated principal (member role or higher).
+type ClientServiceClient interface {
+	GetEvents(ctx context.Context, in *GetEventsRequest, opts ...grpc.CallOption) (*GetEventsResponse, error)
+	GetMe(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*MeResponse, error)
+	SendMessage(ctx context.Context, in *ClientSendMessageRequest, opts ...grpc.CallOption) (*ClientSendMessageResponse, error)
+}
+
+type clientServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewClientServiceClient(cc grpc.ClientConnInterface) ClientServiceClient {
+	return &clientServiceClient{cc}
+}
+
+func (c *clientServiceClient) GetEvents(ctx context.Context, in *GetEventsRequest, opts ...grpc.CallOption) (*GetEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEventsResponse)
+	err := c.cc.Invoke(ctx, ClientService_GetEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientServiceClient) GetMe(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*MeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MeResponse)
+	err := c.cc.Invoke(ctx, ClientService_GetMe_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientServiceClient) SendMessage(ctx context.Context, in *ClientSendMessageRequest, opts ...grpc.CallOption) (*ClientSendMessageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClientSendMessageResponse)
+	err := c.cc.Invoke(ctx, ClientService_SendMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ClientServiceServer is the server API for ClientService service.
+// All implementations must embed UnimplementedClientServiceServer
+// for forward compatibility.
+//
+// ClientService provides client-facing operations for interacting with agents.
+// Requires authenticated principal (member role or higher).
+type ClientServiceServer interface {
+	GetEvents(context.Context, *GetEventsRequest) (*GetEventsResponse, error)
+	GetMe(context.Context, *emptypb.Empty) (*MeResponse, error)
+	SendMessage(context.Context, *ClientSendMessageRequest) (*ClientSendMessageResponse, error)
+	mustEmbedUnimplementedClientServiceServer()
+}
+
+// UnimplementedClientServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedClientServiceServer struct{}
+
+func (UnimplementedClientServiceServer) GetEvents(context.Context, *GetEventsRequest) (*GetEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEvents not implemented")
+}
+func (UnimplementedClientServiceServer) GetMe(context.Context, *emptypb.Empty) (*MeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMe not implemented")
+}
+func (UnimplementedClientServiceServer) SendMessage(context.Context, *ClientSendMessageRequest) (*ClientSendMessageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendMessage not implemented")
+}
+func (UnimplementedClientServiceServer) mustEmbedUnimplementedClientServiceServer() {}
+func (UnimplementedClientServiceServer) testEmbeddedByValue()                       {}
+
+// UnsafeClientServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ClientServiceServer will
+// result in compilation errors.
+type UnsafeClientServiceServer interface {
+	mustEmbedUnimplementedClientServiceServer()
+}
+
+func RegisterClientServiceServer(s grpc.ServiceRegistrar, srv ClientServiceServer) {
+	// If the following call panics, it indicates UnimplementedClientServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ClientService_ServiceDesc, srv)
+}
+
+func _ClientService_GetEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).GetEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_GetEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).GetEvents(ctx, req.(*GetEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientService_GetMe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).GetMe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_GetMe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).GetMe(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientService_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClientSendMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).SendMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_SendMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).SendMessage(ctx, req.(*ClientSendMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ClientService_ServiceDesc is the grpc.ServiceDesc for ClientService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ClientService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "fold.ClientService",
+	HandlerType: (*ClientServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetEvents",
+			Handler:    _ClientService_GetEvents_Handler,
+		},
+		{
+			MethodName: "GetMe",
+			Handler:    _ClientService_GetMe_Handler,
+		},
+		{
+			MethodName: "SendMessage",
+			Handler:    _ClientService_SendMessage_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "fold.proto",
 }

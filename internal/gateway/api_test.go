@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -417,7 +418,7 @@ func newTestGateway(t *testing.T) *Gateway {
 		},
 	}
 
-	logger := slog.New(slog.NewTextHandler(nil, nil))
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	gw, err := New(cfg, logger)
 	if err != nil {

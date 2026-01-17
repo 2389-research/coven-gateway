@@ -17,10 +17,17 @@ type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Tailscale TailscaleConfig `yaml:"tailscale"`
 	Database  DatabaseConfig  `yaml:"database"`
+	Auth      AuthConfig      `yaml:"auth"`
 	Agents    AgentsConfig    `yaml:"agents"`
 	Frontends FrontendsConfig `yaml:"frontends"`
 	Logging   LoggingConfig   `yaml:"logging"`
 	Metrics   MetricsConfig   `yaml:"metrics"`
+	WebAdmin  WebAdminConfig  `yaml:"webadmin"`
+}
+
+// AuthConfig holds authentication configuration
+type AuthConfig struct {
+	JWTSecret string `yaml:"jwt_secret"`
 }
 
 // TailscaleConfig holds Tailscale tsnet configuration
@@ -90,6 +97,13 @@ type LoggingConfig struct {
 type MetricsConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Path    string `yaml:"path"`
+}
+
+// WebAdminConfig holds web admin UI configuration
+type WebAdminConfig struct {
+	// BaseURL is the external URL for the admin UI (used for invite links)
+	// If not set, it's auto-detected from server.http_addr or tailscale hostname
+	BaseURL string `yaml:"base_url"`
 }
 
 // Load reads a configuration file from the given path and returns a parsed Config.
