@@ -7,6 +7,9 @@ bin/
 # Local config (use config.example.yaml as template)
 config.yaml
 
+# Environment variables (use .env.example as template)
+.env
+
 # SQLite database files
 *.db
 *.db-shm
