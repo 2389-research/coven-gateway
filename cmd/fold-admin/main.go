@@ -760,16 +760,21 @@ func cmdInviteCreate(args []string) error {
 	}
 
 	// Default database path
+	// FOLD_DB_PATH env var takes precedence for Docker deployments
 	if dbPath == "" {
-		configDir := os.Getenv("XDG_CONFIG_HOME")
-		if configDir == "" {
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				return fmt.Errorf("could not determine config directory: %w", err)
+		if envPath := os.Getenv("FOLD_DB_PATH"); envPath != "" {
+			dbPath = envPath
+		} else {
+			configDir := os.Getenv("XDG_CONFIG_HOME")
+			if configDir == "" {
+				homeDir, err := os.UserHomeDir()
+				if err != nil {
+					return fmt.Errorf("could not determine config directory: %w", err)
+				}
+				configDir = filepath.Join(homeDir, ".config")
 			}
-			configDir = filepath.Join(homeDir, ".config")
+			dbPath = filepath.Join(configDir, "fold", "gateway.db")
 		}
-		dbPath = filepath.Join(configDir, "fold", "gateway.db")
 	}
 
 	// Default base URL

@@ -25,7 +25,8 @@ tailscale:
 
 database:
   # SQLite database path
-  path: "./fold-gateway.db"
+  # For Docker: use "/app/data/gateway.db" to persist in mounted volume
+  path: "/app/data/gateway.db"
 
 agents:
   # How often agents should send heartbeats

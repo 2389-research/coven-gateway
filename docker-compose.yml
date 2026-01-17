@@ -10,6 +10,7 @@ services:
     environment:
       - TS_AUTHKEY=${TS_AUTHKEY:-}
       - FOLD_GATEWAY_HOST=${FOLD_GATEWAY_HOST:-}
+      - FOLD_DB_PATH=/app/data/gateway.db
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data
