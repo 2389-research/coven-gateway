@@ -98,16 +98,24 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		// Create store adapter for auth interceptors
 		sqlStore := s.(*store.SQLiteStore)
 
+		// Create auth config for auto-registration
+		authConfig := &auth.AuthConfig{
+			AgentAutoRegistration: cfg.Auth.AgentAutoRegistration,
+		}
+		// Default to "approved" if not set
+		if authConfig.AgentAutoRegistration == "" {
+			authConfig.AgentAutoRegistration = "approved"
+		}
+
 		// Create gRPC server with auth interceptors
 		// Supports both JWT (clients) and SSH key (agents) authentication
-		// TODO: Pass AuthConfig and PrincipalCreator for agent auto-registration
 		grpcServer = grpc.NewServer(
 			grpc.ChainUnaryInterceptor(
-				auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, nil, nil),
+				auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore),
 				auth.RequireAdmin(),
 			),
 			grpc.ChainStreamInterceptor(
-				auth.StreamInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, nil, nil),
+				auth.StreamInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore),
 				auth.RequireAdminStream(),
 			),
 		)
