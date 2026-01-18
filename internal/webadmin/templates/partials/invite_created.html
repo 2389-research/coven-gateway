@@ -1,0 +1,30 @@
+{{/* ABOUTME: HTMX partial showing created invite link */}}
+<div class="mt-3 p-3 bg-cyan/5 border border-cyan/20">
+    <div class="flex items-center gap-2 mb-2">
+        <div class="w-2 h-2 rounded-full bg-cyan"></div>
+        <span class="font-mono text-xs text-cyan uppercase tracking-wider">Invite Created</span>
+    </div>
+    <div class="flex items-center gap-2">
+        <input type="text" readonly value="{{.URL}}" id="invite-url-input"
+            class="flex-1 px-2 py-1.5 text-xs bg-surface border border-border font-mono text-text-secondary"
+            onclick="this.select()">
+        <button type="button" id="copy-invite-btn"
+            class="px-3 py-1.5 text-xs bg-cyan text-void font-mono font-semibold uppercase tracking-wider hover:bg-cyan/90 transition-all">
+            Copy
+        </button>
+    </div>
+    <p class="text-xs text-text-muted font-mono mt-2">Expires in 24h</p>
+</div>
+<script>
+(function() {
+    const input = document.getElementById('invite-url-input');
+    const btn = document.getElementById('copy-invite-btn');
+    if (input && btn) {
+        btn.addEventListener('click', function() {
+            navigator.clipboard.writeText(input.value);
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 2000);
+        });
+    }
+})();
+</script>

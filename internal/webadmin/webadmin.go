@@ -580,7 +580,14 @@ func (a *Admin) handleStatsAgents(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAgentsList returns the agents list (htmx partial)
+// For non-HTMX requests, redirects to dashboard where agents are displayed
 func (a *Admin) handleAgentsList(w http.ResponseWriter, r *http.Request) {
+	// Check if this is an HTMX request
+	if r.Header.Get("HX-Request") != "true" {
+		// Regular navigation - redirect to dashboard
+		http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+		return
+	}
 	a.renderAgentsList(w)
 }
 
@@ -974,7 +981,8 @@ func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Pipe agent responses to the chat hub in a goroutine
-	go a.chatHub.pipeAgentResponses(r.Context(), agentID, user.ID, respChan)
+	// Use background context since r.Context() is cancelled when this handler returns
+	go a.chatHub.pipeAgentResponses(context.Background(), agentID, user.ID, respChan)
 
 	a.logger.Debug("message sent to agent", "agent_id", agentID, "user", user.Username)
 

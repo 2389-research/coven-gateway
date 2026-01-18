@@ -1,0 +1,201 @@
+{{/* ABOUTME: Login page with username/password and passkey authentication */}}
+{{define "content"}}
+<div class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <!-- Logo/Brand -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 border border-cyan/30 bg-panel flex items-center justify-center">
+                    <svg class="w-5 h-5 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                    </svg>
+                </div>
+                <span class="font-mono text-2xl font-bold tracking-tight">FOLD</span>
+            </div>
+            <p class="text-text-muted font-mono text-xs tracking-widest uppercase">Control Plane Access</p>
+        </div>
+
+        <!-- Login Card -->
+        <div class="bg-panel border border-border p-6 glow-cyan">
+            <div class="flex items-center gap-2 mb-6 pb-4 border-b border-border">
+                <div class="w-2 h-2 rounded-full bg-cyan status-dot"></div>
+                <span class="font-mono text-xs text-text-secondary uppercase tracking-wider">Authenticate</span>
+            </div>
+
+            {{if .Error}}
+            <div class="mb-4 p-3 bg-crimson/10 border border-crimson/30 text-crimson text-sm font-mono">
+                <span class="text-crimson/60">[ERR]</span> {{.Error}}
+            </div>
+            {{end}}
+
+            <div id="passkey-error" class="hidden mb-4 p-3 bg-crimson/10 border border-crimson/30 text-crimson text-sm font-mono"></div>
+
+            <form method="POST" action="/admin/login" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <div>
+                    <label for="username" class="block text-xs font-mono text-text-secondary uppercase tracking-wider mb-2">Username</label>
+                    <input type="text" id="username" name="username" required autocomplete="username"
+                        class="w-full px-3 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors">
+                </div>
+
+                <div>
+                    <label for="password" class="block text-xs font-mono text-text-secondary uppercase tracking-wider mb-2">Password</label>
+                    <input type="password" id="password" name="password" required autocomplete="current-password"
+                        class="w-full px-3 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors">
+                </div>
+
+                <button type="submit"
+                    class="w-full py-2.5 px-4 bg-cyan text-void font-mono font-semibold text-sm uppercase tracking-wider hover:bg-cyan/90 transition-all hover:shadow-[0_0_20px_rgba(0,229,255,0.3)]">
+                    Authenticate
+                </button>
+            </form>
+
+            <div class="my-6 flex items-center gap-4">
+                <div class="flex-1 h-px bg-border"></div>
+                <span class="text-text-muted font-mono text-xs">OR</span>
+                <div class="flex-1 h-px bg-border"></div>
+            </div>
+
+            <button type="button" id="passkey-login"
+                class="w-full py-2.5 px-4 bg-transparent border border-border-bright text-text-primary font-mono text-sm hover:border-cyan hover:text-cyan transition-all flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+                </svg>
+                <span>Passkey</span>
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <p class="text-center text-text-muted font-mono text-xs mt-6">
+            fold-gateway <span class="text-text-muted/50">|</span> agent control plane
+        </p>
+    </div>
+</div>
+
+<script>
+(function() {
+    const passkeyBtn = document.getElementById('passkey-login');
+    const errorDiv = document.getElementById('passkey-error');
+
+    if (!window.PublicKeyCredential) {
+        passkeyBtn.disabled = true;
+        passkeyBtn.textContent = 'Passkeys not supported';
+        passkeyBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        return;
+    }
+
+    function showError(msg) {
+        // Build error message safely using DOM methods
+        errorDiv.textContent = '';
+        const prefix = document.createElement('span');
+        prefix.className = 'text-crimson/60';
+        prefix.textContent = '[ERR]';
+        errorDiv.appendChild(prefix);
+        errorDiv.appendChild(document.createTextNode(' ' + msg));
+        errorDiv.classList.remove('hidden');
+    }
+
+    function hideError() {
+        errorDiv.classList.add('hidden');
+    }
+
+    function base64URLDecode(str) {
+        const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+        const padLen = (4 - base64.length % 4) % 4;
+        const padded = base64 + '='.repeat(padLen);
+        const binary = atob(padded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    function base64URLEncode(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    }
+
+    passkeyBtn.addEventListener('click', async function() {
+        hideError();
+        passkeyBtn.disabled = true;
+        passkeyBtn.textContent = 'Authenticating...';
+
+        try {
+            // Begin login
+            const beginResp = await fetch('/admin/webauthn/login/begin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!beginResp.ok) {
+                throw new Error('Failed to start authentication');
+            }
+
+            const beginData = await beginResp.json();
+            const options = beginData.options;
+
+            // Convert challenge from base64url
+            options.publicKey.challenge = base64URLDecode(options.publicKey.challenge);
+
+            // Convert allowCredentials if present
+            if (options.publicKey.allowCredentials) {
+                options.publicKey.allowCredentials = options.publicKey.allowCredentials.map(cred => ({
+                    ...cred,
+                    id: base64URLDecode(cred.id)
+                }));
+            }
+
+            // Get credential
+            const credential = await navigator.credentials.get(options);
+
+            // Encode response for server
+            const response = {
+                id: credential.id,
+                rawId: base64URLEncode(credential.rawId),
+                type: credential.type,
+                response: {
+                    authenticatorData: base64URLEncode(credential.response.authenticatorData),
+                    clientDataJSON: base64URLEncode(credential.response.clientDataJSON),
+                    signature: base64URLEncode(credential.response.signature),
+                    userHandle: credential.response.userHandle ? base64URLEncode(credential.response.userHandle) : null
+                }
+            };
+
+            // Finish login
+            const finishResp = await fetch('/admin/webauthn/login/finish', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionToken: beginData.sessionToken,
+                    response: response
+                })
+            });
+
+            if (!finishResp.ok) {
+                const errText = await finishResp.text();
+                throw new Error(errText || 'Authentication failed');
+            }
+
+            const finishData = await finishResp.json();
+            window.location.href = finishData.redirect || '/admin/';
+
+        } catch (err) {
+            console.error('Passkey login error:', err);
+            if (err.name === 'NotAllowedError') {
+                showError('Authentication cancelled or timed out');
+            } else {
+                showError(err.message || 'Authentication failed');
+            }
+            passkeyBtn.disabled = false;
+            // Restore original button content with icon
+            passkeyBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/></svg><span>Passkey</span>';
+        }
+    });
+})();
+</script>
+{{end}}

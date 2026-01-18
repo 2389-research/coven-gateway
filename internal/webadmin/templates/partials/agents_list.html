@@ -1,0 +1,38 @@
+{{/* ABOUTME: HTMX partial for connected agents list */}}
+<div class="space-y-2">
+    {{if .Agents}}
+    {{range .Agents}}
+    <div class="agent-row flex items-center justify-between p-3 bg-surface border border-border hover:border-border-bright transition-colors">
+        <div class="flex items-center gap-3">
+            <div class="relative">
+                <div class="w-2 h-2 rounded-full {{if .Connected}}bg-cyan{{else}}bg-text-muted{{end}}"></div>
+                {{if .Connected}}<div class="absolute inset-0 w-2 h-2 rounded-full bg-cyan animate-ping opacity-50"></div>{{end}}
+            </div>
+            <div>
+                <p class="font-mono text-sm font-medium text-text-primary">{{.Name}}</p>
+                <p class="font-mono text-xs text-text-muted">{{.ID}}</p>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <a href="/admin/chat/{{.ID}}" class="px-3 py-1.5 text-xs font-mono bg-cyan/10 text-cyan border border-cyan/30 hover:bg-cyan/20 transition-colors uppercase tracking-wider">
+                Chat
+            </a>
+            {{if .Connected}}
+            <button hx-post="/admin/agents/{{.ID}}/disconnect" hx-swap="outerHTML" hx-target="closest .agent-row"
+                class="px-3 py-1.5 text-xs font-mono bg-transparent text-text-muted border border-border hover:border-crimson hover:text-crimson transition-colors uppercase tracking-wider">
+                Disconnect
+            </button>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+    {{else}}
+    <div class="flex flex-col items-center justify-center py-12 text-text-muted">
+        <svg class="w-12 h-12 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+        <p class="font-mono text-sm">No agents connected</p>
+        <p class="font-mono text-xs text-text-muted/50 mt-1">Waiting for agent registration...</p>
+    </div>
+    {{end}}
+</div>

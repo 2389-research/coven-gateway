@@ -1,0 +1,81 @@
+{{/* ABOUTME: HTMX partial for principals table */}}
+<div class="overflow-x-auto">
+    <table class="min-w-full">
+        <thead class="bg-surface border-b border-border">
+            <tr>
+                <th class="px-4 py-3 text-left text-[10px] font-mono font-medium text-text-muted uppercase tracking-widest">Name</th>
+                <th class="px-4 py-3 text-left text-[10px] font-mono font-medium text-text-muted uppercase tracking-widest">Type</th>
+                <th class="px-4 py-3 text-left text-[10px] font-mono font-medium text-text-muted uppercase tracking-widest">Status</th>
+                <th class="px-4 py-3 text-left text-[10px] font-mono font-medium text-text-muted uppercase tracking-widest">Last Seen</th>
+                <th class="px-4 py-3 text-left text-[10px] font-mono font-medium text-text-muted uppercase tracking-widest">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+            {{if .Principals}}
+            {{range .Principals}}
+            <tr id="principal-{{.ID}}" class="hover:bg-surface/50 transition-colors">
+                <td class="px-4 py-3">
+                    <div>
+                        <p class="font-mono text-sm font-medium text-text-primary">{{.DisplayName}}</p>
+                        <p class="text-xs text-text-muted font-mono">{{.ID}}</p>
+                    </div>
+                </td>
+                <td class="px-4 py-3">
+                    <span class="px-2 py-1 text-xs font-mono uppercase tracking-wider
+                        {{if eq .Type "agent"}}bg-cyan/10 text-cyan border border-cyan/30
+                        {{else if eq .Type "client"}}bg-purple-500/10 text-purple-400 border border-purple-500/30
+                        {{else}}bg-text-muted/10 text-text-secondary border border-border{{end}}">
+                        {{.Type}}
+                    </span>
+                </td>
+                <td class="px-4 py-3" id="status-{{.ID}}">
+                    <span class="px-2 py-1 text-xs font-mono uppercase tracking-wider
+                        {{if eq .Status "approved"}}bg-cyan/10 text-cyan border border-cyan/30
+                        {{else if eq .Status "pending"}}bg-amber/10 text-amber border border-amber/30
+                        {{else if eq .Status "revoked"}}bg-crimson/10 text-crimson border border-crimson/30
+                        {{else}}bg-text-muted/10 text-text-secondary border border-border{{end}}">
+                        {{.Status}}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-sm font-mono text-text-muted">
+                    {{if .LastSeen}}{{.LastSeen.Format "Jan 02 15:04"}}{{else}}--{{end}}
+                </td>
+                <td class="px-4 py-3">
+                    <div class="flex gap-2">
+                        {{if eq .Status "pending"}}
+                        <button hx-post="/admin/principals/{{.ID}}/approve" hx-target="#status-{{.ID}}" hx-swap="innerHTML"
+                            class="px-2 py-1 text-xs font-mono bg-cyan/10 text-cyan border border-cyan/30 hover:bg-cyan/20 transition-colors uppercase tracking-wider">
+                            Approve
+                        </button>
+                        {{end}}
+                        {{if ne .Status "revoked"}}
+                        <button hx-post="/admin/principals/{{.ID}}/revoke" hx-target="#status-{{.ID}}" hx-swap="innerHTML"
+                            class="px-2 py-1 text-xs font-mono bg-crimson/10 text-crimson border border-crimson/30 hover:bg-crimson/20 transition-colors uppercase tracking-wider">
+                            Revoke
+                        </button>
+                        {{end}}
+                        <button hx-delete="/admin/principals/{{.ID}}" hx-target="#principal-{{.ID}}" hx-swap="outerHTML"
+                            hx-confirm="Delete principal {{.DisplayName}}?"
+                            class="px-2 py-1 text-xs font-mono bg-transparent text-text-muted border border-border hover:border-crimson hover:text-crimson transition-colors uppercase tracking-wider">
+                            Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {{end}}
+            {{else}}
+            <tr>
+                <td colspan="5" class="px-4 py-12 text-center">
+                    <div class="flex flex-col items-center text-text-muted">
+                        <svg class="w-12 h-12 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                        </svg>
+                        <p class="font-mono text-sm">No principals found</p>
+                        <p class="font-mono text-xs text-text-muted/50 mt-1">Adjust filters or wait for registrations</p>
+                    </div>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>

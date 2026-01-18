@@ -1,0 +1,18 @@
+{{/* ABOUTME: HTMX partial for thread messages */}}
+{{if .Messages}}
+{{range .Messages}}
+<div class="p-4 border-b border-border last:border-0">
+    <div class="flex justify-between items-start mb-2">
+        <span class="font-mono text-xs font-semibold uppercase tracking-wider {{if eq .Sender "user"}}text-cyan{{else if eq .Sender "agent"}}text-amber{{else}}text-text-muted{{end}}">
+            {{.Sender}}
+        </span>
+        <span class="font-mono text-xs text-text-muted">{{.CreatedAt.Format "15:04:05"}}</span>
+    </div>
+    <div class="text-text-primary whitespace-pre-wrap text-sm font-mono">{{.Content}}</div>
+</div>
+{{end}}
+{{else}}
+<div class="flex flex-col items-center justify-center py-12 text-text-muted">
+    <p class="font-mono text-sm">No messages</p>
+</div>
+{{end}}

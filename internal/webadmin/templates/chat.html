@@ -1,0 +1,283 @@
+{{/* ABOUTME: Real-time chat interface for agent interaction */}}
+{{define "content"}}
+<div class="min-h-screen flex flex-col" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
+    <!-- Header -->
+    <header class="bg-surface border-b border-border flex-shrink-0">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <a href="/admin/" class="flex items-center gap-2 text-text-muted hover:text-cyan transition-colors font-mono text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Back
+                </a>
+                <div class="h-4 w-px bg-border"></div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 border border-cyan/30 bg-panel flex items-center justify-center">
+                            <svg class="w-4 h-4 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="font-mono text-sm font-semibold text-text-primary">{{.AgentName}}</h1>
+                            <div class="flex items-center gap-1.5">
+                                <div class="relative">
+                                    <div class="w-2 h-2 rounded-full {{if .Connected}}bg-cyan{{else}}bg-text-muted{{end}}"></div>
+                                    {{if .Connected}}<div class="absolute inset-0 w-2 h-2 rounded-full bg-cyan animate-ping opacity-50"></div>{{end}}
+                                </div>
+                                <span class="font-mono text-xs text-text-muted uppercase tracking-wider">{{if .Connected}}Online{{else}}Offline{{end}}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 text-text-secondary">
+                    <div class="w-2 h-2 rounded-full bg-cyan status-dot"></div>
+                    <span class="font-mono text-sm">{{.User.DisplayName}}</span>
+                </div>
+                <form method="POST" action="/admin/logout" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <button type="submit" class="font-mono text-xs text-text-muted hover:text-crimson transition-colors uppercase tracking-wider">Logout</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <!-- Chat area -->
+    <main class="flex-1 max-w-4xl mx-auto w-full p-6 flex flex-col grid-bg">
+        <!-- Messages -->
+        <div id="chat-messages" class="flex-1 bg-panel border border-border mb-4 p-4 overflow-y-auto min-h-[400px] max-h-[600px]">
+            <div class="flex flex-col items-center justify-center py-12 text-text-muted">
+                <svg class="w-12 h-12 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+                <p class="font-mono text-sm">Start a conversation with {{.AgentName}}</p>
+            </div>
+        </div>
+
+        <!-- Input area -->
+        <div class="bg-panel border border-border p-4">
+            {{if .Connected}}
+            <form id="chat-form" class="flex gap-3">
+                <input type="text" id="message-input" name="message" placeholder="Type your message..."
+                    class="flex-1 px-4 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors"
+                    autocomplete="off">
+                <button type="submit"
+                    class="px-6 py-2.5 bg-cyan text-void font-mono font-semibold text-sm uppercase tracking-wider hover:bg-cyan/90 transition-all hover:shadow-[0_0_20px_rgba(0,229,255,0.3)]">
+                    Send
+                </button>
+            </form>
+            {{else}}
+            <div class="flex items-center justify-center gap-2 text-text-muted py-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"/>
+                </svg>
+                <span class="font-mono text-sm">Agent is not connected. Cannot send messages.</span>
+            </div>
+            {{end}}
+        </div>
+    </main>
+</div>
+
+<script>
+(function() {
+    const agentId = "{{.AgentID}}";
+    const chatMessages = document.getElementById('chat-messages');
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+
+    if (!chatForm) return;
+
+    // Connect to SSE stream
+    const evtSource = new EventSource('/admin/chat/' + agentId + '/stream');
+
+    evtSource.addEventListener('connected', function(e) {
+        console.log('Connected to chat stream');
+    });
+
+    // Handle text responses from agent
+    evtSource.addEventListener('text', function(e) {
+        try {
+            const data = JSON.parse(e.data);
+            appendMessage('agent', data.content || '');
+        } catch {
+            appendMessage('agent', e.data);
+        }
+    });
+
+    // Handle thinking/reasoning (show in lighter style)
+    evtSource.addEventListener('thinking', function(e) {
+        try {
+            const data = JSON.parse(e.data);
+            if (data.content) {
+                appendMessage('thinking', data.content);
+            }
+        } catch {
+            // Ignore parse errors for thinking events
+        }
+    });
+
+    // Handle tool use events
+    evtSource.addEventListener('tool_use', function(e) {
+        try {
+            const data = JSON.parse(e.data);
+            const toolInfo = data.tool_name ? 'Using tool: ' + data.tool_name : 'Using tool';
+            appendMessage('tool', toolInfo);
+        } catch {
+            appendMessage('tool', 'Using tool...');
+        }
+    });
+
+    // Handle tool results
+    evtSource.addEventListener('tool_result', function(e) {
+        try {
+            const data = JSON.parse(e.data);
+            if (data.content) {
+                appendMessage('tool_result', data.content);
+            }
+        } catch {
+            // Ignore parse errors for tool results
+        }
+    });
+
+    // Handle done event
+    evtSource.addEventListener('done', function(e) {
+        try {
+            const data = JSON.parse(e.data);
+            if (data.content) {
+                appendMessage('agent', data.content);
+            }
+        } catch {
+            // Done event may not have content
+        }
+    });
+
+    // Handle error events from agent
+    evtSource.addEventListener('error', function(e) {
+        if (e.data) {
+            try {
+                const data = JSON.parse(e.data);
+                appendMessage('error', data.content || 'An error occurred');
+            } catch {
+                appendMessage('error', e.data);
+            }
+        } else {
+            console.log('SSE connection error');
+        }
+    });
+
+    // Handle form submission
+    chatForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const message = messageInput.value.trim();
+        if (!message) return;
+
+        // Add user message to chat
+        appendMessage('user', message);
+        messageInput.value = '';
+
+        // Send to server
+        try {
+            const formData = new FormData();
+            formData.append('message', message);
+
+            const csrfToken = document.querySelector('[name="csrf_token"]')?.value ||
+                             document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
+
+            await fetch('/admin/chat/' + agentId + '/send', {
+                method: 'POST',
+                body: formData,
+                headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+            });
+        } catch (err) {
+            console.error('Failed to send message:', err);
+            appendMessage('system', 'Failed to send message');
+        }
+    });
+
+    function appendMessage(sender, content) {
+        // Remove placeholder if present
+        const placeholder = chatMessages.querySelector('.text-text-muted');
+        if (placeholder && placeholder.parentElement.classList.contains('flex-col')) {
+            placeholder.parentElement.remove();
+        }
+
+        // Create message container using safe DOM methods
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'mb-3';
+
+        // Style based on message type
+        let senderLabel = sender;
+        let senderColor = 'text-text-muted';
+        let contentColor = 'text-text-primary';
+        let bgColor = '';
+
+        switch(sender) {
+            case 'user':
+                senderColor = 'text-cyan';
+                break;
+            case 'agent':
+                senderColor = 'text-amber';
+                break;
+            case 'thinking':
+                senderLabel = 'thinking...';
+                senderColor = 'text-purple-400';
+                contentColor = 'text-purple-300 italic';
+                bgColor = 'bg-purple-500/10 border border-purple-500/20 p-2';
+                break;
+            case 'tool':
+                senderLabel = 'tool';
+                senderColor = 'text-amber';
+                contentColor = 'text-amber/80';
+                bgColor = 'bg-amber/10 border border-amber/20 p-2';
+                break;
+            case 'tool_result':
+                senderLabel = 'result';
+                senderColor = 'text-amber';
+                contentColor = 'text-text-secondary font-mono text-xs';
+                bgColor = 'bg-surface border border-border p-2 overflow-x-auto';
+                break;
+            case 'error':
+                senderLabel = 'error';
+                senderColor = 'text-crimson';
+                contentColor = 'text-crimson/90';
+                bgColor = 'bg-crimson/10 border border-crimson/20 p-2';
+                break;
+            case 'system':
+                senderLabel = 'system';
+                senderColor = 'text-text-muted';
+                contentColor = 'text-text-secondary italic';
+                break;
+        }
+
+        // Header row
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'flex justify-between items-start mb-1';
+
+        const senderSpan = document.createElement('span');
+        senderSpan.className = 'font-mono text-xs font-semibold uppercase tracking-wider ' + senderColor;
+        senderSpan.textContent = senderLabel;
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'font-mono text-xs text-text-muted';
+        timeSpan.textContent = new Date().toLocaleTimeString();
+
+        headerDiv.appendChild(senderSpan);
+        headerDiv.appendChild(timeSpan);
+
+        // Content div
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'whitespace-pre-wrap text-sm font-mono ' + contentColor + ' ' + bgColor;
+        contentDiv.textContent = content;
+
+        msgDiv.appendChild(headerDiv);
+        msgDiv.appendChild(contentDiv);
+
+        chatMessages.appendChild(msgDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+})();
+</script>
+{{end}}
