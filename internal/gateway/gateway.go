@@ -194,11 +194,13 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	if webAdminBaseURL == "" {
 		// Auto-detect based on deployment mode
 		if cfg.Tailscale.Enabled {
-			// With Tailscale, construct URL from hostname
-			// Note: Full DNS name (hostname.tailnet.ts.net) isn't known until tsnet starts,
-			// but the hostname is good enough for WebAuthn RPID extraction
+			// With Tailscale HTTPS, user MUST set webadmin.base_url to the full tailnet DNS name
+			// (e.g., https://fold-gateway.your-tailnet.ts.net) for WebAuthn to work
+			if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
+				logger.Warn("webadmin.base_url not set - WebAuthn/passkeys may fail. Set to full tailnet URL (e.g., https://fold-gateway.your-tailnet.ts.net)")
+			}
 			scheme := "http"
-			if cfg.Tailscale.Funnel {
+			if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
 				scheme = "https"
 			}
 			webAdminBaseURL = scheme + "://" + cfg.Tailscale.Hostname
