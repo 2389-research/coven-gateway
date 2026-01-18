@@ -16,7 +16,8 @@ type MockStore struct {
 	threads     map[string]*Thread         // keyed by thread ID
 	threadIndex map[string]string          // keyed by "frontendName:externalID" -> thread ID
 	messages    map[string][]*Message      // keyed by threadID
-	bindings    map[string]*ChannelBinding // keyed by "frontend:channelID"
+	bindings    map[string]*ChannelBinding // keyed by "frontend:channelID" (legacy)
+	bindingsV2  map[string]*Binding        // keyed by "frontend:channelID" (V2)
 	agentState  map[string][]byte          // keyed by agentID
 	events      map[string]*LedgerEvent    // keyed by event ID
 }
@@ -28,6 +29,7 @@ func NewMockStore() *MockStore {
 		threadIndex: make(map[string]string),
 		messages:    make(map[string][]*Message),
 		bindings:    make(map[string]*ChannelBinding),
+		bindingsV2:  make(map[string]*Binding),
 		agentState:  make(map[string][]byte),
 		events:      make(map[string]*LedgerEvent),
 	}
@@ -260,6 +262,33 @@ func (m *MockStore) DeleteBinding(ctx context.Context, frontend, channelID strin
 	}
 
 	delete(m.bindings, key)
+	return nil
+}
+
+// GetBindingByChannel retrieves a V2 binding by frontend and channel ID.
+func (m *MockStore) GetBindingByChannel(ctx context.Context, frontend, channelID string) (*Binding, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	key := frontend + ":" + channelID
+	b, ok := m.bindingsV2[key]
+	if !ok {
+		return nil, ErrBindingNotFound
+	}
+
+	// Return a copy
+	result := *b
+	return &result, nil
+}
+
+// AddBindingV2 stores a V2 binding (for test setup).
+func (m *MockStore) AddBindingV2(ctx context.Context, binding *Binding) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := binding.Frontend + ":" + binding.ChannelID
+	b := *binding
+	m.bindingsV2[key] = &b
 	return nil
 }
 

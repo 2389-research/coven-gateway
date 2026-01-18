@@ -397,9 +397,9 @@ type bindingResolver struct {
 // by frontend/channel or generates a new thread ID.
 // Returns ErrChannelNotBound if no binding exists for the channel.
 func (r *bindingResolver) Resolve(ctx context.Context, frontend, channelID, threadID string) (*BindingResult, error) {
-	// Look up the binding
-	binding, err := r.store.GetBinding(ctx, frontend, channelID)
-	if errors.Is(err, store.ErrNotFound) {
+	// Look up the binding from V2 bindings table (created by admin service)
+	binding, err := r.store.GetBindingByChannel(ctx, frontend, channelID)
+	if errors.Is(err, store.ErrBindingNotFound) {
 		return nil, ErrChannelNotBound
 	}
 	if err != nil {

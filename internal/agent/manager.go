@@ -256,6 +256,13 @@ func (m *Manager) GetAgent(id string) (*Connection, bool) {
 	return agent, ok
 }
 
+// IsOnline checks whether an agent with the given ID is currently connected.
+// Implements the gateway.AgentChecker interface for use with the Router.
+func (m *Manager) IsOnline(agentID string) bool {
+	_, ok := m.GetAgent(agentID)
+	return ok
+}
+
 // SendRequest represents a request to send a message to an agent.
 type SendRequest struct {
 	ThreadID    string

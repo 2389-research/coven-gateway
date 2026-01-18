@@ -300,14 +300,8 @@ func TestHandleSendMessage_AgentNotFound(t *testing.T) {
 func TestHandleSendMessage_BindingLookup(t *testing.T) {
 	gw := newTestGatewayWithMockManager(t)
 
-	// Create a binding for slack/C001 -> test-agent
-	createReq := `{"frontend":"slack","channel_id":"C001","agent_id":"test-agent"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(createReq))
-	w := httptest.NewRecorder()
-	gw.handleBindings(w, req)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("failed to create binding: %s", w.Body.String())
-	}
+	// Create a V2 binding for slack/C001 -> test-agent
+	createTestBindingV2(t, gw, "slack", "C001", "test-agent")
 
 	// Send message using frontend+channel_id (should resolve via binding)
 	reqBody := SendMessageRequest{
@@ -318,7 +312,7 @@ func TestHandleSendMessage_BindingLookup(t *testing.T) {
 	}
 	body, _ := json.Marshal(reqBody)
 
-	req = httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -368,14 +362,8 @@ func TestHandleSendMessage_BindingNotFound(t *testing.T) {
 func TestHandleSendMessage_BoundAgentOffline(t *testing.T) {
 	gw := newTestGateway(t)
 
-	// Create a binding for a nonexistent agent
-	createReq := `{"frontend":"slack","channel_id":"C001","agent_id":"offline-agent"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(createReq))
-	w := httptest.NewRecorder()
-	gw.handleBindings(w, req)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("failed to create binding: %s", w.Body.String())
-	}
+	// Create a V2 binding for an agent that isn't connected
+	createTestBindingV2(t, gw, "slack", "C001", "offline-agent")
 
 	// Send message - binding exists but agent is offline
 	reqBody := SendMessageRequest{
@@ -386,7 +374,7 @@ func TestHandleSendMessage_BoundAgentOffline(t *testing.T) {
 	}
 	body, _ := json.Marshal(reqBody)
 
-	req = httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -426,6 +414,47 @@ func newTestGateway(t *testing.T) *Gateway {
 	}
 
 	return gw
+}
+
+// createTestBindingV2 creates a V2 binding in the store for testing.
+// It first creates a principal for the agent (required by V2 bindings).
+func createTestBindingV2(t *testing.T, gw *Gateway, frontend, channelID, agentID string) {
+	t.Helper()
+
+	ctx := context.Background()
+
+	// Type assert to SQLiteStore to access V2 methods
+	sqlStore, ok := gw.store.(*store.SQLiteStore)
+	if !ok {
+		t.Fatalf("store is not *SQLiteStore")
+	}
+
+	// Create a principal for the agent first (required by V2 bindings validation)
+	principal := &store.Principal{
+		ID:          agentID,
+		Type:        store.PrincipalTypeAgent,
+		DisplayName: agentID,
+		Status:      store.PrincipalStatusOnline,
+		CreatedAt:   time.Now(),
+	}
+	if err := sqlStore.CreatePrincipal(ctx, principal); err != nil {
+		// Ignore duplicate error - principal might already exist
+		if !strings.Contains(err.Error(), "UNIQUE constraint") {
+			t.Fatalf("failed to create principal: %v", err)
+		}
+	}
+
+	// Now create the V2 binding
+	binding := &store.Binding{
+		ID:        "test-binding-" + frontend + "-" + channelID,
+		Frontend:  frontend,
+		ChannelID: channelID,
+		AgentID:   agentID,
+		CreatedAt: time.Now(),
+	}
+	if err := sqlStore.CreateBindingV2(ctx, binding); err != nil {
+		t.Fatalf("failed to create binding: %v", err)
+	}
 }
 
 // mockAgentManager is a test double that provides a controllable response channel.
@@ -771,11 +800,12 @@ func TestResolveBinding_ExistingBinding(t *testing.T) {
 	// Setup existing thread
 	s.CreateThread(ctx, &store.Thread{ID: "existing-thread", FrontendName: "test", ExternalID: "channel-1", AgentID: "agent-1"})
 
-	// Setup existing binding
-	s.CreateBinding(ctx, &store.ChannelBinding{
-		FrontendName: "test",
-		ChannelID:    "channel-1",
-		AgentID:      "agent-1",
+	// Setup existing V2 binding (the resolver now uses GetBindingByChannel which reads V2 bindings)
+	s.AddBindingV2(ctx, &store.Binding{
+		ID:        "binding-1",
+		Frontend:  "test",
+		ChannelID: "channel-1",
+		AgentID:   "agent-1",
 	})
 
 	resolver := &bindingResolver{store: s}
@@ -811,11 +841,12 @@ func TestResolveBinding_WithProvidedThreadID(t *testing.T) {
 	s := store.NewMockStore()
 	ctx := context.Background()
 
-	// Setup existing binding but no thread yet
-	s.CreateBinding(ctx, &store.ChannelBinding{
-		FrontendName: "test",
-		ChannelID:    "channel-1",
-		AgentID:      "agent-1",
+	// Setup existing V2 binding but no thread yet
+	s.AddBindingV2(ctx, &store.Binding{
+		ID:        "binding-1",
+		Frontend:  "test",
+		ChannelID: "channel-1",
+		AgentID:   "agent-1",
 	})
 
 	resolver := &bindingResolver{store: s}
@@ -844,11 +875,12 @@ func TestResolveBinding_ExistingBindingNoThread(t *testing.T) {
 	s := store.NewMockStore()
 	ctx := context.Background()
 
-	// Setup existing binding but no thread
-	s.CreateBinding(ctx, &store.ChannelBinding{
-		FrontendName: "test",
-		ChannelID:    "channel-1",
-		AgentID:      "agent-1",
+	// Setup existing V2 binding but no thread
+	s.AddBindingV2(ctx, &store.Binding{
+		ID:        "binding-1",
+		Frontend:  "test",
+		ChannelID: "channel-1",
+		AgentID:   "agent-1",
 	})
 
 	resolver := &bindingResolver{store: s}

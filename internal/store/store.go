@@ -67,11 +67,14 @@ type Store interface {
 	SaveAgentState(ctx context.Context, agentID string, state []byte) error
 	GetAgentState(ctx context.Context, agentID string) ([]byte, error)
 
-	// Channel bindings
+	// Channel bindings (legacy - use V2 methods below for new code)
 	CreateBinding(ctx context.Context, binding *ChannelBinding) error
 	GetBinding(ctx context.Context, frontend, channelID string) (*ChannelBinding, error)
 	ListBindings(ctx context.Context) ([]*ChannelBinding, error)
 	DeleteBinding(ctx context.Context, frontend, channelID string) error
+
+	// Bindings V2 (validated against principals table)
+	GetBindingByChannel(ctx context.Context, frontend, channelID string) (*Binding, error)
 
 	// Ledger events
 	SaveEvent(ctx context.Context, event *LedgerEvent) error
