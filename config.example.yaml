@@ -58,6 +58,16 @@ frontends:
     # Only respond in these rooms (empty = all - dangerous!)
     allowed_rooms: []
 
+auth:
+  # JWT secret for token authentication (min 32 bytes)
+  # Use environment variable - NEVER commit real secrets!
+  jwt_secret: "${FOLD_JWT_SECRET}"
+  # Agent auto-registration mode: approved (default), pending, or disabled
+  # - approved: auto-create principal with approved status (can receive messages immediately)
+  # - pending: auto-create principal with pending status (admin must approve)
+  # - disabled: reject unknown SSH fingerprints (admin must pre-register)
+  agent_auto_registration: "approved"
+
 logging:
   # Log level: debug, info, warn, error
   level: "info"

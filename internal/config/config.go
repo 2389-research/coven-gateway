@@ -27,7 +27,8 @@ type Config struct {
 
 // AuthConfig holds authentication configuration
 type AuthConfig struct {
-	JWTSecret string `yaml:"jwt_secret"`
+	JWTSecret             string `yaml:"jwt_secret"`
+	AgentAutoRegistration string `yaml:"agent_auto_registration"` // "approved", "pending", or "disabled"
 }
 
 // TailscaleConfig holds Tailscale tsnet configuration
