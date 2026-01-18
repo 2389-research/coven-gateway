@@ -37,6 +37,7 @@ message AgentMetadata {
   GitInfo git = 2;
   string hostname = 3;
   string os = 4;
+  repeated string workspaces = 5;  // Workspace tags for filtering
 }
 
 // Agent registration
@@ -134,7 +135,9 @@ message ToolApprovalResponse {
 // Server acknowledges registration
 message Welcome {
   string server_id = 1;
-  string agent_id = 2;  // Confirmed agent ID
+  string agent_id = 2;     // Confirmed agent ID (instance name)
+  string instance_id = 3;  // Short code for binding commands
+  string principal_id = 4; // Principal UUID for reference
 }
 
 // Server tells agent to process a message

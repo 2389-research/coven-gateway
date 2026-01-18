@@ -216,6 +216,7 @@ type AgentMetadata struct {
 	Git              *GitInfo               `protobuf:"bytes,2,opt,name=git,proto3" json:"git,omitempty"`
 	Hostname         string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	Os               string                 `protobuf:"bytes,4,opt,name=os,proto3" json:"os,omitempty"`
+	Workspaces       []string               `protobuf:"bytes,5,rep,name=workspaces,proto3" json:"workspaces,omitempty"` // Workspace tags for filtering
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -276,6 +277,13 @@ func (x *AgentMetadata) GetOs() string {
 		return x.Os
 	}
 	return ""
+}
+
+func (x *AgentMetadata) GetWorkspaces() []string {
+	if x != nil {
+		return x.Workspaces
+	}
+	return nil
 }
 
 // Agent registration
@@ -1234,7 +1242,9 @@ func (x *ToolApprovalResponse) GetApproveAll() bool {
 type Welcome struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ServerId      string                 `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
-	AgentId       string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"` // Confirmed agent ID
+	AgentId       string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`             // Confirmed agent ID (instance name)
+	InstanceId    string                 `protobuf:"bytes,3,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`    // Short code for binding commands
+	PrincipalId   string                 `protobuf:"bytes,4,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"` // Principal UUID for reference
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1279,6 +1289,20 @@ func (x *Welcome) GetServerId() string {
 func (x *Welcome) GetAgentId() string {
 	if x != nil {
 		return x.AgentId
+	}
+	return ""
+}
+
+func (x *Welcome) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *Welcome) GetPrincipalId() string {
+	if x != nil {
+		return x.PrincipalId
 	}
 	return ""
 }
@@ -2782,12 +2806,15 @@ const file_fold_proto_rawDesc = "" +
 	"\x05dirty\x18\x03 \x01(\bR\x05dirty\x12\x16\n" +
 	"\x06remote\x18\x04 \x01(\tR\x06remote\x12\x14\n" +
 	"\x05ahead\x18\x05 \x01(\x05R\x05ahead\x12\x16\n" +
-	"\x06behind\x18\x06 \x01(\x05R\x06behind\"\x89\x01\n" +
+	"\x06behind\x18\x06 \x01(\x05R\x06behind\"\xa9\x01\n" +
 	"\rAgentMetadata\x12+\n" +
 	"\x11working_directory\x18\x01 \x01(\tR\x10workingDirectory\x12\x1f\n" +
 	"\x03git\x18\x02 \x01(\v2\r.fold.GitInfoR\x03git\x12\x1a\n" +
 	"\bhostname\x18\x03 \x01(\tR\bhostname\x12\x0e\n" +
-	"\x02os\x18\x04 \x01(\tR\x02os\"\x93\x01\n" +
+	"\x02os\x18\x04 \x01(\tR\x02os\x12\x1e\n" +
+	"\n" +
+	"workspaces\x18\x05 \x03(\tR\n" +
+	"workspaces\"\x93\x01\n" +
 	"\rRegisterAgent\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\"\n" +
@@ -2852,10 +2879,13 @@ const file_fold_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bapproved\x18\x02 \x01(\bR\bapproved\x12\x1f\n" +
 	"\vapprove_all\x18\x03 \x01(\bR\n" +
-	"approveAll\"A\n" +
+	"approveAll\"\x85\x01\n" +
 	"\aWelcome\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\x12\x19\n" +
-	"\bagent_id\x18\x02 \x01(\tR\aagentId\"\xb3\x01\n" +
+	"\bagent_id\x18\x02 \x01(\tR\aagentId\x12\x1f\n" +
+	"\vinstance_id\x18\x03 \x01(\tR\n" +
+	"instanceId\x12!\n" +
+	"\fprincipal_id\x18\x04 \x01(\tR\vprincipalId\"\xb3\x01\n" +
 	"\vSendMessage\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1b\n" +
