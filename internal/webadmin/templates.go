@@ -582,8 +582,8 @@ const dashboardTemplate = `{{define "content"}}
 
     function showResult(msg, isError) {
         resultDiv.textContent = msg;
-        resultDiv.className = 'mt-2 p-2 text-xs rounded ' +
-            (isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700');
+        resultDiv.className = 'mt-2 p-2 text-xs font-mono ' +
+            (isError ? 'bg-crimson/20 text-crimson' : 'bg-cyan/20 text-cyan');
     }
 
     function base64URLDecode(str) {
@@ -693,7 +693,7 @@ const dashboardTemplate = `{{define "content"}}
             }
         } finally {
             registerBtn.disabled = false;
-            registerBtn.textContent = '+ Register Passkey';
+            registerBtn.textContent = 'Add Passkey';
         }
     });
 })();
@@ -1189,8 +1189,8 @@ const threadDetailTemplate = `{{define "content"}}
                     <p class="font-mono text-sm">No messages in this thread</p>
                 </div>
                 {{end}}
+                </div>
             </div>
-        </div>
         </div>
     </main>
 </div>
