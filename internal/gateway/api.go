@@ -301,6 +301,16 @@ func (g *Gateway) responseToSSEEvent(resp *agent.Response) SSEEvent {
 			Event: "error",
 			Data:  map[string]string{"error": resp.Error},
 		}
+	case agent.EventSessionInit:
+		return SSEEvent{
+			Event: "session_init",
+			Data:  map[string]string{"session_id": resp.SessionID},
+		}
+	case agent.EventSessionOrphaned:
+		return SSEEvent{
+			Event: "session_orphaned",
+			Data:  map[string]string{"reason": resp.Error},
+		}
 	default:
 		return SSEEvent{
 			Event: "unknown",

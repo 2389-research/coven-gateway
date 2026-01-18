@@ -218,6 +218,14 @@ func (m *Manager) convertResponse(pbResp *pb.MessageResponse) *Response {
 		resp.Event = EventError
 		resp.Error = event.Error
 		resp.Done = true
+
+	case *pb.MessageResponse_SessionInit:
+		resp.Event = EventSessionInit
+		resp.SessionID = event.SessionInit.GetSessionId()
+
+	case *pb.MessageResponse_SessionOrphaned:
+		resp.Event = EventSessionOrphaned
+		resp.Error = event.SessionOrphaned.GetReason()
 	}
 
 	return resp
@@ -273,6 +281,7 @@ type Response struct {
 	File       *FileEvent
 	Error      string
 	Done       bool
+	SessionID  string // For EventSessionInit
 }
 
 // ResponseEvent indicates the type of response event.
@@ -286,6 +295,8 @@ const (
 	EventFile
 	EventDone
 	EventError
+	EventSessionInit
+	EventSessionOrphaned
 )
 
 // ToolUseEvent represents a tool invocation by the agent.

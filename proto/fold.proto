@@ -59,7 +59,19 @@ message MessageResponse {
     string error = 7;
     FileData file = 8;
     ToolApprovalRequest tool_approval_request = 9;
+    SessionInit session_init = 10;
+    SessionOrphaned session_orphaned = 11;
   }
+}
+
+// Backend session initialized (session_id assigned/confirmed)
+message SessionInit {
+  string session_id = 1;
+}
+
+// Backend session was orphaned (expired, lost, needs retry)
+message SessionOrphaned {
+  string reason = 1;
 }
 
 // Request for tool approval before execution (agent → server)
