@@ -51,14 +51,20 @@ type Gateway struct {
 // New creates a new Gateway instance with the given configuration.
 func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	// Initialize store
+	// FOLD_DB_PATH env var overrides config for Docker deployments
 	var s store.Store
 	var err error
 
-	if cfg.Database.Path == ":memory:" {
+	dbPath := cfg.Database.Path
+	if envPath := os.Getenv("FOLD_DB_PATH"); envPath != "" {
+		dbPath = envPath
+	}
+
+	if dbPath == ":memory:" {
 		// For testing, use in-memory store
 		s, err = store.NewSQLiteStore(":memory:")
 	} else {
-		s, err = store.NewSQLiteStore(cfg.Database.Path)
+		s, err = store.NewSQLiteStore(dbPath)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("initializing store: %w", err)
