@@ -86,7 +86,7 @@ func TestScenario_FullAuthFlow(t *testing.T) {
 	}
 
 	// 5. Call interceptor with real token
-	interceptor := UnaryInterceptor(s, s, verifier, nil)
+	interceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil)
 
 	reqCtx := scenarioContextWithAuth(token)
 	var capturedCtx context.Context
@@ -175,7 +175,7 @@ func TestScenario_RevokedPrincipalDenied(t *testing.T) {
 	}
 
 	// 4. Call interceptor
-	interceptor := UnaryInterceptor(s, s, verifier, nil)
+	interceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil)
 
 	reqCtx := scenarioContextWithAuth(token)
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
@@ -230,7 +230,7 @@ func TestScenario_ExpiredTokenRejected(t *testing.T) {
 	}
 
 	// 4. Call interceptor
-	interceptor := UnaryInterceptor(s, s, verifier, nil)
+	interceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil)
 
 	reqCtx := scenarioContextWithAuth(token)
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
@@ -285,7 +285,7 @@ func TestScenario_PendingPrincipalDenied(t *testing.T) {
 	}
 
 	// 4. Call interceptor
-	interceptor := UnaryInterceptor(s, s, verifier, nil)
+	interceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil)
 
 	reqCtx := scenarioContextWithAuth(token)
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
@@ -347,7 +347,7 @@ func TestScenario_OnlineAndOfflineStatusesAllowed(t *testing.T) {
 				t.Fatalf("failed to generate token: %v", err)
 			}
 
-			interceptor := UnaryInterceptor(s, s, verifier, nil)
+			interceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil)
 			reqCtx := scenarioContextWithAuth(token)
 
 			handlerCalled := false
@@ -387,7 +387,7 @@ func TestScenario_NonexistentPrincipal(t *testing.T) {
 	}
 
 	// 3. Call interceptor
-	interceptor := UnaryInterceptor(s, s, verifier, nil)
+	interceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil)
 
 	reqCtx := scenarioContextWithAuth(token)
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
@@ -442,7 +442,7 @@ func TestScenario_PrincipalWithNoRoles(t *testing.T) {
 	}
 
 	// 4. Call interceptor
-	interceptor := UnaryInterceptor(s, s, verifier, nil)
+	interceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil)
 
 	reqCtx := scenarioContextWithAuth(token)
 	var capturedCtx context.Context

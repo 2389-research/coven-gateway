@@ -100,13 +100,14 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 
 		// Create gRPC server with auth interceptors
 		// Supports both JWT (clients) and SSH key (agents) authentication
+		// TODO: Pass AuthConfig and PrincipalCreator for agent auto-registration
 		grpcServer = grpc.NewServer(
 			grpc.ChainUnaryInterceptor(
-				auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier),
+				auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, nil, nil),
 				auth.RequireAdmin(),
 			),
 			grpc.ChainStreamInterceptor(
-				auth.StreamInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier),
+				auth.StreamInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, nil, nil),
 				auth.RequireAdminStream(),
 			),
 		)

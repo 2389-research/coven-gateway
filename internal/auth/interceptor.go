@@ -7,8 +7,10 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/2389/fold-gateway/internal/store"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -21,20 +23,31 @@ type PrincipalStore interface {
 	GetPrincipalByPubkey(ctx context.Context, fingerprint string) (*store.Principal, error)
 }
 
+// PrincipalCreator can create new principals (for auto-registration)
+type PrincipalCreator interface {
+	CreatePrincipal(ctx context.Context, p *store.Principal) error
+}
+
 // RoleStore defines the interface for retrieving roles
 type RoleStore interface {
 	ListRoles(ctx context.Context, subjectType store.RoleSubjectType, subjectID string) ([]store.RoleName, error)
 }
 
-// UnaryInterceptor returns a gRPC unary interceptor that authenticates requests
-func UnaryInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier) grpc.UnaryServerInterceptor {
+// AuthConfig holds auth configuration options
+type AuthConfig struct {
+	AgentAutoRegistration string // "approved", "pending", or "disabled"
+}
+
+// UnaryInterceptor returns a gRPC unary interceptor that authenticates requests.
+// The optional config and creator parameters enable agent auto-registration.
+func UnaryInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req interface{},
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
-		authCtx, err := extractAuth(ctx, principals, roles, tokens, sshVerifier)
+		authCtx, err := extractAuth(ctx, principals, roles, tokens, sshVerifier, config, creator)
 		if err != nil {
 			return nil, err
 		}
@@ -44,15 +57,16 @@ func UnaryInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVe
 	}
 }
 
-// StreamInterceptor returns a gRPC stream interceptor that authenticates requests
-func StreamInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier) grpc.StreamServerInterceptor {
+// StreamInterceptor returns a gRPC stream interceptor that authenticates requests.
+// The optional config and creator parameters enable agent auto-registration.
+func StreamInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator) grpc.StreamServerInterceptor {
 	return func(
 		srv interface{},
 		ss grpc.ServerStream,
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		authCtx, err := extractAuth(ss.Context(), principals, roles, tokens, sshVerifier)
+		authCtx, err := extractAuth(ss.Context(), principals, roles, tokens, sshVerifier, config, creator)
 		if err != nil {
 			return err
 		}
@@ -81,6 +95,7 @@ func (w *wrappedServerStream) Context() context.Context {
 //  1. Extract SSH headers (x-ssh-pubkey, x-ssh-signature, x-ssh-timestamp, x-ssh-nonce)
 //  2. Verify signature over "timestamp|nonce"
 //  3. Compute fingerprint and lookup principal by pubkey
+//     3a. If principal not found and auto-registration is enabled, create a new principal
 //
 // For JWT auth (clients):
 //  1. Get token from metadata: "authorization: Bearer <token>"
@@ -91,7 +106,7 @@ func (w *wrappedServerStream) Context() context.Context {
 //  4. Check status: allow approved/online/offline, deny pending/revoked (PERMISSION_DENIED)
 //  5. Lookup roles
 //  6. Build AuthContext
-func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier) (*AuthContext, error) {
+func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator) (*AuthContext, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "missing metadata")
@@ -130,9 +145,40 @@ func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore
 		p, err := principals.GetPrincipalByPubkey(ctx, fingerprint)
 		if err != nil {
 			if errors.Is(err, store.ErrPrincipalNotFound) {
-				return nil, status.Error(codes.Unauthenticated, "unknown public key")
+				// Check if auto-registration is enabled
+				if config == nil || config.AgentAutoRegistration == "disabled" || config.AgentAutoRegistration == "" {
+					return nil, status.Error(codes.Unauthenticated, "unknown public key")
+				}
+
+				// Auto-registration is enabled - create a new principal
+				if creator == nil {
+					return nil, status.Error(codes.Internal, "auto-registration enabled but no principal creator configured")
+				}
+
+				// Determine status based on config
+				principalStatus := store.PrincipalStatusPending
+				if config.AgentAutoRegistration == "approved" {
+					principalStatus = store.PrincipalStatusApproved
+				}
+
+				// Create the new principal
+				newPrincipal := &store.Principal{
+					ID:          uuid.New().String(),
+					Type:        store.PrincipalTypeAgent,
+					PubkeyFP:    fingerprint,
+					DisplayName: "auto-registered",
+					Status:      principalStatus,
+					CreatedAt:   time.Now().UTC(),
+				}
+
+				if err := creator.CreatePrincipal(ctx, newPrincipal); err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to auto-create principal: %v", err)
+				}
+
+				p = newPrincipal
+			} else {
+				return nil, status.Errorf(codes.Internal, "failed to lookup principal: %v", err)
 			}
-			return nil, status.Errorf(codes.Internal, "failed to lookup principal: %v", err)
 		}
 		principal = p
 		principalID = p.ID
