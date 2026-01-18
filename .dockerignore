@@ -1,0 +1,17 @@
+# ABOUTME: Excludes local data directories from Docker build context
+# ABOUTME: These contain runtime data that shouldn't be in the image
+
+# Runtime data directories (may have root ownership from container)
+data/
+tailscale/
+
+# Build artifacts
+bin/
+*.exe
+
+# Git
+.git/
+
+# IDE
+.idea/
+.vscode/
