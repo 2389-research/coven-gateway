@@ -34,8 +34,11 @@ type SendMessageRequest struct {
 // AgentInfoResponse is the JSON response for GET /api/agents.
 type AgentInfoResponse struct {
 	ID           string   `json:"id"`
+	InstanceID   string   `json:"instance_id,omitempty"`
 	Name         string   `json:"name"`
 	Capabilities []string `json:"capabilities"`
+	Workspaces   []string `json:"workspaces,omitempty"`
+	WorkingDir   string   `json:"working_dir,omitempty"`
 }
 
 // CreateBindingRequest is the JSON request body for POST /api/bindings.
@@ -86,6 +89,7 @@ type SSEEvent struct {
 
 // handleListAgents handles GET /api/agents requests.
 // It returns a JSON array of all connected agents.
+// Supports optional ?workspace=X query parameter to filter by workspace membership.
 func (g *Gateway) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -95,17 +99,40 @@ func (g *Gateway) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	sender := g.getSender()
 	agents := sender.ListAgents()
 
-	response := make([]AgentInfoResponse, len(agents))
-	for i, a := range agents {
-		response[i] = AgentInfoResponse{
+	// Check for workspace filter
+	workspaceFilter := r.URL.Query().Get("workspace")
+
+	response := make([]AgentInfoResponse, 0, len(agents))
+	for _, a := range agents {
+		// Apply workspace filter if specified
+		if workspaceFilter != "" {
+			if !containsWorkspace(a.Workspaces, workspaceFilter) {
+				continue
+			}
+		}
+
+		response = append(response, AgentInfoResponse{
 			ID:           a.ID,
+			InstanceID:   a.InstanceID,
 			Name:         a.Name,
 			Capabilities: a.Capabilities,
-		}
+			Workspaces:   a.Workspaces,
+			WorkingDir:   a.WorkingDir,
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// containsWorkspace checks if a workspace is in the list of workspaces.
+func containsWorkspace(workspaces []string, target string) bool {
+	for _, ws := range workspaces {
+		if ws == target {
+			return true
+		}
+	}
+	return false
 }
 
 // handleSendMessage handles POST /api/send requests.

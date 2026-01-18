@@ -224,6 +224,16 @@ func TestHandleListAgents_WithAgents(t *testing.T) {
 	if len(agents[0].Capabilities) != 2 {
 		t.Errorf("expected 2 capabilities, got %d", len(agents[0].Capabilities))
 	}
+	// Verify new fields
+	if agents[0].InstanceID != "inst-abc123" {
+		t.Errorf("expected instance_id 'inst-abc123', got %s", agents[0].InstanceID)
+	}
+	if len(agents[0].Workspaces) != 2 || agents[0].Workspaces[0] != "Code" || agents[0].Workspaces[1] != "Personal" {
+		t.Errorf("expected workspaces ['Code', 'Personal'], got %v", agents[0].Workspaces)
+	}
+	if agents[0].WorkingDir != "/projects/website" {
+		t.Errorf("expected working_dir '/projects/website', got %s", agents[0].WorkingDir)
+	}
 }
 
 func TestHandleListAgents_MethodNotAllowed(t *testing.T) {
@@ -236,6 +246,81 @@ func TestHandleListAgents_MethodNotAllowed(t *testing.T) {
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleListAgents_WorkspaceFilter_Matches(t *testing.T) {
+	gw := newTestGatewayWithMockManager(t)
+
+	// Filter by workspace that exists in the agent's workspaces
+	req := httptest.NewRequest(http.MethodGet, "/api/agents?workspace=Code", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleListAgents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var agents []AgentInfoResponse
+	if err := json.NewDecoder(rec.Body).Decode(&agents); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should return the test agent since it has "Code" workspace
+	if len(agents) != 1 {
+		t.Errorf("expected 1 agent with 'Code' workspace, got %d", len(agents))
+	}
+	if len(agents) > 0 && agents[0].ID != "test-agent" {
+		t.Errorf("expected agent ID 'test-agent', got %s", agents[0].ID)
+	}
+}
+
+func TestHandleListAgents_WorkspaceFilter_NoMatch(t *testing.T) {
+	gw := newTestGatewayWithMockManager(t)
+
+	// Filter by workspace that doesn't exist
+	req := httptest.NewRequest(http.MethodGet, "/api/agents?workspace=Nonexistent", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleListAgents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var agents []AgentInfoResponse
+	if err := json.NewDecoder(rec.Body).Decode(&agents); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should return no agents since none have "Nonexistent" workspace
+	if len(agents) != 0 {
+		t.Errorf("expected 0 agents with 'Nonexistent' workspace, got %d", len(agents))
+	}
+}
+
+func TestHandleListAgents_WorkspaceFilter_Personal(t *testing.T) {
+	gw := newTestGatewayWithMockManager(t)
+
+	// Filter by "Personal" workspace (the second workspace in the mock)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents?workspace=Personal", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleListAgents(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var agents []AgentInfoResponse
+	if err := json.NewDecoder(rec.Body).Decode(&agents); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should return the test agent since it has "Personal" workspace
+	if len(agents) != 1 {
+		t.Errorf("expected 1 agent with 'Personal' workspace, got %d", len(agents))
 	}
 }
 
@@ -471,7 +556,14 @@ func (m *mockAgentManager) SendMessage(ctx context.Context, req *agent.SendReque
 }
 
 func (m *mockAgentManager) ListAgents() []*agent.AgentInfo {
-	return []*agent.AgentInfo{{ID: "test-agent", Name: "Test", Capabilities: []string{"chat", "code"}}}
+	return []*agent.AgentInfo{{
+		ID:           "test-agent",
+		InstanceID:   "inst-abc123",
+		Name:         "Test",
+		Capabilities: []string{"chat", "code"},
+		Workspaces:   []string{"Code", "Personal"},
+		WorkingDir:   "/projects/website",
+	}}
 }
 
 // testMockStream implements pb.FoldControl_AgentStreamServer for testing.
