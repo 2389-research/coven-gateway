@@ -14,7 +14,7 @@ services:
       - FOLD_DB_PATH=/app/data/gateway.db
     volumes:
       - ./config.yaml:/app/config.yaml:ro
-      - ./data:/app/data
+      - gateway-data:/app/data
       - tailscale-state:/app/tailscale
     restart: unless-stopped
 
@@ -36,4 +36,5 @@ services:
   #   restart: unless-stopped
 
 volumes:
+  gateway-data:
   tailscale-state:
