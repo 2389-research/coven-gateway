@@ -102,9 +102,9 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		authConfig := &auth.AuthConfig{
 			AgentAutoRegistration: cfg.Auth.AgentAutoRegistration,
 		}
-		// Default to "approved" if not set
+		// Default to "disabled" if not set (secure by default)
 		if authConfig.AgentAutoRegistration == "" {
-			authConfig.AgentAutoRegistration = "approved"
+			authConfig.AgentAutoRegistration = "disabled"
 		}
 
 		// Create gRPC server with auth interceptors

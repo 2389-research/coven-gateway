@@ -83,7 +83,8 @@ func (s *foldControlServer) AgentStream(stream pb.FoldControl_AgentStreamServer)
 	}
 
 	// Generate short instance ID for binding commands
-	instanceID := uuid.New().String()[:8]
+	// 12 chars provides ~48 bits of entropy, collision probability < 0.1% at 1M agents
+	instanceID := uuid.New().String()[:12]
 
 	// Create connection for this agent
 	conn := agent.NewConnection(agent.ConnectionParams{

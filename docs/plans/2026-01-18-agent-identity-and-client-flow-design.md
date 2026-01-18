@@ -13,7 +13,7 @@ This document defines the identity model for fold agents and the interaction mod
 | **Principal** | UUID `a1b2c3d4-...` | Cryptographic identity (SSH key fingerprint), used for auth |
 | **Identity name** | `"bob"` | Human-readable name from agent config, for display |
 | **Instance name** | `"bob-projects-website"` | Identity + working_dir slug, unique per running agent |
-| **Instance ID** | `a1b2c3d4` | Short code (first 8 chars of UUID), for binding commands |
+| **Instance ID** | `a1b2c3d4e5f6` | Short code (first 12 chars of UUID), for binding commands |
 | **Workspaces** | `["Code", "Personal"]` | Tags for filtering agents in TUI/mobile |
 
 ### Hierarchy
@@ -85,9 +85,9 @@ Configuration option `agent_auto_registration`:
 
 | Mode | Behavior |
 |------|----------|
-| `approved` (default) | Auto-create principal with status "approved", agent can immediately receive messages |
+| `approved` | Auto-create principal with status "approved", agent can immediately receive messages |
 | `pending` | Auto-create principal with status "pending", admin must approve before agent works |
-| `disabled` | Reject unknown fingerprints, admin must pre-register |
+| `disabled` (default) | Reject unknown fingerprints, admin must pre-register |
 
 ## Agent TUI Display
 

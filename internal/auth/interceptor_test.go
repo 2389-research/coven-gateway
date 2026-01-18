@@ -730,8 +730,14 @@ func TestExtractAuth_AutoCreatesPrincipalApproved(t *testing.T) {
 		t.Errorf("PubkeyFP = %v, want %v", createdPrincipal.PubkeyFP, fingerprint)
 	}
 
-	if createdPrincipal.DisplayName != "auto-registered" {
-		t.Errorf("DisplayName = %v, want %v", createdPrincipal.DisplayName, "auto-registered")
+	// DisplayName should be "agent-" + last 8 chars of fingerprint
+	expectedSuffix := fingerprint
+	if len(expectedSuffix) > 8 {
+		expectedSuffix = expectedSuffix[len(expectedSuffix)-8:]
+	}
+	expectedDisplayName := "agent-" + expectedSuffix
+	if createdPrincipal.DisplayName != expectedDisplayName {
+		t.Errorf("DisplayName = %v, want %v", createdPrincipal.DisplayName, expectedDisplayName)
 	}
 
 	// Verify auth context

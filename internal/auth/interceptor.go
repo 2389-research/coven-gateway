@@ -114,6 +114,7 @@ func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore
 
 	var principal *store.Principal
 	var principalID string
+	var wasAutoRegistered bool // Track if we just created this principal
 
 	// Try SSH auth first (for agents)
 	if sshReq := ExtractSSHAuthFromMetadata(md); sshReq != nil {
@@ -161,12 +162,17 @@ func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore
 					principalStatus = store.PrincipalStatusApproved
 				}
 
-				// Create the new principal
+				// Create the new principal with a descriptive display name
+				// Use last 8 chars of fingerprint for identification
+				shortFP := fingerprint
+				if len(shortFP) > 8 {
+					shortFP = shortFP[len(shortFP)-8:]
+				}
 				newPrincipal := &store.Principal{
 					ID:          uuid.New().String(),
 					Type:        store.PrincipalTypeAgent,
 					PubkeyFP:    fingerprint,
-					DisplayName: "auto-registered",
+					DisplayName: "agent-" + shortFP,
 					Status:      principalStatus,
 					CreatedAt:   time.Now().UTC(),
 				}
@@ -176,6 +182,7 @@ func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore
 				}
 
 				p = newPrincipal
+				wasAutoRegistered = true
 			} else {
 				return nil, status.Errorf(codes.Internal, "failed to lookup principal: %v", err)
 			}
@@ -219,7 +226,10 @@ func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore
 	case store.PrincipalStatusApproved, store.PrincipalStatusOnline, store.PrincipalStatusOffline:
 		// allowed
 	case store.PrincipalStatusPending:
-		return nil, status.Error(codes.PermissionDenied, "principal status is pending")
+		if wasAutoRegistered {
+			return nil, status.Errorf(codes.PermissionDenied, "agent registered with pending status (principal_id: %s) - admin approval required", principal.ID)
+		}
+		return nil, status.Error(codes.PermissionDenied, "principal status is pending - admin approval required")
 	case store.PrincipalStatusRevoked:
 		return nil, status.Error(codes.PermissionDenied, "principal has been revoked")
 	default:
