@@ -37,9 +37,8 @@ type TailscaleConfig struct {
 	AuthKey   string `yaml:"auth_key"`
 	StateDir  string `yaml:"state_dir"`
 	Ephemeral bool   `yaml:"ephemeral"`
-	CertFile  string `yaml:"cert_file"` // TLS cert file (generate via: tailscale cert <hostname>)
-	KeyFile   string `yaml:"key_file"`  // TLS key file
-	Funnel    bool   `yaml:"funnel"`    // Enable public Funnel (implies HTTPS)
+	HTTPS     bool   `yaml:"https"`  // Enable HTTPS with auto-provisioned Tailscale certs
+	Funnel    bool   `yaml:"funnel"` // Enable public Funnel (implies HTTPS)
 }
 
 // ServerConfig holds server address configuration

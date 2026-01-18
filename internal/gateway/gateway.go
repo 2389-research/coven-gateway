@@ -382,28 +382,30 @@ func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn n
 
 	// Create HTTP listener based on config:
 	// - Funnel: public HTTPS on :443 (Tailscale terminates TLS)
-	// - CertFile+KeyFile: private HTTPS on :443 (user-provided certs)
+	// - HTTPS: private HTTPS on :443 (auto-provisioned Tailscale certs)
 	// - Neither: HTTP on :80 (tailnet only, no passkey support)
 	if tsCfg.Funnel {
 		g.logger.Info("enabling tailscale funnel (public HTTPS) on :443")
 		httpLn, err = g.tsnetServer.ListenFunnel("tcp", ":443")
-	} else if tsCfg.CertFile != "" && tsCfg.KeyFile != "" {
-		// User-provided TLS certs (generate via: tailscale cert <hostname>)
-		g.logger.Info("enabling HTTPS with user-provided certs on :443")
+	} else if tsCfg.HTTPS {
+		// Use Tailscale's auto-provisioned HTTPS certs via LocalClient
+		g.logger.Info("enabling HTTPS with Tailscale certs on :443")
 		ln, listenErr := g.tsnetServer.Listen("tcp", ":443")
 		if listenErr != nil {
 			grpcLn.Close()
 			g.tsnetServer.Close()
 			return nil, nil, fmt.Errorf("listening on tailscale HTTPS port: %w", listenErr)
 		}
-		cert, certErr := tls.LoadX509KeyPair(tsCfg.CertFile, tsCfg.KeyFile)
-		if certErr != nil {
+		lc, lcErr := g.tsnetServer.LocalClient()
+		if lcErr != nil {
 			ln.Close()
 			grpcLn.Close()
 			g.tsnetServer.Close()
-			return nil, nil, fmt.Errorf("loading TLS cert: %w", certErr)
+			return nil, nil, fmt.Errorf("getting tailscale local client: %w", lcErr)
 		}
-		httpLn = tls.NewListener(ln, &tls.Config{Certificates: []tls.Certificate{cert}})
+		httpLn = tls.NewListener(ln, &tls.Config{
+			GetCertificate: lc.GetCertificate,
+		})
 	} else {
 		httpLn, err = g.tsnetServer.Listen("tcp", ":80")
 	}
