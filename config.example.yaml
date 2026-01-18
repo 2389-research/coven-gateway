@@ -20,8 +20,10 @@ tailscale:
   state_dir: ""
   # Ephemeral node - removed from tailnet when gateway stops
   ephemeral: false
-  # Enable HTTPS within tailnet (required for passkeys/WebAuthn, stays private)
-  https: true
+  # TLS certificate for HTTPS (required for passkeys/WebAuthn)
+  # Generate with: tailscale cert fold-gateway.your-tailnet.ts.net
+  cert_file: "/app/tailscale/fold-gateway.crt"
+  key_file: "/app/tailscale/fold-gateway.key"
   # Enable Funnel to expose HTTP API publicly (requires Funnel enabled in tailnet)
   funnel: false
 
