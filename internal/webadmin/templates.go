@@ -10,68 +10,209 @@ import (
 	"github.com/2389/fold-gateway/internal/store"
 )
 
-// Base layout template with Tailwind CSS
+// Base layout template with custom dark theme
 const baseTemplate = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{.Title}} - fold admin</title>
+    <title>{{.Title}} // FOLD</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        void: '#06060a',
+                        surface: '#0c0c12',
+                        panel: '#12121a',
+                        border: '#1a1a24',
+                        'border-bright': '#2a2a3a',
+                        cyan: '#00e5ff',
+                        'cyan-dim': '#00a5b5',
+                        amber: '#ffb300',
+                        'amber-dim': '#b57f00',
+                        crimson: '#ff3366',
+                        'text-primary': '#e8e8ec',
+                        'text-secondary': '#8888a0',
+                        'text-muted': '#555566',
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'monospace'],
+                        sans: ['Space Grotesk', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                    },
+                    keyframes: {
+                        glow: {
+                            '0%': { opacity: '0.5' },
+                            '100%': { opacity: '1' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 229, 255, 0.03), transparent),
+                #06060a;
+        }
+        .noise {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.015;
+            z-index: 1000;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+        }
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 999;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.03) 2px,
+                rgba(0, 0, 0, 0.03) 4px
+            );
+        }
+        .glow-cyan {
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.15), inset 0 0 20px rgba(0, 229, 255, 0.05);
+        }
+        .glow-amber {
+            box-shadow: 0 0 20px rgba(255, 179, 0, 0.15), inset 0 0 20px rgba(255, 179, 0, 0.05);
+        }
+        .glow-crimson {
+            box-shadow: 0 0 20px rgba(255, 51, 102, 0.15), inset 0 0 20px rgba(255, 51, 102, 0.05);
+        }
+        .status-dot {
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        .grid-bg {
+            background-image:
+                linear-gradient(rgba(26, 26, 36, 0.5) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(26, 26, 36, 0.5) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        input:focus, select:focus, textarea:focus, button:focus {
+            outline: none;
+            box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.5);
+        }
+        ::selection {
+            background: rgba(0, 229, 255, 0.3);
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0c0c12;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a2a3a;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3a3a4a;
+        }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    {{template "content" .}}
+<body class="bg-void text-text-primary min-h-screen font-sans antialiased">
+    <div class="noise"></div>
+    <div class="scanlines"></div>
+    <div class="relative z-10">
+        {{template "content" .}}
+    </div>
 </body>
 </html>`
 
 // Login page template
 const loginTemplate = `{{define "content"}}
-<div class="min-h-screen flex items-center justify-center">
-    <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h1 class="text-2xl font-bold text-gray-900 mb-6">fold admin</h1>
-
-        {{if .Error}}
-        <div class="mb-4 p-3 bg-red-100 text-red-700 rounded">
-            {{.Error}}
+<div class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <!-- Logo/Brand -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 border border-cyan/30 bg-panel flex items-center justify-center">
+                    <svg class="w-5 h-5 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                    </svg>
+                </div>
+                <span class="font-mono text-2xl font-bold tracking-tight">FOLD</span>
+            </div>
+            <p class="text-text-muted font-mono text-xs tracking-widest uppercase">Control Plane Access</p>
         </div>
-        {{end}}
 
-        <div id="passkey-error" class="hidden mb-4 p-3 bg-red-100 text-red-700 rounded"></div>
-
-        <form method="POST" action="/admin/login" class="space-y-4">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <div>
-                <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-                <input type="text" id="username" name="username" required
-                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        <!-- Login Card -->
+        <div class="bg-panel border border-border p-6 glow-cyan">
+            <div class="flex items-center gap-2 mb-6 pb-4 border-b border-border">
+                <div class="w-2 h-2 rounded-full bg-cyan status-dot"></div>
+                <span class="font-mono text-xs text-text-secondary uppercase tracking-wider">Authenticate</span>
             </div>
 
-            <div>
-                <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-                <input type="password" id="password" name="password" required
-                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            {{if .Error}}
+            <div class="mb-4 p-3 bg-crimson/10 border border-crimson/30 text-crimson text-sm font-mono">
+                <span class="text-crimson/60">[ERR]</span> {{.Error}}
+            </div>
+            {{end}}
+
+            <div id="passkey-error" class="hidden mb-4 p-3 bg-crimson/10 border border-crimson/30 text-crimson text-sm font-mono"></div>
+
+            <form method="POST" action="/admin/login" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <div>
+                    <label for="username" class="block text-xs font-mono text-text-secondary uppercase tracking-wider mb-2">Username</label>
+                    <input type="text" id="username" name="username" required autocomplete="username"
+                        class="w-full px-3 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors">
+                </div>
+
+                <div>
+                    <label for="password" class="block text-xs font-mono text-text-secondary uppercase tracking-wider mb-2">Password</label>
+                    <input type="password" id="password" name="password" required autocomplete="current-password"
+                        class="w-full px-3 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors">
+                </div>
+
+                <button type="submit"
+                    class="w-full py-2.5 px-4 bg-cyan text-void font-mono font-semibold text-sm uppercase tracking-wider hover:bg-cyan/90 transition-all hover:shadow-[0_0_20px_rgba(0,229,255,0.3)]">
+                    Authenticate
+                </button>
+            </form>
+
+            <div class="my-6 flex items-center gap-4">
+                <div class="flex-1 h-px bg-border"></div>
+                <span class="text-text-muted font-mono text-xs">OR</span>
+                <div class="flex-1 h-px bg-border"></div>
             </div>
 
-            <button type="submit"
-                class="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                Sign In
+            <button type="button" id="passkey-login"
+                class="w-full py-2.5 px-4 bg-transparent border border-border-bright text-text-primary font-mono text-sm hover:border-cyan hover:text-cyan transition-all flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+                </svg>
+                <span>Passkey</span>
             </button>
-        </form>
-
-        <div class="mt-6 relative">
-            <div class="absolute inset-0 flex items-center">
-                <div class="w-full border-t border-gray-300"></div>
-            </div>
-            <div class="relative flex justify-center text-sm">
-                <span class="px-2 bg-white text-gray-500">or</span>
-            </div>
         </div>
 
-        <button type="button" id="passkey-login"
-            class="mt-4 w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-            Sign in with Passkey
-        </button>
+        <!-- Footer -->
+        <p class="text-center text-text-muted font-mono text-xs mt-6">
+            fold-gateway <span class="text-text-muted/50">|</span> agent control plane
+        </p>
     </div>
 </div>
 
@@ -198,150 +339,233 @@ const loginTemplate = `{{define "content"}}
 
 // Invite/signup page template
 const inviteTemplate = `{{define "content"}}
-<div class="min-h-screen flex items-center justify-center">
-    <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h1 class="text-2xl font-bold text-gray-900 mb-2">Create Account</h1>
-        <p class="text-gray-600 mb-6">You've been invited to join fold admin</p>
-
-        {{if .Error}}
-        <div class="mb-4 p-3 bg-red-100 text-red-700 rounded">
-            {{.Error}}
+<div class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <!-- Logo/Brand -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 border border-cyan/30 bg-panel flex items-center justify-center">
+                    <svg class="w-5 h-5 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                    </svg>
+                </div>
+                <span class="font-mono text-2xl font-bold tracking-tight">FOLD</span>
+            </div>
+            <p class="text-text-muted font-mono text-xs tracking-widest uppercase">Operator Registration</p>
         </div>
-        {{end}}
 
-        <form method="POST" action="/admin/invite/{{.Token}}" class="space-y-4">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <div>
-                <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-                <input type="text" id="username" name="username" required
-                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        <!-- Signup Card -->
+        <div class="bg-panel border border-border p-6 glow-cyan">
+            <div class="flex items-center gap-2 mb-6 pb-4 border-b border-border">
+                <div class="w-2 h-2 rounded-full bg-cyan status-dot"></div>
+                <span class="font-mono text-xs text-text-secondary uppercase tracking-wider">Create Account</span>
             </div>
 
-            <div>
-                <label for="display_name" class="block text-sm font-medium text-gray-700">Display Name (optional)</label>
-                <input type="text" id="display_name" name="display_name"
-                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-            </div>
+            <p class="text-text-secondary text-sm mb-6">You've been invited to access the control plane.</p>
 
-            <div>
-                <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-                <input type="password" id="password" name="password" required minlength="8"
-                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                <p class="mt-1 text-xs text-gray-500">Minimum 8 characters</p>
+            {{if .Error}}
+            <div class="mb-4 p-3 bg-crimson/10 border border-crimson/30 text-crimson text-sm font-mono">
+                <span class="text-crimson/60">[ERR]</span> {{.Error}}
             </div>
+            {{end}}
 
-            <button type="submit"
-                class="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                Create Account
-            </button>
-        </form>
+            <form method="POST" action="/admin/invite/{{.Token}}" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <div>
+                    <label for="username" class="block text-xs font-mono text-text-secondary uppercase tracking-wider mb-2">Username</label>
+                    <input type="text" id="username" name="username" required autocomplete="username"
+                        class="w-full px-3 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors">
+                </div>
+
+                <div>
+                    <label for="display_name" class="block text-xs font-mono text-text-secondary uppercase tracking-wider mb-2">Display Name <span class="text-text-muted">(optional)</span></label>
+                    <input type="text" id="display_name" name="display_name" autocomplete="name"
+                        class="w-full px-3 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors">
+                </div>
+
+                <div>
+                    <label for="password" class="block text-xs font-mono text-text-secondary uppercase tracking-wider mb-2">Password</label>
+                    <input type="password" id="password" name="password" required minlength="8" autocomplete="new-password"
+                        class="w-full px-3 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors">
+                    <p class="mt-2 text-xs text-text-muted font-mono">Minimum 8 characters</p>
+                </div>
+
+                <button type="submit"
+                    class="w-full py-2.5 px-4 bg-cyan text-void font-mono font-semibold text-sm uppercase tracking-wider hover:bg-cyan/90 transition-all hover:shadow-[0_0_20px_rgba(0,229,255,0.3)]">
+                    Initialize Account
+                </button>
+            </form>
+        </div>
+
+        <!-- Footer -->
+        <p class="text-center text-text-muted font-mono text-xs mt-6">
+            fold-gateway <span class="text-text-muted/50">|</span> agent control plane
+        </p>
     </div>
 </div>
 {{end}}`
 
 // Dashboard template
 const dashboardTemplate = `{{define "content"}}
-<div class="min-h-screen" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
+<div class="min-h-screen flex flex-col" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
     <!-- Header -->
-    <header class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-            <h1 class="text-xl font-bold text-gray-900">fold admin</h1>
+    <header class="bg-surface border-b border-border flex-shrink-0">
+        <div class="max-w-screen-2xl mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center gap-4">
-                <span class="text-sm text-gray-600">{{.User.DisplayName}}</span>
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 border border-cyan/30 bg-panel flex items-center justify-center">
+                        <svg class="w-4 h-4 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                        </svg>
+                    </div>
+                    <span class="font-mono text-lg font-bold tracking-tight">FOLD</span>
+                </div>
+                <div class="hidden md:flex items-center gap-1 text-text-muted font-mono text-xs">
+                    <span class="text-text-muted/50">//</span>
+                    <span>CONTROL PLANE</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 text-text-secondary">
+                    <div class="w-2 h-2 rounded-full bg-cyan status-dot"></div>
+                    <span class="font-mono text-sm">{{.User.DisplayName}}</span>
+                </div>
                 <form method="POST" action="/admin/logout" class="inline">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                    <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
+                    <button type="submit" class="font-mono text-xs text-text-muted hover:text-crimson transition-colors uppercase tracking-wider">
+                        Logout
+                    </button>
                 </form>
             </div>
         </div>
     </header>
 
-    <!-- Main content -->
-    <main class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <!-- Sidebar -->
-            <nav class="lg:col-span-1">
-                <div class="bg-white rounded-lg shadow p-4">
-                    <ul class="space-y-2">
+    <!-- Main Layout -->
+    <div class="flex-1 flex">
+        <!-- Sidebar -->
+        <nav class="w-56 bg-surface border-r border-border flex-shrink-0 hidden lg:flex flex-col">
+            <div class="p-4 flex-1">
+                <div class="mb-6">
+                    <p class="font-mono text-[10px] text-text-muted uppercase tracking-widest mb-3">Navigation</p>
+                    <ul class="space-y-1">
                         <li>
-                            <a href="/admin/" class="block px-3 py-2 rounded-md bg-indigo-100 text-indigo-700 font-medium">
+                            <a href="/admin/" class="flex items-center gap-2 px-3 py-2 bg-cyan/10 border-l-2 border-cyan text-cyan font-mono text-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+                                </svg>
                                 Dashboard
                             </a>
                         </li>
                         <li>
-                            <a href="/admin/agents" hx-get="/admin/agents" hx-target="#main-content"
-                               class="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">
+                            <a href="/admin/agents" class="flex items-center gap-2 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-panel font-mono text-sm transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                </svg>
                                 Agents
                             </a>
                         </li>
                         <li>
-                            <a href="/admin/principals" class="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">
+                            <a href="/admin/principals" class="flex items-center gap-2 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-panel font-mono text-sm transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                                </svg>
                                 Principals
                             </a>
                         </li>
                         <li>
-                            <a href="/admin/threads" class="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">
+                            <a href="/admin/threads" class="flex items-center gap-2 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-panel font-mono text-sm transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                                </svg>
                                 Threads
                             </a>
                         </li>
                     </ul>
+                </div>
 
-                    <hr class="my-4">
+                <div class="mb-6">
+                    <p class="font-mono text-[10px] text-text-muted uppercase tracking-widest mb-3">Actions</p>
+                    <button hx-post="/admin/invites/create" hx-target="#invite-result" hx-swap="innerHTML"
+                        class="flex items-center gap-2 px-3 py-2 text-cyan hover:bg-cyan/10 font-mono text-sm transition-colors w-full text-left">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                        </svg>
+                        Create Invite
+                    </button>
+                    <div id="invite-result" class="px-3"></div>
 
-                    <div class="px-3">
-                        <h3 class="text-sm font-medium text-gray-500 mb-2">Admin</h3>
-                        <button hx-post="/admin/invites/create" hx-target="#invite-result" hx-swap="innerHTML"
-                            class="text-sm text-indigo-600 hover:text-indigo-800">
-                            + Create Invite Link
-                        </button>
-                        <div id="invite-result" class="mt-2"></div>
+                    <button type="button" id="register-passkey"
+                        class="flex items-center gap-2 px-3 py-2 text-text-secondary hover:text-cyan hover:bg-cyan/10 font-mono text-sm transition-colors w-full text-left mt-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+                        </svg>
+                        Add Passkey
+                    </button>
+                    <div id="passkey-result" class="px-3"></div>
+                </div>
+            </div>
+
+            <!-- Sidebar Footer -->
+            <div class="p-4 border-t border-border">
+                <p class="font-mono text-[10px] text-text-muted">fold-gateway v0.1</p>
+            </div>
+        </nav>
+
+        <!-- Content -->
+        <main class="flex-1 p-6 overflow-auto grid-bg">
+            <div id="main-content" class="max-w-screen-xl mx-auto space-y-6">
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-panel border border-border p-4 glow-cyan">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-mono text-[10px] text-text-muted uppercase tracking-widest">Agents Online</span>
+                            <div class="w-2 h-2 rounded-full bg-cyan status-dot"></div>
+                        </div>
+                        <p class="font-mono text-3xl font-bold text-cyan" hx-get="/admin/stats/agents" hx-trigger="every 5s">
+                            --
+                        </p>
                     </div>
-
-                    <hr class="my-4">
-
-                    <div class="px-3">
-                        <h3 class="text-sm font-medium text-gray-500 mb-2">Security</h3>
-                        <button type="button" id="register-passkey"
-                            class="text-sm text-indigo-600 hover:text-indigo-800">
-                            + Register Passkey
-                        </button>
-                        <div id="passkey-result" class="mt-2"></div>
+                    <div class="bg-panel border border-border p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-mono text-[10px] text-text-muted uppercase tracking-widest">Pending Approvals</span>
+                            <div class="w-2 h-2 rounded-full bg-amber"></div>
+                        </div>
+                        <p class="font-mono text-3xl font-bold text-amber">--</p>
+                    </div>
+                    <div class="bg-panel border border-border p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-mono text-[10px] text-text-muted uppercase tracking-widest">Active Threads</span>
+                            <div class="w-2 h-2 rounded-full bg-text-muted"></div>
+                        </div>
+                        <p class="font-mono text-3xl font-bold text-text-primary">--</p>
                     </div>
                 </div>
-            </nav>
 
-            <!-- Content area -->
-            <div id="main-content" class="lg:col-span-3">
-                <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-medium text-gray-900 mb-4">Overview</h2>
-
-                    <!-- Stats -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div class="bg-gray-50 rounded-lg p-4">
-                            <p class="text-sm text-gray-500">Connected Agents</p>
-                            <p class="text-2xl font-bold text-gray-900" hx-get="/admin/stats/agents" hx-trigger="every 5s">
-                                --
-                            </p>
+                <!-- Connected Agents Panel -->
+                <div class="bg-panel border border-border">
+                    <div class="px-4 py-3 border-b border-border flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                            <span class="font-mono text-sm font-semibold uppercase tracking-wider">Connected Agents</span>
                         </div>
-                        <div class="bg-gray-50 rounded-lg p-4">
-                            <p class="text-sm text-gray-500">Pending Approvals</p>
-                            <p class="text-2xl font-bold text-orange-600">--</p>
-                        </div>
-                        <div class="bg-gray-50 rounded-lg p-4">
-                            <p class="text-sm text-gray-500">Active Threads</p>
-                            <p class="text-2xl font-bold text-gray-900">--</p>
-                        </div>
+                        <span class="font-mono text-xs text-text-muted">Auto-refresh: 10s</span>
                     </div>
-
-                    <!-- Recent activity -->
-                    <h3 class="text-md font-medium text-gray-900 mb-2">Connected Agents</h3>
-                    <div hx-get="/admin/agents" hx-trigger="load, every 10s" hx-swap="innerHTML">
-                        <p class="text-gray-500">Loading...</p>
+                    <div class="p-4" hx-get="/admin/agents" hx-trigger="load, every 10s" hx-swap="innerHTML">
+                        <div class="flex items-center justify-center py-8">
+                            <div class="flex items-center gap-2 text-text-muted">
+                                <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                <span class="font-mono text-sm">Loading...</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </main>
+        </main>
+    </div>
 </div>
 
 <script>
@@ -478,18 +702,21 @@ const dashboardTemplate = `{{define "content"}}
 
 // Invite created partial (for htmx)
 const inviteCreatedTemplate = `
-<div class="p-3 bg-green-50 border border-green-200 rounded-lg">
-    <p class="text-sm text-green-800 font-medium mb-2">Invite link created!</p>
+<div class="mt-3 p-3 bg-cyan/5 border border-cyan/20">
+    <div class="flex items-center gap-2 mb-2">
+        <div class="w-2 h-2 rounded-full bg-cyan"></div>
+        <span class="font-mono text-xs text-cyan uppercase tracking-wider">Invite Created</span>
+    </div>
     <div class="flex items-center gap-2">
         <input type="text" readonly value="{{.URL}}"
-            class="flex-1 px-2 py-1 text-xs bg-white border border-gray-300 rounded font-mono"
+            class="flex-1 px-2 py-1.5 text-xs bg-surface border border-border font-mono text-text-secondary"
             onclick="this.select()">
-        <button type="button" onclick="navigator.clipboard.writeText('{{.URL}}')"
-            class="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700">
+        <button type="button" onclick="navigator.clipboard.writeText('{{.URL}}'); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy', 2000)"
+            class="px-3 py-1.5 text-xs bg-cyan text-void font-mono font-semibold uppercase tracking-wider hover:bg-cyan/90 transition-all">
             Copy
         </button>
     </div>
-    <p class="text-xs text-gray-500 mt-2">Link expires in 24 hours</p>
+    <p class="text-xs text-text-muted font-mono mt-2">Expires in 24h</p>
 </div>
 `
 
@@ -498,21 +725,24 @@ const agentsListTemplate = `
 <div class="space-y-2">
     {{if .Agents}}
     {{range .Agents}}
-    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+    <div class="flex items-center justify-between p-3 bg-surface border border-border hover:border-border-bright transition-colors">
         <div class="flex items-center gap-3">
-            <span class="w-2 h-2 rounded-full {{if .Connected}}bg-green-500{{else}}bg-gray-400{{end}}"></span>
+            <div class="relative">
+                <div class="w-2 h-2 rounded-full {{if .Connected}}bg-cyan{{else}}bg-text-muted{{end}}"></div>
+                {{if .Connected}}<div class="absolute inset-0 w-2 h-2 rounded-full bg-cyan animate-ping opacity-50"></div>{{end}}
+            </div>
             <div>
-                <p class="font-medium text-gray-900">{{.Name}}</p>
-                <p class="text-sm text-gray-500">{{.ID}}</p>
+                <p class="font-mono text-sm font-medium text-text-primary">{{.Name}}</p>
+                <p class="font-mono text-xs text-text-muted">{{.ID}}</p>
             </div>
         </div>
         <div class="flex gap-2">
-            <a href="/admin/chat/{{.ID}}" class="px-3 py-1 text-sm bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200">
+            <a href="/admin/chat/{{.ID}}" class="px-3 py-1.5 text-xs font-mono bg-cyan/10 text-cyan border border-cyan/30 hover:bg-cyan/20 transition-colors uppercase tracking-wider">
                 Chat
             </a>
             {{if .Connected}}
             <button hx-post="/admin/agents/{{.ID}}/disconnect" hx-swap="outerHTML" hx-target="closest div"
-                class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                class="px-3 py-1.5 text-xs font-mono bg-transparent text-text-muted border border-border hover:border-crimson hover:text-crimson transition-colors uppercase tracking-wider">
                 Disconnect
             </button>
             {{end}}
@@ -520,66 +750,106 @@ const agentsListTemplate = `
     </div>
     {{end}}
     {{else}}
-    <p class="text-gray-500 text-center py-4">No agents connected</p>
+    <div class="flex flex-col items-center justify-center py-12 text-text-muted">
+        <svg class="w-12 h-12 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+        <p class="font-mono text-sm">No agents connected</p>
+        <p class="font-mono text-xs text-text-muted/50 mt-1">Waiting for agent registration...</p>
+    </div>
     {{end}}
 </div>
 `
 
 // Principals page template
 const principalsTemplate = `{{define "content"}}
-<div class="min-h-screen" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
+<div class="min-h-screen flex flex-col" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
     <!-- Header -->
-    <header class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-            <h1 class="text-xl font-bold text-gray-900">fold admin</h1>
+    <header class="bg-surface border-b border-border flex-shrink-0">
+        <div class="max-w-screen-2xl mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center gap-4">
-                <span class="text-sm text-gray-600">{{.User.DisplayName}}</span>
+                <a href="/admin/" class="flex items-center gap-2">
+                    <div class="w-8 h-8 border border-cyan/30 bg-panel flex items-center justify-center">
+                        <svg class="w-4 h-4 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                        </svg>
+                    </div>
+                    <span class="font-mono text-lg font-bold tracking-tight">FOLD</span>
+                </a>
+                <div class="hidden md:flex items-center gap-1 text-text-muted font-mono text-xs">
+                    <span class="text-text-muted/50">//</span>
+                    <span>PRINCIPALS</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 text-text-secondary">
+                    <div class="w-2 h-2 rounded-full bg-cyan status-dot"></div>
+                    <span class="font-mono text-sm">{{.User.DisplayName}}</span>
+                </div>
                 <form method="POST" action="/admin/logout" class="inline">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                    <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
+                    <button type="submit" class="font-mono text-xs text-text-muted hover:text-crimson transition-colors uppercase tracking-wider">Logout</button>
                 </form>
             </div>
         </div>
     </header>
 
-    <!-- Main content -->
-    <main class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <!-- Sidebar -->
-            <nav class="lg:col-span-1">
-                <div class="bg-white rounded-lg shadow p-4">
-                    <ul class="space-y-2">
-                        <li>
-                            <a href="/admin/" class="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">
-                                Dashboard
-                            </a>
-                        </li>
-                        <li>
-                            <a href="/admin/agents" class="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">
-                                Agents
-                            </a>
-                        </li>
-                        <li>
-                            <a href="/admin/principals" class="block px-3 py-2 rounded-md bg-indigo-100 text-indigo-700 font-medium">
-                                Principals
-                            </a>
-                        </li>
-                        <li>
-                            <a href="/admin/threads" class="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">
-                                Threads
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-            </nav>
+    <!-- Main Layout -->
+    <div class="flex-1 flex">
+        <!-- Sidebar -->
+        <nav class="w-56 bg-surface border-r border-border flex-shrink-0 hidden lg:flex flex-col">
+            <div class="p-4 flex-1">
+                <p class="font-mono text-[10px] text-text-muted uppercase tracking-widest mb-3">Navigation</p>
+                <ul class="space-y-1">
+                    <li>
+                        <a href="/admin/" class="flex items-center gap-2 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-panel font-mono text-sm transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+                            </svg>
+                            Dashboard
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/admin/agents" class="flex items-center gap-2 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-panel font-mono text-sm transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                            Agents
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/admin/principals" class="flex items-center gap-2 px-3 py-2 bg-cyan/10 border-l-2 border-cyan text-cyan font-mono text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                            </svg>
+                            Principals
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/admin/threads" class="flex items-center gap-2 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-panel font-mono text-sm transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                            </svg>
+                            Threads
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
 
-            <!-- Content area -->
-            <div class="lg:col-span-3">
-                <div class="bg-white rounded-lg shadow p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-lg font-medium text-gray-900">Principals</h2>
+        <!-- Content -->
+        <main class="flex-1 p-6 overflow-auto grid-bg">
+            <div class="max-w-screen-xl mx-auto">
+                <div class="bg-panel border border-border">
+                    <div class="px-4 py-3 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                            </svg>
+                            <span class="font-mono text-sm font-semibold uppercase tracking-wider">Principals Registry</span>
+                        </div>
                         <div class="flex gap-2">
-                            <select id="type-filter" class="text-sm border-gray-300 rounded-md"
+                            <select id="type-filter" class="px-3 py-1.5 bg-surface border border-border text-text-primary font-mono text-xs focus:border-cyan"
                                 hx-get="/admin/principals/list" hx-target="#principals-list"
                                 hx-include="[id='status-filter']" name="type">
                                 <option value="">All Types</option>
@@ -587,7 +857,7 @@ const principalsTemplate = `{{define "content"}}
                                 <option value="agent">Agent</option>
                                 <option value="pack">Pack</option>
                             </select>
-                            <select id="status-filter" class="text-sm border-gray-300 rounded-md"
+                            <select id="status-filter" class="px-3 py-1.5 bg-surface border border-border text-text-primary font-mono text-xs focus:border-cyan"
                                 hx-get="/admin/principals/list" hx-target="#principals-list"
                                 hx-include="[id='type-filter']" name="status">
                                 <option value="">All Statuses</option>
@@ -599,75 +869,82 @@ const principalsTemplate = `{{define "content"}}
                     </div>
 
                     <div id="principals-list" hx-get="/admin/principals/list" hx-trigger="load" hx-swap="innerHTML">
-                        <p class="text-gray-500">Loading...</p>
+                        <div class="flex items-center justify-center py-8">
+                            <div class="flex items-center gap-2 text-text-muted">
+                                <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                <span class="font-mono text-sm">Loading...</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </main>
+        </main>
+    </div>
 </div>
 {{end}}`
 
 // Principals list partial (for htmx)
 const principalsListTemplate = `
 <div class="overflow-x-auto">
-    <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+    <table class="min-w-full">
+        <thead class="bg-surface border-b border-border">
             <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Seen</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th class="px-4 py-3 text-left text-[10px] font-mono font-medium text-text-muted uppercase tracking-widest">Name</th>
+                <th class="px-4 py-3 text-left text-[10px] font-mono font-medium text-text-muted uppercase tracking-widest">Type</th>
+                <th class="px-4 py-3 text-left text-[10px] font-mono font-medium text-text-muted uppercase tracking-widest">Status</th>
+                <th class="px-4 py-3 text-left text-[10px] font-mono font-medium text-text-muted uppercase tracking-widest">Last Seen</th>
+                <th class="px-4 py-3 text-left text-[10px] font-mono font-medium text-text-muted uppercase tracking-widest">Actions</th>
             </tr>
         </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
+        <tbody class="divide-y divide-border">
             {{if .Principals}}
             {{range .Principals}}
-            <tr id="principal-{{.ID}}">
+            <tr id="principal-{{.ID}}" class="hover:bg-surface/50 transition-colors">
                 <td class="px-4 py-3">
                     <div>
-                        <p class="font-medium text-gray-900">{{.DisplayName}}</p>
-                        <p class="text-xs text-gray-500 font-mono">{{.ID}}</p>
+                        <p class="font-mono text-sm font-medium text-text-primary">{{.DisplayName}}</p>
+                        <p class="text-xs text-text-muted font-mono">{{.ID}}</p>
                     </div>
                 </td>
                 <td class="px-4 py-3">
-                    <span class="px-2 py-1 text-xs rounded-full
-                        {{if eq .Type "agent"}}bg-blue-100 text-blue-800
-                        {{else if eq .Type "client"}}bg-purple-100 text-purple-800
-                        {{else}}bg-gray-100 text-gray-800{{end}}">
+                    <span class="px-2 py-1 text-xs font-mono uppercase tracking-wider
+                        {{if eq .Type "agent"}}bg-cyan/10 text-cyan border border-cyan/30
+                        {{else if eq .Type "client"}}bg-purple-500/10 text-purple-400 border border-purple-500/30
+                        {{else}}bg-text-muted/10 text-text-secondary border border-border{{end}}">
                         {{.Type}}
                     </span>
                 </td>
                 <td class="px-4 py-3" id="status-{{.ID}}">
-                    <span class="px-2 py-1 text-xs rounded-full
-                        {{if eq .Status "approved"}}bg-green-100 text-green-800
-                        {{else if eq .Status "pending"}}bg-yellow-100 text-yellow-800
-                        {{else if eq .Status "revoked"}}bg-red-100 text-red-800
-                        {{else}}bg-gray-100 text-gray-800{{end}}">
+                    <span class="px-2 py-1 text-xs font-mono uppercase tracking-wider
+                        {{if eq .Status "approved"}}bg-cyan/10 text-cyan border border-cyan/30
+                        {{else if eq .Status "pending"}}bg-amber/10 text-amber border border-amber/30
+                        {{else if eq .Status "revoked"}}bg-crimson/10 text-crimson border border-crimson/30
+                        {{else}}bg-text-muted/10 text-text-secondary border border-border{{end}}">
                         {{.Status}}
                     </span>
                 </td>
-                <td class="px-4 py-3 text-sm text-gray-500">
-                    {{if .LastSeen}}{{.LastSeen.Format "Jan 02 15:04"}}{{else}}Never{{end}}
+                <td class="px-4 py-3 text-sm font-mono text-text-muted">
+                    {{if .LastSeen}}{{.LastSeen.Format "Jan 02 15:04"}}{{else}}--{{end}}
                 </td>
                 <td class="px-4 py-3">
                     <div class="flex gap-2">
                         {{if eq .Status "pending"}}
                         <button hx-post="/admin/principals/{{.ID}}/approve" hx-target="#status-{{.ID}}" hx-swap="innerHTML"
-                            class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200">
+                            class="px-2 py-1 text-xs font-mono bg-cyan/10 text-cyan border border-cyan/30 hover:bg-cyan/20 transition-colors uppercase tracking-wider">
                             Approve
                         </button>
                         {{end}}
                         {{if ne .Status "revoked"}}
                         <button hx-post="/admin/principals/{{.ID}}/revoke" hx-target="#status-{{.ID}}" hx-swap="innerHTML"
-                            class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200">
+                            class="px-2 py-1 text-xs font-mono bg-crimson/10 text-crimson border border-crimson/30 hover:bg-crimson/20 transition-colors uppercase tracking-wider">
                             Revoke
                         </button>
                         {{end}}
                         <button hx-delete="/admin/principals/{{.ID}}" hx-target="#principal-{{.ID}}" hx-swap="outerHTML"
                             hx-confirm="Delete principal {{.DisplayName}}?"
-                            class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                            class="px-2 py-1 text-xs font-mono bg-transparent text-text-muted border border-border hover:border-crimson hover:text-crimson transition-colors uppercase tracking-wider">
                             Delete
                         </button>
                     </div>
@@ -676,7 +953,15 @@ const principalsListTemplate = `
             {{end}}
             {{else}}
             <tr>
-                <td colspan="5" class="px-4 py-8 text-center text-gray-500">No principals found</td>
+                <td colspan="5" class="px-4 py-12 text-center">
+                    <div class="flex flex-col items-center text-text-muted">
+                        <svg class="w-12 h-12 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                        </svg>
+                        <p class="font-mono text-sm">No principals found</p>
+                        <p class="font-mono text-xs text-text-muted/50 mt-1">Adjust filters or wait for registrations</p>
+                    </div>
+                </td>
             </tr>
             {{end}}
         </tbody>
@@ -686,156 +971,226 @@ const principalsListTemplate = `
 
 // Threads page template
 const threadsTemplate = `{{define "content"}}
-<div class="min-h-screen" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
+<div class="min-h-screen flex flex-col" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
     <!-- Header -->
-    <header class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-            <h1 class="text-xl font-bold text-gray-900">fold admin</h1>
+    <header class="bg-surface border-b border-border flex-shrink-0">
+        <div class="max-w-screen-2xl mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center gap-4">
-                <span class="text-sm text-gray-600">{{.User.DisplayName}}</span>
+                <a href="/admin/" class="flex items-center gap-2">
+                    <div class="w-8 h-8 border border-cyan/30 bg-panel flex items-center justify-center">
+                        <svg class="w-4 h-4 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                        </svg>
+                    </div>
+                    <span class="font-mono text-lg font-bold tracking-tight">FOLD</span>
+                </a>
+                <div class="hidden md:flex items-center gap-1 text-text-muted font-mono text-xs">
+                    <span class="text-text-muted/50">//</span>
+                    <span>THREADS</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 text-text-secondary">
+                    <div class="w-2 h-2 rounded-full bg-cyan status-dot"></div>
+                    <span class="font-mono text-sm">{{.User.DisplayName}}</span>
+                </div>
                 <form method="POST" action="/admin/logout" class="inline">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                    <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
+                    <button type="submit" class="font-mono text-xs text-text-muted hover:text-crimson transition-colors uppercase tracking-wider">Logout</button>
                 </form>
             </div>
         </div>
     </header>
 
-    <!-- Main content -->
-    <main class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <!-- Sidebar -->
-            <nav class="lg:col-span-1">
-                <div class="bg-white rounded-lg shadow p-4">
-                    <ul class="space-y-2">
-                        <li>
-                            <a href="/admin/" class="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">
-                                Dashboard
-                            </a>
-                        </li>
-                        <li>
-                            <a href="/admin/agents" class="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">
-                                Agents
-                            </a>
-                        </li>
-                        <li>
-                            <a href="/admin/principals" class="block px-3 py-2 rounded-md text-gray-700 hover:bg-gray-100">
-                                Principals
-                            </a>
-                        </li>
-                        <li>
-                            <a href="/admin/threads" class="block px-3 py-2 rounded-md bg-indigo-100 text-indigo-700 font-medium">
-                                Threads
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-            </nav>
-
-            <!-- Content area -->
-            <div class="lg:col-span-3">
-                <div class="bg-white rounded-lg shadow p-6">
-                    <h2 class="text-lg font-medium text-gray-900 mb-4">Conversation Threads</h2>
-                    <p class="text-gray-500 text-sm mb-4">View and inspect conversation history across all frontends.</p>
-
-                    {{if .Threads}}
-                    <div class="space-y-3">
-                        {{range .Threads}}
-                        <a href="/admin/threads/{{.ID}}" class="block p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <p class="font-medium text-gray-900">{{.FrontendName}}</p>
-                                    <p class="text-sm text-gray-500">Agent: {{.AgentID}}</p>
-                                    <p class="text-xs text-gray-400 font-mono mt-1">{{.ID}}</p>
-                                </div>
-                                <div class="text-right">
-                                    <p class="text-sm text-gray-500">{{.UpdatedAt.Format "Jan 02 15:04"}}</p>
-                                    <p class="text-xs text-gray-400">Created: {{.CreatedAt.Format "Jan 02"}}</p>
-                                </div>
-                            </div>
+    <!-- Main Layout -->
+    <div class="flex-1 flex">
+        <!-- Sidebar -->
+        <nav class="w-56 bg-surface border-r border-border flex-shrink-0 hidden lg:flex flex-col">
+            <div class="p-4 flex-1">
+                <p class="font-mono text-[10px] text-text-muted uppercase tracking-widest mb-3">Navigation</p>
+                <ul class="space-y-1">
+                    <li>
+                        <a href="/admin/" class="flex items-center gap-2 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-panel font-mono text-sm transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+                            </svg>
+                            Dashboard
                         </a>
+                    </li>
+                    <li>
+                        <a href="/admin/agents" class="flex items-center gap-2 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-panel font-mono text-sm transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                            Agents
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/admin/principals" class="flex items-center gap-2 px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-panel font-mono text-sm transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                            </svg>
+                            Principals
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/admin/threads" class="flex items-center gap-2 px-3 py-2 bg-cyan/10 border-l-2 border-cyan text-cyan font-mono text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                            </svg>
+                            Threads
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- Content -->
+        <main class="flex-1 p-6 overflow-auto grid-bg">
+            <div class="max-w-screen-xl mx-auto">
+                <div class="bg-panel border border-border">
+                    <div class="px-4 py-3 border-b border-border flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                            </svg>
+                            <span class="font-mono text-sm font-semibold uppercase tracking-wider">Conversation Threads</span>
+                        </div>
+                        <span class="font-mono text-xs text-text-muted">History across all frontends</span>
+                    </div>
+
+                    <div class="p-4">
+                        {{if .Threads}}
+                        <div class="space-y-2">
+                            {{range .Threads}}
+                            <a href="/admin/threads/{{.ID}}" class="block p-4 bg-surface border border-border hover:border-cyan/30 hover:glow-cyan transition-all">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="font-mono text-sm font-medium text-text-primary">{{.FrontendName}}</p>
+                                        <p class="text-xs text-text-muted font-mono mt-1">Agent: {{.AgentID}}</p>
+                                        <p class="text-xs text-text-muted/50 font-mono mt-1">{{.ID}}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="font-mono text-xs text-text-secondary">{{.UpdatedAt.Format "Jan 02 15:04"}}</p>
+                                        <p class="font-mono text-xs text-text-muted mt-1">Created: {{.CreatedAt.Format "Jan 02"}}</p>
+                                    </div>
+                                </div>
+                            </a>
+                            {{end}}
+                        </div>
+                        {{else}}
+                        <div class="flex flex-col items-center justify-center py-12 text-text-muted">
+                            <svg class="w-12 h-12 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                            </svg>
+                            <p class="font-mono text-sm">No threads yet</p>
+                            <p class="font-mono text-xs text-text-muted/50 mt-1">Conversations will appear here</p>
+                        </div>
                         {{end}}
                     </div>
-                    {{else}}
-                    <p class="text-gray-500 text-center py-8">No threads yet</p>
-                    {{end}}
                 </div>
             </div>
-        </div>
-    </main>
+        </main>
+    </div>
 </div>
 {{end}}`
 
 // Thread detail template
 const threadDetailTemplate = `{{define "content"}}
-<div class="min-h-screen" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
+<div class="min-h-screen flex flex-col" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
     <!-- Header -->
-    <header class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
+    <header class="bg-surface border-b border-border flex-shrink-0">
+        <div class="max-w-screen-2xl mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center gap-4">
-                <a href="/admin/threads" class="text-gray-500 hover:text-gray-700">&larr; Back</a>
-                <h1 class="text-xl font-bold text-gray-900">Thread Detail</h1>
+                <a href="/admin/threads" class="flex items-center gap-2 text-text-muted hover:text-cyan transition-colors font-mono text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Back
+                </a>
+                <div class="h-4 w-px bg-border"></div>
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 border border-cyan/30 bg-panel flex items-center justify-center">
+                        <svg class="w-4 h-4 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                        </svg>
+                    </div>
+                    <span class="font-mono text-sm font-semibold uppercase tracking-wider">Thread Detail</span>
+                </div>
             </div>
             <div class="flex items-center gap-4">
-                <span class="text-sm text-gray-600">{{.User.DisplayName}}</span>
+                <div class="flex items-center gap-2 text-text-secondary">
+                    <div class="w-2 h-2 rounded-full bg-cyan status-dot"></div>
+                    <span class="font-mono text-sm">{{.User.DisplayName}}</span>
+                </div>
                 <form method="POST" action="/admin/logout" class="inline">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                    <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
+                    <button type="submit" class="font-mono text-xs text-text-muted hover:text-crimson transition-colors uppercase tracking-wider">Logout</button>
                 </form>
             </div>
         </div>
     </header>
 
     <!-- Main content -->
-    <main class="max-w-4xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        <!-- Thread info -->
-        <div class="bg-white rounded-lg shadow p-4 mb-6">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                    <p class="text-gray-500">Frontend</p>
-                    <p class="font-medium">{{.Thread.FrontendName}}</p>
+    <main class="flex-1 p-6 overflow-auto grid-bg">
+        <div class="max-w-4xl mx-auto space-y-4">
+            <!-- Thread info -->
+            <div class="bg-panel border border-border p-4">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                        <p class="font-mono text-[10px] text-text-muted uppercase tracking-widest mb-1">Frontend</p>
+                        <p class="font-mono text-sm text-text-primary">{{.Thread.FrontendName}}</p>
+                    </div>
+                    <div>
+                        <p class="font-mono text-[10px] text-text-muted uppercase tracking-widest mb-1">Agent</p>
+                        <p class="font-mono text-xs text-text-secondary">{{.Thread.AgentID}}</p>
+                    </div>
+                    <div>
+                        <p class="font-mono text-[10px] text-text-muted uppercase tracking-widest mb-1">Created</p>
+                        <p class="font-mono text-sm text-text-primary">{{.Thread.CreatedAt.Format "Jan 02, 2006 15:04"}}</p>
+                    </div>
+                    <div>
+                        <p class="font-mono text-[10px] text-text-muted uppercase tracking-widest mb-1">Updated</p>
+                        <p class="font-mono text-sm text-text-primary">{{.Thread.UpdatedAt.Format "Jan 02, 2006 15:04"}}</p>
+                    </div>
                 </div>
-                <div>
-                    <p class="text-gray-500">Agent</p>
-                    <p class="font-medium font-mono text-xs">{{.Thread.AgentID}}</p>
-                </div>
-                <div>
-                    <p class="text-gray-500">Created</p>
-                    <p class="font-medium">{{.Thread.CreatedAt.Format "Jan 02, 2006 15:04"}}</p>
-                </div>
-                <div>
-                    <p class="text-gray-500">Updated</p>
-                    <p class="font-medium">{{.Thread.UpdatedAt.Format "Jan 02, 2006 15:04"}}</p>
+                <div class="mt-3 pt-3 border-t border-border">
+                    <p class="font-mono text-[10px] text-text-muted uppercase tracking-widest mb-1">Thread ID</p>
+                    <p class="font-mono text-xs text-text-muted">{{.Thread.ID}}</p>
                 </div>
             </div>
-            <div class="mt-3 pt-3 border-t">
-                <p class="text-gray-500 text-sm">Thread ID</p>
-                <p class="font-mono text-xs text-gray-700">{{.Thread.ID}}</p>
+
+            <!-- Messages -->
+            <div class="bg-panel border border-border">
+                <div class="px-4 py-3 border-b border-border flex items-center gap-2">
+                    <svg class="w-4 h-4 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                    </svg>
+                    <span class="font-mono text-sm font-semibold uppercase tracking-wider">Messages</span>
+                </div>
+                <div id="messages-list" class="divide-y divide-border max-h-[600px] overflow-y-auto">
+                    {{if .Messages}}
+                    {{range .Messages}}
+                    <div class="p-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="font-mono text-xs font-semibold uppercase tracking-wider {{if eq .Sender "user"}}text-cyan{{else if eq .Sender "agent"}}text-amber{{else}}text-text-muted{{end}}">
+                                {{.Sender}}
+                            </span>
+                            <span class="font-mono text-xs text-text-muted">{{.CreatedAt.Format "15:04:05"}}</span>
+                        </div>
+                        <div class="text-text-primary whitespace-pre-wrap text-sm font-mono">{{.Content}}</div>
+                    </div>
+                    {{end}}
+                {{else}}
+                <div class="flex flex-col items-center justify-center py-12 text-text-muted">
+                    <svg class="w-12 h-12 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                    </svg>
+                    <p class="font-mono text-sm">No messages in this thread</p>
+                </div>
+                {{end}}
             </div>
         </div>
-
-        <!-- Messages -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="p-4 border-b">
-                <h2 class="font-medium text-gray-900">Messages</h2>
-            </div>
-            <div id="messages-list" class="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
-                {{if .Messages}}
-                {{range .Messages}}
-                <div class="p-4">
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="font-medium text-sm {{if eq .Sender "user"}}text-blue-600{{else if eq .Sender "agent"}}text-green-600{{else}}text-gray-600{{end}}">
-                            {{.Sender}}
-                        </span>
-                        <span class="text-xs text-gray-400">{{.CreatedAt.Format "15:04:05"}}</span>
-                    </div>
-                    <div class="text-gray-800 whitespace-pre-wrap text-sm">{{.Content}}</div>
-                </div>
-                {{end}}
-                {{else}}
-                <p class="text-gray-500 text-center py-8">No messages in this thread</p>
-                {{end}}
-            </div>
         </div>
     </main>
 </div>
@@ -845,18 +1200,20 @@ const threadDetailTemplate = `{{define "content"}}
 const messagesListTemplate = `
 {{if .Messages}}
 {{range .Messages}}
-<div class="p-4 border-b border-gray-100 last:border-0">
+<div class="p-4 border-b border-border last:border-0">
     <div class="flex justify-between items-start mb-2">
-        <span class="font-medium text-sm {{if eq .Sender "user"}}text-blue-600{{else if eq .Sender "agent"}}text-green-600{{else}}text-gray-600{{end}}">
+        <span class="font-mono text-xs font-semibold uppercase tracking-wider {{if eq .Sender "user"}}text-cyan{{else if eq .Sender "agent"}}text-amber{{else}}text-text-muted{{end}}">
             {{.Sender}}
         </span>
-        <span class="text-xs text-gray-400">{{.CreatedAt.Format "15:04:05"}}</span>
+        <span class="font-mono text-xs text-text-muted">{{.CreatedAt.Format "15:04:05"}}</span>
     </div>
-    <div class="text-gray-800 whitespace-pre-wrap text-sm">{{.Content}}</div>
+    <div class="text-text-primary whitespace-pre-wrap text-sm font-mono">{{.Content}}</div>
 </div>
 {{end}}
 {{else}}
-<p class="text-gray-500 text-center py-8">No messages</p>
+<div class="flex flex-col items-center justify-center py-12 text-text-muted">
+    <p class="font-mono text-sm">No messages</p>
+</div>
 {{end}}
 `
 
@@ -864,49 +1221,80 @@ const messagesListTemplate = `
 const chatTemplate = `{{define "content"}}
 <div class="min-h-screen flex flex-col" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
     <!-- Header -->
-    <header class="bg-white shadow flex-shrink-0">
-        <div class="max-w-4xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
+    <header class="bg-surface border-b border-border flex-shrink-0">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center gap-4">
-                <a href="/admin/" class="text-gray-500 hover:text-gray-700">&larr; Back</a>
+                <a href="/admin/" class="flex items-center gap-2 text-text-muted hover:text-cyan transition-colors font-mono text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Back
+                </a>
+                <div class="h-4 w-px bg-border"></div>
                 <div>
-                    <h1 class="text-xl font-bold text-gray-900">{{.AgentName}}</h1>
                     <div class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full {{if .Connected}}bg-green-500{{else}}bg-gray-400{{end}}"></span>
-                        <span class="text-sm text-gray-500">{{if .Connected}}Connected{{else}}Disconnected{{end}}</span>
+                        <div class="w-8 h-8 border border-cyan/30 bg-panel flex items-center justify-center">
+                            <svg class="w-4 h-4 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="font-mono text-sm font-semibold text-text-primary">{{.AgentName}}</h1>
+                            <div class="flex items-center gap-1.5">
+                                <div class="relative">
+                                    <div class="w-2 h-2 rounded-full {{if .Connected}}bg-cyan{{else}}bg-text-muted{{end}}"></div>
+                                    {{if .Connected}}<div class="absolute inset-0 w-2 h-2 rounded-full bg-cyan animate-ping opacity-50"></div>{{end}}
+                                </div>
+                                <span class="font-mono text-xs text-text-muted uppercase tracking-wider">{{if .Connected}}Online{{else}}Offline{{end}}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="flex items-center gap-4">
-                <span class="text-sm text-gray-600">{{.User.DisplayName}}</span>
+                <div class="flex items-center gap-2 text-text-secondary">
+                    <div class="w-2 h-2 rounded-full bg-cyan status-dot"></div>
+                    <span class="font-mono text-sm">{{.User.DisplayName}}</span>
+                </div>
                 <form method="POST" action="/admin/logout" class="inline">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                    <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
+                    <button type="submit" class="font-mono text-xs text-text-muted hover:text-crimson transition-colors uppercase tracking-wider">Logout</button>
                 </form>
             </div>
         </div>
     </header>
 
     <!-- Chat area -->
-    <main class="flex-1 max-w-4xl mx-auto w-full px-4 py-6 sm:px-6 lg:px-8 flex flex-col">
+    <main class="flex-1 max-w-4xl mx-auto w-full p-6 flex flex-col grid-bg">
         <!-- Messages -->
-        <div id="chat-messages" class="flex-1 bg-white rounded-lg shadow mb-4 p-4 overflow-y-auto min-h-[400px] max-h-[600px]">
-            <p class="text-gray-500 text-center py-8">Start a conversation with {{.AgentName}}</p>
+        <div id="chat-messages" class="flex-1 bg-panel border border-border mb-4 p-4 overflow-y-auto min-h-[400px] max-h-[600px]">
+            <div class="flex flex-col items-center justify-center py-12 text-text-muted">
+                <svg class="w-12 h-12 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+                <p class="font-mono text-sm">Start a conversation with {{.AgentName}}</p>
+            </div>
         </div>
 
         <!-- Input area -->
-        <div class="bg-white rounded-lg shadow p-4">
+        <div class="bg-panel border border-border p-4">
             {{if .Connected}}
             <form id="chat-form" class="flex gap-3">
                 <input type="text" id="message-input" name="message" placeholder="Type your message..."
-                    class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    class="flex-1 px-4 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors"
                     autocomplete="off">
                 <button type="submit"
-                    class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                    class="px-6 py-2.5 bg-cyan text-void font-mono font-semibold text-sm uppercase tracking-wider hover:bg-cyan/90 transition-all hover:shadow-[0_0_20px_rgba(0,229,255,0.3)]">
                     Send
                 </button>
             </form>
             {{else}}
-            <p class="text-gray-500 text-center">Agent is not connected. Cannot send messages.</p>
+            <div class="flex items-center justify-center gap-2 text-text-muted py-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"/>
+                </svg>
+                <span class="font-mono text-sm">Agent is not connected. Cannot send messages.</span>
+            </div>
             {{end}}
         </div>
     </main>
@@ -1030,8 +1418,10 @@ const chatTemplate = `{{define "content"}}
 
     function appendMessage(sender, content) {
         // Remove placeholder if present
-        const placeholder = chatMessages.querySelector('p.text-gray-500');
-        if (placeholder) placeholder.remove();
+        const placeholder = chatMessages.querySelector('.text-text-muted');
+        if (placeholder && placeholder.parentElement.classList.contains('flex-col')) {
+            placeholder.parentElement.remove();
+        }
 
         // Create message container using safe DOM methods
         const msgDiv = document.createElement('div');
@@ -1039,45 +1429,45 @@ const chatTemplate = `{{define "content"}}
 
         // Style based on message type
         let senderLabel = sender;
-        let senderColor = 'text-gray-500';
-        let contentColor = 'text-gray-800';
+        let senderColor = 'text-text-muted';
+        let contentColor = 'text-text-primary';
         let bgColor = '';
 
         switch(sender) {
             case 'user':
-                senderColor = 'text-blue-600';
+                senderColor = 'text-cyan';
                 break;
             case 'agent':
-                senderColor = 'text-green-600';
+                senderColor = 'text-amber';
                 break;
             case 'thinking':
                 senderLabel = 'thinking...';
-                senderColor = 'text-purple-500';
-                contentColor = 'text-purple-600 italic';
-                bgColor = 'bg-purple-50 rounded p-2';
+                senderColor = 'text-purple-400';
+                contentColor = 'text-purple-300 italic';
+                bgColor = 'bg-purple-500/10 border border-purple-500/20 p-2';
                 break;
             case 'tool':
                 senderLabel = 'tool';
-                senderColor = 'text-orange-500';
-                contentColor = 'text-orange-700';
-                bgColor = 'bg-orange-50 rounded p-2';
+                senderColor = 'text-amber';
+                contentColor = 'text-amber/80';
+                bgColor = 'bg-amber/10 border border-amber/20 p-2';
                 break;
             case 'tool_result':
                 senderLabel = 'result';
-                senderColor = 'text-orange-500';
-                contentColor = 'text-gray-600 font-mono text-xs';
-                bgColor = 'bg-gray-100 rounded p-2 overflow-x-auto';
+                senderColor = 'text-amber';
+                contentColor = 'text-text-secondary font-mono text-xs';
+                bgColor = 'bg-surface border border-border p-2 overflow-x-auto';
                 break;
             case 'error':
                 senderLabel = 'error';
-                senderColor = 'text-red-500';
-                contentColor = 'text-red-700';
-                bgColor = 'bg-red-50 rounded p-2';
+                senderColor = 'text-crimson';
+                contentColor = 'text-crimson/90';
+                bgColor = 'bg-crimson/10 border border-crimson/20 p-2';
                 break;
             case 'system':
                 senderLabel = 'system';
-                senderColor = 'text-gray-500';
-                contentColor = 'text-gray-600 italic';
+                senderColor = 'text-text-muted';
+                contentColor = 'text-text-secondary italic';
                 break;
         }
 
@@ -1086,11 +1476,11 @@ const chatTemplate = `{{define "content"}}
         headerDiv.className = 'flex justify-between items-start mb-1';
 
         const senderSpan = document.createElement('span');
-        senderSpan.className = 'font-medium text-sm ' + senderColor;
+        senderSpan.className = 'font-mono text-xs font-semibold uppercase tracking-wider ' + senderColor;
         senderSpan.textContent = senderLabel;
 
         const timeSpan = document.createElement('span');
-        timeSpan.className = 'text-xs text-gray-400';
+        timeSpan.className = 'font-mono text-xs text-text-muted';
         timeSpan.textContent = new Date().toLocaleTimeString();
 
         headerDiv.appendChild(senderSpan);
@@ -1098,7 +1488,7 @@ const chatTemplate = `{{define "content"}}
 
         // Content div
         const contentDiv = document.createElement('div');
-        contentDiv.className = 'whitespace-pre-wrap text-sm ' + contentColor + ' ' + bgColor;
+        contentDiv.className = 'whitespace-pre-wrap text-sm font-mono ' + contentColor + ' ' + bgColor;
         contentDiv.textContent = content;
 
         msgDiv.appendChild(headerDiv);
