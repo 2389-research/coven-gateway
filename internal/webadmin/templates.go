@@ -80,6 +80,7 @@ type chatPageData struct {
 	AgentID   string
 	AgentName string
 	Connected bool
+	Messages  []*store.Message // Chat history
 	CSRFToken string
 }
 
@@ -258,7 +259,7 @@ func (a *Admin) renderMessagesList(w http.ResponseWriter, messages []*store.Mess
 }
 
 // renderChatPage renders the chat interface for an agent
-func (a *Admin) renderChatPage(w http.ResponseWriter, user *store.AdminUser, agentID, agentName string, connected bool, csrfToken string) {
+func (a *Admin) renderChatPage(w http.ResponseWriter, user *store.AdminUser, agentID, agentName string, connected bool, messages []*store.Message, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/chat.html"))
 
 	data := chatPageData{
@@ -267,6 +268,7 @@ func (a *Admin) renderChatPage(w http.ResponseWriter, user *store.AdminUser, age
 		AgentID:   agentID,
 		AgentName: agentName,
 		Connected: connected,
+		Messages:  messages,
 		CSRFToken: csrfToken,
 	}
 

@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/2389/fold-gateway/internal/agent"
+	"github.com/2389/fold-gateway/internal/conversation"
 	"github.com/2389/fold-gateway/internal/store"
 )
 
@@ -110,18 +111,16 @@ func (g *Gateway) handleListAgents(w http.ResponseWriter, r *http.Request) {
 // handleSendMessage handles POST /api/send requests.
 // It accepts a JSON body with the message content and streams responses via SSE.
 // If agent_id is specified, the message is sent to that specific agent.
-// Messages are persisted to the store for history retrieval.
+// Messages are persisted via ConversationService (the source of truth for history).
 //
-// Responsibilities (for strangler pattern decomposition):
+// Responsibilities:
 //  1. Parse JSON body - decode SendMessageRequest from request body
 //  2. Validate required fields - ensure content and sender are present
 //  3. Resolve agent ID - look up via binding (frontend+channel_id) or use direct agent_id
 //  4. Verify agent online - check agent exists and is available
-//  5. Get or create thread - ensure thread exists for message persistence
-//  6. Save user message - persist the incoming message to store
-//  7. Send message via manager - dispatch to agent through SendMessage
-//  8. Setup SSE streaming - verify flusher support, set SSE headers
-//  9. Stream responses as SSE - delegate to streamResponses helper
+//  5. Send via ConversationService - handles thread creation and message persistence
+//  6. Setup SSE streaming - verify flusher support, set SSE headers
+//  7. Stream responses as SSE - responses are already persisted by ConversationService
 func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -136,13 +135,13 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve agent ID and thread ID
 	var agentID, threadID string
+	var frontendName, externalID string
 	if req.AgentID != "" {
 		// Direct agent ID specified
 		agentID = req.AgentID
 		threadID = req.ThreadID
-		if threadID == "" {
-			threadID = uuid.New().String()
-		}
+		frontendName = "direct"
+		externalID = threadID
 	} else {
 		// Must have frontend + channel_id for binding lookup
 		if req.Frontend == "" || req.ChannelID == "" {
@@ -164,6 +163,8 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		agentID = result.AgentID
 		threadID = result.ThreadID
+		frontendName = req.Frontend
+		externalID = req.ChannelID
 	}
 
 	// Verify agent exists and is online
@@ -172,81 +173,26 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure thread exists in store and update if found
-	existingThread, err := g.store.GetThread(r.Context(), threadID)
-	if err == nil {
-		// Thread exists - update timestamp if this is a frontend channel thread
-		if req.Frontend != "" && req.ChannelID != "" {
-			// Update thread if agent changed
-			if existingThread.AgentID != agentID {
-				g.logger.Info("thread agent changed", "thread_id", threadID, "old_agent", existingThread.AgentID, "new_agent", agentID)
-				existingThread.AgentID = agentID
-			}
-			existingThread.UpdatedAt = time.Now()
-			if updateErr := g.store.UpdateThread(r.Context(), existingThread); updateErr != nil {
-				g.logger.Debug("failed to update thread timestamp", "error", updateErr)
-			}
-		}
-	} else if errors.Is(err, store.ErrNotFound) {
-		// Create new thread
-		now := time.Now()
-		frontendName := req.Frontend
-		externalID := req.ChannelID
-		// Use sensible defaults for direct agent_id usage
-		if frontendName == "" {
-			frontendName = "direct"
-		}
-		if externalID == "" {
-			externalID = threadID
-		}
-		thread := &store.Thread{
-			ID:           threadID,
-			FrontendName: frontendName,
-			ExternalID:   externalID,
-			AgentID:      agentID,
-			CreatedAt:    now,
-			UpdatedAt:    now,
-		}
-		if createErr := g.store.CreateThread(r.Context(), thread); createErr != nil {
-			g.logger.Error("failed to create thread", "error", createErr)
-			// Race condition: another request may have created it - try to get it
-			if retryThread, retryErr := g.store.GetThreadByFrontendID(r.Context(), frontendName, externalID); retryErr == nil {
-				threadID = retryThread.ID
-				g.logger.Debug("using thread created by concurrent request", "thread_id", threadID)
-			}
-			// Continue anyway - message persistence is best-effort
-		}
-	} else {
-		g.logger.Error("failed to get thread", "error", err)
-		// Continue anyway - message persistence is best-effort
+	// Check streaming support before sending (fail fast)
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		g.logger.Error("streaming not supported")
+		g.sendJSONError(w, http.StatusInternalServerError, "streaming not supported")
+		return
 	}
 
-	// Save the user's message
-	userMsg := &store.Message{
-		ID:        uuid.New().String(),
-		ThreadID:  threadID,
-		Sender:    req.Sender,
-		Content:   req.Content,
-		CreatedAt: time.Now(),
-	}
-	if err := g.store.SaveMessage(r.Context(), userMsg); err != nil {
-		g.logger.Error("failed to save user message", "error", err)
-		// Continue anyway - message persistence is best-effort
+	// Send message via ConversationService
+	// This handles: thread creation, user message persistence, and response persistence
+	convReq := &conversation.SendRequest{
+		ThreadID:     threadID,
+		FrontendName: frontendName,
+		ExternalID:   externalID,
+		AgentID:      agentID,
+		Sender:       req.Sender,
+		Content:      req.Content,
 	}
 
-	// Use mock sender if set (for testing), otherwise use agent manager
-	sender := g.getSender()
-
-	// Create the send request
-	sendReq := &agent.SendRequest{
-		ThreadID: threadID,
-		Sender:   req.Sender,
-		Content:  req.Content,
-		AgentID:  agentID,
-	}
-
-	// Send message to the specified agent
-	respChan, err := sender.SendMessage(r.Context(), sendReq)
+	convResp, err := g.conversation.SendMessage(r.Context(), convReq)
 	if err != nil {
 		if errors.Is(err, agent.ErrAgentNotFound) {
 			g.sendJSONError(w, http.StatusNotFound, "agent not found")
@@ -257,14 +203,6 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check streaming support before setting headers
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		g.logger.Error("streaming not supported")
-		g.sendJSONError(w, http.StatusInternalServerError, "streaming not supported")
-		return
-	}
-
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -272,16 +210,16 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 
 	// Send initial "started" event with thread_id so client can track the conversation
-	g.writeSSEEvent(w, "started", map[string]string{"thread_id": threadID})
+	g.writeSSEEvent(w, "started", map[string]string{"thread_id": convResp.ThreadID})
 	flusher.Flush()
 
-	// Stream responses and persist agent response
-	g.streamResponses(r.Context(), w, flusher, respChan, threadID, agentID)
+	// Stream responses (persistence is handled by ConversationService)
+	g.streamResponses(r.Context(), w, flusher, convResp.Stream)
 }
 
 // streamResponses reads from the response channel and writes SSE events.
-// It also persists tool events and the agent's final response to the store.
-func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, respChan <-chan *agent.Response, threadID, agentID string) {
+// Message persistence is handled by ConversationService which wraps the channel.
+func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, respChan <-chan *agent.Response) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -298,61 +236,7 @@ func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, fl
 			g.writeSSEEvent(w, event.Event, event.Data)
 			flusher.Flush()
 
-			// Save tool events to the store for thread history
-			// Use a timeout context since request context may be cancelled but we still want to persist
-			switch resp.Event {
-			case agent.EventToolUse:
-				if resp.ToolUse != nil {
-					toolMsg := &store.Message{
-						ID:        uuid.New().String(),
-						ThreadID:  threadID,
-						Sender:    "agent:" + agentID,
-						Type:      store.MessageTypeToolUse,
-						ToolName:  resp.ToolUse.Name,
-						ToolID:    resp.ToolUse.ID,
-						Content:   resp.ToolUse.InputJSON,
-						CreatedAt: time.Now(),
-					}
-					saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					if err := g.store.SaveMessage(saveCtx, toolMsg); err != nil {
-						g.logger.Error("failed to save tool_use message", "error", err)
-					}
-					cancel()
-				}
-
-			case agent.EventToolResult:
-				if resp.ToolResult != nil {
-					toolMsg := &store.Message{
-						ID:        uuid.New().String(),
-						ThreadID:  threadID,
-						Sender:    "agent:" + agentID,
-						Type:      store.MessageTypeToolResult,
-						ToolID:    resp.ToolResult.ID,
-						Content:   resp.ToolResult.Output,
-						CreatedAt: time.Now(),
-					}
-					saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					if err := g.store.SaveMessage(saveCtx, toolMsg); err != nil {
-						g.logger.Error("failed to save tool_result message", "error", err)
-					}
-					cancel()
-				}
-
-			case agent.EventDone:
-				// Save the agent's complete response (Done event contains full_response)
-				agentMsg := &store.Message{
-					ID:        uuid.New().String(),
-					ThreadID:  threadID,
-					Sender:    "agent:" + agentID,
-					Type:      store.MessageTypeMessage,
-					Content:   resp.Text,
-					CreatedAt: time.Now(),
-				}
-				saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				if err := g.store.SaveMessage(saveCtx, agentMsg); err != nil {
-					g.logger.Error("failed to save agent message", "error", err)
-				}
-				cancel()
+			if resp.Event == agent.EventDone {
 				return
 			}
 		}

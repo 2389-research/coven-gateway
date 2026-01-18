@@ -22,6 +22,7 @@ import (
 	"github.com/2389/fold-gateway/internal/auth"
 	"github.com/2389/fold-gateway/internal/client"
 	"github.com/2389/fold-gateway/internal/config"
+	"github.com/2389/fold-gateway/internal/conversation"
 	"github.com/2389/fold-gateway/internal/dedupe"
 	"github.com/2389/fold-gateway/internal/store"
 	"github.com/2389/fold-gateway/internal/webadmin"
@@ -34,9 +35,11 @@ type Gateway struct {
 	config       *config.Config
 	agentManager *agent.Manager
 	store        store.Store
+	conversation *conversation.Service
 	grpcServer   *grpc.Server
 	httpServer   *http.Server
 	tsnetServer  *tsnet.Server
+	webAdmin     *webadmin.Admin
 	logger       *slog.Logger
 
 	// serverID identifies this gateway instance
@@ -114,11 +117,19 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		logger.Warn("auth disabled - no jwt_secret configured")
 	}
 
+	// Create conversation service (central message persistence layer)
+	convService := conversation.New(
+		s.(*store.SQLiteStore),
+		agentMgr,
+		logger.With("component", "conversation"),
+	)
+
 	// Create gateway
 	gw := &Gateway{
 		config:       cfg,
 		agentManager: agentMgr,
 		store:        s,
+		conversation: convService,
 		grpcServer:   grpcServer,
 		logger:       logger.With("component", "gateway"),
 		serverID:     generateServerID(),
@@ -214,8 +225,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	webAdminCfg := webadmin.Config{
 		BaseURL: webAdminBaseURL,
 	}
-	webAdmin := webadmin.New(sqliteStore, gw.agentManager, webAdminCfg)
-	webAdmin.RegisterRoutes(mux)
+	gw.webAdmin = webadmin.New(sqliteStore, gw.agentManager, convService, webAdminCfg)
+	gw.webAdmin.RegisterRoutes(mux)
 	logger.Info("admin web UI enabled at /admin/", "base_url", webAdminBaseURL)
 
 	gw.httpServer = &http.Server{
@@ -464,6 +475,11 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	// Close dedupe cache (stops background cleanup goroutine)
 	if g.dedupe != nil {
 		g.dedupe.Close()
+	}
+
+	// Close web admin (cleans up chat hub and sessions)
+	if g.webAdmin != nil {
+		g.webAdmin.Close()
 	}
 
 	if len(errs) > 0 {

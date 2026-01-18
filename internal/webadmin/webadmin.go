@@ -20,6 +20,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 
 	"github.com/2389/fold-gateway/internal/agent"
+	"github.com/2389/fold-gateway/internal/conversation"
 	"github.com/2389/fold-gateway/internal/store"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -58,9 +59,13 @@ type FullStore interface {
 	store.AdminStore
 
 	// Threads
+	CreateThread(ctx context.Context, thread *store.Thread) error
 	ListThreads(ctx context.Context, limit int) ([]*store.Thread, error)
 	GetThread(ctx context.Context, id string) (*store.Thread, error)
 	GetThreadMessages(ctx context.Context, threadID string, limit int) ([]*store.Message, error)
+
+	// Messages
+	SaveMessage(ctx context.Context, msg *store.Message) error
 
 	// Principals
 	ListPrincipals(ctx context.Context, filter store.PrincipalFilter) ([]store.Principal, error)
@@ -74,6 +79,7 @@ type FullStore interface {
 type Admin struct {
 	store            FullStore
 	manager          *agent.Manager
+	conversation     *conversation.Service
 	config           Config
 	logger           *slog.Logger
 	webauthn         *webauthn.WebAuthn
@@ -82,13 +88,14 @@ type Admin struct {
 }
 
 // New creates a new Admin handler
-func New(fullStore FullStore, manager *agent.Manager, cfg Config) *Admin {
+func New(fullStore FullStore, manager *agent.Manager, convService *conversation.Service, cfg Config) *Admin {
 	a := &Admin{
-		store:   fullStore,
-		manager: manager,
-		config:  cfg,
-		logger:  slog.Default().With("component", "admin"),
-		chatHub: newChatHub(),
+		store:        fullStore,
+		manager:      manager,
+		conversation: convService,
+		config:       cfg,
+		logger:       slog.Default().With("component", "admin"),
+		chatHub:      newChatHub(),
 	}
 
 	// Initialize WebAuthn (errors are logged but don't prevent startup)
@@ -917,7 +924,17 @@ func (a *Admin) handleChatPage(w http.ResponseWriter, r *http.Request) {
 
 	user := getUserFromContext(r)
 	_, csrfToken := a.ensureCSRFToken(w, r)
-	a.renderChatPage(w, user, agentID, agentName, connected, csrfToken)
+
+	// Load chat history for this agent/user combination
+	threadID := "admin-chat-" + agentID + "-" + user.ID
+	messages, err := a.store.GetThreadMessages(r.Context(), threadID, 100)
+	if err != nil {
+		// Not a fatal error - chat can work without history
+		a.logger.Debug("no chat history found", "thread_id", threadID, "error", err)
+		messages = nil
+	}
+
+	a.renderChatPage(w, user, agentID, agentName, connected, messages, csrfToken)
 }
 
 // handleChatSend sends a message to an agent
@@ -944,9 +961,9 @@ func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send message to agent via manager
-	if a.manager == nil {
-		http.Error(w, "Agent manager not available", http.StatusServiceUnavailable)
+	// Send message to agent via ConversationService
+	if a.conversation == nil {
+		http.Error(w, "Conversation service not available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -960,21 +977,25 @@ func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	// Ensure chat session exists
 	a.chatHub.getOrCreateSession(agentID, user.ID)
 
-	// Create send request
-	sendReq := &agent.SendRequest{
-		ThreadID: "admin-chat-" + agentID + "-" + user.ID, // Use a consistent thread ID for admin chat
-		Sender:   user.Username,
-		Content:  message,
-		AgentID:  agentID,
+	// Build thread ID for admin chat
+	threadID := "admin-chat-" + agentID + "-" + user.ID
+
+	// Send message via ConversationService
+	// This handles: user message persistence, agent dispatch, and response persistence
+	convReq := &conversation.SendRequest{
+		ThreadID:     threadID,
+		FrontendName: "webadmin",
+		ExternalID:   agentID + "-" + user.ID,
+		AgentID:      agentID,
+		Sender:       user.Username,
+		Content:      message,
 	}
 
-	// Send message to agent
-	// Use background context since r.Context() is cancelled when this handler returns,
-	// which would cause transformResponses to exit and clean up the request prematurely
-	respChan, err := a.manager.SendMessage(context.Background(), sendReq)
+	// Use background context since r.Context() is cancelled when this handler returns
+	convResp, err := a.conversation.SendMessage(context.Background(), convReq)
 	if err != nil {
 		a.logger.Error("failed to send message to agent", "error", err, "agent_id", agentID)
-		if err == agent.ErrAgentNotFound {
+		if errors.Is(err, agent.ErrAgentNotFound) {
 			http.Error(w, "Agent not connected", http.StatusNotFound)
 		} else {
 			http.Error(w, "Failed to send message", http.StatusInternalServerError)
@@ -983,8 +1004,8 @@ func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Pipe agent responses to the chat hub in a goroutine
-	// Use background context since r.Context() is cancelled when this handler returns
-	go a.chatHub.pipeAgentResponses(context.Background(), agentID, user.ID, respChan)
+	// ConversationService handles persistence, this just pipes to SSE clients
+	go a.pipeAgentResponses(context.Background(), agentID, user.ID, convResp.Stream)
 
 	a.logger.Debug("message sent to agent", "agent_id", agentID, "user", user.Username)
 
@@ -996,6 +1017,55 @@ func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// pipeAgentResponses pipes agent responses to the chat hub for SSE streaming.
+// Message persistence is handled by ConversationService which wraps the channel.
+func (a *Admin) pipeAgentResponses(ctx context.Context, agentID, userID string, respChan <-chan *agent.Response) {
+	session, ok := a.chatHub.getSession(agentID, userID)
+	if !ok {
+		// Session doesn't exist, drain the response channel to prevent agent blocking
+		for range respChan {
+		}
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			session.send(&chatMessage{
+				Type:      "error",
+				Content:   "Request cancelled",
+				Timestamp: time.Now(),
+			})
+			go drainChannel(respChan)
+			return
+
+		case <-session.ctx.Done():
+			go drainChannel(respChan)
+			return
+
+		case resp, ok := <-respChan:
+			if !ok {
+				return
+			}
+
+			// Convert and send to SSE stream
+			msg := convertAgentResponse(resp)
+			sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			sent := sendWithContext(sendCtx, session, msg)
+			cancel()
+
+			if !sent && session.isClosed() {
+				go drainChannel(respChan)
+				return
+			}
+
+			if resp.Done {
+				return
+			}
+		}
+	}
 }
 
 // handleChatStream handles SSE streaming of chat responses

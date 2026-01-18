@@ -49,12 +49,38 @@
     <main class="flex-1 max-w-4xl mx-auto w-full p-6 flex flex-col grid-bg">
         <!-- Messages -->
         <div id="chat-messages" class="flex-1 bg-panel border border-border mb-4 p-4 overflow-y-auto min-h-[400px] max-h-[600px]">
+            {{if .Messages}}
+            {{range .Messages}}
+            <div class="mb-3">
+                <div class="flex justify-between items-start mb-1">
+                    {{if eq .Type "tool_use"}}
+                    <span class="font-mono text-xs font-semibold uppercase tracking-wider text-violet-400">tool: {{.ToolName}}</span>
+                    {{else if eq .Type "tool_result"}}
+                    <span class="font-mono text-xs font-semibold uppercase tracking-wider text-emerald-400">result</span>
+                    {{else if eq .Sender "user"}}
+                    <span class="font-mono text-xs font-semibold uppercase tracking-wider text-cyan">user</span>
+                    {{else}}
+                    <span class="font-mono text-xs font-semibold uppercase tracking-wider text-amber">agent</span>
+                    {{end}}
+                    <span class="font-mono text-xs text-text-muted">{{.CreatedAt.Format "15:04:05"}}</span>
+                </div>
+                {{if eq .Type "tool_use"}}
+                <div class="whitespace-pre-wrap text-sm font-mono text-violet-300/80 bg-violet-500/10 border border-violet-500/20 p-2 max-h-48 overflow-y-auto">{{.Content}}</div>
+                {{else if eq .Type "tool_result"}}
+                <div class="whitespace-pre-wrap text-sm font-mono text-text-secondary bg-surface border border-border p-2 overflow-x-auto max-h-48 overflow-y-auto">{{.Content}}</div>
+                {{else}}
+                <div class="whitespace-pre-wrap text-sm font-mono text-text-primary">{{.Content}}</div>
+                {{end}}
+            </div>
+            {{end}}
+            {{else}}
             <div class="flex flex-col items-center justify-center py-12 text-text-muted">
                 <svg class="w-12 h-12 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                 </svg>
                 <p class="font-mono text-sm">Start a conversation with {{.AgentName}}</p>
             </div>
+            {{end}}
         </div>
 
         <!-- Input area -->
@@ -87,6 +113,11 @@
     const chatMessages = document.getElementById('chat-messages');
     const chatForm = document.getElementById('chat-form');
     const messageInput = document.getElementById('message-input');
+
+    // Scroll to bottom if there's history
+    if (chatMessages) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 
     if (!chatForm) return;
 
@@ -142,16 +173,10 @@
         }
     });
 
-    // Handle done event
+    // Handle done event - just log completion, don't display content
+    // (content was already streamed via text events)
     evtSource.addEventListener('done', function(e) {
-        try {
-            const data = JSON.parse(e.data);
-            if (data.content) {
-                appendMessage('agent', data.content);
-            }
-        } catch {
-            // Done event may not have content
-        }
+        console.log('Agent response complete');
     });
 
     // Handle error events from agent
