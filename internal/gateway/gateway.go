@@ -192,12 +192,15 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	// The admin UI has its own session-based auth (separate from JWT)
 	webAdminBaseURL := cfg.WebAdmin.BaseURL
 	if webAdminBaseURL == "" {
-		// Auto-detect based on deployment mode
-		if cfg.Tailscale.Enabled {
-			// With Tailscale HTTPS, user MUST set webadmin.base_url to the full tailnet DNS name
-			// (e.g., https://fold-gateway.your-tailnet.ts.net) for WebAuthn to work
+		// Check FOLD_GATEWAY_URL env var (includes full tailnet DNS name)
+		if envURL := os.Getenv("FOLD_GATEWAY_URL"); envURL != "" {
+			webAdminBaseURL = envURL
+		} else if cfg.Tailscale.Enabled {
+			// Auto-detect based on deployment mode
+			// With Tailscale HTTPS, user MUST set FOLD_GATEWAY_URL or webadmin.base_url
+			// to the full tailnet DNS name for WebAuthn to work
 			if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
-				logger.Warn("webadmin.base_url not set - WebAuthn/passkeys may fail. Set to full tailnet URL (e.g., https://fold-gateway.your-tailnet.ts.net)")
+				logger.Warn("webadmin.base_url/FOLD_GATEWAY_URL not set - WebAuthn/passkeys may fail. Set FOLD_GATEWAY_URL to full tailnet URL (e.g., https://fold-gateway.your-tailnet.ts.net)")
 			}
 			scheme := "http"
 			if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
