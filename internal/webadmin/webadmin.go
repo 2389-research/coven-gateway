@@ -969,7 +969,9 @@ func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send message to agent
-	respChan, err := a.manager.SendMessage(r.Context(), sendReq)
+	// Use background context since r.Context() is cancelled when this handler returns,
+	// which would cause transformResponses to exit and clean up the request prematurely
+	respChan, err := a.manager.SendMessage(context.Background(), sendReq)
 	if err != nil {
 		a.logger.Error("failed to send message to agent", "error", err, "agent_id", agentID)
 		if err == agent.ErrAgentNotFound {
