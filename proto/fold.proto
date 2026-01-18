@@ -21,11 +21,30 @@ message AgentMessage {
   }
 }
 
+// Git repository state (optional - agent may not be in a git repo)
+message GitInfo {
+  string branch = 1;
+  string commit = 2;
+  bool dirty = 3;
+  string remote = 4;
+  int32 ahead = 5;
+  int32 behind = 6;
+}
+
+// Environment metadata sent during registration
+message AgentMetadata {
+  string working_directory = 1;
+  GitInfo git = 2;
+  string hostname = 3;
+  string os = 4;
+}
+
 // Agent registration
 message RegisterAgent {
   string agent_id = 1;           // Unique agent identifier
   string name = 2;               // Human-readable name
   repeated string capabilities = 3;  // What this agent can do
+  AgentMetadata metadata = 4;    // Environment context
 }
 
 // Response to a message request
@@ -39,7 +58,15 @@ message MessageResponse {
     Done done = 6;
     string error = 7;
     FileData file = 8;
+    ToolApprovalRequest tool_approval_request = 9;
   }
+}
+
+// Request for tool approval before execution (agent → server)
+message ToolApprovalRequest {
+  string id = 1;           // Correlates with ToolUse.id
+  string name = 2;         // Tool name
+  string input_json = 3;   // Tool input for display
 }
 
 message ToolUse {
@@ -74,7 +101,22 @@ message ServerMessage {
     Welcome welcome = 1;
     SendMessage send_message = 2;
     Shutdown shutdown = 3;
+    ToolApprovalResponse tool_approval = 4;
+    RegistrationError registration_error = 5;
   }
+}
+
+// Server rejects registration (e.g., agent_id already taken)
+message RegistrationError {
+  string reason = 1;              // Human-readable error message
+  string suggested_id = 2;        // Optional: server-suggested alternative ID
+}
+
+// Response to tool approval request (server → agent)
+message ToolApprovalResponse {
+  string id = 1;           // Correlates with ToolApprovalRequest.id
+  bool approved = 2;       // True = execute, False = skip
+  bool approve_all = 3;    // If true, auto-approve remaining tools this request
 }
 
 // Server acknowledges registration
