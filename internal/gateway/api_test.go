@@ -503,7 +503,7 @@ func newTestGatewayWithMockManager(t *testing.T) *Gateway {
 	}
 
 	// Register a test agent with the real agent manager so GetAgent succeeds
-	conn := agent.NewConnection("test-agent", "Test", []string{"chat", "code"}, &testMockStream{}, logger)
+	conn := agent.NewConnection(agent.ConnectionParams{ID: "test-agent", Name: "Test", Capabilities: []string{"chat", "code"}, Stream: &testMockStream{}, Logger: logger})
 	if err := gw.agentManager.Register(conn); err != nil {
 		t.Fatalf("failed to register test agent: %v", err)
 	}

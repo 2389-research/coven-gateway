@@ -240,8 +240,12 @@ func (m *Manager) ListAgents() []*AgentInfo {
 	for _, agent := range m.agents {
 		agents = append(agents, &AgentInfo{
 			ID:           agent.ID,
+			PrincipalID:  agent.PrincipalID,
 			Name:         agent.Name,
 			Capabilities: agent.Capabilities,
+			Workspaces:   agent.Workspaces,
+			WorkingDir:   agent.WorkingDir,
+			InstanceID:   agent.InstanceID,
 		})
 	}
 	return agents
@@ -330,6 +334,10 @@ type FileEvent struct {
 // AgentInfo contains public information about a connected agent.
 type AgentInfo struct {
 	ID           string
+	PrincipalID  string
 	Name         string
 	Capabilities []string
+	Workspaces   []string
+	WorkingDir   string
+	InstanceID   string
 }

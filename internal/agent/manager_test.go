@@ -51,7 +51,7 @@ func (m *mockStream) getSentMessages() []*pb.ServerMessage {
 func TestConnectionSend(t *testing.T) {
 	t.Run("sends message to stream", func(t *testing.T) {
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat"}, Stream: stream, Logger: slog.Default()})
 
 		msg := &pb.ServerMessage{
 			Payload: &pb.ServerMessage_Welcome{
@@ -81,7 +81,7 @@ func TestConnectionSend(t *testing.T) {
 func TestConnectionRequestHandling(t *testing.T) {
 	t.Run("creates and closes request channels", func(t *testing.T) {
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat"}, Stream: stream, Logger: slog.Default()})
 
 		requestID := "req-123"
 		respChan := conn.CreateRequest(requestID)
@@ -106,7 +106,7 @@ func TestConnectionRequestHandling(t *testing.T) {
 
 	t.Run("routes response to correct request channel", func(t *testing.T) {
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat"}, Stream: stream, Logger: slog.Default()})
 
 		requestID := "req-456"
 		respChan := conn.CreateRequest(requestID)
@@ -133,7 +133,7 @@ func TestConnectionRequestHandling(t *testing.T) {
 
 	t.Run("ignores response for unknown request", func(t *testing.T) {
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat"}, Stream: stream, Logger: slog.Default()})
 
 		// Send response without creating request first
 		resp := &pb.MessageResponse{
@@ -153,7 +153,7 @@ func TestManagerRegister(t *testing.T) {
 	t.Run("registers agent successfully", func(t *testing.T) {
 		manager := NewManager(slog.Default())
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat", "code"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat", "code"}, Stream: stream, Logger: slog.Default()})
 
 		err := manager.Register(conn)
 		if err != nil {
@@ -178,8 +178,8 @@ func TestManagerRegister(t *testing.T) {
 		stream1 := newMockStream()
 		stream2 := newMockStream()
 
-		conn1 := NewConnection("agent-1", "Agent One", []string{"chat"}, stream1, slog.Default())
-		conn2 := NewConnection("agent-1", "Agent One Duplicate", []string{"chat"}, stream2, slog.Default())
+		conn1 := NewConnection(ConnectionParams{ID: "agent-1", Name: "Agent One", Capabilities: []string{"chat"}, Stream: stream1, Logger: slog.Default()})
+		conn2 := NewConnection(ConnectionParams{ID: "agent-1", Name: "Agent One Duplicate", Capabilities: []string{"chat"}, Stream: stream2, Logger: slog.Default()})
 
 		err := manager.Register(conn1)
 		if err != nil {
@@ -201,7 +201,7 @@ func TestManagerUnregister(t *testing.T) {
 	t.Run("unregisters existing agent", func(t *testing.T) {
 		manager := NewManager(slog.Default())
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat"}, Stream: stream, Logger: slog.Default()})
 
 		manager.Register(conn)
 		manager.Unregister("agent-1")
@@ -225,7 +225,7 @@ func TestManagerGetAgent(t *testing.T) {
 	t.Run("returns agent when exists", func(t *testing.T) {
 		manager := NewManager(slog.Default())
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat"}, Stream: stream, Logger: slog.Default()})
 
 		manager.Register(conn)
 
@@ -264,13 +264,13 @@ func TestManagerListAgents(t *testing.T) {
 
 		for i := 1; i <= 3; i++ {
 			stream := newMockStream()
-			conn := NewConnection(
-				fmt.Sprintf("agent-%d", i),
-				fmt.Sprintf("Agent %d", i),
-				[]string{"chat"},
-				stream,
-				slog.Default(),
-			)
+			conn := NewConnection(ConnectionParams{
+				ID:           fmt.Sprintf("agent-%d", i),
+				Name:         fmt.Sprintf("Agent %d", i),
+				Capabilities: []string{"chat"},
+				Stream:       stream,
+				Logger:       slog.Default(),
+			})
 			manager.Register(conn)
 		}
 
@@ -286,7 +286,7 @@ func TestManagerSendMessage(t *testing.T) {
 	t.Run("returns error when agent_id is missing", func(t *testing.T) {
 		manager := NewManager(slog.Default())
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat"}, Stream: stream, Logger: slog.Default()})
 		manager.Register(conn)
 
 		req := &SendRequest{
@@ -327,7 +327,7 @@ func TestManagerSendMessage(t *testing.T) {
 	t.Run("sends message to specified agent and returns response channel", func(t *testing.T) {
 		manager := NewManager(slog.Default())
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat"}, Stream: stream, Logger: slog.Default()})
 		manager.Register(conn)
 
 		req := &SendRequest{
@@ -369,7 +369,7 @@ func TestManagerSendMessage(t *testing.T) {
 	t.Run("sends message with attachments", func(t *testing.T) {
 		manager := NewManager(slog.Default())
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat"}, Stream: stream, Logger: slog.Default()})
 		manager.Register(conn)
 
 		req := &SendRequest{
@@ -409,7 +409,7 @@ func TestManagerSendMessage(t *testing.T) {
 	t.Run("generates unique request ID", func(t *testing.T) {
 		manager := NewManager(slog.Default())
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat"}, Stream: stream, Logger: slog.Default()})
 		manager.Register(conn)
 
 		req := &SendRequest{
@@ -445,8 +445,8 @@ func TestManagerSendMessageTargeting(t *testing.T) {
 		manager := NewManager(slog.Default())
 		stream1 := newMockStream()
 		stream2 := newMockStream()
-		conn1 := NewConnection("agent-1", "Agent One", []string{"chat"}, stream1, slog.Default())
-		conn2 := NewConnection("agent-2", "Agent Two", []string{"chat"}, stream2, slog.Default())
+		conn1 := NewConnection(ConnectionParams{ID: "agent-1", Name: "Agent One", Capabilities: []string{"chat"}, Stream: stream1, Logger: slog.Default()})
+		conn2 := NewConnection(ConnectionParams{ID: "agent-2", Name: "Agent Two", Capabilities: []string{"chat"}, Stream: stream2, Logger: slog.Default()})
 		manager.Register(conn1)
 		manager.Register(conn2)
 
@@ -480,7 +480,7 @@ func TestAgentInfo(t *testing.T) {
 	t.Run("contains correct information", func(t *testing.T) {
 		manager := NewManager(slog.Default())
 		stream := newMockStream()
-		conn := NewConnection("agent-1", "Test Agent", []string{"chat", "code"}, stream, slog.Default())
+		conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat", "code"}, Stream: stream, Logger: slog.Default()})
 		manager.Register(conn)
 
 		agents := manager.ListAgents()
@@ -533,13 +533,13 @@ func TestConcurrentAccess(t *testing.T) {
 			go func(id int) {
 				defer wg.Done()
 				stream := newMockStream()
-				conn := NewConnection(
-					fmt.Sprintf("agent-%d", id),
-					"Agent",
-					[]string{"chat"},
-					stream,
-					slog.Default(),
-				)
+				conn := NewConnection(ConnectionParams{
+					ID:           fmt.Sprintf("agent-%d", id),
+					Name:         "Agent",
+					Capabilities: []string{"chat"},
+					Stream:       stream,
+					Logger:       slog.Default(),
+				})
 				manager.Register(conn)
 			}(i)
 		}

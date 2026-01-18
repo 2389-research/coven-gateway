@@ -8,10 +8,12 @@ import (
 	"io"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/2389/fold-gateway/internal/agent"
+	"github.com/2389/fold-gateway/internal/auth"
 	pb "github.com/2389/fold-gateway/proto/fold"
 )
 
@@ -65,14 +67,36 @@ func (s *foldControlServer) AgentStream(stream pb.FoldControl_AgentStreamServer)
 		return status.Error(codes.InvalidArgument, "agent_id is required")
 	}
 
+	// Extract authenticated principal from auth context
+	authCtx := auth.FromContext(stream.Context())
+	var principalID string
+	if authCtx != nil {
+		principalID = authCtx.PrincipalID
+	}
+
+	// Extract metadata from registration
+	var workspaces []string
+	var workingDir string
+	if metadata := reg.GetMetadata(); metadata != nil {
+		workspaces = metadata.GetWorkspaces()
+		workingDir = metadata.GetWorkingDirectory()
+	}
+
+	// Generate short instance ID for binding commands
+	instanceID := uuid.New().String()[:8]
+
 	// Create connection for this agent
-	conn := agent.NewConnection(
-		reg.GetAgentId(),
-		reg.GetName(),
-		reg.GetCapabilities(),
-		stream,
-		s.logger.With("agent_id", reg.GetAgentId()),
-	)
+	conn := agent.NewConnection(agent.ConnectionParams{
+		ID:           reg.GetAgentId(),
+		Name:         reg.GetName(),
+		Capabilities: reg.GetCapabilities(),
+		PrincipalID:  principalID,
+		Workspaces:   workspaces,
+		WorkingDir:   workingDir,
+		InstanceID:   instanceID,
+		Stream:       stream,
+		Logger:       s.logger.With("agent_id", reg.GetAgentId()),
+	})
 
 	// Register the agent with the manager
 	if err := s.gateway.agentManager.Register(conn); err != nil {
@@ -85,12 +109,14 @@ func (s *foldControlServer) AgentStream(stream pb.FoldControl_AgentStreamServer)
 	// Ensure we unregister on exit
 	defer s.gateway.agentManager.Unregister(conn.ID)
 
-	// Send welcome message
+	// Send welcome message with instance ID and principal ID
 	welcome := &pb.ServerMessage{
 		Payload: &pb.ServerMessage_Welcome{
 			Welcome: &pb.Welcome{
-				ServerId: s.gateway.serverID,
-				AgentId:  reg.GetAgentId(),
+				ServerId:    s.gateway.serverID,
+				AgentId:     reg.GetAgentId(),
+				InstanceId:  instanceID,
+				PrincipalId: principalID,
 			},
 		},
 	}

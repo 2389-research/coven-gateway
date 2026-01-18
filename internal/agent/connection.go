@@ -15,6 +15,10 @@ type Connection struct {
 	ID           string
 	Name         string
 	Capabilities []string
+	PrincipalID  string   // Authenticated principal UUID (for audit)
+	Workspaces   []string // From registration metadata
+	WorkingDir   string   // From registration metadata
+	InstanceID   string   // Short code for binding commands
 
 	stream  pb.FoldControl_AgentStreamServer
 	pending map[string]chan *pb.MessageResponse
@@ -22,15 +26,32 @@ type Connection struct {
 	logger  *slog.Logger
 }
 
+// ConnectionParams contains the parameters needed to create a new Connection.
+type ConnectionParams struct {
+	ID           string
+	Name         string
+	Capabilities []string
+	PrincipalID  string
+	Workspaces   []string
+	WorkingDir   string
+	InstanceID   string
+	Stream       pb.FoldControl_AgentStreamServer
+	Logger       *slog.Logger
+}
+
 // NewConnection creates a new Connection for a connected agent.
-func NewConnection(id, name string, caps []string, stream pb.FoldControl_AgentStreamServer, logger *slog.Logger) *Connection {
+func NewConnection(params ConnectionParams) *Connection {
 	return &Connection{
-		ID:           id,
-		Name:         name,
-		Capabilities: caps,
-		stream:       stream,
+		ID:           params.ID,
+		Name:         params.Name,
+		Capabilities: params.Capabilities,
+		PrincipalID:  params.PrincipalID,
+		Workspaces:   params.Workspaces,
+		WorkingDir:   params.WorkingDir,
+		InstanceID:   params.InstanceID,
+		stream:       params.Stream,
 		pending:      make(map[string]chan *pb.MessageResponse),
-		logger:       logger,
+		logger:       params.Logger,
 	}
 }
 
