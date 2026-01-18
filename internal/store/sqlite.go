@@ -60,6 +60,11 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("creating schema: %w", err)
 	}
 
+	if err := s.runMigrations(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("running migrations: %w", err)
+	}
+
 	logger.Info("SQLite store initialized", "path", path)
 	return s, nil
 }
@@ -84,6 +89,9 @@ func (s *SQLiteStore) createSchema() error {
 			thread_id TEXT NOT NULL,
 			sender TEXT NOT NULL,
 			content TEXT NOT NULL,
+			type TEXT NOT NULL DEFAULT 'message',
+			tool_name TEXT,
+			tool_id TEXT,
 			created_at DATETIME NOT NULL,
 			FOREIGN KEY (thread_id) REFERENCES threads(id)
 		);
@@ -252,6 +260,50 @@ func (s *SQLiteStore) createSchema() error {
 
 	_, err := s.db.Exec(schema)
 	return err
+}
+
+// runMigrations applies schema migrations for existing databases.
+// These are idempotent - safe to run multiple times.
+func (s *SQLiteStore) runMigrations() error {
+	// Migration: Add tool-related columns to messages table (if they don't exist)
+	// SQLite doesn't support ADD COLUMN IF NOT EXISTS, so we check first
+	migrations := []struct {
+		check  string // Query to check if migration is needed
+		apply  string // Query to apply the migration
+		column string // Column name for logging
+	}{
+		{
+			check:  `SELECT 1 FROM pragma_table_info('messages') WHERE name = 'type'`,
+			apply:  `ALTER TABLE messages ADD COLUMN type TEXT NOT NULL DEFAULT 'message'`,
+			column: "type",
+		},
+		{
+			check:  `SELECT 1 FROM pragma_table_info('messages') WHERE name = 'tool_name'`,
+			apply:  `ALTER TABLE messages ADD COLUMN tool_name TEXT`,
+			column: "tool_name",
+		},
+		{
+			check:  `SELECT 1 FROM pragma_table_info('messages') WHERE name = 'tool_id'`,
+			apply:  `ALTER TABLE messages ADD COLUMN tool_id TEXT`,
+			column: "tool_id",
+		},
+	}
+
+	for _, m := range migrations {
+		var exists int
+		err := s.db.QueryRow(m.check).Scan(&exists)
+		if err == nil {
+			// Column already exists, skip
+			continue
+		}
+		// Column doesn't exist, apply migration
+		if _, err := s.db.Exec(m.apply); err != nil {
+			return fmt.Errorf("adding %s column to messages: %w", m.column, err)
+		}
+		s.logger.Info("applied migration", "column", m.column, "table", "messages")
+	}
+
+	return nil
 }
 
 // Close closes the database connection
@@ -460,9 +512,15 @@ func (s *SQLiteStore) ListThreads(ctx context.Context, limit int) ([]*Thread, er
 
 // SaveMessage saves a message to the database
 func (s *SQLiteStore) SaveMessage(ctx context.Context, msg *Message) error {
+	// Default to "message" type if not specified
+	msgType := msg.Type
+	if msgType == "" {
+		msgType = MessageTypeMessage
+	}
+
 	query := `
-		INSERT INTO messages (id, thread_id, sender, content, created_at)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO messages (id, thread_id, sender, content, type, tool_name, tool_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := s.db.ExecContext(ctx, query,
@@ -470,14 +528,25 @@ func (s *SQLiteStore) SaveMessage(ctx context.Context, msg *Message) error {
 		msg.ThreadID,
 		msg.Sender,
 		msg.Content,
+		msgType,
+		nullString(msg.ToolName),
+		nullString(msg.ToolID),
 		msg.CreatedAt.UTC().Format(time.RFC3339),
 	)
 	if err != nil {
 		return fmt.Errorf("inserting message: %w", err)
 	}
 
-	s.logger.Debug("saved message", "id", msg.ID, "thread_id", msg.ThreadID)
+	s.logger.Debug("saved message", "id", msg.ID, "thread_id", msg.ThreadID, "type", msgType)
 	return nil
+}
+
+// nullString returns nil for empty strings, otherwise the string pointer
+func nullString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // GetThreadMessages retrieves messages for a thread, limited to the most recent `limit` messages.
@@ -491,9 +560,9 @@ func (s *SQLiteStore) GetThreadMessages(ctx context.Context, threadID string, li
 		// Get the N most recent messages, but return them in chronological order
 		// We use a subquery to get the most recent N, then order ascending
 		query = `
-			SELECT id, thread_id, sender, content, created_at
+			SELECT id, thread_id, sender, content, type, tool_name, tool_id, created_at
 			FROM (
-				SELECT id, thread_id, sender, content, created_at
+				SELECT id, thread_id, sender, content, type, tool_name, tool_id, created_at
 				FROM messages
 				WHERE thread_id = ?
 				ORDER BY created_at DESC
@@ -504,7 +573,7 @@ func (s *SQLiteStore) GetThreadMessages(ctx context.Context, threadID string, li
 		args = []any{threadID, limit}
 	} else {
 		query = `
-			SELECT id, thread_id, sender, content, created_at
+			SELECT id, thread_id, sender, content, type, tool_name, tool_id, created_at
 			FROM messages
 			WHERE thread_id = ?
 			ORDER BY created_at ASC
@@ -522,14 +591,23 @@ func (s *SQLiteStore) GetThreadMessages(ctx context.Context, threadID string, li
 	for rows.Next() {
 		var msg Message
 		var createdAtStr string
+		var toolName, toolID *string
 
-		if err := rows.Scan(&msg.ID, &msg.ThreadID, &msg.Sender, &msg.Content, &createdAtStr); err != nil {
+		if err := rows.Scan(&msg.ID, &msg.ThreadID, &msg.Sender, &msg.Content, &msg.Type, &toolName, &toolID, &createdAtStr); err != nil {
 			return nil, fmt.Errorf("scanning message row: %w", err)
 		}
 
 		msg.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
 		if err != nil {
 			return nil, fmt.Errorf("parsing message created_at: %w", err)
+		}
+
+		// Handle nullable fields
+		if toolName != nil {
+			msg.ToolName = *toolName
+		}
+		if toolID != nil {
+			msg.ToolID = *toolID
 		}
 
 		messages = append(messages, &msg)

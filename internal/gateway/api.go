@@ -65,6 +65,9 @@ type MessageResponse struct {
 	ThreadID  string `json:"thread_id"`
 	Sender    string `json:"sender"`
 	Content   string `json:"content"`
+	Type      string `json:"type"`                // "message", "tool_use", "tool_result"
+	ToolName  string `json:"tool_name,omitempty"` // For tool_use: name of the tool
+	ToolID    string `json:"tool_id,omitempty"`   // Links tool_use to tool_result
 	CreatedAt string `json:"created_at"`
 }
 
@@ -277,7 +280,7 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 // streamResponses reads from the response channel and writes SSE events.
-// It also persists the agent's final response to the store.
+// It also persists tool events and the agent's final response to the store.
 func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, respChan <-chan *agent.Response, threadID, agentID string) {
 	for {
 		select {
@@ -295,19 +298,61 @@ func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, fl
 			g.writeSSEEvent(w, event.Event, event.Data)
 			flusher.Flush()
 
-			if resp.Done {
+			// Save tool events to the store for thread history
+			// Use a timeout context since request context may be cancelled but we still want to persist
+			switch resp.Event {
+			case agent.EventToolUse:
+				if resp.ToolUse != nil {
+					toolMsg := &store.Message{
+						ID:        uuid.New().String(),
+						ThreadID:  threadID,
+						Sender:    "agent:" + agentID,
+						Type:      store.MessageTypeToolUse,
+						ToolName:  resp.ToolUse.Name,
+						ToolID:    resp.ToolUse.ID,
+						Content:   resp.ToolUse.InputJSON,
+						CreatedAt: time.Now(),
+					}
+					saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					if err := g.store.SaveMessage(saveCtx, toolMsg); err != nil {
+						g.logger.Error("failed to save tool_use message", "error", err)
+					}
+					cancel()
+				}
+
+			case agent.EventToolResult:
+				if resp.ToolResult != nil {
+					toolMsg := &store.Message{
+						ID:        uuid.New().String(),
+						ThreadID:  threadID,
+						Sender:    "agent:" + agentID,
+						Type:      store.MessageTypeToolResult,
+						ToolID:    resp.ToolResult.ID,
+						Content:   resp.ToolResult.Output,
+						CreatedAt: time.Now(),
+					}
+					saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					if err := g.store.SaveMessage(saveCtx, toolMsg); err != nil {
+						g.logger.Error("failed to save tool_result message", "error", err)
+					}
+					cancel()
+				}
+
+			case agent.EventDone:
 				// Save the agent's complete response (Done event contains full_response)
 				agentMsg := &store.Message{
 					ID:        uuid.New().String(),
 					ThreadID:  threadID,
 					Sender:    "agent:" + agentID,
+					Type:      store.MessageTypeMessage,
 					Content:   resp.Text,
 					CreatedAt: time.Now(),
 				}
-				// Use background context since request context may be cancelled
-				if err := g.store.SaveMessage(context.Background(), agentMsg); err != nil {
+				saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				if err := g.store.SaveMessage(saveCtx, agentMsg); err != nil {
 					g.logger.Error("failed to save agent message", "error", err)
 				}
+				cancel()
 				return
 			}
 		}
@@ -691,11 +736,19 @@ func (g *Gateway) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i, msg := range messages {
+		// Default to "message" type if not set (for backwards compatibility)
+		msgType := msg.Type
+		if msgType == "" {
+			msgType = store.MessageTypeMessage
+		}
 		response.Messages[i] = MessageResponse{
 			ID:        msg.ID,
 			ThreadID:  msg.ThreadID,
 			Sender:    msg.Sender,
 			Content:   msg.Content,
+			Type:      msgType,
+			ToolName:  msg.ToolName,
+			ToolID:    msg.ToolID,
 			CreatedAt: msg.CreatedAt.Format(time.RFC3339),
 		}
 	}

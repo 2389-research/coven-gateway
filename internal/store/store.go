@@ -22,12 +22,22 @@ type Thread struct {
 	UpdatedAt    time.Time
 }
 
+// MessageType constants for message types
+const (
+	MessageTypeMessage    = "message"     // Regular text message
+	MessageTypeToolUse    = "tool_use"    // Tool invocation
+	MessageTypeToolResult = "tool_result" // Tool result
+)
+
 // Message represents a single message within a thread for audit/history purposes
 type Message struct {
 	ID        string
 	ThreadID  string
 	Sender    string
 	Content   string
+	Type      string // "message", "tool_use", "tool_result" (defaults to "message")
+	ToolName  string // For tool_use: name of the tool being called
+	ToolID    string // Links tool_use to its corresponding tool_result
 	CreatedAt time.Time
 }
 
