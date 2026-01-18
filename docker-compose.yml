@@ -14,8 +14,8 @@ services:
       - FOLD_DB_PATH=/app/data/gateway.db
     volumes:
       - ./config.yaml:/app/config.yaml:ro
-      - gateway-data:/app/data
-      - tailscale-state:/app/tailscale
+      - ./data:/app/data
+      - ./tailscale:/app/tailscale
     restart: unless-stopped
 
   # fold-matrix: Matrix bridge (disabled for now)
@@ -34,7 +34,3 @@ services:
   #     - ./config.matrix.toml:/app/config.toml:ro
   #     - matrix-crypto:/app/data
   #   restart: unless-stopped
-
-volumes:
-  gateway-data:
-  tailscale-state:
