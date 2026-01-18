@@ -37,7 +37,8 @@ type TailscaleConfig struct {
 	AuthKey   string `yaml:"auth_key"`
 	StateDir  string `yaml:"state_dir"`
 	Ephemeral bool   `yaml:"ephemeral"`
-	Funnel    bool   `yaml:"funnel"`
+	HTTPS     bool   `yaml:"https"`  // Enable HTTPS within tailnet (required for passkeys)
+	Funnel    bool   `yaml:"funnel"` // Enable public Funnel (implies HTTPS)
 }
 
 // ServerConfig holds server address configuration

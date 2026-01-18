@@ -379,12 +379,16 @@ func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn n
 		return nil, nil, fmt.Errorf("listening on tailscale gRPC port: %w", err)
 	}
 
-	// Create HTTP listener - use Funnel if enabled, otherwise regular tailscale listen.
-	// Funnel requires HTTPS on port 443 (Tailscale terminates TLS).
-	// Non-Funnel uses port 80 since traffic stays within the tailnet.
+	// Create HTTP listener based on config:
+	// - Funnel: public HTTPS on :443 (Tailscale terminates TLS)
+	// - HTTPS: private HTTPS on :443 (Tailscale certs, tailnet only)
+	// - Neither: HTTP on :80 (tailnet only, no passkey support)
 	if tsCfg.Funnel {
-		g.logger.Info("enabling tailscale funnel on :443")
+		g.logger.Info("enabling tailscale funnel (public HTTPS) on :443")
 		httpLn, err = g.tsnetServer.ListenFunnel("tcp", ":443")
+	} else if tsCfg.HTTPS {
+		g.logger.Info("enabling tailscale HTTPS (private) on :443")
+		httpLn, err = g.tsnetServer.ListenTLS("tcp", ":443")
 	} else {
 		httpLn, err = g.tsnetServer.Listen("tcp", ":80")
 	}

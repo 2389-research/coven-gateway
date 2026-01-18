@@ -20,6 +20,8 @@ tailscale:
   state_dir: ""
   # Ephemeral node - removed from tailnet when gateway stops
   ephemeral: false
+  # Enable HTTPS within tailnet (required for passkeys/WebAuthn, stays private)
+  https: true
   # Enable Funnel to expose HTTP API publicly (requires Funnel enabled in tailnet)
   funnel: false
 
