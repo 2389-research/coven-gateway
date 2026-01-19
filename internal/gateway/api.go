@@ -81,6 +81,11 @@ type SingleBindingResponse struct {
 	Online     bool   `json:"online"`
 }
 
+// SendToAgentRequest is the JSON request body for POST /api/agents/{id}/send.
+type SendToAgentRequest struct {
+	Message string `json:"message"`
+}
+
 // AgentHistoryEvent is the JSON response for GET /api/agents/{id}/history.
 type AgentHistoryEvent struct {
 	ID              string `json:"id"`
@@ -812,9 +817,40 @@ func (g *Gateway) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// handleAgentRoutes routes /api/agents/{id}/* requests to the appropriate handler.
+// Routes:
+// - GET /api/agents/{id}/history -> handleAgentHistoryImpl
+// - POST /api/agents/{id}/send -> handleSendToAgent
+func (g *Gateway) handleAgentRoutes(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	prefix := "/api/agents/"
+
+	if !strings.HasPrefix(path, prefix) {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	// Route based on suffix
+	switch {
+	case strings.HasSuffix(path, "/history"):
+		g.handleAgentHistoryImpl(w, r)
+	case strings.HasSuffix(path, "/send"):
+		g.handleSendToAgent(w, r)
+	default:
+		g.sendJSONError(w, http.StatusBadRequest, "invalid path: must end with /history or /send")
+	}
+}
+
 // handleAgentHistory handles GET /api/agents/{id}/history requests.
 // Returns recent conversation events for a specific agent, ordered by timestamp DESC.
+// Deprecated: use handleAgentRoutes which dispatches to handleAgentHistoryImpl.
 func (g *Gateway) handleAgentHistory(w http.ResponseWriter, r *http.Request) {
+	g.handleAgentRoutes(w, r)
+}
+
+// handleAgentHistoryImpl handles GET /api/agents/{id}/history requests.
+// Returns recent conversation events for a specific agent, ordered by timestamp DESC.
+func (g *Gateway) handleAgentHistoryImpl(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -885,4 +921,94 @@ func (g *Gateway) handleAgentHistory(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// handleSendToAgent handles POST /api/agents/{id}/send requests.
+// Sends a message to a specific agent and streams the response via SSE.
+func (g *Gateway) handleSendToAgent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract agent ID from path: /api/agents/{id}/send
+	path := r.URL.Path
+	prefix := "/api/agents/"
+	suffix := "/send"
+
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	agentID := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
+	if agentID == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "agent_id is required")
+		return
+	}
+
+	// Parse JSON body
+	var req SendToAgentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	// Validate message is not empty
+	if req.Message == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "message is required")
+		return
+	}
+
+	// Look up agent by ID to verify it exists
+	_, ok := g.agentManager.GetAgent(agentID)
+	if !ok {
+		g.sendJSONError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+
+	// Check streaming support before sending (fail fast)
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		g.logger.Error("streaming not supported")
+		g.sendJSONError(w, http.StatusInternalServerError, "streaming not supported")
+		return
+	}
+
+	// Generate unique conversation key for this request
+	conversationKey := "leader:" + uuid.New().String()
+
+	// Send message via ConversationService
+	convReq := &conversation.SendRequest{
+		ThreadID:     uuid.New().String(), // New thread for each request
+		FrontendName: "leader",
+		ExternalID:   conversationKey,
+		AgentID:      agentID,
+		Sender:       "fold-leader",
+		Content:      req.Message,
+	}
+
+	convResp, err := g.conversation.SendMessage(r.Context(), convReq)
+	if err != nil {
+		if errors.Is(err, agent.ErrAgentNotFound) {
+			g.sendJSONError(w, http.StatusNotFound, "agent not found")
+			return
+		}
+		g.logger.Error("failed to send message", "error", err)
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	// Send initial "started" event with thread_id so client can track the conversation
+	g.writeSSEEvent(w, "started", map[string]string{"thread_id": convResp.ThreadID})
+	flusher.Flush()
+
+	// Stream responses (persistence is handled by ConversationService)
+	g.streamResponses(r.Context(), w, flusher, convResp.Stream)
 }
