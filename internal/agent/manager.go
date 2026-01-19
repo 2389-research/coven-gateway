@@ -267,6 +267,19 @@ func (m *Manager) IsOnline(agentID string) bool {
 	return ok
 }
 
+// GetByInstanceID returns the connection with the given instance ID, or nil if not found.
+func (m *Manager) GetByInstanceID(instanceID string) *Connection {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, agent := range m.agents {
+		if agent.InstanceID == instanceID {
+			return agent
+		}
+	}
+	return nil
+}
+
 // SendRequest represents a request to send a message to an agent.
 type SendRequest struct {
 	ThreadID    string

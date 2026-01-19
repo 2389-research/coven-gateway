@@ -521,6 +521,73 @@ func TestResponseTypes(t *testing.T) {
 	})
 }
 
+// TestManagerGetByInstanceID tests retrieving an agent by instance ID.
+func TestManagerGetByInstanceID(t *testing.T) {
+	t.Run("returns agent when instance ID exists", func(t *testing.T) {
+		manager := NewManager(slog.Default())
+		stream := newMockStream()
+		conn := NewConnection(ConnectionParams{
+			ID:           "bob-projects-website",
+			Name:         "bob",
+			Capabilities: []string{"chat"},
+			PrincipalID:  "principal-uuid",
+			WorkingDir:   "/projects/website",
+			InstanceID:   "0fb8187d-c06",
+			Stream:       stream,
+			Logger:       slog.Default(),
+		})
+
+		manager.Register(conn)
+
+		// Lookup by instance ID
+		got := manager.GetByInstanceID("0fb8187d-c06")
+		if got == nil {
+			t.Fatal("expected to find agent by instance ID")
+		}
+		if got.ID != "bob-projects-website" {
+			t.Errorf("expected ID 'bob-projects-website', got '%s'", got.ID)
+		}
+		if got.WorkingDir != "/projects/website" {
+			t.Errorf("expected WorkingDir '/projects/website', got '%s'", got.WorkingDir)
+		}
+	})
+
+	t.Run("returns nil when instance ID not found", func(t *testing.T) {
+		manager := NewManager(slog.Default())
+
+		got := manager.GetByInstanceID("nonexistent")
+		if got != nil {
+			t.Error("expected nil for non-existent instance ID")
+		}
+	})
+
+	t.Run("finds correct agent among multiple", func(t *testing.T) {
+		manager := NewManager(slog.Default())
+
+		// Register multiple agents
+		for i, instanceID := range []string{"aaa111", "bbb222", "ccc333"} {
+			stream := newMockStream()
+			conn := NewConnection(ConnectionParams{
+				ID:         fmt.Sprintf("agent-%d", i),
+				Name:       fmt.Sprintf("Agent %d", i),
+				InstanceID: instanceID,
+				Stream:     stream,
+				Logger:     slog.Default(),
+			})
+			manager.Register(conn)
+		}
+
+		// Find the middle one
+		got := manager.GetByInstanceID("bbb222")
+		if got == nil {
+			t.Fatal("expected to find agent")
+		}
+		if got.ID != "agent-1" {
+			t.Errorf("expected 'agent-1', got '%s'", got.ID)
+		}
+	})
+}
+
 // TestConcurrentAccess tests thread safety of the Manager.
 func TestConcurrentAccess(t *testing.T) {
 	t.Run("handles concurrent register and list", func(t *testing.T) {
