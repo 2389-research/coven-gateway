@@ -65,9 +65,9 @@ func TestStore_CreateThread_Duplicate(t *testing.T) {
 	err := store.CreateThread(ctx, thread)
 	require.NoError(t, err)
 
-	// Second create should fail
+	// Second create should fail with ErrDuplicateThread
 	err = store.CreateThread(ctx, thread)
-	assert.Error(t, err, "duplicate thread creation should fail")
+	assert.ErrorIs(t, err, ErrDuplicateThread, "duplicate thread creation should return ErrDuplicateThread")
 }
 
 func TestStore_GetThread_NotFound(t *testing.T) {

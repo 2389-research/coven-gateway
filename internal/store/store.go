@@ -12,6 +12,9 @@ import (
 // ErrNotFound is returned when a requested entity does not exist
 var ErrNotFound = errors.New("not found")
 
+// ErrDuplicateThread is returned when trying to create a thread that already exists
+var ErrDuplicateThread = errors.New("thread already exists")
+
 // Thread represents a conversation thread linking a frontend conversation to an agent
 type Thread struct {
 	ID           string

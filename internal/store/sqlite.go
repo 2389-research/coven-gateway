@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -324,7 +325,9 @@ func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }
 
-// CreateThread creates a new thread in the database
+// CreateThread creates a new thread in the database.
+// If a thread with the same frontend_name and external_id already exists,
+// it returns ErrDuplicateThread.
 func (s *SQLiteStore) CreateThread(ctx context.Context, thread *Thread) error {
 	query := `
 		INSERT INTO threads (id, frontend_name, external_id, agent_id, created_at, updated_at)
@@ -340,11 +343,25 @@ func (s *SQLiteStore) CreateThread(ctx context.Context, thread *Thread) error {
 		thread.UpdatedAt.UTC().Format(time.RFC3339),
 	)
 	if err != nil {
+		// Check for UNIQUE constraint violation
+		if isConstraintViolation(err) {
+			return ErrDuplicateThread
+		}
 		return fmt.Errorf("inserting thread: %w", err)
 	}
 
 	s.logger.Debug("created thread", "id", thread.ID, "frontend", thread.FrontendName)
 	return nil
+}
+
+// isConstraintViolation checks if the error is a SQLite UNIQUE constraint violation
+func isConstraintViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "UNIQUE constraint failed") ||
+		strings.Contains(errStr, "constraint failed")
 }
 
 // GetThread retrieves a thread by ID.

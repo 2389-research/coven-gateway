@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -165,11 +164,13 @@ func (s *Service) ensureThread(ctx context.Context, req *SendRequest) (*store.Th
 		if err := s.store.CreateThread(ctx, thread); err != nil {
 			// Handle race condition: another request may have created the thread
 			// between our lookup and insert attempt
-			if isConstraintError(err) {
+			if err == store.ErrDuplicateThread {
 				thread, lookupErr := s.store.GetThread(ctx, req.ThreadID)
 				if lookupErr == nil {
+					s.logger.Debug("found existing thread after race", "thread_id", thread.ID)
 					return thread, nil
 				}
+				s.logger.Error("retry lookup failed after duplicate error", "lookup_error", lookupErr)
 			}
 			return nil, err
 		}
@@ -179,13 +180,18 @@ func (s *Service) ensureThread(ctx context.Context, req *SendRequest) (*store.Th
 
 	// Lookup by frontend + external ID
 	if req.FrontendName != "" && req.ExternalID != "" {
+		s.logger.Debug("looking up thread by frontend ID",
+			"frontend", req.FrontendName,
+			"external_id", req.ExternalID)
 		thread, err := s.store.GetThreadByFrontendID(ctx, req.FrontendName, req.ExternalID)
 		if err == nil {
+			s.logger.Debug("found existing thread", "thread_id", thread.ID)
 			return thread, nil
 		}
 		if err != store.ErrNotFound {
 			return nil, err
 		}
+		s.logger.Debug("thread not found, will create new one")
 	}
 
 	// Create new thread with generated ID
@@ -200,26 +206,22 @@ func (s *Service) ensureThread(ctx context.Context, req *SendRequest) (*store.Th
 	if err := s.store.CreateThread(ctx, thread); err != nil {
 		// Handle race condition: another request may have created the thread
 		// between our lookup and insert attempt
-		if isConstraintError(err) && req.FrontendName != "" && req.ExternalID != "" {
-			thread, lookupErr := s.store.GetThreadByFrontendID(ctx, req.FrontendName, req.ExternalID)
+		if err == store.ErrDuplicateThread && req.FrontendName != "" && req.ExternalID != "" {
+			s.logger.Debug("thread creation hit duplicate, retrying lookup",
+				"frontend", req.FrontendName,
+				"external_id", req.ExternalID)
+			existingThread, lookupErr := s.store.GetThreadByFrontendID(ctx, req.FrontendName, req.ExternalID)
 			if lookupErr == nil {
-				return thread, nil
+				s.logger.Debug("found existing thread after duplicate error", "thread_id", existingThread.ID)
+				return existingThread, nil
 			}
+			s.logger.Error("retry lookup failed after duplicate error",
+				"lookup_error", lookupErr)
 		}
 		return nil, err
 	}
 	s.logger.Debug("thread created", "thread_id", thread.ID)
 	return thread, nil
-}
-
-// isConstraintError checks if an error is a UNIQUE constraint violation
-func isConstraintError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	return strings.Contains(errStr, "UNIQUE constraint failed") ||
-		strings.Contains(errStr, "constraint failed")
 }
 
 // persistResponses wraps the agent response channel to save messages as they stream
