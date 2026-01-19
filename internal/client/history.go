@@ -30,6 +30,7 @@ type ClientService struct {
 	store      EventStore
 	principals PrincipalStore
 	dedupe     DedupeCache
+	agents     AgentLister
 }
 
 // NewClientService creates a new ClientService with the given stores

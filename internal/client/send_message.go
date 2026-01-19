@@ -92,3 +92,14 @@ func NewClientServiceWithDedupe(eventStore EventStore, principalStore PrincipalS
 		dedupe:     dedupeCache,
 	}
 }
+
+// NewClientServiceFull creates a new ClientService with all dependencies.
+// This is the constructor to use when all features are needed including agent listing.
+func NewClientServiceFull(eventStore EventStore, principalStore PrincipalStore, dedupeCache *dedupe.Cache, agents AgentLister) *ClientService {
+	return &ClientService{
+		store:      eventStore,
+		principals: principalStore,
+		dedupe:     dedupeCache,
+		agents:     agents,
+	}
+}

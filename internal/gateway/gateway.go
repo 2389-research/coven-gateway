@@ -179,7 +179,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		pb.RegisterAdminServiceServer(grpcServer, adminService)
 	}
 
-	clientService := client.NewClientServiceWithDedupe(sqliteStore, sqliteStore, dedupeCache)
+	clientService := client.NewClientServiceFull(sqliteStore, sqliteStore, dedupeCache, agentMgr)
 	pb.RegisterClientServiceServer(grpcServer, clientService)
 
 	// Create HTTP server for health checks and API

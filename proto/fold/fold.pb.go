@@ -2911,6 +2911,635 @@ func (*DeletePrincipalResponse) Descriptor() ([]byte, []int) {
 	return file_fold_proto_rawDescGZIP(), []int{40}
 }
 
+// Request to stream events for a conversation
+type StreamEventsRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ConversationKey string                 `protobuf:"bytes,1,opt,name=conversation_key,json=conversationKey,proto3" json:"conversation_key,omitempty"` // Which conversation to stream
+	SinceEventId    *string                `protobuf:"bytes,2,opt,name=since_event_id,json=sinceEventId,proto3,oneof" json:"since_event_id,omitempty"`  // Resume from this event ID (for reconnection)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *StreamEventsRequest) Reset() {
+	*x = StreamEventsRequest{}
+	mi := &file_fold_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamEventsRequest) ProtoMessage() {}
+
+func (x *StreamEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamEventsRequest.ProtoReflect.Descriptor instead.
+func (*StreamEventsRequest) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *StreamEventsRequest) GetConversationKey() string {
+	if x != nil {
+		return x.ConversationKey
+	}
+	return ""
+}
+
+func (x *StreamEventsRequest) GetSinceEventId() string {
+	if x != nil && x.SinceEventId != nil {
+		return *x.SinceEventId
+	}
+	return ""
+}
+
+// Streaming event sent to clients - wraps all possible event types
+type ClientStreamEvent struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ConversationKey string                 `protobuf:"bytes,1,opt,name=conversation_key,json=conversationKey,proto3" json:"conversation_key,omitempty"`
+	Timestamp       string                 `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // ISO-8601
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*ClientStreamEvent_Text
+	//	*ClientStreamEvent_Thinking
+	//	*ClientStreamEvent_ToolUse
+	//	*ClientStreamEvent_ToolResult
+	//	*ClientStreamEvent_ToolState
+	//	*ClientStreamEvent_Usage
+	//	*ClientStreamEvent_Done
+	//	*ClientStreamEvent_Error
+	//	*ClientStreamEvent_Event
+	Payload       isClientStreamEvent_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientStreamEvent) Reset() {
+	*x = ClientStreamEvent{}
+	mi := &file_fold_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientStreamEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientStreamEvent) ProtoMessage() {}
+
+func (x *ClientStreamEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientStreamEvent.ProtoReflect.Descriptor instead.
+func (*ClientStreamEvent) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *ClientStreamEvent) GetConversationKey() string {
+	if x != nil {
+		return x.ConversationKey
+	}
+	return ""
+}
+
+func (x *ClientStreamEvent) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
+func (x *ClientStreamEvent) GetPayload() isClientStreamEvent_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *ClientStreamEvent) GetText() *TextChunk {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientStreamEvent_Text); ok {
+			return x.Text
+		}
+	}
+	return nil
+}
+
+func (x *ClientStreamEvent) GetThinking() *ThinkingChunk {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientStreamEvent_Thinking); ok {
+			return x.Thinking
+		}
+	}
+	return nil
+}
+
+func (x *ClientStreamEvent) GetToolUse() *ToolUse {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientStreamEvent_ToolUse); ok {
+			return x.ToolUse
+		}
+	}
+	return nil
+}
+
+func (x *ClientStreamEvent) GetToolResult() *ToolResult {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientStreamEvent_ToolResult); ok {
+			return x.ToolResult
+		}
+	}
+	return nil
+}
+
+func (x *ClientStreamEvent) GetToolState() *ToolStateUpdate {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientStreamEvent_ToolState); ok {
+			return x.ToolState
+		}
+	}
+	return nil
+}
+
+func (x *ClientStreamEvent) GetUsage() *TokenUsage {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientStreamEvent_Usage); ok {
+			return x.Usage
+		}
+	}
+	return nil
+}
+
+func (x *ClientStreamEvent) GetDone() *StreamDone {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientStreamEvent_Done); ok {
+			return x.Done
+		}
+	}
+	return nil
+}
+
+func (x *ClientStreamEvent) GetError() *StreamError {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientStreamEvent_Error); ok {
+			return x.Error
+		}
+	}
+	return nil
+}
+
+func (x *ClientStreamEvent) GetEvent() *Event {
+	if x != nil {
+		if x, ok := x.Payload.(*ClientStreamEvent_Event); ok {
+			return x.Event
+		}
+	}
+	return nil
+}
+
+type isClientStreamEvent_Payload interface {
+	isClientStreamEvent_Payload()
+}
+
+type ClientStreamEvent_Text struct {
+	// Text content events
+	Text *TextChunk `protobuf:"bytes,3,opt,name=text,proto3,oneof"`
+}
+
+type ClientStreamEvent_Thinking struct {
+	Thinking *ThinkingChunk `protobuf:"bytes,4,opt,name=thinking,proto3,oneof"`
+}
+
+type ClientStreamEvent_ToolUse struct {
+	// Tool lifecycle events
+	ToolUse *ToolUse `protobuf:"bytes,5,opt,name=tool_use,json=toolUse,proto3,oneof"`
+}
+
+type ClientStreamEvent_ToolResult struct {
+	ToolResult *ToolResult `protobuf:"bytes,6,opt,name=tool_result,json=toolResult,proto3,oneof"`
+}
+
+type ClientStreamEvent_ToolState struct {
+	ToolState *ToolStateUpdate `protobuf:"bytes,7,opt,name=tool_state,json=toolState,proto3,oneof"`
+}
+
+type ClientStreamEvent_Usage struct {
+	// Session events
+	Usage *TokenUsage `protobuf:"bytes,8,opt,name=usage,proto3,oneof"`
+}
+
+type ClientStreamEvent_Done struct {
+	Done *StreamDone `protobuf:"bytes,9,opt,name=done,proto3,oneof"`
+}
+
+type ClientStreamEvent_Error struct {
+	Error *StreamError `protobuf:"bytes,10,opt,name=error,proto3,oneof"`
+}
+
+type ClientStreamEvent_Event struct {
+	// Full message (for history replay)
+	Event *Event `protobuf:"bytes,11,opt,name=event,proto3,oneof"`
+}
+
+func (*ClientStreamEvent_Text) isClientStreamEvent_Payload() {}
+
+func (*ClientStreamEvent_Thinking) isClientStreamEvent_Payload() {}
+
+func (*ClientStreamEvent_ToolUse) isClientStreamEvent_Payload() {}
+
+func (*ClientStreamEvent_ToolResult) isClientStreamEvent_Payload() {}
+
+func (*ClientStreamEvent_ToolState) isClientStreamEvent_Payload() {}
+
+func (*ClientStreamEvent_Usage) isClientStreamEvent_Payload() {}
+
+func (*ClientStreamEvent_Done) isClientStreamEvent_Payload() {}
+
+func (*ClientStreamEvent_Error) isClientStreamEvent_Payload() {}
+
+func (*ClientStreamEvent_Event) isClientStreamEvent_Payload() {}
+
+// Incremental text chunk
+type TextChunk struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Content       string                 `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TextChunk) Reset() {
+	*x = TextChunk{}
+	mi := &file_fold_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TextChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TextChunk) ProtoMessage() {}
+
+func (x *TextChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TextChunk.ProtoReflect.Descriptor instead.
+func (*TextChunk) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *TextChunk) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+// Incremental thinking chunk
+type ThinkingChunk struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Content       string                 `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ThinkingChunk) Reset() {
+	*x = ThinkingChunk{}
+	mi := &file_fold_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ThinkingChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ThinkingChunk) ProtoMessage() {}
+
+func (x *ThinkingChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ThinkingChunk.ProtoReflect.Descriptor instead.
+func (*ThinkingChunk) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *ThinkingChunk) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+// Stream completed successfully
+type StreamDone struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FullResponse  *string                `protobuf:"bytes,1,opt,name=full_response,json=fullResponse,proto3,oneof" json:"full_response,omitempty"` // Complete concatenated response
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamDone) Reset() {
+	*x = StreamDone{}
+	mi := &file_fold_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamDone) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamDone) ProtoMessage() {}
+
+func (x *StreamDone) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamDone.ProtoReflect.Descriptor instead.
+func (*StreamDone) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *StreamDone) GetFullResponse() string {
+	if x != nil && x.FullResponse != nil {
+		return *x.FullResponse
+	}
+	return ""
+}
+
+// Stream error
+type StreamError struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	Recoverable   bool                   `protobuf:"varint,2,opt,name=recoverable,proto3" json:"recoverable,omitempty"` // Can client retry?
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamError) Reset() {
+	*x = StreamError{}
+	mi := &file_fold_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamError) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamError) ProtoMessage() {}
+
+func (x *StreamError) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamError.ProtoReflect.Descriptor instead.
+func (*StreamError) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *StreamError) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *StreamError) GetRecoverable() bool {
+	if x != nil {
+		return x.Recoverable
+	}
+	return false
+}
+
+// Agent info for client listing
+type AgentInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Backend       string                 `protobuf:"bytes,3,opt,name=backend,proto3" json:"backend,omitempty"` // "mux", "cli", "acp", "direct"
+	WorkingDir    string                 `protobuf:"bytes,4,opt,name=working_dir,json=workingDir,proto3" json:"working_dir,omitempty"`
+	Connected     bool                   `protobuf:"varint,5,opt,name=connected,proto3" json:"connected,omitempty"`
+	Metadata      *AgentMetadata         `protobuf:"bytes,6,opt,name=metadata,proto3,oneof" json:"metadata,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentInfo) Reset() {
+	*x = AgentInfo{}
+	mi := &file_fold_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentInfo) ProtoMessage() {}
+
+func (x *AgentInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentInfo.ProtoReflect.Descriptor instead.
+func (*AgentInfo) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *AgentInfo) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AgentInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AgentInfo) GetBackend() string {
+	if x != nil {
+		return x.Backend
+	}
+	return ""
+}
+
+func (x *AgentInfo) GetWorkingDir() string {
+	if x != nil {
+		return x.WorkingDir
+	}
+	return ""
+}
+
+func (x *AgentInfo) GetConnected() bool {
+	if x != nil {
+		return x.Connected
+	}
+	return false
+}
+
+func (x *AgentInfo) GetMetadata() *AgentMetadata {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type ListAgentsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Workspace     *string                `protobuf:"bytes,1,opt,name=workspace,proto3,oneof" json:"workspace,omitempty"` // Filter by workspace tag
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentsRequest) Reset() {
+	*x = ListAgentsRequest{}
+	mi := &file_fold_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentsRequest) ProtoMessage() {}
+
+func (x *ListAgentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentsRequest.ProtoReflect.Descriptor instead.
+func (*ListAgentsRequest) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *ListAgentsRequest) GetWorkspace() string {
+	if x != nil && x.Workspace != nil {
+		return *x.Workspace
+	}
+	return ""
+}
+
+type ListAgentsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Agents        []*AgentInfo           `protobuf:"bytes,1,rep,name=agents,proto3" json:"agents,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentsResponse) Reset() {
+	*x = ListAgentsResponse{}
+	mi := &file_fold_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentsResponse) ProtoMessage() {}
+
+func (x *ListAgentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentsResponse.ProtoReflect.Descriptor instead.
+func (*ListAgentsResponse) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *ListAgentsResponse) GetAgents() []*AgentInfo {
+	if x != nil {
+		return x.Agents
+	}
+	return nil
+}
+
 // ClientSendMessageRequest is the request for direct client message sending.
 // The idempotency_key is required and must be unique per message to prevent duplicates.
 type ClientSendMessageRequest struct {
@@ -2925,7 +3554,7 @@ type ClientSendMessageRequest struct {
 
 func (x *ClientSendMessageRequest) Reset() {
 	*x = ClientSendMessageRequest{}
-	mi := &file_fold_proto_msgTypes[41]
+	mi := &file_fold_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2937,7 +3566,7 @@ func (x *ClientSendMessageRequest) String() string {
 func (*ClientSendMessageRequest) ProtoMessage() {}
 
 func (x *ClientSendMessageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[41]
+	mi := &file_fold_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2950,7 +3579,7 @@ func (x *ClientSendMessageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientSendMessageRequest.ProtoReflect.Descriptor instead.
 func (*ClientSendMessageRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{41}
+	return file_fold_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ClientSendMessageRequest) GetConversationKey() string {
@@ -2992,7 +3621,7 @@ type ClientSendMessageResponse struct {
 
 func (x *ClientSendMessageResponse) Reset() {
 	*x = ClientSendMessageResponse{}
-	mi := &file_fold_proto_msgTypes[42]
+	mi := &file_fold_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3004,7 +3633,7 @@ func (x *ClientSendMessageResponse) String() string {
 func (*ClientSendMessageResponse) ProtoMessage() {}
 
 func (x *ClientSendMessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[42]
+	mi := &file_fold_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3017,7 +3646,7 @@ func (x *ClientSendMessageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientSendMessageResponse.ProtoReflect.Descriptor instead.
 func (*ClientSendMessageResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{42}
+	return file_fold_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ClientSendMessageResponse) GetStatus() string {
@@ -3050,7 +3679,7 @@ type MeResponse struct {
 
 func (x *MeResponse) Reset() {
 	*x = MeResponse{}
-	mi := &file_fold_proto_msgTypes[43]
+	mi := &file_fold_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3062,7 +3691,7 @@ func (x *MeResponse) String() string {
 func (*MeResponse) ProtoMessage() {}
 
 func (x *MeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[43]
+	mi := &file_fold_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3075,7 +3704,7 @@ func (x *MeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeResponse.ProtoReflect.Descriptor instead.
 func (*MeResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{43}
+	return file_fold_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *MeResponse) GetPrincipalId() string {
@@ -3147,7 +3776,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_fold_proto_msgTypes[44]
+	mi := &file_fold_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3159,7 +3788,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[44]
+	mi := &file_fold_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3172,7 +3801,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{44}
+	return file_fold_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *Event) GetId() string {
@@ -3265,7 +3894,7 @@ type GetEventsRequest struct {
 
 func (x *GetEventsRequest) Reset() {
 	*x = GetEventsRequest{}
-	mi := &file_fold_proto_msgTypes[45]
+	mi := &file_fold_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3277,7 +3906,7 @@ func (x *GetEventsRequest) String() string {
 func (*GetEventsRequest) ProtoMessage() {}
 
 func (x *GetEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[45]
+	mi := &file_fold_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3290,7 +3919,7 @@ func (x *GetEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventsRequest.ProtoReflect.Descriptor instead.
 func (*GetEventsRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{45}
+	return file_fold_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *GetEventsRequest) GetConversationKey() string {
@@ -3339,7 +3968,7 @@ type GetEventsResponse struct {
 
 func (x *GetEventsResponse) Reset() {
 	*x = GetEventsResponse{}
-	mi := &file_fold_proto_msgTypes[46]
+	mi := &file_fold_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3351,7 +3980,7 @@ func (x *GetEventsResponse) String() string {
 func (*GetEventsResponse) ProtoMessage() {}
 
 func (x *GetEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[46]
+	mi := &file_fold_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3364,7 +3993,7 @@ func (x *GetEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventsResponse.ProtoReflect.Descriptor instead.
 func (*GetEventsResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{46}
+	return file_fold_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *GetEventsResponse) GetEvents() []*Event {
@@ -3605,7 +4234,53 @@ const file_fold_proto_rawDesc = "" +
 	"_pubkey_fp\"(\n" +
 	"\x16DeletePrincipalRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x19\n" +
-	"\x17DeletePrincipalResponse\"\xc0\x01\n" +
+	"\x17DeletePrincipalResponse\"~\n" +
+	"\x13StreamEventsRequest\x12)\n" +
+	"\x10conversation_key\x18\x01 \x01(\tR\x0fconversationKey\x12)\n" +
+	"\x0esince_event_id\x18\x02 \x01(\tH\x00R\fsinceEventId\x88\x01\x01B\x11\n" +
+	"\x0f_since_event_id\"\xfc\x03\n" +
+	"\x11ClientStreamEvent\x12)\n" +
+	"\x10conversation_key\x18\x01 \x01(\tR\x0fconversationKey\x12\x1c\n" +
+	"\ttimestamp\x18\x02 \x01(\tR\ttimestamp\x12%\n" +
+	"\x04text\x18\x03 \x01(\v2\x0f.fold.TextChunkH\x00R\x04text\x121\n" +
+	"\bthinking\x18\x04 \x01(\v2\x13.fold.ThinkingChunkH\x00R\bthinking\x12*\n" +
+	"\btool_use\x18\x05 \x01(\v2\r.fold.ToolUseH\x00R\atoolUse\x123\n" +
+	"\vtool_result\x18\x06 \x01(\v2\x10.fold.ToolResultH\x00R\n" +
+	"toolResult\x126\n" +
+	"\n" +
+	"tool_state\x18\a \x01(\v2\x15.fold.ToolStateUpdateH\x00R\ttoolState\x12(\n" +
+	"\x05usage\x18\b \x01(\v2\x10.fold.TokenUsageH\x00R\x05usage\x12&\n" +
+	"\x04done\x18\t \x01(\v2\x10.fold.StreamDoneH\x00R\x04done\x12)\n" +
+	"\x05error\x18\n" +
+	" \x01(\v2\x11.fold.StreamErrorH\x00R\x05error\x12#\n" +
+	"\x05event\x18\v \x01(\v2\v.fold.EventH\x00R\x05eventB\t\n" +
+	"\apayload\"%\n" +
+	"\tTextChunk\x12\x18\n" +
+	"\acontent\x18\x01 \x01(\tR\acontent\")\n" +
+	"\rThinkingChunk\x12\x18\n" +
+	"\acontent\x18\x01 \x01(\tR\acontent\"H\n" +
+	"\n" +
+	"StreamDone\x12(\n" +
+	"\rfull_response\x18\x01 \x01(\tH\x00R\ffullResponse\x88\x01\x01B\x10\n" +
+	"\x0e_full_response\"I\n" +
+	"\vStreamError\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\x12 \n" +
+	"\vrecoverable\x18\x02 \x01(\bR\vrecoverable\"\xcb\x01\n" +
+	"\tAgentInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
+	"\abackend\x18\x03 \x01(\tR\abackend\x12\x1f\n" +
+	"\vworking_dir\x18\x04 \x01(\tR\n" +
+	"workingDir\x12\x1c\n" +
+	"\tconnected\x18\x05 \x01(\bR\tconnected\x124\n" +
+	"\bmetadata\x18\x06 \x01(\v2\x13.fold.AgentMetadataH\x00R\bmetadata\x88\x01\x01B\v\n" +
+	"\t_metadata\"D\n" +
+	"\x11ListAgentsRequest\x12!\n" +
+	"\tworkspace\x18\x01 \x01(\tH\x00R\tworkspace\x88\x01\x01B\f\n" +
+	"\n" +
+	"_workspace\"=\n" +
+	"\x12ListAgentsResponse\x12'\n" +
+	"\x06agents\x18\x01 \x03(\v2\x0f.fold.AgentInfoR\x06agents\"\xc0\x01\n" +
 	"\x18ClientSendMessageRequest\x12)\n" +
 	"\x10conversation_key\x18\x01 \x01(\tR\x0fconversationKey\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\x126\n" +
@@ -3686,11 +4361,14 @@ const file_fold_proto_rawDesc = "" +
 	"\vCreateToken\x12\x18.fold.CreateTokenRequest\x1a\x19.fold.CreateTokenResponse\x12K\n" +
 	"\x0eListPrincipals\x12\x1b.fold.ListPrincipalsRequest\x1a\x1c.fold.ListPrincipalsResponse\x12@\n" +
 	"\x0fCreatePrincipal\x12\x1c.fold.CreatePrincipalRequest\x1a\x0f.fold.Principal\x12N\n" +
-	"\x0fDeletePrincipal\x12\x1c.fold.DeletePrincipalRequest\x1a\x1d.fold.DeletePrincipalResponse2\xd0\x01\n" +
+	"\x0fDeletePrincipal\x12\x1c.fold.DeletePrincipalRequest\x1a\x1d.fold.DeletePrincipalResponse2\xd7\x02\n" +
 	"\rClientService\x12<\n" +
 	"\tGetEvents\x12\x16.fold.GetEventsRequest\x1a\x17.fold.GetEventsResponse\x121\n" +
 	"\x05GetMe\x12\x16.google.protobuf.Empty\x1a\x10.fold.MeResponse\x12N\n" +
-	"\vSendMessage\x12\x1e.fold.ClientSendMessageRequest\x1a\x1f.fold.ClientSendMessageResponseb\x06proto3"
+	"\vSendMessage\x12\x1e.fold.ClientSendMessageRequest\x1a\x1f.fold.ClientSendMessageResponse\x12D\n" +
+	"\fStreamEvents\x12\x19.fold.StreamEventsRequest\x1a\x17.fold.ClientStreamEvent0\x01\x12?\n" +
+	"\n" +
+	"ListAgents\x12\x17.fold.ListAgentsRequest\x1a\x18.fold.ListAgentsResponseb\x06proto3"
 
 var (
 	file_fold_proto_rawDescOnce sync.Once
@@ -3705,7 +4383,7 @@ func file_fold_proto_rawDescGZIP() []byte {
 }
 
 var file_fold_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_fold_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
+var file_fold_proto_msgTypes = make([]protoimpl.MessageInfo, 56)
 var file_fold_proto_goTypes = []any{
 	(ToolState)(0),                    // 0: fold.ToolState
 	(InjectionPriority)(0),            // 1: fold.InjectionPriority
@@ -3750,13 +4428,22 @@ var file_fold_proto_goTypes = []any{
 	(*CreatePrincipalRequest)(nil),    // 40: fold.CreatePrincipalRequest
 	(*DeletePrincipalRequest)(nil),    // 41: fold.DeletePrincipalRequest
 	(*DeletePrincipalResponse)(nil),   // 42: fold.DeletePrincipalResponse
-	(*ClientSendMessageRequest)(nil),  // 43: fold.ClientSendMessageRequest
-	(*ClientSendMessageResponse)(nil), // 44: fold.ClientSendMessageResponse
-	(*MeResponse)(nil),                // 45: fold.MeResponse
-	(*Event)(nil),                     // 46: fold.Event
-	(*GetEventsRequest)(nil),          // 47: fold.GetEventsRequest
-	(*GetEventsResponse)(nil),         // 48: fold.GetEventsResponse
-	(*emptypb.Empty)(nil),             // 49: google.protobuf.Empty
+	(*StreamEventsRequest)(nil),       // 43: fold.StreamEventsRequest
+	(*ClientStreamEvent)(nil),         // 44: fold.ClientStreamEvent
+	(*TextChunk)(nil),                 // 45: fold.TextChunk
+	(*ThinkingChunk)(nil),             // 46: fold.ThinkingChunk
+	(*StreamDone)(nil),                // 47: fold.StreamDone
+	(*StreamError)(nil),               // 48: fold.StreamError
+	(*AgentInfo)(nil),                 // 49: fold.AgentInfo
+	(*ListAgentsRequest)(nil),         // 50: fold.ListAgentsRequest
+	(*ListAgentsResponse)(nil),        // 51: fold.ListAgentsResponse
+	(*ClientSendMessageRequest)(nil),  // 52: fold.ClientSendMessageRequest
+	(*ClientSendMessageResponse)(nil), // 53: fold.ClientSendMessageResponse
+	(*MeResponse)(nil),                // 54: fold.MeResponse
+	(*Event)(nil),                     // 55: fold.Event
+	(*GetEventsRequest)(nil),          // 56: fold.GetEventsRequest
+	(*GetEventsResponse)(nil),         // 57: fold.GetEventsResponse
+	(*emptypb.Empty)(nil),             // 58: google.protobuf.Empty
 }
 var file_fold_proto_depIdxs = []int32{
 	5,  // 0: fold.AgentMessage.register:type_name -> fold.RegisterAgent
@@ -3787,37 +4474,52 @@ var file_fold_proto_depIdxs = []int32{
 	26, // 25: fold.SendMessage.attachments:type_name -> fold.FileAttachment
 	28, // 26: fold.ListBindingsResponse.bindings:type_name -> fold.Binding
 	37, // 27: fold.ListPrincipalsResponse.principals:type_name -> fold.Principal
-	26, // 28: fold.ClientSendMessageRequest.attachments:type_name -> fold.FileAttachment
-	46, // 29: fold.GetEventsResponse.events:type_name -> fold.Event
-	2,  // 30: fold.FoldControl.AgentStream:input_type -> fold.AgentMessage
-	29, // 31: fold.AdminService.ListBindings:input_type -> fold.ListBindingsRequest
-	31, // 32: fold.AdminService.CreateBinding:input_type -> fold.CreateBindingRequest
-	32, // 33: fold.AdminService.UpdateBinding:input_type -> fold.UpdateBindingRequest
-	33, // 34: fold.AdminService.DeleteBinding:input_type -> fold.DeleteBindingRequest
-	35, // 35: fold.AdminService.CreateToken:input_type -> fold.CreateTokenRequest
-	38, // 36: fold.AdminService.ListPrincipals:input_type -> fold.ListPrincipalsRequest
-	40, // 37: fold.AdminService.CreatePrincipal:input_type -> fold.CreatePrincipalRequest
-	41, // 38: fold.AdminService.DeletePrincipal:input_type -> fold.DeletePrincipalRequest
-	47, // 39: fold.ClientService.GetEvents:input_type -> fold.GetEventsRequest
-	49, // 40: fold.ClientService.GetMe:input_type -> google.protobuf.Empty
-	43, // 41: fold.ClientService.SendMessage:input_type -> fold.ClientSendMessageRequest
-	21, // 42: fold.FoldControl.AgentStream:output_type -> fold.ServerMessage
-	30, // 43: fold.AdminService.ListBindings:output_type -> fold.ListBindingsResponse
-	28, // 44: fold.AdminService.CreateBinding:output_type -> fold.Binding
-	28, // 45: fold.AdminService.UpdateBinding:output_type -> fold.Binding
-	34, // 46: fold.AdminService.DeleteBinding:output_type -> fold.DeleteBindingResponse
-	36, // 47: fold.AdminService.CreateToken:output_type -> fold.CreateTokenResponse
-	39, // 48: fold.AdminService.ListPrincipals:output_type -> fold.ListPrincipalsResponse
-	37, // 49: fold.AdminService.CreatePrincipal:output_type -> fold.Principal
-	42, // 50: fold.AdminService.DeletePrincipal:output_type -> fold.DeletePrincipalResponse
-	48, // 51: fold.ClientService.GetEvents:output_type -> fold.GetEventsResponse
-	45, // 52: fold.ClientService.GetMe:output_type -> fold.MeResponse
-	44, // 53: fold.ClientService.SendMessage:output_type -> fold.ClientSendMessageResponse
-	42, // [42:54] is the sub-list for method output_type
-	30, // [30:42] is the sub-list for method input_type
-	30, // [30:30] is the sub-list for extension type_name
-	30, // [30:30] is the sub-list for extension extendee
-	0,  // [0:30] is the sub-list for field type_name
+	45, // 28: fold.ClientStreamEvent.text:type_name -> fold.TextChunk
+	46, // 29: fold.ClientStreamEvent.thinking:type_name -> fold.ThinkingChunk
+	16, // 30: fold.ClientStreamEvent.tool_use:type_name -> fold.ToolUse
+	17, // 31: fold.ClientStreamEvent.tool_result:type_name -> fold.ToolResult
+	10, // 32: fold.ClientStreamEvent.tool_state:type_name -> fold.ToolStateUpdate
+	9,  // 33: fold.ClientStreamEvent.usage:type_name -> fold.TokenUsage
+	47, // 34: fold.ClientStreamEvent.done:type_name -> fold.StreamDone
+	48, // 35: fold.ClientStreamEvent.error:type_name -> fold.StreamError
+	55, // 36: fold.ClientStreamEvent.event:type_name -> fold.Event
+	4,  // 37: fold.AgentInfo.metadata:type_name -> fold.AgentMetadata
+	49, // 38: fold.ListAgentsResponse.agents:type_name -> fold.AgentInfo
+	26, // 39: fold.ClientSendMessageRequest.attachments:type_name -> fold.FileAttachment
+	55, // 40: fold.GetEventsResponse.events:type_name -> fold.Event
+	2,  // 41: fold.FoldControl.AgentStream:input_type -> fold.AgentMessage
+	29, // 42: fold.AdminService.ListBindings:input_type -> fold.ListBindingsRequest
+	31, // 43: fold.AdminService.CreateBinding:input_type -> fold.CreateBindingRequest
+	32, // 44: fold.AdminService.UpdateBinding:input_type -> fold.UpdateBindingRequest
+	33, // 45: fold.AdminService.DeleteBinding:input_type -> fold.DeleteBindingRequest
+	35, // 46: fold.AdminService.CreateToken:input_type -> fold.CreateTokenRequest
+	38, // 47: fold.AdminService.ListPrincipals:input_type -> fold.ListPrincipalsRequest
+	40, // 48: fold.AdminService.CreatePrincipal:input_type -> fold.CreatePrincipalRequest
+	41, // 49: fold.AdminService.DeletePrincipal:input_type -> fold.DeletePrincipalRequest
+	56, // 50: fold.ClientService.GetEvents:input_type -> fold.GetEventsRequest
+	58, // 51: fold.ClientService.GetMe:input_type -> google.protobuf.Empty
+	52, // 52: fold.ClientService.SendMessage:input_type -> fold.ClientSendMessageRequest
+	43, // 53: fold.ClientService.StreamEvents:input_type -> fold.StreamEventsRequest
+	50, // 54: fold.ClientService.ListAgents:input_type -> fold.ListAgentsRequest
+	21, // 55: fold.FoldControl.AgentStream:output_type -> fold.ServerMessage
+	30, // 56: fold.AdminService.ListBindings:output_type -> fold.ListBindingsResponse
+	28, // 57: fold.AdminService.CreateBinding:output_type -> fold.Binding
+	28, // 58: fold.AdminService.UpdateBinding:output_type -> fold.Binding
+	34, // 59: fold.AdminService.DeleteBinding:output_type -> fold.DeleteBindingResponse
+	36, // 60: fold.AdminService.CreateToken:output_type -> fold.CreateTokenResponse
+	39, // 61: fold.AdminService.ListPrincipals:output_type -> fold.ListPrincipalsResponse
+	37, // 62: fold.AdminService.CreatePrincipal:output_type -> fold.Principal
+	42, // 63: fold.AdminService.DeletePrincipal:output_type -> fold.DeletePrincipalResponse
+	57, // 64: fold.ClientService.GetEvents:output_type -> fold.GetEventsResponse
+	54, // 65: fold.ClientService.GetMe:output_type -> fold.MeResponse
+	53, // 66: fold.ClientService.SendMessage:output_type -> fold.ClientSendMessageResponse
+	44, // 67: fold.ClientService.StreamEvents:output_type -> fold.ClientStreamEvent
+	51, // 68: fold.ClientService.ListAgents:output_type -> fold.ListAgentsResponse
+	55, // [55:69] is the sub-list for method output_type
+	41, // [41:55] is the sub-list for method input_type
+	41, // [41:41] is the sub-list for extension type_name
+	41, // [41:41] is the sub-list for extension extendee
+	0,  // [0:41] is the sub-list for field type_name
 }
 
 func init() { file_fold_proto_init() }
@@ -3864,17 +4566,32 @@ func file_fold_proto_init() {
 	file_fold_proto_msgTypes[35].OneofWrappers = []any{}
 	file_fold_proto_msgTypes[36].OneofWrappers = []any{}
 	file_fold_proto_msgTypes[38].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[43].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[44].OneofWrappers = []any{}
+	file_fold_proto_msgTypes[41].OneofWrappers = []any{}
+	file_fold_proto_msgTypes[42].OneofWrappers = []any{
+		(*ClientStreamEvent_Text)(nil),
+		(*ClientStreamEvent_Thinking)(nil),
+		(*ClientStreamEvent_ToolUse)(nil),
+		(*ClientStreamEvent_ToolResult)(nil),
+		(*ClientStreamEvent_ToolState)(nil),
+		(*ClientStreamEvent_Usage)(nil),
+		(*ClientStreamEvent_Done)(nil),
+		(*ClientStreamEvent_Error)(nil),
+		(*ClientStreamEvent_Event)(nil),
+	}
 	file_fold_proto_msgTypes[45].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[46].OneofWrappers = []any{}
+	file_fold_proto_msgTypes[47].OneofWrappers = []any{}
+	file_fold_proto_msgTypes[48].OneofWrappers = []any{}
+	file_fold_proto_msgTypes[52].OneofWrappers = []any{}
+	file_fold_proto_msgTypes[53].OneofWrappers = []any{}
+	file_fold_proto_msgTypes[54].OneofWrappers = []any{}
+	file_fold_proto_msgTypes[55].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_fold_proto_rawDesc), len(file_fold_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   47,
+			NumMessages:   56,
 			NumExtensions: 0,
 			NumServices:   3,
 		},
