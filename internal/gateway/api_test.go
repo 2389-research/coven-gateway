@@ -595,8 +595,17 @@ func newTestGatewayWithMockManager(t *testing.T) *Gateway {
 		t.Fatalf("failed to create gateway: %v", err)
 	}
 
-	// Register a test agent with the real agent manager so GetAgent succeeds
-	conn := agent.NewConnection(agent.ConnectionParams{ID: "test-agent", Name: "Test", Capabilities: []string{"chat", "code"}, Stream: &testMockStream{}, Logger: logger})
+	// Register a test agent with the real agent manager so GetAgent and GetByPrincipalAndWorkDir succeed
+	// PrincipalID must match what the binding stores (the binding's AgentID)
+	conn := agent.NewConnection(agent.ConnectionParams{
+		ID:           "test-agent",
+		Name:         "Test",
+		PrincipalID:  "test-agent", // Must match binding's AgentID for GetByPrincipalAndWorkDir
+		WorkingDir:   "",           // Empty to match bindings with no working_dir
+		Capabilities: []string{"chat", "code"},
+		Stream:       &testMockStream{},
+		Logger:       logger,
+	})
 	if err := gw.agentManager.Register(conn); err != nil {
 		t.Fatalf("failed to register test agent: %v", err)
 	}

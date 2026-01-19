@@ -81,6 +81,17 @@ type SingleBindingResponse struct {
 	Online     bool   `json:"online"`
 }
 
+// AgentHistoryEvent is the JSON response for GET /api/agents/{id}/history.
+type AgentHistoryEvent struct {
+	ID              string `json:"id"`
+	Timestamp       string `json:"timestamp"`
+	Author          string `json:"author"`
+	Type            string `json:"type"`
+	Content         string `json:"content,omitempty"`
+	ConversationKey string `json:"conversation_key"`
+	Direction       string `json:"direction"`
+}
+
 // MessageResponse is the JSON response for message history.
 type MessageResponse struct {
 	ID        string `json:"id"`
@@ -206,16 +217,26 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 			g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
-		agentID = result.AgentID
+
+		// Find the online agent matching the binding's principal_id + working_dir
+		// Bindings store (principal_id, working_dir) but agent manager is keyed by Connection.ID
+		agentConn := g.agentManager.GetByPrincipalAndWorkDir(result.AgentID, result.WorkingDir)
+		if agentConn == nil {
+			g.sendJSONError(w, http.StatusServiceUnavailable, "agent unavailable")
+			return
+		}
+		agentID = agentConn.ID // Use the connection ID, not principal_id
 		threadID = result.ThreadID
 		frontendName = req.Frontend
 		externalID = req.ChannelID
 	}
 
-	// Verify agent exists and is online
-	if _, ok := g.agentManager.GetAgent(agentID); !ok {
-		g.sendJSONError(w, http.StatusServiceUnavailable, "agent unavailable")
-		return
+	// Verify agent exists and is online (for direct agent_id path)
+	if req.AgentID != "" {
+		if _, ok := g.agentManager.GetAgent(agentID); !ok {
+			g.sendJSONError(w, http.StatusServiceUnavailable, "agent unavailable")
+			return
+		}
 	}
 
 	// Check streaming support before sending (fail fast)
@@ -428,8 +449,9 @@ var ErrChannelNotBound = errors.New("channel not bound to agent")
 
 // BindingResult contains the resolved thread and agent information.
 type BindingResult struct {
-	ThreadID string
-	AgentID  string
+	ThreadID   string
+	AgentID    string // principal_id from the binding
+	WorkingDir string // working_dir from the binding (needed to find exact agent)
 }
 
 // bindingResolver handles looking up and creating bindings and threads.
@@ -452,7 +474,8 @@ func (r *bindingResolver) Resolve(ctx context.Context, frontend, channelID, thre
 	}
 
 	result := &BindingResult{
-		AgentID: binding.AgentID,
+		AgentID:    binding.AgentID,
+		WorkingDir: binding.WorkingDir,
 	}
 
 	// If thread ID was provided, use it
@@ -519,7 +542,8 @@ func (g *Gateway) handleListBindings(w http.ResponseWriter, r *http.Request) {
 	for i, b := range bindings {
 		agentOnline := false
 		agentName := ""
-		if agent, ok := g.agentManager.GetAgent(b.AgentID); ok {
+		// Use GetByPrincipalAndWorkDir since b.AgentID is principal_id, not connection ID
+		if agent := g.agentManager.GetByPrincipalAndWorkDir(b.AgentID, b.WorkingDir); agent != nil {
 			agentOnline = true
 			agentName = agent.Name
 		}
@@ -553,10 +577,10 @@ func (g *Gateway) handleGetSingleBinding(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	// Check if agent is online by looking up by AgentID
+	// Check if agent is online - use GetByPrincipalAndWorkDir since binding.AgentID is principal_id
 	online := false
 	agentName := ""
-	if agent, ok := g.agentManager.GetAgent(binding.AgentID); ok {
+	if agent := g.agentManager.GetByPrincipalAndWorkDir(binding.AgentID, binding.WorkingDir); agent != nil {
 		online = true
 		agentName = agent.Name
 	}
