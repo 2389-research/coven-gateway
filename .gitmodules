@@ -1,0 +1,3 @@
+[submodule "proto/fold-proto"]
+	path = proto/fold-proto
+	url = https://github.com/2389-research/fold-proto.git
