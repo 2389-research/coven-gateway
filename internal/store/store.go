@@ -74,7 +74,11 @@ type Store interface {
 	DeleteBinding(ctx context.Context, frontend, channelID string) error
 
 	// Bindings V2 (validated against principals table)
+	CreateBindingV2(ctx context.Context, binding *Binding) error
 	GetBindingByChannel(ctx context.Context, frontend, channelID string) (*Binding, error)
+	ListBindingsV2(ctx context.Context, filter BindingFilter) ([]Binding, error)
+	DeleteBindingByID(ctx context.Context, id string) error
+	DeleteBindingByChannel(ctx context.Context, frontend, channelID string) error
 
 	// Ledger events
 	SaveEvent(ctx context.Context, event *LedgerEvent) error

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -622,10 +623,10 @@ func newTestGatewayWithMockManager(t *testing.T) *Gateway {
 }
 
 func TestBindingsCRUD(t *testing.T) {
-	gw := newTestGateway(t)
+	gw := newTestGatewayWithAgentForBinding(t, "inst-crud", "/test/path", "agent-crud")
 
-	// Create a binding
-	createReq := `{"frontend":"slack","channel_id":"C001","agent_id":"test-agent"}`
+	// Create a binding using instance_id
+	createReq := `{"frontend":"slack","channel_id":"C001","instance_id":"inst-crud"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(createReq))
 	w := httptest.NewRecorder()
 	gw.handleBindings(w, req)
@@ -685,23 +686,23 @@ func TestBindingsValidation(t *testing.T) {
 	}{
 		{
 			name:    "missing frontend",
-			body:    `{"channel_id":"C001","agent_id":"test-agent"}`,
-			wantErr: "frontend, channel_id, and agent_id are required",
+			body:    `{"channel_id":"C001","instance_id":"test-instance"}`,
+			wantErr: "frontend, channel_id, and instance_id are required",
 		},
 		{
 			name:    "missing channel_id",
-			body:    `{"frontend":"slack","agent_id":"test-agent"}`,
-			wantErr: "frontend, channel_id, and agent_id are required",
+			body:    `{"frontend":"slack","instance_id":"test-instance"}`,
+			wantErr: "frontend, channel_id, and instance_id are required",
 		},
 		{
-			name:    "missing agent_id",
+			name:    "missing instance_id",
 			body:    `{"frontend":"slack","channel_id":"C001"}`,
-			wantErr: "frontend, channel_id, and agent_id are required",
+			wantErr: "frontend, channel_id, and instance_id are required",
 		},
 		{
 			name:    "empty body",
 			body:    `{}`,
-			wantErr: "frontend, channel_id, and agent_id are required",
+			wantErr: "frontend, channel_id, and instance_id are required",
 		},
 		{
 			name:    "invalid json",
@@ -733,10 +734,10 @@ func TestBindingsValidation(t *testing.T) {
 }
 
 func TestBindingsDuplicate(t *testing.T) {
-	gw := newTestGateway(t)
+	gw := newTestGatewayWithAgentForBinding(t, "inst-dup", "/test/path", "agent-dup")
 
-	// Create first binding
-	createReq := `{"frontend":"slack","channel_id":"C001","agent_id":"test-agent"}`
+	// Create first binding using instance_id
+	createReq := `{"frontend":"slack","channel_id":"C001","instance_id":"inst-dup"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(createReq))
 	w := httptest.NewRecorder()
 	gw.handleBindings(w, req)
@@ -745,22 +746,14 @@ func TestBindingsDuplicate(t *testing.T) {
 		t.Fatalf("first create: got status %d, want %d. Body: %s", w.Code, http.StatusCreated, w.Body.String())
 	}
 
-	// Try to create duplicate binding
+	// Try to create duplicate binding - should return 200 (same agent noop)
 	req = httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(createReq))
 	w = httptest.NewRecorder()
 	gw.handleBindings(w, req)
 
-	if w.Code != http.StatusConflict {
-		t.Errorf("duplicate create: got status %d, want %d. Body: %s", w.Code, http.StatusConflict, w.Body.String())
-	}
-
-	var errResp map[string]string
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("decode error response: %v", err)
-	}
-
-	if errResp["error"] != "binding already exists" {
-		t.Errorf("got error %q, want %q", errResp["error"], "binding already exists")
+	// Since it's the same agent, it returns 200 (idempotent)
+	if w.Code != http.StatusOK {
+		t.Errorf("duplicate create with same agent: got status %d, want %d. Body: %s", w.Code, http.StatusOK, w.Body.String())
 	}
 }
 
@@ -987,5 +980,306 @@ func TestResolveBinding_ExistingBindingNoThread(t *testing.T) {
 	}
 	if result.AgentID != "agent-1" {
 		t.Errorf("expected agent ID 'agent-1', got %q", result.AgentID)
+	}
+}
+
+// newTestGatewayWithAgentForBinding creates a gateway with a registered agent
+// that has the specified instance_id, working_dir, and principal_id for binding tests.
+func newTestGatewayWithAgentForBinding(t *testing.T, instanceID, workingDir, principalID string) *Gateway {
+	t.Helper()
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			GRPCAddr: "localhost:0",
+			HTTPAddr: "localhost:0",
+		},
+		Database: config.DatabaseConfig{
+			Path: ":memory:",
+		},
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	gw, err := New(cfg, logger)
+	if err != nil {
+		t.Fatalf("failed to create gateway: %v", err)
+	}
+
+	// Register an agent with the specified parameters
+	conn := agent.NewConnection(agent.ConnectionParams{
+		ID:           principalID,
+		Name:         "test-agent",
+		Capabilities: []string{"chat", "code"},
+		PrincipalID:  principalID,
+		Workspaces:   []string{"Work"},
+		WorkingDir:   workingDir,
+		InstanceID:   instanceID,
+		Stream:       &testMockStream{},
+		Logger:       logger,
+	})
+	if err := gw.agentManager.Register(conn); err != nil {
+		t.Fatalf("failed to register test agent: %v", err)
+	}
+
+	// Create the principal in the store so the binding can be created
+	sqlStore, ok := gw.store.(*store.SQLiteStore)
+	if !ok {
+		t.Fatalf("store is not *SQLiteStore")
+	}
+	// Generate a unique pubkey fingerprint based on principal ID
+	pubkeyFP := fmt.Sprintf("%064s", principalID)[:64]
+	principal := &store.Principal{
+		ID:          principalID,
+		Type:        store.PrincipalTypeAgent,
+		PubkeyFP:    pubkeyFP,
+		DisplayName: "test-agent",
+		Status:      store.PrincipalStatusOnline,
+		CreatedAt:   time.Now(),
+	}
+	if err := sqlStore.CreatePrincipal(context.Background(), principal); err != nil {
+		t.Fatalf("failed to create principal: %v", err)
+	}
+
+	return gw
+}
+
+// Tests for POST /api/bindings with instance_id
+
+func TestCreateBindingByInstanceID_Success(t *testing.T) {
+	gw := newTestGatewayWithAgentForBinding(t, "0fb8187d-c06", "/projects/website", "agent-uuid-123")
+
+	reqBody := `{"frontend":"matrix","channel_id":"!roomid:server","instance_id":"0fb8187d-c06"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d. Body: %s", http.StatusCreated, w.Code, w.Body.String())
+	}
+
+	var resp CreateBindingResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.BindingID == "" {
+		t.Error("expected non-empty binding_id")
+	}
+	if resp.AgentName != "test-agent" {
+		t.Errorf("expected agent_name 'test-agent', got %q", resp.AgentName)
+	}
+	if resp.WorkingDir != "/projects/website" {
+		t.Errorf("expected working_dir '/projects/website', got %q", resp.WorkingDir)
+	}
+	if resp.ReboundFrom != nil {
+		t.Errorf("expected rebound_from to be nil, got %v", resp.ReboundFrom)
+	}
+}
+
+func TestCreateBindingByInstanceID_NotFound(t *testing.T) {
+	gw := newTestGateway(t) // No agents registered
+
+	reqBody := `{"frontend":"matrix","channel_id":"!roomid:server","instance_id":"nonexistent"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d. Body: %s", http.StatusNotFound, w.Code, w.Body.String())
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+
+	expectedErr := "no agent online with instance_id 'nonexistent'"
+	if errResp["error"] != expectedErr {
+		t.Errorf("expected error %q, got %q", expectedErr, errResp["error"])
+	}
+}
+
+func TestCreateBindingByInstanceID_MissingFields(t *testing.T) {
+	gw := newTestGateway(t)
+
+	tests := []struct {
+		name    string
+		body    string
+		wantErr string
+	}{
+		{
+			name:    "missing frontend",
+			body:    `{"channel_id":"C001","instance_id":"abc"}`,
+			wantErr: "frontend, channel_id, and instance_id are required",
+		},
+		{
+			name:    "missing channel_id",
+			body:    `{"frontend":"slack","instance_id":"abc"}`,
+			wantErr: "frontend, channel_id, and instance_id are required",
+		},
+		{
+			name:    "missing instance_id",
+			body:    `{"frontend":"slack","channel_id":"C001"}`,
+			wantErr: "frontend, channel_id, and instance_id are required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(tt.body))
+			w := httptest.NewRecorder()
+			gw.handleBindings(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("got status %d, want %d. Body: %s", w.Code, http.StatusBadRequest, w.Body.String())
+			}
+
+			var errResp map[string]string
+			if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+				t.Fatalf("decode error response: %v", err)
+			}
+
+			if errResp["error"] != tt.wantErr {
+				t.Errorf("got error %q, want %q", errResp["error"], tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCreateBindingByInstanceID_Rebind(t *testing.T) {
+	// Create gateway with two agents
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			GRPCAddr: "localhost:0",
+			HTTPAddr: "localhost:0",
+		},
+		Database: config.DatabaseConfig{
+			Path: ":memory:",
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	gw, err := New(cfg, logger)
+	if err != nil {
+		t.Fatalf("failed to create gateway: %v", err)
+	}
+
+	// Create first agent
+	conn1 := agent.NewConnection(agent.ConnectionParams{
+		ID:          "agent-1",
+		Name:        "first-agent",
+		PrincipalID: "agent-1",
+		WorkingDir:  "/old/path",
+		InstanceID:  "inst-001",
+		Stream:      &testMockStream{},
+		Logger:      logger,
+	})
+	if err := gw.agentManager.Register(conn1); err != nil {
+		t.Fatalf("failed to register first agent: %v", err)
+	}
+
+	// Create second agent
+	conn2 := agent.NewConnection(agent.ConnectionParams{
+		ID:          "agent-2",
+		Name:        "second-agent",
+		PrincipalID: "agent-2",
+		WorkingDir:  "/new/path",
+		InstanceID:  "inst-002",
+		Stream:      &testMockStream{},
+		Logger:      logger,
+	})
+	if err := gw.agentManager.Register(conn2); err != nil {
+		t.Fatalf("failed to register second agent: %v", err)
+	}
+
+	// Create principals in store (each needs unique PubkeyFP)
+	sqlStore := gw.store.(*store.SQLiteStore)
+	for _, p := range []struct{ id, name, fp string }{
+		{"agent-1", "first-agent", "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111"},
+		{"agent-2", "second-agent", "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222"},
+	} {
+		principal := &store.Principal{
+			ID:          p.id,
+			Type:        store.PrincipalTypeAgent,
+			PubkeyFP:    p.fp,
+			DisplayName: p.name,
+			Status:      store.PrincipalStatusOnline,
+			CreatedAt:   time.Now(),
+		}
+		if err := sqlStore.CreatePrincipal(context.Background(), principal); err != nil {
+			t.Fatalf("failed to create principal: %v", err)
+		}
+	}
+
+	// Create initial binding with first agent
+	reqBody := `{"frontend":"matrix","channel_id":"!room:server","instance_id":"inst-001"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("first binding: got status %d, want %d. Body: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+
+	// Rebind to second agent
+	reqBody = `{"frontend":"matrix","channel_id":"!room:server","instance_id":"inst-002"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(reqBody))
+	w = httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("rebind: got status %d, want %d. Body: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+
+	var resp CreateBindingResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.AgentName != "second-agent" {
+		t.Errorf("expected agent_name 'second-agent', got %q", resp.AgentName)
+	}
+	if resp.WorkingDir != "/new/path" {
+		t.Errorf("expected working_dir '/new/path', got %q", resp.WorkingDir)
+	}
+	if resp.ReboundFrom == nil {
+		t.Fatal("expected rebound_from to be set")
+	}
+	if *resp.ReboundFrom != "first-agent" {
+		t.Errorf("expected rebound_from 'first-agent', got %q", *resp.ReboundFrom)
+	}
+}
+
+func TestCreateBindingByInstanceID_SameAgentNoop(t *testing.T) {
+	gw := newTestGatewayWithAgentForBinding(t, "inst-abc", "/projects/same", "agent-uuid")
+
+	// Create initial binding
+	reqBody := `{"frontend":"matrix","channel_id":"!room:server","instance_id":"inst-abc"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("first binding: got status %d, want %d. Body: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+
+	// Try to bind same channel to same agent again
+	req = httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(reqBody))
+	w = httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	// Should return 200 (idempotent) with existing binding info
+	if w.Code != http.StatusOK {
+		t.Fatalf("same binding: got status %d, want %d. Body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var resp CreateBindingResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.ReboundFrom != nil {
+		t.Errorf("expected rebound_from to be nil for same agent, got %v", resp.ReboundFrom)
 	}
 }

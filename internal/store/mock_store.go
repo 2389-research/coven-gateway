@@ -265,6 +265,21 @@ func (m *MockStore) DeleteBinding(ctx context.Context, frontend, channelID strin
 	return nil
 }
 
+// CreateBindingV2 creates a V2 binding (interface method).
+func (m *MockStore) CreateBindingV2(ctx context.Context, binding *Binding) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := binding.Frontend + ":" + binding.ChannelID
+	if _, exists := m.bindingsV2[key]; exists {
+		return ErrDuplicateChannel
+	}
+
+	b := *binding
+	m.bindingsV2[key] = &b
+	return nil
+}
+
 // GetBindingByChannel retrieves a V2 binding by frontend and channel ID.
 func (m *MockStore) GetBindingByChannel(ctx context.Context, frontend, channelID string) (*Binding, error) {
 	m.mu.RLock()
@@ -281,7 +296,54 @@ func (m *MockStore) GetBindingByChannel(ctx context.Context, frontend, channelID
 	return &result, nil
 }
 
-// AddBindingV2 stores a V2 binding (for test setup).
+// DeleteBindingByID deletes a V2 binding by ID.
+func (m *MockStore) DeleteBindingByID(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Find binding by ID
+	for key, b := range m.bindingsV2 {
+		if b.ID == id {
+			delete(m.bindingsV2, key)
+			return nil
+		}
+	}
+	return ErrBindingNotFound
+}
+
+// ListBindingsV2 returns V2 bindings matching the filter criteria.
+func (m *MockStore) ListBindingsV2(ctx context.Context, filter BindingFilter) ([]Binding, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []Binding
+	for _, b := range m.bindingsV2 {
+		// Apply filters
+		if filter.Frontend != nil && b.Frontend != *filter.Frontend {
+			continue
+		}
+		if filter.AgentID != nil && b.AgentID != *filter.AgentID {
+			continue
+		}
+		result = append(result, *b)
+	}
+	return result, nil
+}
+
+// DeleteBindingByChannel deletes a V2 binding by frontend and channel_id.
+func (m *MockStore) DeleteBindingByChannel(ctx context.Context, frontend, channelID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := frontend + ":" + channelID
+	if _, ok := m.bindingsV2[key]; !ok {
+		return ErrBindingNotFound
+	}
+	delete(m.bindingsV2, key)
+	return nil
+}
+
+// AddBindingV2 stores a V2 binding (for test setup, alias for CreateBindingV2 without duplicate check).
 func (m *MockStore) AddBindingV2(ctx context.Context, binding *Binding) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

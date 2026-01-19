@@ -42,10 +42,19 @@ type AgentInfoResponse struct {
 }
 
 // CreateBindingRequest is the JSON request body for POST /api/bindings.
+// Uses instance_id to look up the agent by its short instance identifier.
 type CreateBindingRequest struct {
-	Frontend  string `json:"frontend"`
-	ChannelID string `json:"channel_id"`
-	AgentID   string `json:"agent_id"`
+	Frontend   string `json:"frontend"`
+	ChannelID  string `json:"channel_id"`
+	InstanceID string `json:"instance_id"`
+}
+
+// CreateBindingResponse is the JSON response for POST /api/bindings.
+type CreateBindingResponse struct {
+	BindingID   string  `json:"binding_id"`
+	AgentName   string  `json:"agent_name"`
+	WorkingDir  string  `json:"working_dir"`
+	ReboundFrom *string `json:"rebound_from"`
 }
 
 // BindingResponse is the JSON response for binding operations.
@@ -475,7 +484,7 @@ func (g *Gateway) handleBindings(w http.ResponseWriter, r *http.Request) {
 
 // handleListBindings handles GET /api/bindings.
 func (g *Gateway) handleListBindings(w http.ResponseWriter, r *http.Request) {
-	bindings, err := g.store.ListBindings(r.Context())
+	bindings, err := g.store.ListBindingsV2(r.Context(), store.BindingFilter{})
 	if err != nil {
 		g.logger.Error("failed to list bindings", "error", err)
 		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
@@ -495,7 +504,7 @@ func (g *Gateway) handleListBindings(w http.ResponseWriter, r *http.Request) {
 		}
 
 		response.Bindings[i] = BindingResponse{
-			Frontend:    b.FrontendName,
+			Frontend:    b.Frontend,
 			ChannelID:   b.ChannelID,
 			AgentID:     b.AgentID,
 			AgentName:   agentName,
@@ -509,6 +518,8 @@ func (g *Gateway) handleListBindings(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleCreateBinding handles POST /api/bindings.
+// Looks up an agent by instance_id and creates a binding to it.
+// Handles rebinding if the channel is already bound to a different agent.
 func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 	var req CreateBindingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -516,23 +527,75 @@ func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Frontend == "" || req.ChannelID == "" || req.AgentID == "" {
-		g.sendJSONError(w, http.StatusBadRequest, "frontend, channel_id, and agent_id are required")
+	if req.Frontend == "" || req.ChannelID == "" || req.InstanceID == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "frontend, channel_id, and instance_id are required")
 		return
 	}
 
-	now := time.Now()
-	binding := &store.ChannelBinding{
-		FrontendName: req.Frontend,
-		ChannelID:    req.ChannelID,
-		AgentID:      req.AgentID,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+	// Look up agent by instance_id
+	agentConn := g.agentManager.GetByInstanceID(req.InstanceID)
+	if agentConn == nil {
+		g.sendJSONError(w, http.StatusNotFound, fmt.Sprintf("no agent online with instance_id '%s'", req.InstanceID))
+		return
 	}
 
-	if err := g.store.CreateBinding(r.Context(), binding); err != nil {
-		// Check for duplicate
-		if existing, _ := g.store.GetBinding(r.Context(), req.Frontend, req.ChannelID); existing != nil {
+	ctx := r.Context()
+	var reboundFrom *string
+
+	// Check if binding already exists for this (frontend, channel_id)
+	existingBinding, err := g.store.GetBindingByChannel(ctx, req.Frontend, req.ChannelID)
+	if err != nil && !errors.Is(err, store.ErrBindingNotFound) {
+		g.logger.Error("failed to check existing binding", "error", err)
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	if existingBinding != nil {
+		// Binding already exists
+		if existingBinding.AgentID == agentConn.PrincipalID && existingBinding.WorkingDir == agentConn.WorkingDir {
+			// Same agent and workdir - return existing binding (idempotent)
+			response := CreateBindingResponse{
+				BindingID:   existingBinding.ID,
+				AgentName:   agentConn.Name,
+				WorkingDir:  existingBinding.WorkingDir,
+				ReboundFrom: nil,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// Different agent - delete old binding and record rebound
+		oldAgentName := ""
+		if oldAgent, ok := g.agentManager.GetAgent(existingBinding.AgentID); ok {
+			oldAgentName = oldAgent.Name
+		} else {
+			oldAgentName = existingBinding.AgentID // fallback to ID if agent offline
+		}
+		reboundFrom = &oldAgentName
+
+		if err := g.store.DeleteBindingByID(ctx, existingBinding.ID); err != nil {
+			g.logger.Error("failed to delete existing binding", "error", err)
+			g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+	}
+
+	// Create new binding
+	bindingID := uuid.New().String()
+	binding := &store.Binding{
+		ID:         bindingID,
+		Frontend:   req.Frontend,
+		ChannelID:  req.ChannelID,
+		AgentID:    agentConn.PrincipalID,
+		WorkingDir: agentConn.WorkingDir,
+		CreatedAt:  time.Now(),
+		CreatedBy:  nil, // TODO: get from auth context when available
+	}
+
+	if err := g.store.CreateBindingV2(ctx, binding); err != nil {
+		if errors.Is(err, store.ErrDuplicateChannel) {
 			g.sendJSONError(w, http.StatusConflict, "binding already exists")
 			return
 		}
@@ -541,20 +604,11 @@ func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agentOnline := false
-	agentName := ""
-	if agent, ok := g.agentManager.GetAgent(req.AgentID); ok {
-		agentOnline = true
-		agentName = agent.Name
-	}
-
-	response := BindingResponse{
-		Frontend:    binding.FrontendName,
-		ChannelID:   binding.ChannelID,
-		AgentID:     binding.AgentID,
-		AgentName:   agentName,
-		AgentOnline: agentOnline,
-		CreatedAt:   binding.CreatedAt.Format(time.RFC3339),
+	response := CreateBindingResponse{
+		BindingID:   bindingID,
+		AgentName:   agentConn.Name,
+		WorkingDir:  agentConn.WorkingDir,
+		ReboundFrom: reboundFrom,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -572,8 +626,8 @@ func (g *Gateway) handleDeleteBinding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := g.store.DeleteBinding(r.Context(), frontend, channelID)
-	if errors.Is(err, store.ErrNotFound) {
+	err := g.store.DeleteBindingByChannel(r.Context(), frontend, channelID)
+	if errors.Is(err, store.ErrBindingNotFound) {
 		g.sendJSONError(w, http.StatusNotFound, "binding not found")
 		return
 	}

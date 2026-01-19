@@ -168,6 +168,28 @@ func (s *SQLiteStore) DeleteBindingByID(ctx context.Context, id string) error {
 	return nil
 }
 
+// DeleteBindingByChannel deletes a binding by frontend and channel_id
+func (s *SQLiteStore) DeleteBindingByChannel(ctx context.Context, frontend, channelID string) error {
+	query := `DELETE FROM bindings WHERE frontend = ? AND channel_id = ?`
+
+	result, err := s.db.ExecContext(ctx, query, frontend, channelID)
+	if err != nil {
+		return fmt.Errorf("deleting binding: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrBindingNotFound
+	}
+
+	s.logger.Debug("deleted binding", "frontend", frontend, "channel_id", channelID)
+	return nil
+}
+
 // ListBindingsV2 returns bindings matching the filter criteria.
 // Named V2 to avoid collision with existing ListBindings method.
 func (s *SQLiteStore) ListBindingsV2(ctx context.Context, f BindingFilter) ([]Binding, error) {
