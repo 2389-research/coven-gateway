@@ -164,6 +164,12 @@ func (b *Bridge) handleMessageEvent(ctx context.Context, evt *event.Event) {
 		return
 	}
 
+	// Check for /fold commands
+	if strings.HasPrefix(msgBody, "/fold ") || msgBody == "/fold" {
+		go b.handleFoldCommand(b.ctx, evt.RoomID, strings.TrimPrefix(msgBody, "/fold"))
+		return
+	}
+
 	b.logger.Info("received message",
 		"room", roomID,
 		"sender", evt.Sender.String(),
@@ -334,4 +340,125 @@ func markdownToHTML(text string) string {
 		return template.HTMLEscapeString(text)
 	}
 	return buf.String()
+}
+
+// handleFoldCommand processes /fold commands for binding management.
+func (b *Bridge) handleFoldCommand(ctx context.Context, roomID id.RoomID, cmd string) {
+	cmd = strings.TrimSpace(cmd)
+	parts := strings.Fields(cmd)
+
+	if len(parts) == 0 {
+		b.sendMessage(roomID, "**Usage:** `/fold <bind|unbind|status|agents>`")
+		return
+	}
+
+	switch parts[0] {
+	case "bind":
+		if len(parts) < 2 {
+			b.sendMessage(roomID, "**Usage:** `/fold bind <instance-id>`\n\nUse `/fold agents` to list available agents.")
+			return
+		}
+		b.handleBind(ctx, roomID, parts[1])
+	case "unbind":
+		b.handleUnbind(ctx, roomID)
+	case "status":
+		b.handleStatus(ctx, roomID)
+	case "agents":
+		b.handleListAgents(ctx, roomID)
+	default:
+		b.sendMessage(roomID, fmt.Sprintf("Unknown command: `%s`\n\nAvailable commands: `bind`, `unbind`, `status`, `agents`", parts[0]))
+	}
+}
+
+// handleBind binds this room to an agent by instance ID.
+func (b *Bridge) handleBind(ctx context.Context, roomID id.RoomID, instanceID string) {
+	b.logger.Info("bind command", "room", roomID.String(), "instance_id", instanceID)
+
+	resp, err := b.gateway.CreateBinding(ctx, "matrix", roomID.String(), instanceID)
+	if err != nil {
+		b.logger.Error("failed to create binding", "room", roomID.String(), "error", err)
+		b.sendMessage(roomID, fmt.Sprintf("Failed to bind: %v", err))
+		return
+	}
+
+	var msg string
+	if resp.ReboundFrom != nil {
+		msg = fmt.Sprintf("Rebound from **%s** to **%s**\n\nWorking directory: `%s`",
+			*resp.ReboundFrom, resp.AgentName, resp.WorkingDir)
+	} else {
+		msg = fmt.Sprintf("Bound to **%s**\n\nWorking directory: `%s`",
+			resp.AgentName, resp.WorkingDir)
+	}
+
+	b.sendMessage(roomID, msg)
+}
+
+// handleUnbind removes the binding from this room.
+func (b *Bridge) handleUnbind(ctx context.Context, roomID id.RoomID) {
+	b.logger.Info("unbind command", "room", roomID.String())
+
+	err := b.gateway.DeleteBinding(ctx, "matrix", roomID.String())
+	if err != nil {
+		b.logger.Error("failed to delete binding", "room", roomID.String(), "error", err)
+		b.sendMessage(roomID, fmt.Sprintf("Failed to unbind: %v", err))
+		return
+	}
+
+	b.sendMessage(roomID, "Unbound from agent. Use `/fold bind <instance-id>` to bind to a new agent.")
+}
+
+// handleStatus shows the current binding status for this room.
+func (b *Bridge) handleStatus(ctx context.Context, roomID id.RoomID) {
+	b.logger.Info("status command", "room", roomID.String())
+
+	binding, err := b.gateway.GetBinding(ctx, "matrix", roomID.String())
+	if err != nil {
+		b.logger.Error("failed to get binding", "room", roomID.String(), "error", err)
+		b.sendMessage(roomID, fmt.Sprintf("Failed to get status: %v", err))
+		return
+	}
+
+	if binding == nil {
+		b.sendMessage(roomID, "This room is not bound to any agent.\n\nUse `/fold agents` to list available agents, then `/fold bind <instance-id>` to bind.")
+		return
+	}
+
+	status := "offline"
+	if binding.Online {
+		status = "online"
+	}
+
+	msg := fmt.Sprintf("**Agent:** %s (%s)\n**Working directory:** `%s`",
+		binding.AgentName, status, binding.WorkingDir)
+
+	b.sendMessage(roomID, msg)
+}
+
+// handleListAgents lists all online agents.
+func (b *Bridge) handleListAgents(ctx context.Context, roomID id.RoomID) {
+	b.logger.Info("agents command", "room", roomID.String())
+
+	agents, err := b.gateway.ListAgents(ctx)
+	if err != nil {
+		b.logger.Error("failed to list agents", "room", roomID.String(), "error", err)
+		b.sendMessage(roomID, fmt.Sprintf("Failed to list agents: %v", err))
+		return
+	}
+
+	if len(agents) == 0 {
+		b.sendMessage(roomID, "No agents online.")
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString("**Online agents:**\n\n")
+
+	for _, agent := range agents {
+		sb.WriteString(fmt.Sprintf("- `%s` - **%s** (`%s`)\n",
+			agent.InstanceID, agent.Name, agent.WorkingDir))
+	}
+
+	sb.WriteString("\nUse `/fold bind <instance-id>` to bind this room to an agent.")
+
+	b.sendMessage(roomID, sb.String())
 }

@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -53,6 +54,38 @@ type SendRequest struct {
 	Content   string `json:"content"`
 	Frontend  string `json:"frontend"`
 	ChannelID string `json:"channel_id"`
+}
+
+// BindingInfo represents a binding's current state.
+type BindingInfo struct {
+	BindingID  string `json:"binding_id"`
+	AgentName  string `json:"agent_name"`
+	WorkingDir string `json:"working_dir"`
+	Online     bool   `json:"online"`
+}
+
+// CreateBindingRequest is the request body for POST /api/bindings.
+type CreateBindingRequest struct {
+	Frontend   string `json:"frontend"`
+	ChannelID  string `json:"channel_id"`
+	InstanceID string `json:"instance_id"`
+}
+
+// CreateBindingResponse is the response from POST /api/bindings.
+type CreateBindingResponse struct {
+	BindingID   string  `json:"binding_id"`
+	AgentName   string  `json:"agent_name"`
+	WorkingDir  string  `json:"working_dir"`
+	ReboundFrom *string `json:"rebound_from"`
+}
+
+// AgentInfo represents an online agent.
+type AgentInfo struct {
+	ID         string   `json:"id"`
+	InstanceID string   `json:"instance_id"`
+	Name       string   `json:"name"`
+	WorkingDir string   `json:"working_dir"`
+	Workspaces []string `json:"workspaces"`
 }
 
 // GatewayClient communicates with fold-gateway HTTP API.
@@ -208,4 +241,128 @@ func (g *GatewayClient) parseSSEStream(ctx context.Context, body io.Reader, onEv
 	processEvent()
 
 	return fullResponse, nil
+}
+
+// CreateBinding binds a channel to an agent by instance ID.
+func (g *GatewayClient) CreateBinding(ctx context.Context, frontend, channelID, instanceID string) (*CreateBindingResponse, error) {
+	reqBody := CreateBindingRequest{
+		Frontend:   frontend,
+		ChannelID:  channelID,
+		InstanceID: instanceID,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		g.baseURL+"/api/bindings", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := g.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, g.handleErrorResponse(resp)
+	}
+
+	var result CreateBindingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteBinding removes the binding for a channel.
+func (g *GatewayClient) DeleteBinding(ctx context.Context, frontend, channelID string) error {
+	u := fmt.Sprintf("%s/api/bindings?frontend=%s&channel_id=%s",
+		g.baseURL, url.QueryEscape(frontend), url.QueryEscape(channelID))
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	resp, err := g.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return g.handleErrorResponse(resp)
+	}
+
+	return nil
+}
+
+// GetBinding returns the current binding for a channel.
+func (g *GatewayClient) GetBinding(ctx context.Context, frontend, channelID string) (*BindingInfo, error) {
+	u := fmt.Sprintf("%s/api/bindings?frontend=%s&channel_id=%s",
+		g.baseURL, url.QueryEscape(frontend), url.QueryEscape(channelID))
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+
+	resp, err := g.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil // Not bound
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, g.handleErrorResponse(resp)
+	}
+
+	var result BindingInfo
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// ListAgents returns all online agents.
+func (g *GatewayClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		g.baseURL+"/api/agents", nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+
+	resp, err := g.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, g.handleErrorResponse(resp)
+	}
+
+	var result []AgentInfo
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding response: %w", err)
+	}
+
+	return result, nil
 }
