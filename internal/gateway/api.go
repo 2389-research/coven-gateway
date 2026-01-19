@@ -647,7 +647,8 @@ func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 
 		// Different agent - delete old binding and record rebound
 		oldAgentName := ""
-		if oldAgent, ok := g.agentManager.GetAgent(existingBinding.AgentID); ok {
+		// Use GetByPrincipalAndWorkDir since existingBinding.AgentID is principal_id
+		if oldAgent := g.agentManager.GetByPrincipalAndWorkDir(existingBinding.AgentID, existingBinding.WorkingDir); oldAgent != nil {
 			oldAgentName = oldAgent.Name
 		} else {
 			oldAgentName = existingBinding.AgentID // fallback to ID if agent offline
