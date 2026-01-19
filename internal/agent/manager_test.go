@@ -588,6 +588,110 @@ func TestManagerGetByInstanceID(t *testing.T) {
 	})
 }
 
+// TestManagerGetByPrincipalAndWorkDir tests retrieving an agent by principal ID and working dir.
+func TestManagerGetByPrincipalAndWorkDir(t *testing.T) {
+	t.Run("returns agent when principal and workdir match", func(t *testing.T) {
+		manager := NewManager(slog.Default())
+		stream := newMockStream()
+		conn := NewConnection(ConnectionParams{
+			ID:          "bob-projects-website",
+			Name:        "bob",
+			PrincipalID: "principal-uuid",
+			WorkingDir:  "/projects/website",
+			Stream:      stream,
+			Logger:      slog.Default(),
+		})
+
+		manager.Register(conn)
+
+		// Exact match
+		got := manager.GetByPrincipalAndWorkDir("principal-uuid", "/projects/website")
+		if got == nil {
+			t.Fatal("expected to find agent by principal and workdir")
+		}
+		if got.ID != "bob-projects-website" {
+			t.Errorf("expected ID 'bob-projects-website', got '%s'", got.ID)
+		}
+	})
+
+	t.Run("returns nil when workdir does not match", func(t *testing.T) {
+		manager := NewManager(slog.Default())
+		stream := newMockStream()
+		conn := NewConnection(ConnectionParams{
+			ID:          "bob-projects-website",
+			Name:        "bob",
+			PrincipalID: "principal-uuid",
+			WorkingDir:  "/projects/website",
+			Stream:      stream,
+			Logger:      slog.Default(),
+		})
+
+		manager.Register(conn)
+
+		got := manager.GetByPrincipalAndWorkDir("principal-uuid", "/other/dir")
+		if got != nil {
+			t.Error("expected nil when workdir does not match")
+		}
+	})
+
+	t.Run("returns nil when principal does not match", func(t *testing.T) {
+		manager := NewManager(slog.Default())
+		stream := newMockStream()
+		conn := NewConnection(ConnectionParams{
+			ID:          "bob-projects-website",
+			Name:        "bob",
+			PrincipalID: "principal-uuid",
+			WorkingDir:  "/projects/website",
+			Stream:      stream,
+			Logger:      slog.Default(),
+		})
+
+		manager.Register(conn)
+
+		got := manager.GetByPrincipalAndWorkDir("other-uuid", "/projects/website")
+		if got != nil {
+			t.Error("expected nil when principal does not match")
+		}
+	})
+
+	t.Run("finds correct agent among multiple", func(t *testing.T) {
+		manager := NewManager(slog.Default())
+
+		// Register multiple agents with different principal/workdir combos
+		testCases := []struct {
+			id          string
+			principalID string
+			workingDir  string
+		}{
+			{"agent-1", "alice", "/home/alice/proj1"},
+			{"agent-2", "alice", "/home/alice/proj2"},
+			{"agent-3", "bob", "/home/bob/proj1"},
+		}
+
+		for _, tc := range testCases {
+			stream := newMockStream()
+			conn := NewConnection(ConnectionParams{
+				ID:          tc.id,
+				Name:        "Agent",
+				PrincipalID: tc.principalID,
+				WorkingDir:  tc.workingDir,
+				Stream:      stream,
+				Logger:      slog.Default(),
+			})
+			manager.Register(conn)
+		}
+
+		// Find alice's second project
+		got := manager.GetByPrincipalAndWorkDir("alice", "/home/alice/proj2")
+		if got == nil {
+			t.Fatal("expected to find agent")
+		}
+		if got.ID != "agent-2" {
+			t.Errorf("expected 'agent-2', got '%s'", got.ID)
+		}
+	})
+}
+
 // TestConcurrentAccess tests thread safety of the Manager.
 func TestConcurrentAccess(t *testing.T) {
 	t.Run("handles concurrent register and list", func(t *testing.T) {

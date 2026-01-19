@@ -280,6 +280,21 @@ func (m *Manager) GetByInstanceID(instanceID string) *Connection {
 	return nil
 }
 
+// GetByPrincipalAndWorkDir finds an online agent matching both principal and working dir.
+// This is used for routing messages to bound channels, where a binding stores
+// (principal_id, working_dir) and we need to find the specific agent instance.
+func (m *Manager) GetByPrincipalAndWorkDir(principalID, workingDir string) *Connection {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, agent := range m.agents {
+		if agent.PrincipalID == principalID && agent.WorkingDir == workingDir {
+			return agent
+		}
+	}
+	return nil
+}
+
 // SendRequest represents a request to send a message to an agent.
 type SendRequest struct {
 	ThreadID    string
