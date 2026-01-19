@@ -165,10 +165,20 @@ func (s *Service) ensureThread(ctx context.Context, req *SendRequest) (*store.Th
 			// Handle race condition: another request may have created the thread
 			// between our lookup and insert attempt
 			if err == store.ErrDuplicateThread {
+				// First try by the provided ThreadID
 				thread, lookupErr := s.store.GetThread(ctx, req.ThreadID)
 				if lookupErr == nil {
 					s.logger.Debug("found existing thread after race", "thread_id", thread.ID)
 					return thread, nil
+				}
+				// Also try by frontend+external ID since that's what the UNIQUE constraint is on
+				// The existing thread may have a different ID but same frontend/external pair
+				if req.FrontendName != "" && req.ExternalID != "" {
+					thread, lookupErr = s.store.GetThreadByFrontendID(ctx, req.FrontendName, req.ExternalID)
+					if lookupErr == nil {
+						s.logger.Debug("found existing thread by frontend ID after race", "thread_id", thread.ID)
+						return thread, nil
+					}
 				}
 				s.logger.Error("retry lookup failed after duplicate error", "lookup_error", lookupErr)
 			}
