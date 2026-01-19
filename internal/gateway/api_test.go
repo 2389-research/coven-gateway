@@ -1283,3 +1283,130 @@ func TestCreateBindingByInstanceID_SameAgentNoop(t *testing.T) {
 		t.Errorf("expected rebound_from to be nil for same agent, got %v", resp.ReboundFrom)
 	}
 }
+
+// TestGetBindingStatus tests GET /api/bindings?frontend=X&channel_id=Y for a single binding.
+func TestGetBindingStatus(t *testing.T) {
+	gw := newTestGatewayWithAgentForBinding(t, "inst-status", "/projects/website", "agent-status")
+
+	// Create a binding first
+	reqBody := `{"frontend":"matrix","channel_id":"!room:server","instance_id":"inst-status"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create binding: got status %d, want %d. Body: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+
+	// Get binding status by frontend + channel_id
+	req = httptest.NewRequest(http.MethodGet, "/api/bindings?frontend=matrix&channel_id=!room:server", nil)
+	w = httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("get binding status: got status %d, want %d. Body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Verify expected fields
+	if resp["binding_id"] == nil || resp["binding_id"] == "" {
+		t.Error("expected non-empty binding_id")
+	}
+	if resp["agent_name"] != "test-agent" {
+		t.Errorf("expected agent_name 'test-agent', got %v", resp["agent_name"])
+	}
+	if resp["working_dir"] != "/projects/website" {
+		t.Errorf("expected working_dir '/projects/website', got %v", resp["working_dir"])
+	}
+	if resp["online"] != true {
+		t.Errorf("expected online=true, got %v", resp["online"])
+	}
+}
+
+// TestGetBindingStatus_NotFound tests GET with frontend+channel_id for non-existent binding.
+func TestGetBindingStatus_NotFound(t *testing.T) {
+	gw := newTestGateway(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/bindings?frontend=matrix&channel_id=!nonexistent:server", nil)
+	w := httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d. Body: %s", http.StatusNotFound, w.Code, w.Body.String())
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+
+	if errResp["error"] != "no binding for this channel" {
+		t.Errorf("expected error 'no binding for this channel', got %q", errResp["error"])
+	}
+}
+
+// TestGetBindingStatus_AgentOffline tests GET binding when agent is offline.
+func TestGetBindingStatus_AgentOffline(t *testing.T) {
+	gw := newTestGateway(t)
+
+	// Create a binding directly in store without a connected agent
+	createTestBindingV2(t, gw, "matrix", "!offline:server", "offline-agent")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/bindings?frontend=matrix&channel_id=!offline:server", nil)
+	w := httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d. Body: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp["online"] != false {
+		t.Errorf("expected online=false for offline agent, got %v", resp["online"])
+	}
+}
+
+// TestListBindings_IncludesWorkingDir tests that list response includes working_dir.
+func TestListBindings_IncludesWorkingDir(t *testing.T) {
+	gw := newTestGatewayWithAgentForBinding(t, "inst-list", "/projects/listtest", "agent-list")
+
+	// Create a binding
+	reqBody := `{"frontend":"slack","channel_id":"C123","instance_id":"inst-list"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/bindings", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create binding: got status %d, want %d. Body: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+
+	// List all bindings (no query params)
+	req = httptest.NewRequest(http.MethodGet, "/api/bindings", nil)
+	w = httptest.NewRecorder()
+	gw.handleBindings(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("list bindings: got status %d, want %d. Body: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var resp ListBindingsResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(resp.Bindings) != 1 {
+		t.Fatalf("expected 1 binding, got %d", len(resp.Bindings))
+	}
+
+	if resp.Bindings[0].WorkingDir != "/projects/listtest" {
+		t.Errorf("expected working_dir '/projects/listtest', got %q", resp.Bindings[0].WorkingDir)
+	}
+}

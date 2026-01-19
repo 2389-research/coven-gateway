@@ -64,12 +64,21 @@ type BindingResponse struct {
 	AgentID     string `json:"agent_id"`
 	AgentName   string `json:"agent_name,omitempty"`
 	AgentOnline bool   `json:"agent_online"`
+	WorkingDir  string `json:"working_dir"`
 	CreatedAt   string `json:"created_at"`
 }
 
 // ListBindingsResponse is the JSON response for GET /api/bindings.
 type ListBindingsResponse struct {
 	Bindings []BindingResponse `json:"bindings"`
+}
+
+// SingleBindingResponse is the JSON response for GET /api/bindings?frontend=X&channel_id=Y.
+type SingleBindingResponse struct {
+	BindingID  string `json:"binding_id"`
+	AgentName  string `json:"agent_name"`
+	WorkingDir string `json:"working_dir"`
+	Online     bool   `json:"online"`
 }
 
 // MessageResponse is the JSON response for message history.
@@ -483,7 +492,19 @@ func (g *Gateway) handleBindings(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleListBindings handles GET /api/bindings.
+// When frontend+channel_id query params are provided, returns a single binding status.
+// Otherwise, lists all bindings.
 func (g *Gateway) handleListBindings(w http.ResponseWriter, r *http.Request) {
+	frontend := r.URL.Query().Get("frontend")
+	channelID := r.URL.Query().Get("channel_id")
+
+	// If frontend + channel_id provided, return single binding status
+	if frontend != "" && channelID != "" {
+		g.handleGetSingleBinding(w, r, frontend, channelID)
+		return
+	}
+
+	// List all bindings
 	bindings, err := g.store.ListBindingsV2(r.Context(), store.BindingFilter{})
 	if err != nil {
 		g.logger.Error("failed to list bindings", "error", err)
@@ -509,8 +530,42 @@ func (g *Gateway) handleListBindings(w http.ResponseWriter, r *http.Request) {
 			AgentID:     b.AgentID,
 			AgentName:   agentName,
 			AgentOnline: agentOnline,
+			WorkingDir:  b.WorkingDir,
 			CreatedAt:   b.CreatedAt.Format(time.RFC3339),
 		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleGetSingleBinding handles GET /api/bindings?frontend=X&channel_id=Y.
+// Returns status for a single binding including working_dir and online status.
+func (g *Gateway) handleGetSingleBinding(w http.ResponseWriter, r *http.Request, frontend, channelID string) {
+	binding, err := g.store.GetBindingByChannel(r.Context(), frontend, channelID)
+	if errors.Is(err, store.ErrBindingNotFound) {
+		g.sendJSONError(w, http.StatusNotFound, "no binding for this channel")
+		return
+	}
+	if err != nil {
+		g.logger.Error("failed to get binding", "error", err)
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	// Check if agent is online by looking up by AgentID
+	online := false
+	agentName := ""
+	if agent, ok := g.agentManager.GetAgent(binding.AgentID); ok {
+		online = true
+		agentName = agent.Name
+	}
+
+	response := SingleBindingResponse{
+		BindingID:  binding.ID,
+		AgentName:  agentName,
+		WorkingDir: binding.WorkingDir,
+		Online:     online,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
