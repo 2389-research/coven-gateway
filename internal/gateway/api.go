@@ -810,3 +810,84 @@ func (g *Gateway) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
+
+// handleAgentHistory handles GET /api/agents/{id}/history requests.
+// Returns recent conversation events for a specific agent, ordered by timestamp DESC.
+func (g *Gateway) handleAgentHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract agent ID from path: /api/agents/{id}/history
+	path := r.URL.Path
+	prefix := "/api/agents/"
+	suffix := "/history"
+
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	agentID := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
+	if agentID == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "agent_id is required")
+		return
+	}
+
+	// Look up agent by ID to get their principal_id
+	agent, ok := g.agentManager.GetAgent(agentID)
+	if !ok {
+		g.sendJSONError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+
+	// Parse optional limit parameter (default 20, max 100)
+	limit := 20
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		parsed, err := strconv.Atoi(limitStr)
+		if err != nil || parsed < 1 {
+			g.sendJSONError(w, http.StatusBadRequest, "limit must be a positive integer")
+			return
+		}
+		limit = parsed
+		if limit > 100 {
+			limit = 100
+		}
+	}
+
+	// Query events by actor principal_id
+	sqlStore := g.store.(*store.SQLiteStore)
+	events, err := sqlStore.ListEventsByActor(r.Context(), agent.PrincipalID, limit)
+	if err != nil {
+		g.logger.Error("failed to list events by actor", "error", err)
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	// Reverse events to get DESC order (most recent first)
+	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+		events[i], events[j] = events[j], events[i]
+	}
+
+	// Build response
+	response := make([]AgentHistoryEvent, len(events))
+	for i, evt := range events {
+		var content string
+		if evt.Text != nil {
+			content = *evt.Text
+		}
+		response[i] = AgentHistoryEvent{
+			ID:              evt.ID,
+			Timestamp:       evt.Timestamp.Format(time.RFC3339),
+			Author:          evt.Author,
+			Type:            string(evt.Type),
+			Content:         content,
+			ConversationKey: evt.ConversationKey,
+			Direction:       string(evt.Direction),
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}

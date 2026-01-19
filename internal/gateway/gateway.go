@@ -185,6 +185,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 
 		// Protected endpoints - any authenticated user
 		mux.Handle("/api/agents", authMiddleware(http.HandlerFunc(gw.handleListAgents)))
+		mux.Handle("/api/agents/", authMiddleware(http.HandlerFunc(gw.handleAgentHistory)))
 		mux.Handle("/api/send", authMiddleware(http.HandlerFunc(gw.handleSendMessage)))
 		mux.Handle("/api/threads/", authMiddleware(http.HandlerFunc(gw.handleThreadMessages)))
 
@@ -202,6 +203,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	} else {
 		// No auth - register handlers directly
 		mux.HandleFunc("/api/agents", gw.handleListAgents)
+		mux.HandleFunc("/api/agents/", gw.handleAgentHistory)
 		mux.HandleFunc("/api/send", gw.handleSendMessage)
 		mux.HandleFunc("/api/bindings", gw.handleBindings)
 		mux.HandleFunc("/api/threads/", gw.handleThreadMessages)
