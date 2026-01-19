@@ -1,7 +1,7 @@
 # ABOUTME: Build and development commands for fold-gateway
 # ABOUTME: Handles proto generation, building, and testing
 
-.PHONY: all build build-gateway build-matrix build-admin build-tui proto clean test lint fmt run
+.PHONY: all build build-gateway build-matrix build-admin build-tui proto update-proto clean test lint fmt run
 
 # Default target
 all: proto build
@@ -33,6 +33,12 @@ proto:
 		--go-grpc_opt=Mfold.proto=github.com/2389/fold-gateway/proto/fold \
 		-I proto/fold-proto \
 		proto/fold-proto/fold.proto
+
+# Update proto submodule and regenerate
+update-proto:
+	git submodule update --remote proto/fold-proto
+	$(MAKE) proto
+	@echo "Proto updated from fold-proto submodule"
 
 # Install protoc plugins (run once)
 proto-deps:
