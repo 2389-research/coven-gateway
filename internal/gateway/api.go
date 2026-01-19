@@ -856,18 +856,12 @@ func (g *Gateway) handleAgentHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Query events by actor principal_id
-	sqlStore := g.store.(*store.SQLiteStore)
-	events, err := sqlStore.ListEventsByActor(r.Context(), agent.PrincipalID, limit)
+	// Query events by actor principal_id, ordered newest first
+	events, err := g.store.ListEventsByActorDesc(r.Context(), agent.PrincipalID, limit)
 	if err != nil {
 		g.logger.Error("failed to list events by actor", "error", err)
 		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
 		return
-	}
-
-	// Reverse events to get DESC order (most recent first)
-	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
-		events[i], events[j] = events[j], events[i]
 	}
 
 	// Build response

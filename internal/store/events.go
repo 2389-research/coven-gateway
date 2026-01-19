@@ -189,6 +189,27 @@ func (s *SQLiteStore) ListEventsByActor(ctx context.Context, principalID string,
 	return s.queryEvents(ctx, query, principalID, limit)
 }
 
+// ListEventsByActorDesc retrieves events created by a specific principal, ordered newest first
+func (s *SQLiteStore) ListEventsByActorDesc(ctx context.Context, principalID string, limit int) ([]*LedgerEvent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	query := `
+		SELECT event_id, conversation_key, direction, author, timestamp, type, text,
+		       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
+		FROM ledger_events
+		WHERE actor_principal_id = ?
+		ORDER BY timestamp DESC
+		LIMIT ?
+	`
+
+	return s.queryEvents(ctx, query, principalID, limit)
+}
+
 // queryEvents is a helper that executes a query and returns events
 func (s *SQLiteStore) queryEvents(ctx context.Context, query string, args ...any) ([]*LedgerEvent, error) {
 	rows, err := s.db.QueryContext(ctx, query, args...)

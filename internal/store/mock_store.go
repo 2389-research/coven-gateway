@@ -421,6 +421,31 @@ func (m *MockStore) ListEventsByActor(ctx context.Context, principalID string, l
 	return result, nil
 }
 
+// ListEventsByActorDesc retrieves events created by a specific principal, ordered newest first.
+func (m *MockStore) ListEventsByActorDesc(ctx context.Context, principalID string, limit int) ([]*LedgerEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*LedgerEvent
+	for _, e := range m.events {
+		if e.ActorPrincipalID != nil && *e.ActorPrincipalID == principalID {
+			eventCopy := *e
+			result = append(result, &eventCopy)
+		}
+	}
+
+	// Sort by timestamp descending (newest first)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Timestamp.After(result[j].Timestamp)
+	})
+
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+
+	return result, nil
+}
+
 // GetEvents retrieves events for a conversation with pagination support.
 func (m *MockStore) GetEvents(ctx context.Context, p GetEventsParams) (*GetEventsResult, error) {
 	m.mu.RLock()
