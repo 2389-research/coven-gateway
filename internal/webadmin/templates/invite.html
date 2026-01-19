@@ -1,66 +1,67 @@
 {{/* ABOUTME: Invite acceptance page for new user registration */}}
+{{/* ABOUTME: Professional business design */}}
 {{define "content"}}
-<div class="min-h-screen flex items-center justify-center p-4">
+<div class="min-h-screen flex items-center justify-center p-4 bg-warm-50">
     <div class="w-full max-w-md">
         <!-- Logo/Brand -->
         <div class="text-center mb-8">
             <div class="inline-flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 border border-cyan/30 bg-panel flex items-center justify-center">
-                    <svg class="w-5 h-5 text-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="w-12 h-12 rounded-xl bg-forest flex items-center justify-center shadow-soft">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
                     </svg>
                 </div>
-                <span class="font-mono text-2xl font-bold tracking-tight">FOLD</span>
+                <span class="font-serif text-3xl text-ink">Fold</span>
             </div>
-            <p class="text-text-muted font-mono text-xs tracking-widest uppercase">Operator Registration</p>
+            <p class="text-warm-500 text-sm font-medium tracking-wide">Create Your Account</p>
         </div>
 
         <!-- Signup Card -->
-        <div class="bg-panel border border-border p-6 glow-cyan">
-            <div class="flex items-center gap-2 mb-6 pb-4 border-b border-border">
-                <div class="w-2 h-2 rounded-full bg-cyan status-dot"></div>
-                <span class="font-mono text-xs text-text-secondary uppercase tracking-wider">Create Account</span>
+        <div class="bg-white rounded-xl border border-warm-200 p-8 shadow-card">
+            <div class="flex items-center gap-3 mb-6 pb-4 border-b border-warm-100">
+                <div class="w-2 h-2 rounded-full bg-forest pulse-soft"></div>
+                <span class="text-xs text-warm-500 font-semibold uppercase tracking-wider">Welcome</span>
             </div>
 
-            <p class="text-text-secondary text-sm mb-6">You've been invited to access the control plane.</p>
+            <p class="text-warm-600 text-sm mb-6">You've been invited to join the Fold platform. Complete your registration below.</p>
 
             {{if .Error}}
-            <div class="mb-4 p-3 bg-crimson/10 border border-crimson/30 text-crimson text-sm font-mono">
-                <span class="text-crimson/60">[ERR]</span> {{.Error}}
+            <div class="mb-4 p-4 bg-danger/5 border border-danger/20 rounded-lg text-danger text-sm">
+                {{.Error}}
             </div>
             {{end}}
 
-            <form method="POST" action="/admin/invite/{{.Token}}" class="space-y-4">
+            <form method="POST" action="/admin/invite/{{.Token}}" class="space-y-5">
                 <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                 <div>
-                    <label for="username" class="block text-xs font-mono text-text-secondary uppercase tracking-wider mb-2">Username</label>
+                    <label for="username" class="block text-sm font-medium text-ink mb-2">Username</label>
                     <input type="text" id="username" name="username" required autocomplete="username"
-                        class="w-full px-3 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors">
+                        class="w-full px-4 py-3 bg-warm-50 border border-warm-200 rounded-lg text-ink text-sm placeholder-warm-400 focus:border-forest focus:ring-1 focus:ring-forest/20 transition-colors">
                 </div>
 
                 <div>
-                    <label for="display_name" class="block text-xs font-mono text-text-secondary uppercase tracking-wider mb-2">Display Name <span class="text-text-muted">(optional)</span></label>
+                    <label for="display_name" class="block text-sm font-medium text-ink mb-2">Display Name <span class="text-warm-400 font-normal">(optional)</span></label>
                     <input type="text" id="display_name" name="display_name" autocomplete="name"
-                        class="w-full px-3 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors">
+                        class="w-full px-4 py-3 bg-warm-50 border border-warm-200 rounded-lg text-ink text-sm placeholder-warm-400 focus:border-forest focus:ring-1 focus:ring-forest/20 transition-colors">
                 </div>
 
                 <div>
-                    <label for="password" class="block text-xs font-mono text-text-secondary uppercase tracking-wider mb-2">Password</label>
+                    <label for="password" class="block text-sm font-medium text-ink mb-2">Password</label>
                     <input type="password" id="password" name="password" required minlength="8" autocomplete="new-password"
-                        class="w-full px-3 py-2.5 bg-surface border border-border text-text-primary font-mono text-sm placeholder-text-muted focus:border-cyan transition-colors">
-                    <p class="mt-2 text-xs text-text-muted font-mono">Minimum 8 characters</p>
+                        class="w-full px-4 py-3 bg-warm-50 border border-warm-200 rounded-lg text-ink text-sm placeholder-warm-400 focus:border-forest focus:ring-1 focus:ring-forest/20 transition-colors">
+                    <p class="mt-2 text-xs text-warm-400">Minimum 8 characters</p>
                 </div>
 
                 <button type="submit"
-                    class="w-full py-2.5 px-4 bg-cyan text-void font-mono font-semibold text-sm uppercase tracking-wider hover:bg-cyan/90 transition-all hover:shadow-[0_0_20px_rgba(0,229,255,0.3)]">
-                    Initialize Account
+                    class="w-full py-3 px-4 bg-forest text-white font-medium text-sm rounded-lg hover:bg-forest-light transition-colors shadow-soft">
+                    Create Account
                 </button>
             </form>
         </div>
 
         <!-- Footer -->
-        <p class="text-center text-text-muted font-mono text-xs mt-6">
-            fold-gateway <span class="text-text-muted/50">|</span> agent control plane
+        <p class="text-center text-warm-400 text-xs mt-6">
+            Fold Gateway
         </p>
     </div>
 </div>

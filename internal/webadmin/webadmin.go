@@ -134,6 +134,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 
 	// Agent management
 	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsList))
+	mux.HandleFunc("GET /admin/agents/{id}", a.requireAuth(a.handleAgentDetail))
 	mux.HandleFunc("POST /admin/agents/{id}/approve", a.requireAuth(a.handleAgentApprove))
 	mux.HandleFunc("POST /admin/agents/{id}/revoke", a.requireAuth(a.handleAgentRevoke))
 
@@ -654,6 +655,54 @@ func (a *Admin) handleAgentRevoke(w http.ResponseWriter, r *http.Request) {
 	a.logger.Info("agent revoked", "agent_id", agentID)
 	// Return updated agents list
 	a.renderAgentsList(w)
+}
+
+// handleAgentDetail renders the agent detail page
+func (a *Admin) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
+	agentID := r.PathValue("id")
+	if agentID == "" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Build agent detail info
+	agentInfo := agentDetailItem{
+		ID:        agentID,
+		Name:      agentID, // Default to ID if not found
+		Connected: false,
+	}
+
+	// Check if agent is currently connected and get details
+	if a.manager != nil {
+		for _, info := range a.manager.ListAgents() {
+			if info.ID == agentID {
+				agentInfo.Name = info.Name
+				agentInfo.Connected = true
+				agentInfo.WorkingDir = info.WorkingDir
+				agentInfo.Capabilities = info.Capabilities
+				agentInfo.Workspaces = info.Workspaces
+				agentInfo.InstanceID = info.InstanceID
+				agentInfo.Backend = info.Backend
+				break
+			}
+		}
+	}
+
+	// Get threads associated with this agent
+	// For now, we'll get all threads and filter - could be optimized with store method
+	allThreads, err := a.store.ListThreads(r.Context(), 100)
+	var agentThreads []*store.Thread
+	if err == nil {
+		for _, thread := range allThreads {
+			if thread.AgentID == agentID {
+				agentThreads = append(agentThreads, thread)
+			}
+		}
+	}
+
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderAgentDetail(w, user, agentInfo, agentThreads, csrfToken)
 }
 
 // handleCreateInvite creates a new invite link

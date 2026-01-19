@@ -84,6 +84,25 @@ type chatPageData struct {
 	CSRFToken string
 }
 
+type agentDetailItem struct {
+	ID           string
+	Name         string
+	Connected    bool
+	WorkingDir   string
+	Capabilities []string
+	Workspaces   []string
+	InstanceID   string
+	Backend      string
+}
+
+type agentDetailData struct {
+	Title     string
+	User      *store.AdminUser
+	Agent     agentDetailItem
+	Threads   []*store.Thread
+	CSRFToken string
+}
+
 // renderLoginPage renders the login page
 func (a *Admin) renderLoginPage(w http.ResponseWriter, errorMsg, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/login.html"))
@@ -275,5 +294,23 @@ func (a *Admin) renderChatPage(w http.ResponseWriter, user *store.AdminUser, age
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render chat page", "error", err)
+	}
+}
+
+// renderAgentDetail renders the agent detail page
+func (a *Admin) renderAgentDetail(w http.ResponseWriter, user *store.AdminUser, agent agentDetailItem, threads []*store.Thread, csrfToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/agent_detail.html"))
+
+	data := agentDetailData{
+		Title:     agent.Name + " - Agent Details",
+		User:      user,
+		Agent:     agent,
+		Threads:   threads,
+		CSRFToken: csrfToken,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render agent detail page", "error", err)
 	}
 }

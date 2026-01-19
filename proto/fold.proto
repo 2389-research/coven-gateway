@@ -18,6 +18,7 @@ message AgentMessage {
     RegisterAgent register = 1;
     MessageResponse response = 2;
     Heartbeat heartbeat = 3;
+    InjectionAck injection_ack = 4;  // Acknowledge context injection
   }
 }
 
@@ -38,6 +39,7 @@ message AgentMetadata {
   string hostname = 3;
   string os = 4;
   repeated string workspaces = 5;  // Workspace tags for filtering
+  string backend = 6;              // Backend type: "mux", "cli", "acp", "direct"
 }
 
 // Agent registration
@@ -46,6 +48,7 @@ message RegisterAgent {
   string name = 2;               // Human-readable name
   repeated string capabilities = 3;  // What this agent can do
   AgentMetadata metadata = 4;    // Environment context
+  repeated string protocol_features = 5;  // Supported features: "token_usage", "tool_states", "injection", "cancellation"
 }
 
 // Response to a message request
@@ -62,6 +65,9 @@ message MessageResponse {
     ToolApprovalRequest tool_approval_request = 9;
     SessionInit session_init = 10;
     SessionOrphaned session_orphaned = 11;
+    TokenUsage usage = 12;           // Token consumption update
+    ToolStateUpdate tool_state = 13; // Tool lifecycle update
+    Cancelled cancelled = 14;        // Request was cancelled
   }
 }
 
@@ -73,6 +79,69 @@ message SessionInit {
 // Backend session was orphaned (expired, lost, needs retry)
 message SessionOrphaned {
   string reason = 1;
+}
+
+// Token usage statistics from the LLM provider
+message TokenUsage {
+  int32 input_tokens = 1;         // Tokens in the prompt
+  int32 output_tokens = 2;        // Tokens generated
+  int32 cache_read_tokens = 3;    // Tokens read from cache (Anthropic)
+  int32 cache_write_tokens = 4;   // Tokens written to cache (Anthropic)
+  int32 thinking_tokens = 5;      // Extended thinking tokens (Claude)
+}
+
+// Tool execution state
+enum ToolState {
+  TOOL_STATE_UNSPECIFIED = 0;
+  TOOL_STATE_PENDING = 1;           // Tool identified, not yet started
+  TOOL_STATE_AWAITING_APPROVAL = 2; // Waiting for human approval
+  TOOL_STATE_RUNNING = 3;           // Actively executing
+  TOOL_STATE_COMPLETED = 4;         // Finished successfully
+  TOOL_STATE_FAILED = 5;            // Execution error
+  TOOL_STATE_DENIED = 6;            // Approval denied
+  TOOL_STATE_TIMEOUT = 7;           // Execution timed out
+  TOOL_STATE_CANCELLED = 8;         // Cancelled by user/system
+}
+
+// Tool state transition notification
+message ToolStateUpdate {
+  string id = 1;                    // Tool invocation ID (matches ToolUse.id)
+  ToolState state = 2;              // New state
+  optional string detail = 3;       // Optional detail (error message, etc.)
+}
+
+// Cancellation acknowledgment (agent → server)
+message Cancelled {
+  string reason = 1;                // Echo back the reason
+}
+
+// Priority for context injection
+enum InjectionPriority {
+  INJECTION_PRIORITY_UNSPECIFIED = 0;
+  INJECTION_PRIORITY_IMMEDIATE = 1;   // Process before current turn completes
+  INJECTION_PRIORITY_NORMAL = 2;      // Standard priority
+  INJECTION_PRIORITY_DEFERRED = 3;    // Process after current work
+}
+
+// Context injection request (server → agent)
+message InjectContext {
+  string injection_id = 1;            // Unique ID for acknowledgment
+  string content = 2;                 // Content to inject
+  InjectionPriority priority = 3;     // When to process
+  optional string source = 4;         // Origin (e.g., "pack:elevenlabs", "system")
+}
+
+// Context injection acknowledgment (agent → server)
+message InjectionAck {
+  string injection_id = 1;            // Matches InjectContext.injection_id
+  bool accepted = 2;                  // Whether agent accepted the injection
+  optional string reason = 3;         // Why rejected (if not accepted)
+}
+
+// Request cancellation (server → agent)
+message CancelRequest {
+  string request_id = 1;              // Request to cancel
+  optional string reason = 2;         // Why cancelled (e.g., "user_requested")
 }
 
 // Request for tool approval before execution (agent → server)
@@ -116,6 +185,8 @@ message ServerMessage {
     Shutdown shutdown = 3;
     ToolApprovalResponse tool_approval = 4;
     RegistrationError registration_error = 5;
+    InjectContext inject_context = 6;   // Push context to agent mid-turn
+    CancelRequest cancel_request = 7;   // Cancel in-flight request
   }
 }
 

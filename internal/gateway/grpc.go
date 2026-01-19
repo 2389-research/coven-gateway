@@ -80,9 +80,11 @@ func (s *foldControlServer) AgentStream(stream pb.FoldControl_AgentStreamServer)
 	// Extract metadata from registration
 	var workspaces []string
 	var workingDir string
+	var backend string
 	if metadata := reg.GetMetadata(); metadata != nil {
 		workspaces = metadata.GetWorkspaces()
 		workingDir = metadata.GetWorkingDirectory()
+		backend = metadata.GetBackend()
 	}
 
 	// Generate short instance ID for binding commands
@@ -98,6 +100,7 @@ func (s *foldControlServer) AgentStream(stream pb.FoldControl_AgentStreamServer)
 		Workspaces:   workspaces,
 		WorkingDir:   workingDir,
 		InstanceID:   instanceID,
+		Backend:      backend,
 		Stream:       stream,
 		Logger:       s.logger.With("agent_id", reg.GetAgentId()),
 	})

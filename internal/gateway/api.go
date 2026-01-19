@@ -39,6 +39,7 @@ type AgentInfoResponse struct {
 	Capabilities []string `json:"capabilities"`
 	Workspaces   []string `json:"workspaces,omitempty"`
 	WorkingDir   string   `json:"working_dir,omitempty"`
+	Backend      string   `json:"backend,omitempty"`
 }
 
 // CreateBindingRequest is the JSON request body for POST /api/bindings.
@@ -152,6 +153,7 @@ func (g *Gateway) handleListAgents(w http.ResponseWriter, r *http.Request) {
 			Capabilities: a.Capabilities,
 			Workspaces:   a.Workspaces,
 			WorkingDir:   a.WorkingDir,
+			Backend:      a.Backend,
 		})
 	}
 
@@ -380,6 +382,37 @@ func (g *Gateway) responseToSSEEvent(resp *agent.Response) SSEEvent {
 	case agent.EventSessionOrphaned:
 		return SSEEvent{
 			Event: "session_orphaned",
+			Data:  map[string]string{"reason": resp.Error},
+		}
+	case agent.EventUsage:
+		if resp.Usage == nil {
+			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed usage event"}}
+		}
+		return SSEEvent{
+			Event: "usage",
+			Data: map[string]interface{}{
+				"input_tokens":       resp.Usage.InputTokens,
+				"output_tokens":      resp.Usage.OutputTokens,
+				"cache_read_tokens":  resp.Usage.CacheReadTokens,
+				"cache_write_tokens": resp.Usage.CacheWriteTokens,
+				"thinking_tokens":    resp.Usage.ThinkingTokens,
+			},
+		}
+	case agent.EventToolState:
+		if resp.ToolState == nil {
+			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed tool_state event"}}
+		}
+		return SSEEvent{
+			Event: "tool_state",
+			Data: map[string]string{
+				"id":     resp.ToolState.ID,
+				"state":  resp.ToolState.State,
+				"detail": resp.ToolState.Detail,
+			},
+		}
+	case agent.EventCancelled:
+		return SSEEvent{
+			Event: "cancelled",
 			Data:  map[string]string{"reason": resp.Error},
 		}
 	default:

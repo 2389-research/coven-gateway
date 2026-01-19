@@ -19,6 +19,7 @@ type Connection struct {
 	Workspaces   []string // From registration metadata
 	WorkingDir   string   // From registration metadata
 	InstanceID   string   // Short code for binding commands
+	Backend      string   // Backend type: "mux", "cli", "acp", "direct"
 
 	stream  pb.FoldControl_AgentStreamServer
 	pending map[string]chan *pb.MessageResponse
@@ -35,6 +36,7 @@ type ConnectionParams struct {
 	Workspaces   []string
 	WorkingDir   string
 	InstanceID   string
+	Backend      string
 	Stream       pb.FoldControl_AgentStreamServer
 	Logger       *slog.Logger
 }
@@ -49,6 +51,7 @@ func NewConnection(params ConnectionParams) *Connection {
 		Workspaces:   params.Workspaces,
 		WorkingDir:   params.WorkingDir,
 		InstanceID:   params.InstanceID,
+		Backend:      params.Backend,
 		stream:       params.Stream,
 		pending:      make(map[string]chan *pb.MessageResponse),
 		logger:       params.Logger,

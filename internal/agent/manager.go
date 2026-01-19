@@ -226,9 +226,56 @@ func (m *Manager) convertResponse(pbResp *pb.MessageResponse) *Response {
 	case *pb.MessageResponse_SessionOrphaned:
 		resp.Event = EventSessionOrphaned
 		resp.Error = event.SessionOrphaned.GetReason()
+
+	case *pb.MessageResponse_Usage:
+		resp.Event = EventUsage
+		resp.Usage = &UsageEvent{
+			InputTokens:      event.Usage.GetInputTokens(),
+			OutputTokens:     event.Usage.GetOutputTokens(),
+			CacheReadTokens:  event.Usage.GetCacheReadTokens(),
+			CacheWriteTokens: event.Usage.GetCacheWriteTokens(),
+			ThinkingTokens:   event.Usage.GetThinkingTokens(),
+		}
+
+	case *pb.MessageResponse_ToolState:
+		resp.Event = EventToolState
+		resp.ToolState = &ToolStateEvent{
+			ID:     event.ToolState.GetId(),
+			State:  toolStateToString(event.ToolState.GetState()),
+			Detail: event.ToolState.GetDetail(),
+		}
+
+	case *pb.MessageResponse_Cancelled:
+		resp.Event = EventCancelled
+		resp.Error = event.Cancelled.GetReason()
+		resp.Done = true
 	}
 
 	return resp
+}
+
+// toolStateToString converts a pb.ToolState enum to a string.
+func toolStateToString(state pb.ToolState) string {
+	switch state {
+	case pb.ToolState_TOOL_STATE_PENDING:
+		return "pending"
+	case pb.ToolState_TOOL_STATE_AWAITING_APPROVAL:
+		return "awaiting_approval"
+	case pb.ToolState_TOOL_STATE_RUNNING:
+		return "running"
+	case pb.ToolState_TOOL_STATE_COMPLETED:
+		return "completed"
+	case pb.ToolState_TOOL_STATE_FAILED:
+		return "failed"
+	case pb.ToolState_TOOL_STATE_DENIED:
+		return "denied"
+	case pb.ToolState_TOOL_STATE_TIMEOUT:
+		return "timeout"
+	case pb.ToolState_TOOL_STATE_CANCELLED:
+		return "cancelled"
+	default:
+		return "unknown"
+	}
 }
 
 // ListAgents returns information about all connected agents.
@@ -246,6 +293,7 @@ func (m *Manager) ListAgents() []*AgentInfo {
 			Workspaces:   agent.Workspaces,
 			WorkingDir:   agent.WorkingDir,
 			InstanceID:   agent.InstanceID,
+			Backend:      agent.Backend,
 		})
 	}
 	return agents
@@ -320,7 +368,9 @@ type Response struct {
 	File       *FileEvent
 	Error      string
 	Done       bool
-	SessionID  string // For EventSessionInit
+	SessionID  string          // For EventSessionInit
+	Usage      *UsageEvent     // For EventUsage
+	ToolState  *ToolStateEvent // For EventToolState
 }
 
 // ResponseEvent indicates the type of response event.
@@ -336,6 +386,9 @@ const (
 	EventError
 	EventSessionInit
 	EventSessionOrphaned
+	EventUsage     // Token usage update
+	EventToolState // Tool lifecycle state change
+	EventCancelled // Request was cancelled
 )
 
 // ToolUseEvent represents a tool invocation by the agent.
@@ -359,6 +412,22 @@ type FileEvent struct {
 	Data     []byte
 }
 
+// UsageEvent represents token consumption from an LLM call.
+type UsageEvent struct {
+	InputTokens      int32
+	OutputTokens     int32
+	CacheReadTokens  int32
+	CacheWriteTokens int32
+	ThinkingTokens   int32
+}
+
+// ToolStateEvent represents a tool lifecycle state change.
+type ToolStateEvent struct {
+	ID     string
+	State  string // "pending", "awaiting_approval", "running", "completed", "failed", "denied", "timeout", "cancelled"
+	Detail string
+}
+
 // AgentInfo contains public information about a connected agent.
 type AgentInfo struct {
 	ID           string
@@ -368,4 +437,5 @@ type AgentInfo struct {
 	Workspaces   []string
 	WorkingDir   string
 	InstanceID   string
+	Backend      string
 }

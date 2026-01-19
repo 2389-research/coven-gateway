@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -162,6 +163,14 @@ func (s *Service) ensureThread(ctx context.Context, req *SendRequest) (*store.Th
 			UpdatedAt:    time.Now(),
 		}
 		if err := s.store.CreateThread(ctx, thread); err != nil {
+			// Handle race condition: another request may have created the thread
+			// between our lookup and insert attempt
+			if isConstraintError(err) {
+				thread, lookupErr := s.store.GetThread(ctx, req.ThreadID)
+				if lookupErr == nil {
+					return thread, nil
+				}
+			}
 			return nil, err
 		}
 		s.logger.Debug("thread created", "thread_id", thread.ID)
@@ -189,10 +198,28 @@ func (s *Service) ensureThread(ctx context.Context, req *SendRequest) (*store.Th
 		UpdatedAt:    time.Now(),
 	}
 	if err := s.store.CreateThread(ctx, thread); err != nil {
+		// Handle race condition: another request may have created the thread
+		// between our lookup and insert attempt
+		if isConstraintError(err) && req.FrontendName != "" && req.ExternalID != "" {
+			thread, lookupErr := s.store.GetThreadByFrontendID(ctx, req.FrontendName, req.ExternalID)
+			if lookupErr == nil {
+				return thread, nil
+			}
+		}
 		return nil, err
 	}
 	s.logger.Debug("thread created", "thread_id", thread.ID)
 	return thread, nil
+}
+
+// isConstraintError checks if an error is a UNIQUE constraint violation
+func isConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "UNIQUE constraint failed") ||
+		strings.Contains(errStr, "constraint failed")
 }
 
 // persistResponses wraps the agent response channel to save messages as they stream
