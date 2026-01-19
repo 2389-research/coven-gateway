@@ -1419,3 +1419,227 @@ func TestListBindings_IncludesWorkingDir(t *testing.T) {
 		t.Errorf("expected working_dir '/projects/listtest', got %q", resp.Bindings[0].WorkingDir)
 	}
 }
+
+// Agent History endpoint tests
+
+func TestHandleAgentHistory_AgentNotFound(t *testing.T) {
+	gw := newTestGateway(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/nonexistent-agent/history", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleAgentHistory(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if errResp["error"] != "agent not found" {
+		t.Errorf("unexpected error message: %s", errResp["error"])
+	}
+}
+
+func TestHandleAgentHistory_InvalidLimit(t *testing.T) {
+	gw := newTestGatewayWithMockManager(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/test-agent/history?limit=invalid", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleAgentHistory(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if errResp["error"] != "limit must be a positive integer" {
+		t.Errorf("unexpected error message: %s", errResp["error"])
+	}
+}
+
+func TestHandleAgentHistory_NegativeLimit(t *testing.T) {
+	gw := newTestGatewayWithMockManager(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/test-agent/history?limit=-5", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleAgentHistory(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleAgentHistory_LimitClamped(t *testing.T) {
+	gw := newTestGatewayWithMockManagerAndStore(t)
+
+	// Request with limit > 100 should work (clamped internally)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/test-agent/history?limit=500", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleAgentHistory(rec, req)
+
+	// Should succeed (not error) - limit is clamped silently to 100
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d. Body: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleAgentHistory_EmptyResult(t *testing.T) {
+	gw := newTestGatewayWithMockManagerAndStore(t)
+
+	// Agent exists but has no events
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/test-agent/history", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleAgentHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var events []AgentHistoryEvent
+	if err := json.NewDecoder(rec.Body).Decode(&events); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(events) != 0 {
+		t.Errorf("expected 0 events, got %d", len(events))
+	}
+}
+
+func TestHandleAgentHistory_WithEvents(t *testing.T) {
+	gw := newTestGatewayWithMockManagerAndStore(t)
+
+	// Add some events for the test agent
+	sqlStore, ok := gw.store.(*store.SQLiteStore)
+	if !ok {
+		t.Fatalf("store is not *SQLiteStore")
+	}
+
+	principalID := "test-agent" // Matches the mock agent's principal ID
+	ctx := context.Background()
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	for i := 0; i < 3; i++ {
+		event := &store.LedgerEvent{
+			ID:               fmt.Sprintf("event-%d", i),
+			ConversationKey:  "matrix:!room:server.com",
+			Direction:        store.EventDirectionOutbound,
+			Author:           "test-agent",
+			Timestamp:        baseTime.Add(time.Duration(i) * time.Second),
+			Type:             store.EventTypeMessage,
+			Text:             ptrString(fmt.Sprintf("Message %d", i)),
+			ActorPrincipalID: &principalID,
+		}
+		if err := sqlStore.SaveEvent(ctx, event); err != nil {
+			t.Fatalf("failed to save event: %v", err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/test-agent/history", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleAgentHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	if rec.Header().Get("Content-Type") != "application/json" {
+		t.Errorf("expected Content-Type application/json, got %s", rec.Header().Get("Content-Type"))
+	}
+
+	var events []AgentHistoryEvent
+	if err := json.NewDecoder(rec.Body).Decode(&events); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(events) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(events))
+	}
+
+	// Verify newest first (DESC order)
+	if events[0].ID != "event-2" {
+		t.Errorf("expected first event to be 'event-2' (newest), got %s", events[0].ID)
+	}
+	if events[2].ID != "event-0" {
+		t.Errorf("expected last event to be 'event-0' (oldest), got %s", events[2].ID)
+	}
+
+	// Verify event fields
+	if events[0].ConversationKey != "matrix:!room:server.com" {
+		t.Errorf("unexpected conversation_key: %s", events[0].ConversationKey)
+	}
+	if events[0].Direction != "outbound_from_agent" {
+		t.Errorf("unexpected direction: %s", events[0].Direction)
+	}
+	if events[0].Type != "message" {
+		t.Errorf("unexpected type: %s", events[0].Type)
+	}
+}
+
+func TestHandleAgentHistory_MethodNotAllowed(t *testing.T) {
+	gw := newTestGateway(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/test-agent/history", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleAgentHistory(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+// ptrString is a helper to create a pointer to a string.
+func ptrString(s string) *string {
+	return &s
+}
+
+// newTestGatewayWithMockManagerAndStore creates a gateway with a registered agent
+// using real SQLite store for event queries.
+func newTestGatewayWithMockManagerAndStore(t *testing.T) *Gateway {
+	t.Helper()
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			GRPCAddr: "localhost:0",
+			HTTPAddr: "localhost:0",
+		},
+		Database: config.DatabaseConfig{
+			Path: ":memory:",
+		},
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	gw, err := New(cfg, logger)
+	if err != nil {
+		t.Fatalf("failed to create gateway: %v", err)
+	}
+
+	// Register a test agent with the agent manager
+	conn := agent.NewConnection(agent.ConnectionParams{
+		ID:           "test-agent",
+		Name:         "Test Agent",
+		PrincipalID:  "test-agent",
+		WorkingDir:   "/test/path",
+		InstanceID:   "inst-test",
+		Capabilities: []string{"chat"},
+		Stream:       &testMockStream{},
+		Logger:       logger,
+	})
+	if err := gw.agentManager.Register(conn); err != nil {
+		t.Fatalf("failed to register test agent: %v", err)
+	}
+
+	return gw
+}

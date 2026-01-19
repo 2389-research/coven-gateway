@@ -220,6 +220,91 @@ func strPtr(s string) *string {
 	return &s
 }
 
+// ListEventsByActorDesc tests
+
+func TestEventStore_ListEventsByActorDesc_ReturnsDescOrder(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	principalID := "principal-desc-order"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	// Create events in ascending order
+	for i := 0; i < 5; i++ {
+		event := &LedgerEvent{
+			ID:               generateTestID("desc-event", i),
+			ConversationKey:  "test:conv:desc",
+			Direction:        EventDirectionOutbound,
+			Author:           "agent",
+			Timestamp:        baseTime.Add(time.Duration(i) * time.Second),
+			Type:             EventTypeMessage,
+			Text:             strPtr("Message " + string(rune('A'+i))),
+			ActorPrincipalID: &principalID,
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	// Fetch events - should be in descending order (newest first)
+	events, err := store.ListEventsByActorDesc(ctx, principalID, 100)
+	require.NoError(t, err)
+	assert.Len(t, events, 5)
+
+	// Verify descending order
+	for i := 1; i < len(events); i++ {
+		assert.True(t, events[i-1].Timestamp.After(events[i].Timestamp) ||
+			events[i-1].Timestamp.Equal(events[i].Timestamp),
+			"events should be in descending order")
+	}
+
+	// Verify the newest event is first (index 4 -> 'e')
+	assert.Equal(t, "desc-event-e", events[0].ID)
+	// Verify the oldest event is last (index 0 -> 'a')
+	assert.Equal(t, "desc-event-a", events[4].ID)
+}
+
+func TestEventStore_ListEventsByActorDesc_RespectsLimit(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	principalID := "principal-limit"
+	baseTime := time.Now().UTC().Truncate(time.Second)
+
+	// Create 10 events
+	for i := 0; i < 10; i++ {
+		event := &LedgerEvent{
+			ID:               generateTestID("limit-event", i),
+			ConversationKey:  "test:conv:limit",
+			Direction:        EventDirectionOutbound,
+			Author:           "agent",
+			Timestamp:        baseTime.Add(time.Duration(i) * time.Second),
+			Type:             EventTypeMessage,
+			Text:             strPtr("Message " + string(rune('A'+i))),
+			ActorPrincipalID: &principalID,
+		}
+		require.NoError(t, store.SaveEvent(ctx, event))
+	}
+
+	// Request only 3 events
+	events, err := store.ListEventsByActorDesc(ctx, principalID, 3)
+	require.NoError(t, err)
+	assert.Len(t, events, 3)
+
+	// Should be the 3 newest events (indices 9, 8, 7 -> j, i, h)
+	assert.Equal(t, "limit-event-j", events[0].ID)
+	assert.Equal(t, "limit-event-i", events[1].ID)
+	assert.Equal(t, "limit-event-h", events[2].ID)
+}
+
+func TestEventStore_ListEventsByActorDesc_ReturnsEmptyForUnknownPrincipal(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	// Query for a principal that has no events
+	events, err := store.ListEventsByActorDesc(ctx, "nonexistent-principal", 100)
+	require.NoError(t, err)
+	assert.Len(t, events, 0)
+}
+
 // GetEvents tests - TDD tests for the History Store feature
 
 func TestGetEvents_Basic(t *testing.T) {
