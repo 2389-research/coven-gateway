@@ -24,6 +24,7 @@ const (
 	RoleOwner  RoleName = "owner"
 	RoleAdmin  RoleName = "admin"
 	RoleMember RoleName = "member"
+	RoleLeader RoleName = "leader"
 )
 
 // ValidRoleNames lists all valid role names
@@ -31,6 +32,7 @@ var ValidRoleNames = []RoleName{
 	RoleOwner,
 	RoleAdmin,
 	RoleMember,
+	RoleLeader,
 }
 
 // Role represents a role assignment to a subject

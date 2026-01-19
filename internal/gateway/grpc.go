@@ -4,9 +4,11 @@
 package gateway
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
+	"slices"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/2389/fold-gateway/internal/agent"
 	"github.com/2389/fold-gateway/internal/auth"
+	"github.com/2389/fold-gateway/internal/store"
 	pb "github.com/2389/fold-gateway/proto/fold"
 )
 
@@ -126,6 +129,9 @@ func (s *foldControlServer) AgentStream(stream pb.FoldControl_AgentStreamServer)
 		return status.Errorf(codes.Internal, "sending welcome: %v", err)
 	}
 
+	// Auto-grant leader role if agent has "leader" capability
+	s.maybeGrantLeaderRole(stream.Context(), principalID, reg.GetCapabilities())
+
 	// Main receive loop
 	for {
 		msg, err := stream.Recv()
@@ -177,4 +183,40 @@ func (s *foldControlServer) handleResponse(conn *agent.Connection, resp *pb.Mess
 	)
 
 	conn.HandleResponse(resp)
+}
+
+// maybeGrantLeaderRole grants the "leader" role to a principal if the agent
+// has "leader" in its capabilities array. Errors are logged but don't fail
+// registration.
+func (s *foldControlServer) maybeGrantLeaderRole(ctx context.Context, principalID string, capabilities []string) {
+	// Skip if no principal ID (unauthenticated connection)
+	if principalID == "" {
+		return
+	}
+
+	// Check if agent has leader capability
+	if !slices.Contains(capabilities, "leader") {
+		return
+	}
+
+	// Type assert to SQLiteStore to access AddRole
+	sqlStore, ok := s.gateway.store.(*store.SQLiteStore)
+	if !ok {
+		s.logger.Error("cannot grant leader role: store is not SQLiteStore")
+		return
+	}
+
+	// Add the leader role to the principal (idempotent operation)
+	err := sqlStore.AddRole(ctx, store.RoleSubjectPrincipal, principalID, store.RoleLeader)
+	if err != nil {
+		s.logger.Error("failed to grant leader role",
+			"principal_id", principalID,
+			"error", err,
+		)
+		return
+	}
+
+	s.logger.Info("granted leader role to principal",
+		"principal_id", principalID,
+	)
 }
