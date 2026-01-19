@@ -110,12 +110,96 @@
     </main>
 </div>
 
+<style>
+    /* Streaming message indicator */
+    .streaming-message {
+        border-left: 3px solid #2D5A47;
+        background: linear-gradient(90deg, rgba(45, 90, 71, 0.05) 0%, transparent 100%);
+        padding-left: 0.75rem;
+    }
+    /* Animated throbber */
+    .throbber {
+        display: inline-block;
+        font-family: monospace;
+        color: #2D5A47;
+        margin-left: 0.5rem;
+        min-width: 1rem;
+    }
+    /* Markdown code blocks */
+    .message-content pre {
+        background: #1f2937;
+        color: #e5e7eb;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        overflow-x: auto;
+        margin: 0.5rem 0;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.875rem;
+    }
+    .message-content code {
+        background: #374151;
+        padding: 0.125rem 0.375rem;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+        font-family: 'IBM Plex Mono', monospace;
+    }
+    /* Inline code (not in pre) */
+    .message-content :not(pre) > code {
+        background: #e5e7eb;
+        color: #1f2937;
+    }
+    /* Markdown lists */
+    .message-content ul, .message-content ol {
+        margin: 0.5rem 0;
+        padding-left: 1.5rem;
+    }
+    .message-content li {
+        margin: 0.25rem 0;
+    }
+    /* Markdown headings */
+    .message-content h1, .message-content h2, .message-content h3 {
+        font-weight: 600;
+        margin: 0.75rem 0 0.5rem 0;
+    }
+    /* Reconnection banner */
+    .reconnect-banner {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: #fef3c7;
+        color: #92400e;
+        text-align: center;
+        padding: 0.5rem;
+        font-size: 0.875rem;
+        z-index: 50;
+    }
+    .reconnect-banner.error {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+</style>
+
 <script>
 (function() {
     const agentId = "{{.AgentID}}";
     const chatMessages = document.getElementById('chat-messages');
     const chatForm = document.getElementById('chat-form');
     const messageInput = document.getElementById('message-input');
+
+    // Streaming state
+    let currentStreamingMessage = null;
+    let streamingContent = '';
+    let isStreaming = false;
+    let throbberInterval = null;
+    const throbberFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    let throbberIndex = 0;
+
+    // SSE reconnection state
+    let evtSource = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    const reconnectDelay = 2000;
 
     // Scroll to bottom if there's history
     if (chatMessages) {
@@ -124,115 +208,351 @@
 
     if (!chatForm) return;
 
-    // Connect to SSE stream
-    const evtSource = new EventSource('/admin/chat/' + agentId + '/stream');
+    // Start SSE connection
+    connectSSE();
 
-    evtSource.addEventListener('connected', function(e) {
-        console.log('Connected to chat stream');
-    });
+    function connectSSE() {
+        evtSource = new EventSource('/admin/chat/' + agentId + '/stream');
 
-    // Handle text responses from agent
-    evtSource.addEventListener('text', function(e) {
-        try {
-            const data = JSON.parse(e.data);
-            appendMessage('agent', data.content || '');
-        } catch {
-            appendMessage('agent', e.data);
-        }
-    });
+        evtSource.addEventListener('connected', function(e) {
+            console.log('Connected to chat stream');
+            reconnectAttempts = 0;
+            removeReconnectBanner();
+        });
 
-    // Handle thinking/reasoning (show in lighter style)
-    evtSource.addEventListener('thinking', function(e) {
-        try {
-            const data = JSON.parse(e.data);
-            if (data.content) {
-                appendMessage('thinking', data.content);
-            }
-        } catch {
-            // Ignore parse errors for thinking events
-        }
-    });
-
-    // Handle tool use events
-    evtSource.addEventListener('tool_use', function(e) {
-        try {
-            const data = JSON.parse(e.data);
-            const toolInfo = data.tool_name ? 'Using tool: ' + data.tool_name : 'Using tool';
-            appendMessage('tool', toolInfo);
-        } catch {
-            appendMessage('tool', 'Using tool...');
-        }
-    });
-
-    // Handle tool results
-    evtSource.addEventListener('tool_result', function(e) {
-        try {
-            const data = JSON.parse(e.data);
-            if (data.content) {
-                appendMessage('tool_result', data.content);
-            }
-        } catch {
-            // Ignore parse errors for tool results
-        }
-    });
-
-    // Handle done event - just log completion, don't display content
-    // (content was already streamed via text events)
-    evtSource.addEventListener('done', function(e) {
-        console.log('Agent response complete');
-    });
-
-    // Handle error events from agent
-    evtSource.addEventListener('error', function(e) {
-        if (e.data) {
+        // Store thread_id when received
+        evtSource.addEventListener('started', function(e) {
             try {
                 const data = JSON.parse(e.data);
-                appendMessage('error', data.content || 'An error occurred');
+                if (data.thread_id) {
+                    localStorage.setItem('chat-thread-' + agentId, data.thread_id);
+                }
             } catch {
-                appendMessage('error', e.data);
+                // Ignore parse errors
             }
+        });
+
+        // Text events - accumulate into streaming message
+        evtSource.addEventListener('text', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                appendStreamText(data.content || '');
+            } catch {
+                appendStreamText(e.data);
+            }
+        });
+
+        // Thinking - show in separate styled block
+        evtSource.addEventListener('thinking', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.content) {
+                    appendThinkingBlock(data.content);
+                }
+            } catch {
+                // Ignore parse errors
+            }
+        });
+
+        // Tool use - show tool indicator
+        evtSource.addEventListener('tool_use', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                appendToolBlock('use', data.tool_name, data.content);
+            } catch {
+                appendToolBlock('use', 'tool', '');
+            }
+        });
+
+        // Tool result
+        evtSource.addEventListener('tool_result', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.content) {
+                    appendToolBlock('result', null, data.content);
+                }
+            } catch {
+                // Ignore parse errors
+            }
+        });
+
+        // Done - finalize streaming message
+        evtSource.addEventListener('done', function(e) {
+            finalizeStreaming();
+        });
+
+        // Error - show error and finalize
+        evtSource.addEventListener('error', function(e) {
+            if (e.data) {
+                try {
+                    const data = JSON.parse(e.data);
+                    appendMessage('error', data.content || 'An error occurred');
+                } catch {
+                    appendMessage('error', e.data);
+                }
+                finalizeStreaming();
+            } else if (evtSource.readyState === EventSource.CLOSED) {
+                console.log('SSE connection closed, attempting reconnect...');
+                attemptReconnect();
+            }
+        });
+
+        // Usage/token statistics
+        evtSource.addEventListener('usage', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                const input = data.input_tokens || 0;
+                const output = data.output_tokens || 0;
+                const cacheRead = data.cache_read_tokens || 0;
+                appendMessage('usage', `Tokens: ${input} in / ${output} out` +
+                    (cacheRead > 0 ? ` (${cacheRead} cached)` : ''));
+            } catch {
+                // Ignore parse errors
+            }
+        });
+
+        // Tool state updates
+        evtSource.addEventListener('tool_state', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                const state = data.state || 'unknown';
+                const emoji = getToolStateEmoji(state);
+                const detail = data.detail ? ': ' + data.detail : '';
+                appendMessage('tool_state', emoji + ' ' + state + detail);
+            } catch {
+                // Ignore parse errors
+            }
+        });
+
+        // Cancelled events
+        evtSource.addEventListener('cancelled', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                appendMessage('cancelled', data.reason || 'Request was cancelled');
+            } catch {
+                appendMessage('cancelled', 'Request was cancelled');
+            }
+            finalizeStreaming();
+        });
+    }
+
+    function attemptReconnect() {
+        if (reconnectAttempts >= maxReconnectAttempts) {
+            showReconnectBanner('Connection lost. Please refresh the page.', true);
+            return;
+        }
+        reconnectAttempts++;
+        showReconnectBanner('Reconnecting... (attempt ' + reconnectAttempts + ')');
+        setTimeout(connectSSE, reconnectDelay * reconnectAttempts);
+    }
+
+    function showReconnectBanner(message, isError) {
+        removeReconnectBanner();
+        const banner = document.createElement('div');
+        banner.id = 'reconnect-banner';
+        banner.className = 'reconnect-banner' + (isError ? ' error' : '');
+        banner.textContent = message;
+        document.body.prepend(banner);
+    }
+
+    function removeReconnectBanner() {
+        const banner = document.getElementById('reconnect-banner');
+        if (banner) banner.remove();
+    }
+
+    // Start streaming - create message container with throbber
+    function startStreaming() {
+        if (isStreaming) return;
+        isStreaming = true;
+        streamingContent = '';
+        throbberIndex = 0;
+
+        removePlaceholder();
+
+        // Create streaming message container
+        currentStreamingMessage = document.createElement('div');
+        currentStreamingMessage.className = 'mb-4 streaming-message';
+
+        // Header with throbber
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'flex justify-between items-start mb-2';
+
+        const senderSpan = document.createElement('span');
+        senderSpan.className = 'text-xs font-semibold px-2 py-1 rounded text-warm-600 bg-warm-100';
+        senderSpan.textContent = 'Agent';
+
+        const throbberSpan = document.createElement('span');
+        throbberSpan.className = 'throbber';
+        throbberSpan.textContent = throbberFrames[0];
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'text-xs text-warm-400';
+        timeSpan.textContent = new Date().toLocaleTimeString();
+
+        const leftGroup = document.createElement('div');
+        leftGroup.className = 'flex items-center';
+        leftGroup.appendChild(senderSpan);
+        leftGroup.appendChild(throbberSpan);
+
+        headerDiv.appendChild(leftGroup);
+        headerDiv.appendChild(timeSpan);
+
+        // Content div (plain text during streaming, markdown on finalize)
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content whitespace-pre-wrap text-sm text-ink leading-relaxed';
+
+        currentStreamingMessage.appendChild(headerDiv);
+        currentStreamingMessage.appendChild(contentDiv);
+        chatMessages.appendChild(currentStreamingMessage);
+
+        // Start throbber animation
+        throbberInterval = setInterval(function() {
+            throbberIndex = (throbberIndex + 1) % throbberFrames.length;
+            const throbber = currentStreamingMessage?.querySelector('.throbber');
+            if (throbber) {
+                throbber.textContent = throbberFrames[throbberIndex];
+            }
+        }, 80);
+
+        scrollToBottom();
+    }
+
+    // Append text chunk to current streaming message
+    function appendStreamText(text) {
+        if (!currentStreamingMessage) startStreaming();
+        streamingContent += text;
+
+        const contentDiv = currentStreamingMessage.querySelector('.message-content');
+        if (contentDiv) {
+            contentDiv.textContent = streamingContent;
+        }
+        scrollToBottom();
+    }
+
+    // Finalize streaming - render markdown with DOMPurify sanitization, remove throbber
+    function finalizeStreaming() {
+        if (!currentStreamingMessage) return;
+
+        clearInterval(throbberInterval);
+        isStreaming = false;
+
+        // Remove throbber
+        const throbber = currentStreamingMessage.querySelector('.throbber');
+        if (throbber) throbber.remove();
+
+        // Remove streaming indicator styling
+        currentStreamingMessage.classList.remove('streaming-message');
+
+        // Render markdown with DOMPurify sanitization (safe HTML rendering)
+        const contentDiv = currentStreamingMessage.querySelector('.message-content');
+        if (contentDiv && streamingContent) {
+            const rawHtml = marked.parse(streamingContent);
+            // DOMPurify.sanitize ensures no XSS - this is the safe way to render HTML
+            contentDiv.innerHTML = DOMPurify.sanitize(rawHtml);
+        }
+
+        currentStreamingMessage = null;
+        streamingContent = '';
+        scrollToBottom();
+    }
+
+    // Append thinking block (separate from main text stream)
+    function appendThinkingBlock(content) {
+        removePlaceholder();
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'mb-4';
+
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'flex justify-between items-start mb-2';
+
+        const senderSpan = document.createElement('span');
+        senderSpan.className = 'text-xs font-semibold px-2 py-1 rounded text-purple-600 bg-purple-50';
+        senderSpan.textContent = 'Thinking...';
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'text-xs text-warm-400';
+        timeSpan.textContent = new Date().toLocaleTimeString();
+
+        headerDiv.appendChild(senderSpan);
+        headerDiv.appendChild(timeSpan);
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'whitespace-pre-wrap text-sm text-purple-700 italic bg-purple-50 border border-purple-100 p-3 rounded-lg';
+        contentDiv.textContent = content;
+
+        msgDiv.appendChild(headerDiv);
+        msgDiv.appendChild(contentDiv);
+        chatMessages.appendChild(msgDiv);
+        scrollToBottom();
+    }
+
+    // Append tool block (use or result)
+    function appendToolBlock(type, toolName, content) {
+        removePlaceholder();
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'mb-4';
+
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'flex justify-between items-start mb-2';
+
+        const senderSpan = document.createElement('span');
+        if (type === 'use') {
+            senderSpan.className = 'text-xs font-semibold px-2 py-1 rounded text-warning bg-warning/10';
+            senderSpan.textContent = toolName ? '⚙ ' + toolName : '⚙ Tool';
         } else {
-            console.log('SSE connection error');
+            senderSpan.className = 'text-xs font-semibold px-2 py-1 rounded text-forest bg-forest/10';
+            senderSpan.textContent = '✓ Result';
         }
-    });
 
-    // Handle usage/token statistics
-    evtSource.addEventListener('usage', function(e) {
-        try {
-            const data = JSON.parse(e.data);
-            const input = data.input_tokens || 0;
-            const output = data.output_tokens || 0;
-            const cacheRead = data.cache_read_tokens || 0;
-            const cacheWrite = data.cache_write_tokens || 0;
-            appendMessage('usage', `Tokens: ${input} in / ${output} out` +
-                (cacheRead > 0 ? ` (${cacheRead} cached)` : '') +
-                (cacheWrite > 0 ? ` (+${cacheWrite} written to cache)` : ''));
-        } catch {
-            // Ignore parse errors for usage events
-        }
-    });
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'text-xs text-warm-400';
+        timeSpan.textContent = new Date().toLocaleTimeString();
 
-    // Handle tool state updates
-    evtSource.addEventListener('tool_state', function(e) {
-        try {
-            const data = JSON.parse(e.data);
-            const state = data.state || 'unknown';
-            const detail = data.detail ? ': ' + data.detail : '';
-            appendMessage('tool_state', `Tool ${state}${detail}`);
-        } catch {
-            // Ignore parse errors for tool_state events
-        }
-    });
+        headerDiv.appendChild(senderSpan);
+        headerDiv.appendChild(timeSpan);
 
-    // Handle cancelled events
-    evtSource.addEventListener('cancelled', function(e) {
-        try {
-            const data = JSON.parse(e.data);
-            appendMessage('cancelled', data.reason || 'Request was cancelled');
-        } catch {
-            appendMessage('cancelled', 'Request was cancelled');
+        msgDiv.appendChild(headerDiv);
+
+        // Only show content if it's not too long or is a result
+        if (content) {
+            const contentDiv = document.createElement('div');
+            const isLong = content.length > 500;
+
+            if (type === 'result') {
+                contentDiv.className = 'whitespace-pre-wrap text-xs font-mono text-warm-600 bg-warm-50 border border-warm-200 p-3 rounded-lg overflow-x-auto max-h-48 overflow-y-auto';
+            } else {
+                contentDiv.className = 'whitespace-pre-wrap text-xs font-mono text-warning/80 bg-warning/5 border border-warning/20 p-3 rounded-lg overflow-x-auto' + (isLong ? ' max-h-32 overflow-y-auto' : '');
+            }
+            contentDiv.textContent = content;
+            msgDiv.appendChild(contentDiv);
         }
-    });
+
+        chatMessages.appendChild(msgDiv);
+        scrollToBottom();
+    }
+
+    function getToolStateEmoji(state) {
+        const emojis = {
+            'pending': '⏳',
+            'awaiting_approval': '🔐',
+            'running': '▶️',
+            'completed': '✅',
+            'failed': '❌',
+            'denied': '🚫',
+            'timeout': '⏰',
+            'cancelled': '🛑'
+        };
+        return emojis[state] || '⚙️';
+    }
+
+    function removePlaceholder() {
+        const placeholder = document.getElementById('chat-placeholder');
+        if (placeholder) placeholder.remove();
+    }
+
+    function scrollToBottom() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 
     // Handle form submission
     chatForm.addEventListener('submit', async function(e) {
@@ -244,37 +564,45 @@
         appendMessage('user', message);
         messageInput.value = '';
 
+        // Start streaming indicator for upcoming response
+        startStreaming();
+
         // Send to server
         try {
             const formData = new FormData();
             formData.append('message', message);
 
+            // Include thread_id if available for conversation continuity
+            const threadId = localStorage.getItem('chat-thread-' + agentId);
+            if (threadId) {
+                formData.append('thread_id', threadId);
+            }
+
             const csrfToken = document.querySelector('[name="csrf_token"]')?.value ||
                              document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
 
-            await fetch('/admin/chat/' + agentId + '/send', {
+            const response = await fetch('/admin/chat/' + agentId + '/send', {
                 method: 'POST',
                 body: formData,
                 headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
             });
+
+            if (!response.ok) {
+                throw new Error('Server returned ' + response.status);
+            }
         } catch (err) {
             console.error('Failed to send message:', err);
-            appendMessage('system', 'Failed to send message');
+            finalizeStreaming();
+            appendMessage('error', 'Failed to send message: ' + err.message);
         }
     });
 
     function appendMessage(sender, content) {
-        // Remove placeholder if present
-        const placeholder = document.getElementById('chat-placeholder');
-        if (placeholder) {
-            placeholder.remove();
-        }
+        removePlaceholder();
 
-        // Create message container using safe DOM methods
         const msgDiv = document.createElement('div');
         msgDiv.className = 'mb-4';
 
-        // Style based on message type
         let senderLabel = sender;
         let senderClass = 'text-warm-600 bg-warm-100';
         let contentClass = 'text-ink';
@@ -284,28 +612,6 @@
             case 'user':
                 senderLabel = 'You';
                 senderClass = 'text-info bg-info/10';
-                break;
-            case 'agent':
-                senderLabel = 'Agent';
-                senderClass = 'text-warm-600 bg-warm-100';
-                break;
-            case 'thinking':
-                senderLabel = 'Thinking...';
-                senderClass = 'text-purple-600 bg-purple-50';
-                contentClass = 'text-purple-700 italic';
-                wrapperClass = 'bg-purple-50 border border-purple-100 p-3 rounded-lg';
-                break;
-            case 'tool':
-                senderLabel = 'Tool';
-                senderClass = 'text-warning bg-warning/10';
-                contentClass = 'text-warning/90';
-                wrapperClass = 'bg-warning/5 border border-warning/20 p-3 rounded-lg';
-                break;
-            case 'tool_result':
-                senderLabel = 'Result';
-                senderClass = 'text-forest bg-forest/10';
-                contentClass = 'text-warm-600 font-mono text-xs';
-                wrapperClass = 'bg-warm-50 border border-warm-200 p-3 rounded-lg overflow-x-auto';
                 break;
             case 'error':
                 senderLabel = 'Error';
@@ -338,7 +644,6 @@
                 break;
         }
 
-        // Header row
         const headerDiv = document.createElement('div');
         headerDiv.className = 'flex justify-between items-start mb-2';
 
@@ -353,7 +658,6 @@
         headerDiv.appendChild(senderSpan);
         headerDiv.appendChild(timeSpan);
 
-        // Content div
         const contentDiv = document.createElement('div');
         contentDiv.className = 'whitespace-pre-wrap text-sm leading-relaxed ' + contentClass + ' ' + wrapperClass;
         contentDiv.textContent = content;
@@ -362,7 +666,7 @@
         msgDiv.appendChild(contentDiv);
 
         chatMessages.appendChild(msgDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        scrollToBottom();
     }
 })();
 </script>
