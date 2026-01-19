@@ -203,6 +203,10 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		// Direct agent ID specified
 		agentID = req.AgentID
 		threadID = req.ThreadID
+		if threadID == "" {
+			// Generate a new thread ID if none provided - required for unique constraint
+			threadID = uuid.New().String()
+		}
 		frontendName = "direct"
 		externalID = threadID
 	} else {
