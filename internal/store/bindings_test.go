@@ -380,3 +380,76 @@ func TestBindingStore_Create_NilCreatedBy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, retrieved.CreatedBy)
 }
+
+func TestBindingWithWorkingDir(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	// Create an agent principal first
+	createTestAgent(t, store, "agent-uuid")
+
+	binding := &Binding{
+		ID:         "binding-uuid",
+		Frontend:   "matrix",
+		ChannelID:  "!room:server",
+		AgentID:    "agent-uuid",
+		WorkingDir: "/projects/website",
+		CreatedAt:  time.Now().UTC().Truncate(time.Second),
+	}
+
+	err := store.CreateBindingV2(ctx, binding)
+	require.NoError(t, err)
+
+	// Retrieve and verify working_dir is preserved
+	got, err := store.GetBindingByChannel(ctx, "matrix", "!room:server")
+	require.NoError(t, err)
+	assert.Equal(t, "/projects/website", got.WorkingDir)
+}
+
+func TestBindingWithWorkingDir_NilIsEmpty(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	createTestAgent(t, store, "agent-empty-wd")
+
+	// Binding without WorkingDir set (should default to empty string)
+	binding := &Binding{
+		ID:        "binding-empty-wd",
+		Frontend:  "slack",
+		ChannelID: "C12345",
+		AgentID:   "agent-empty-wd",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+	}
+
+	err := store.CreateBindingV2(ctx, binding)
+	require.NoError(t, err)
+
+	got, err := store.GetBindingByID(ctx, "binding-empty-wd")
+	require.NoError(t, err)
+	assert.Equal(t, "", got.WorkingDir)
+}
+
+func TestBindingWithWorkingDir_ListPreserves(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	createTestAgent(t, store, "agent-list-wd")
+
+	binding := &Binding{
+		ID:         "binding-list-wd",
+		Frontend:   "telegram",
+		ChannelID:  "chat_789",
+		AgentID:    "agent-list-wd",
+		WorkingDir: "/home/user/myproject",
+		CreatedAt:  time.Now().UTC().Truncate(time.Second),
+	}
+
+	err := store.CreateBindingV2(ctx, binding)
+	require.NoError(t, err)
+
+	// List bindings and verify working_dir is preserved
+	bindings, err := store.ListBindingsV2(ctx, BindingFilter{})
+	require.NoError(t, err)
+	require.Len(t, bindings, 1)
+	assert.Equal(t, "/home/user/myproject", bindings[0].WorkingDir)
+}

@@ -196,12 +196,13 @@ func (s *SQLiteStore) createSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_ledger_timestamp ON ledger_events(timestamp);
 
 		CREATE TABLE IF NOT EXISTS bindings (
-			binding_id TEXT PRIMARY KEY,
-			frontend   TEXT NOT NULL,
-			channel_id TEXT NOT NULL,
-			agent_id   TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			created_by TEXT,
+			binding_id  TEXT PRIMARY KEY,
+			frontend    TEXT NOT NULL,
+			channel_id  TEXT NOT NULL,
+			agent_id    TEXT NOT NULL,
+			working_dir TEXT,
+			created_at  TEXT NOT NULL,
+			created_by  TEXT,
 
 			UNIQUE(frontend, channel_id)
 		);
@@ -301,6 +302,17 @@ func (s *SQLiteStore) runMigrations() error {
 			return fmt.Errorf("adding %s column to messages: %w", m.column, err)
 		}
 		s.logger.Info("applied migration", "column", m.column, "table", "messages")
+	}
+
+	// Migration: Add working_dir column to bindings table
+	var exists int
+	err := s.db.QueryRow(`SELECT 1 FROM pragma_table_info('bindings') WHERE name = 'working_dir'`).Scan(&exists)
+	if err != nil {
+		// Column doesn't exist, add it
+		if _, err := s.db.Exec(`ALTER TABLE bindings ADD COLUMN working_dir TEXT`); err != nil {
+			return fmt.Errorf("adding working_dir column to bindings: %w", err)
+		}
+		s.logger.Info("applied migration", "column", "working_dir", "table", "bindings")
 	}
 
 	return nil

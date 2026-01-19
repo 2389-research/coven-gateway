@@ -21,12 +21,13 @@ var (
 
 // Binding represents a channel-to-agent mapping for message routing
 type Binding struct {
-	ID        string    // UUID v4
-	Frontend  string    // "matrix", "slack", "telegram" (1-50 chars, lowercase alphanumeric + underscore)
-	ChannelID string    // room/channel identifier (1-500 chars)
-	AgentID   string    // principal_id of agent
-	CreatedAt time.Time // when the binding was created
-	CreatedBy *string   // principal_id who created it (optional)
+	ID         string    // UUID v4
+	Frontend   string    // "matrix", "slack", "telegram" (1-50 chars, lowercase alphanumeric + underscore)
+	ChannelID  string    // room/channel identifier (1-500 chars)
+	AgentID    string    // principal_id of agent
+	WorkingDir string    // filesystem path where the agent operates (optional, empty string if not set)
+	CreatedAt  time.Time // when the binding was created
+	CreatedBy  *string   // principal_id who created it (optional)
 }
 
 // BindingFilter specifies filtering options for listing bindings
@@ -65,15 +66,22 @@ func (s *SQLiteStore) CreateBindingV2(ctx context.Context, b *Binding) error {
 	}
 
 	query := `
-		INSERT INTO bindings (binding_id, frontend, channel_id, agent_id, created_at, created_by)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO bindings (binding_id, frontend, channel_id, agent_id, working_dir, created_at, created_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
+
+	// Convert empty string to NULL for working_dir
+	var workingDir any
+	if b.WorkingDir != "" {
+		workingDir = b.WorkingDir
+	}
 
 	_, err := s.db.ExecContext(ctx, query,
 		b.ID,
 		b.Frontend,
 		b.ChannelID,
 		b.AgentID,
+		workingDir,
 		b.CreatedAt.UTC().Format(time.RFC3339),
 		b.CreatedBy,
 	)
@@ -91,7 +99,7 @@ func (s *SQLiteStore) CreateBindingV2(ctx context.Context, b *Binding) error {
 // GetBindingByID retrieves a binding by its ID
 func (s *SQLiteStore) GetBindingByID(ctx context.Context, id string) (*Binding, error) {
 	query := `
-		SELECT binding_id, frontend, channel_id, agent_id, created_at, created_by
+		SELECT binding_id, frontend, channel_id, agent_id, working_dir, created_at, created_by
 		FROM bindings
 		WHERE binding_id = ?
 	`
@@ -102,7 +110,7 @@ func (s *SQLiteStore) GetBindingByID(ctx context.Context, id string) (*Binding, 
 // GetBindingByChannel retrieves a binding by frontend and channel_id
 func (s *SQLiteStore) GetBindingByChannel(ctx context.Context, frontend, channelID string) (*Binding, error) {
 	query := `
-		SELECT binding_id, frontend, channel_id, agent_id, created_at, created_by
+		SELECT binding_id, frontend, channel_id, agent_id, working_dir, created_at, created_by
 		FROM bindings
 		WHERE frontend = ? AND channel_id = ?
 	`
@@ -164,7 +172,7 @@ func (s *SQLiteStore) DeleteBindingByID(ctx context.Context, id string) error {
 // Named V2 to avoid collision with existing ListBindings method.
 func (s *SQLiteStore) ListBindingsV2(ctx context.Context, f BindingFilter) ([]Binding, error) {
 	query := `
-		SELECT binding_id, frontend, channel_id, agent_id, created_at, created_by
+		SELECT binding_id, frontend, channel_id, agent_id, working_dir, created_at, created_by
 		FROM bindings
 		WHERE (? IS NULL OR frontend = ?)
 		  AND (? IS NULL OR agent_id = ?)
@@ -209,12 +217,14 @@ func (s *SQLiteStore) scanBinding(row *sql.Row) (*Binding, error) {
 	var b Binding
 	var createdAtStr string
 	var createdBy *string
+	var workingDir sql.NullString
 
 	err := row.Scan(
 		&b.ID,
 		&b.Frontend,
 		&b.ChannelID,
 		&b.AgentID,
+		&workingDir,
 		&createdAtStr,
 		&createdBy,
 	)
@@ -232,6 +242,9 @@ func (s *SQLiteStore) scanBinding(row *sql.Row) (*Binding, error) {
 	}
 
 	b.CreatedBy = createdBy
+	if workingDir.Valid {
+		b.WorkingDir = workingDir.String
+	}
 
 	return &b, nil
 }
@@ -241,12 +254,14 @@ func (s *SQLiteStore) scanBindingRow(rows *sql.Rows) (*Binding, error) {
 	var b Binding
 	var createdAtStr string
 	var createdBy *string
+	var workingDir sql.NullString
 
 	err := rows.Scan(
 		&b.ID,
 		&b.Frontend,
 		&b.ChannelID,
 		&b.AgentID,
+		&workingDir,
 		&createdAtStr,
 		&createdBy,
 	)
@@ -260,6 +275,9 @@ func (s *SQLiteStore) scanBindingRow(rows *sql.Rows) (*Binding, error) {
 	}
 
 	b.CreatedBy = createdBy
+	if workingDir.Valid {
+		b.WorkingDir = workingDir.String
+	}
 
 	return &b, nil
 }
