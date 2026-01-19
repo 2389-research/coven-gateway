@@ -13,11 +13,25 @@ import (
 
 // chatMessage represents a message in the chat stream
 type chatMessage struct {
-	Type      string    `json:"type"` // "user", "text", "thinking", "tool_use", "tool_result", "error", "done"
+	Type      string    `json:"type"` // "user", "text", "thinking", "tool_use", "tool_result", "usage", "tool_state", "cancelled", "error", "done"
 	Content   string    `json:"content,omitempty"`
 	ToolName  string    `json:"tool_name,omitempty"`
 	ToolID    string    `json:"tool_id,omitempty"`
 	Timestamp time.Time `json:"timestamp"`
+
+	// Usage fields (for type="usage")
+	InputTokens      int32 `json:"input_tokens,omitempty"`
+	OutputTokens     int32 `json:"output_tokens,omitempty"`
+	CacheReadTokens  int32 `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens int32 `json:"cache_write_tokens,omitempty"`
+	ThinkingTokens   int32 `json:"thinking_tokens,omitempty"`
+
+	// ToolState fields (for type="tool_state")
+	State  string `json:"state,omitempty"`
+	Detail string `json:"detail,omitempty"`
+
+	// Cancelled fields (for type="cancelled")
+	Reason string `json:"reason,omitempty"`
 }
 
 // chatSession represents an active chat between a user and an agent
@@ -312,6 +326,28 @@ func convertAgentResponse(resp *agent.Response) *chatMessage {
 	case agent.EventError:
 		msg.Type = "error"
 		msg.Content = resp.Error
+
+	case agent.EventUsage:
+		msg.Type = "usage"
+		if resp.Usage != nil {
+			msg.InputTokens = resp.Usage.InputTokens
+			msg.OutputTokens = resp.Usage.OutputTokens
+			msg.CacheReadTokens = resp.Usage.CacheReadTokens
+			msg.CacheWriteTokens = resp.Usage.CacheWriteTokens
+			msg.ThinkingTokens = resp.Usage.ThinkingTokens
+		}
+
+	case agent.EventToolState:
+		msg.Type = "tool_state"
+		if resp.ToolState != nil {
+			msg.ToolID = resp.ToolState.ID
+			msg.State = resp.ToolState.State
+			msg.Detail = resp.ToolState.Detail
+		}
+
+	case agent.EventCancelled:
+		msg.Type = "cancelled"
+		msg.Reason = resp.Text
 
 	default:
 		msg.Type = "text"

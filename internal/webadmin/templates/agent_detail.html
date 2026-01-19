@@ -60,17 +60,11 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex gap-2">
-                        {{if .Agent.Connected}}
-                        <a href="/admin/chat/{{.Agent.ID}}" class="px-5 py-2.5 text-sm font-medium bg-forest text-white rounded-lg hover:bg-forest-light transition-colors shadow-soft">
-                            Start Chat
-                        </a>
-                        <button hx-post="/admin/agents/{{.Agent.ID}}/disconnect" hx-swap="none"
-                            class="px-5 py-2.5 text-sm font-medium bg-white text-warm-500 border border-warm-200 rounded-lg hover:border-danger hover:text-danger hover:bg-danger/5 transition-colors">
-                            Disconnect
-                        </button>
-                        {{end}}
-                    </div>
+                    {{if .Agent.Connected}}
+                    <a href="/admin/chat/{{.Agent.ID}}" class="px-5 py-2.5 text-sm font-medium bg-forest text-white rounded-lg hover:bg-forest-light transition-colors shadow-soft">
+                        Start Chat
+                    </a>
+                    {{end}}
                 </div>
             </div>
 
@@ -154,9 +148,6 @@
                             <span class="text-xs text-warm-400">{{.UpdatedAt.Format "Jan 2, 3:04 PM"}}</span>
                         </div>
                         <p class="text-xs text-warm-400 font-mono">{{.ID}}</p>
-                        <div class="flex items-center gap-4 mt-2">
-                            <span class="text-xs text-warm-500">{{.MessageCount}} messages</span>
-                        </div>
                     </a>
                     {{end}}
                 </div>
