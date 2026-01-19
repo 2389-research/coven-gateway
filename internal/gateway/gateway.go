@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"tailscale.com/tsnet"
 
 	"github.com/2389/fold-gateway/internal/admin"
@@ -110,6 +111,14 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		// Create gRPC server with auth interceptors
 		// Supports both JWT (clients) and SSH key (agents) authentication
 		grpcServer = grpc.NewServer(
+			grpc.KeepaliveParams(keepalive.ServerParameters{
+				Time:    15 * time.Second, // Ping client if idle for 15s
+				Timeout: 5 * time.Second,  // Wait 5s for ping ack
+			}),
+			grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+				MinTime:             5 * time.Second, // Allow pings as frequent as every 5s
+				PermitWithoutStream: true,            // Allow pings even without active RPC
+			}),
 			grpc.ChainUnaryInterceptor(
 				auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore),
 				auth.RequireAdmin(),
@@ -121,8 +130,17 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		)
 		logger.Info("auth interceptors enabled (JWT + SSH)")
 	} else {
-		// No auth - create plain gRPC server
-		grpcServer = grpc.NewServer()
+		// No auth - create plain gRPC server with keepalive
+		grpcServer = grpc.NewServer(
+			grpc.KeepaliveParams(keepalive.ServerParameters{
+				Time:    15 * time.Second, // Ping client if idle for 15s
+				Timeout: 5 * time.Second,  // Wait 5s for ping ack
+			}),
+			grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+				MinTime:             5 * time.Second, // Allow pings as frequent as every 5s
+				PermitWithoutStream: true,            // Allow pings even without active RPC
+			}),
+		)
 		logger.Warn("auth disabled - no jwt_secret configured")
 	}
 
