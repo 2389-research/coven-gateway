@@ -57,6 +57,12 @@ type Gateway struct {
 	// packRouter routes tool calls to packs
 	packRouter *packs.Router
 
+	// mcpTokens maps MCP access tokens to agent capabilities
+	mcpTokens *mcp.TokenStore
+
+	// mcpEndpoint is the base URL for MCP endpoint (e.g., "http://localhost:8080/mcp")
+	mcpEndpoint string
+
 	// mockSender is used for testing to inject a mock message sender
 	mockSender messageSender
 }
@@ -138,7 +144,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		)
 		logger.Info("auth interceptors enabled (JWT + SSH)")
 	} else {
-		// No auth - create plain gRPC server with keepalive
+		// No auth - create gRPC server with anonymous auth interceptors
+		// These inject a placeholder auth context to prevent panics in handlers
 		grpcServer = grpc.NewServer(
 			grpc.KeepaliveParams(keepalive.ServerParameters{
 				Time:    15 * time.Second, // Ping client if idle for 15s
@@ -148,6 +155,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 				MinTime:             5 * time.Second, // Allow pings as frequent as every 5s
 				PermitWithoutStream: true,            // Allow pings even without active RPC
 			}),
+			grpc.ChainUnaryInterceptor(auth.NoAuthUnaryInterceptor()),
+			grpc.ChainStreamInterceptor(auth.NoAuthStreamInterceptor()),
 		)
 		logger.Warn("auth disabled - no jwt_secret configured")
 	}
@@ -166,6 +175,29 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		Logger:   logger.With("component", "pack-router"),
 	})
 
+	// Create MCP token store for agent capability-scoped access
+	mcpTokens := mcp.NewTokenStore()
+
+	// Determine MCP endpoint URL
+	// Priority: FOLD_MCP_ENDPOINT env > FOLD_GATEWAY_URL + /mcp > derived from config
+	var mcpEndpoint string
+	if envEndpoint := os.Getenv("FOLD_MCP_ENDPOINT"); envEndpoint != "" {
+		mcpEndpoint = envEndpoint
+	} else if envGatewayURL := os.Getenv("FOLD_GATEWAY_URL"); envGatewayURL != "" {
+		mcpEndpoint = envGatewayURL + "/mcp"
+	} else if cfg.Tailscale.Enabled {
+		// Derive from tailscale config
+		scheme := "http"
+		if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
+			scheme = "https"
+		}
+		mcpEndpoint = scheme + "://" + cfg.Tailscale.Hostname + "/mcp"
+	} else {
+		// Use HTTP address from config
+		mcpEndpoint = "http://" + cfg.Server.HTTPAddr + "/mcp"
+	}
+	logger.Info("MCP endpoint configured", "endpoint", mcpEndpoint)
+
 	// Create gateway
 	gw := &Gateway{
 		config:       cfg,
@@ -178,6 +210,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		dedupe:       dedupeCache,
 		packRegistry: packRegistry,
 		packRouter:   packRouter,
+		mcpTokens:    mcpTokens,
+		mcpEndpoint:  mcpEndpoint,
 	}
 
 	// Register FoldControl service (agent streaming - no auth required for now)
@@ -284,6 +318,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	mcpServer, err := mcp.NewServer(mcp.Config{
 		Registry:    packRegistry,
 		Router:      packRouter,
+		TokenStore:  mcpTokens,
 		Logger:      logger.With("component", "mcp"),
 		RequireAuth: false, // MCP endpoints don't require auth for now
 	})
@@ -291,7 +326,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		return nil, fmt.Errorf("creating MCP server: %w", err)
 	}
 	mcpServer.RegisterRoutes(mux)
-	logger.Info("MCP server enabled at /mcp/tools and /mcp/tool")
+	logger.Info("MCP server enabled at /mcp (JSON-RPC 2.0)")
 
 	gw.httpServer = &http.Server{
 		Addr:    cfg.Server.HTTPAddr,

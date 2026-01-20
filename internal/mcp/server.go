@@ -1,5 +1,5 @@
 // ABOUTME: MCP-compatible HTTP server for external agents like Claude Code.
-// ABOUTME: Exposes tool listing and execution via REST endpoints with optional JWT auth.
+// ABOUTME: Implements JSON-RPC 2.0 protocol over HTTP at /mcp endpoint.
 
 package mcp
 
@@ -22,28 +22,70 @@ import (
 // MaxRequestBodySize is the maximum allowed size for request bodies (1MB).
 const MaxRequestBodySize = 1 << 20
 
-// ToolInfo represents an MCP-compatible tool definition in the list response.
-type ToolInfo struct {
+// JSON-RPC 2.0 types
+
+// JSONRPCRequest represents a JSON-RPC 2.0 request.
+type JSONRPCRequest struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
+// JSONRPCResponse represents a JSON-RPC 2.0 response.
+type JSONRPCResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Result  any             `json:"result,omitempty"`
+	Error   *JSONRPCError   `json:"error,omitempty"`
+}
+
+// JSONRPCError represents a JSON-RPC 2.0 error object.
+type JSONRPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
+}
+
+// Standard JSON-RPC error codes
+const (
+	JSONRPCParseError     = -32700
+	JSONRPCInvalidRequest = -32600
+	JSONRPCMethodNotFound = -32601
+	JSONRPCInvalidParams  = -32602
+	JSONRPCInternalError  = -32603
+)
+
+// MCP-specific types
+
+// MCPToolInfo represents an MCP tool definition.
+type MCPToolInfo struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 
-// ListToolsResponse is the JSON response for GET /mcp/tools.
-type ListToolsResponse struct {
-	Tools []ToolInfo `json:"tools"`
+// MCPListToolsResult is the result for tools/list.
+type MCPListToolsResult struct {
+	Tools []MCPToolInfo `json:"tools"`
 }
 
-// ExecuteToolRequest is the JSON request body for POST /mcp/tool.
-type ExecuteToolRequest struct {
+// MCPCallToolParams are the params for tools/call.
+type MCPCallToolParams struct {
 	Name      string          `json:"name"`
-	Arguments json.RawMessage `json:"arguments"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
 
-// ExecuteToolResponse is the JSON response for POST /mcp/tool.
-type ExecuteToolResponse struct {
-	Result json.RawMessage `json:"result,omitempty"`
-	Error  string          `json:"error,omitempty"`
+// MCPCallToolResult is the result for tools/call.
+type MCPCallToolResult struct {
+	Content []MCPContent `json:"content"`
+	IsError bool         `json:"isError,omitempty"`
+}
+
+// MCPContent represents content in a tool result.
+type MCPContent struct {
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
 }
 
 // Config holds configuration for the MCP server.
@@ -52,8 +94,9 @@ type Config struct {
 	Router        *packs.Router
 	Logger        *slog.Logger
 	TokenVerifier auth.TokenVerifier
-	RequireAuth   bool     // If true, reject requests without valid auth
-	DefaultCaps   []string // Capabilities to use when no auth is provided
+	TokenStore    *TokenStore // Token-based auth (URL query param)
+	RequireAuth   bool        // If true, reject requests without valid auth
+	DefaultCaps   []string    // Capabilities to use when no auth is provided
 }
 
 // Server implements MCP-compatible HTTP endpoints for external agents.
@@ -62,12 +105,12 @@ type Server struct {
 	router      *packs.Router
 	logger      *slog.Logger
 	verifier    auth.TokenVerifier
+	tokenStore  *TokenStore
 	requireAuth bool
 	defaultCaps []string
 }
 
 // NewServer creates a new MCP server with the given configuration.
-// Returns an error if Registry or Router are nil, or if RequireAuth is true without a TokenVerifier.
 func NewServer(cfg Config) (*Server, error) {
 	if cfg.Registry == nil {
 		return nil, errors.New("registry is required")
@@ -75,8 +118,8 @@ func NewServer(cfg Config) (*Server, error) {
 	if cfg.Router == nil {
 		return nil, errors.New("router is required")
 	}
-	if cfg.RequireAuth && cfg.TokenVerifier == nil {
-		return nil, errors.New("token verifier required when auth is required")
+	if cfg.RequireAuth && cfg.TokenVerifier == nil && cfg.TokenStore == nil {
+		return nil, errors.New("token verifier or token store required when auth is required")
 	}
 
 	logger := cfg.Logger
@@ -84,7 +127,6 @@ func NewServer(cfg Config) (*Server, error) {
 		logger = slog.Default()
 	}
 
-	// Copy default caps to prevent aliasing
 	var defaultCaps []string
 	if len(cfg.DefaultCaps) > 0 {
 		defaultCaps = make([]string, len(cfg.DefaultCaps))
@@ -96,41 +138,102 @@ func NewServer(cfg Config) (*Server, error) {
 		router:      cfg.Router,
 		logger:      logger,
 		verifier:    cfg.TokenVerifier,
+		tokenStore:  cfg.TokenStore,
 		requireAuth: cfg.RequireAuth,
 		defaultCaps: defaultCaps,
 	}, nil
 }
 
-// RegisterRoutes registers the MCP endpoints on the given ServeMux.
+// RegisterRoutes registers the MCP endpoint on the given ServeMux.
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/mcp/tools", s.handleListTools)
-	mux.HandleFunc("/mcp/tool", s.handleExecuteTool)
+	mux.HandleFunc("/mcp", s.handleMCP)
 }
 
-// handleListTools handles GET /mcp/tools requests.
-// Returns a list of available tools, optionally filtered by agent capabilities.
-func (s *Server) handleListTools(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", "GET")
-		s.sendJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+// handleMCP handles all MCP JSON-RPC requests at POST /mcp.
+func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "method not allowed", nil)
 		return
 	}
 
-	// Extract capabilities from auth token if present
+	// Extract capabilities from auth
 	caps, err := s.extractCapabilities(r)
 	if err != nil {
-		if s.requireAuth {
-			s.sendJSONError(w, http.StatusUnauthorized, "authentication required")
+		// If a token was explicitly provided but is invalid, always reject
+		// This prevents privilege escalation from invalid->unauthenticated access
+		if errors.Is(err, errInvalidToken) {
+			s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "invalid or expired token", nil)
 			return
 		}
-		// Use default capabilities when auth is optional and not provided
+		// For other auth errors, check if auth is required
+		if s.requireAuth {
+			s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "authentication required", nil)
+			return
+		}
 		caps = s.defaultCaps
 	}
 
-	// Get tools filtered by capabilities
+	// Read request body
+	body, err := io.ReadAll(io.LimitReader(r.Body, MaxRequestBodySize+1))
+	if err != nil {
+		s.sendJSONRPCError(w, nil, JSONRPCParseError, "failed to read request body", nil)
+		return
+	}
+	if int64(len(body)) > MaxRequestBodySize {
+		s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "request body too large", nil)
+		return
+	}
+
+	// Parse JSON-RPC request
+	var req JSONRPCRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		s.sendJSONRPCError(w, nil, JSONRPCParseError, "invalid JSON", nil)
+		return
+	}
+
+	if req.JSONRPC != "2.0" {
+		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidRequest, "invalid JSON-RPC version", nil)
+		return
+	}
+
+	s.logger.Debug("MCP request",
+		"method", req.Method,
+		"capabilities", caps,
+	)
+
+	// Route to appropriate handler
+	switch req.Method {
+	case "tools/list":
+		s.handleToolsList(w, r, req, caps)
+	case "tools/call":
+		s.handleToolsCall(w, r, req, caps)
+	case "initialize":
+		s.handleInitialize(w, r, req)
+	default:
+		s.sendJSONRPCError(w, req.ID, JSONRPCMethodNotFound, "method not found", nil)
+	}
+}
+
+// handleInitialize handles the MCP initialize handshake.
+func (s *Server) handleInitialize(w http.ResponseWriter, _ *http.Request, req JSONRPCRequest) {
+	result := map[string]any{
+		"protocolVersion": "2024-11-05",
+		"capabilities": map[string]any{
+			"tools": map[string]any{},
+		},
+		"serverInfo": map[string]any{
+			"name":    "fold-gateway",
+			"version": "1.0.0",
+		},
+	}
+	s.sendJSONRPCResult(w, req.ID, result)
+}
+
+// handleToolsList handles tools/list requests.
+func (s *Server) handleToolsList(w http.ResponseWriter, _ *http.Request, req JSONRPCRequest, caps []string) {
 	var tools []*pb.ToolDefinition
 	if len(caps) == 0 {
-		// No capabilities means get all tools (or use registry method that returns all)
 		allTools := s.registry.GetAllTools()
 		tools = make([]*pb.ToolDefinition, len(allTools))
 		for i, t := range allTools {
@@ -140,86 +243,52 @@ func (s *Server) handleListTools(w http.ResponseWriter, r *http.Request) {
 		tools = s.registry.GetToolsForCapabilities(caps)
 	}
 
-	// Convert to MCP response format
-	response := ListToolsResponse{
-		Tools: make([]ToolInfo, len(tools)),
+	result := MCPListToolsResult{
+		Tools: make([]MCPToolInfo, len(tools)),
 	}
 
 	for i, tool := range tools {
-		response.Tools[i] = ToolInfo{
+		result.Tools[i] = MCPToolInfo{
 			Name:        tool.GetName(),
 			Description: tool.GetDescription(),
 			InputSchema: json.RawMessage(tool.GetInputSchemaJson()),
 		}
 	}
 
-	s.logger.Debug("listing tools",
+	s.logger.Debug("tools/list",
 		"count", len(tools),
 		"capabilities", caps,
 	)
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		s.logger.Warn("failed to encode list tools response", "error", err)
-	}
+	s.sendJSONRPCResult(w, req.ID, result)
 }
 
-// handleExecuteTool handles POST /mcp/tool requests.
-// Executes a tool and returns the result.
-func (s *Server) handleExecuteTool(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", "POST")
-		s.sendJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	// Check auth if required
-	caps, err := s.extractCapabilities(r)
-	if err != nil {
-		if s.requireAuth {
-			s.sendJSONError(w, http.StatusUnauthorized, "authentication required")
+// handleToolsCall handles tools/call requests.
+func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSONRPCRequest, caps []string) {
+	// Parse params
+	var params MCPCallToolParams
+	if len(req.Params) > 0 {
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			s.sendJSONRPCError(w, req.ID, JSONRPCInvalidParams, "invalid params", nil)
 			return
 		}
-		caps = s.defaultCaps
 	}
 
-	// Read body with size limit
-	body, err := io.ReadAll(io.LimitReader(r.Body, MaxRequestBodySize+1))
-	if err != nil {
-		s.sendJSONError(w, http.StatusBadRequest, "failed to read request body")
-		return
-	}
-	if int64(len(body)) > MaxRequestBodySize {
-		s.sendJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
-		return
-	}
-
-	// Parse request body
-	var req ExecuteToolRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		if len(body) == 0 {
-			s.sendJSONError(w, http.StatusBadRequest, "empty request body")
-		} else {
-			s.sendJSONError(w, http.StatusBadRequest, "invalid JSON body")
-		}
-		return
-	}
-
-	if req.Name == "" {
-		s.sendJSONError(w, http.StatusBadRequest, "tool name is required")
+	if params.Name == "" {
+		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidParams, "tool name is required", nil)
 		return
 	}
 
 	// Get tool definition to check capabilities
-	toolDef := s.router.GetToolDefinition(req.Name)
+	toolDef := s.router.GetToolDefinition(params.Name)
 	if toolDef == nil {
-		s.sendJSONError(w, http.StatusNotFound, "tool not found")
+		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidParams, "tool not found", nil)
 		return
 	}
 
 	// Verify caller has required capabilities
 	if !s.hasRequiredCapabilities(caps, toolDef.GetRequiredCapabilities()) {
-		s.sendJSONError(w, http.StatusForbidden, "insufficient capabilities for this tool")
+		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidRequest, "insufficient capabilities for this tool", nil)
 		return
 	}
 
@@ -227,54 +296,72 @@ func (s *Server) handleExecuteTool(w http.ResponseWriter, r *http.Request) {
 	requestID := uuid.New().String()
 
 	// Convert arguments to JSON string
-	inputJSON := string(req.Arguments)
+	inputJSON := string(params.Arguments)
 	if inputJSON == "" || inputJSON == "null" {
 		inputJSON = "{}"
 	}
 
-	s.logger.Debug("executing tool",
-		"tool_name", req.Name,
+	s.logger.Debug("tools/call",
+		"tool_name", params.Name,
 		"request_id", requestID,
 	)
 
 	// Route the tool call
-	resp, err := s.router.RouteToolCall(r.Context(), req.Name, inputJSON, requestID)
+	resp, err := s.router.RouteToolCall(r.Context(), params.Name, inputJSON, requestID)
 	if err != nil {
-		s.handleToolError(w, req.Name, requestID, err)
+		s.handleToolError(w, req.ID, params.Name, requestID, err)
 		return
 	}
 
-	// Build response
-	var response ExecuteToolResponse
+	// Build MCP result
+	var result MCPCallToolResult
 	if errStr := resp.GetError(); errStr != "" {
-		response.Error = errStr
+		result = MCPCallToolResult{
+			Content: []MCPContent{{Type: "text", Text: errStr}},
+			IsError: true,
+		}
 	} else {
-		response.Result = json.RawMessage(resp.GetOutputJson())
+		result = MCPCallToolResult{
+			Content: []MCPContent{{Type: "text", Text: resp.GetOutputJson()}},
+		}
 	}
 
-	s.logger.Debug("tool execution complete",
-		"tool_name", req.Name,
+	s.logger.Debug("tools/call complete",
+		"tool_name", params.Name,
 		"request_id", requestID,
-		"has_error", response.Error != "",
+		"is_error", result.IsError,
 	)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Request-ID", requestID)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		s.logger.Warn("failed to encode tool execution response", "error", err)
-	}
+	s.sendJSONRPCResult(w, req.ID, result)
 }
 
-// extractCapabilities extracts capabilities from the Authorization header JWT.
-// Returns the capabilities claim from the token, or an error if token is missing/invalid.
+// errInvalidToken is returned when a token is provided but invalid/expired.
+// This is distinct from "no auth" - if a token was provided, we should reject
+// invalid tokens rather than falling through to unauthenticated access.
+var errInvalidToken = errors.New("invalid or expired token")
+
+// extractCapabilities extracts capabilities from the request.
 func (s *Server) extractCapabilities(r *http.Request) ([]string, error) {
+	// First try token query parameter (preferred for agent MCP access)
+	if token := r.URL.Query().Get("token"); token != "" {
+		if s.tokenStore != nil {
+			if caps := s.tokenStore.GetCapabilities(token); caps != nil {
+				return caps, nil
+			}
+		}
+		// Token was provided but is invalid - this should always error
+		// (don't fall through to unauthenticated access)
+		return nil, errInvalidToken
+	}
+
+	// Fall back to Authorization header (for JWT-based auth)
 	if s.verifier == nil {
-		return nil, errors.New("no token verifier configured")
+		return nil, errors.New("no authentication provided")
 	}
 
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		return nil, errors.New("missing authorization header")
+		return nil, errors.New("missing authorization")
 	}
 
 	if !strings.HasPrefix(authHeader, "Bearer ") {
@@ -286,14 +373,11 @@ func (s *Server) extractCapabilities(r *http.Request) ([]string, error) {
 		return nil, errors.New("empty token")
 	}
 
-	// Verify token and extract principal ID
 	principalID, err := s.verifier.Verify(token)
 	if err != nil {
 		return nil, err
 	}
 
-	// For now, we use the principal ID as a capability
-	// In the future, this could be extended to look up capabilities from a store
 	return []string{principalID}, nil
 }
 
@@ -316,35 +400,60 @@ func (s *Server) hasRequiredCapabilities(callerCaps, requiredCaps []string) bool
 	return true
 }
 
-// handleToolError handles errors from tool execution and sends appropriate HTTP response.
-func (s *Server) handleToolError(w http.ResponseWriter, toolName, requestID string, err error) {
+// handleToolError handles errors from tool execution.
+func (s *Server) handleToolError(w http.ResponseWriter, id json.RawMessage, toolName, requestID string, err error) {
 	s.logger.Warn("tool execution failed",
 		"tool_name", toolName,
 		"request_id", requestID,
 		"error", err,
 	)
 
+	code := JSONRPCInternalError
+	message := "tool execution failed"
+
 	switch {
 	case errors.Is(err, packs.ErrToolNotFound):
-		s.sendJSONError(w, http.StatusNotFound, "tool not found")
+		code = JSONRPCInvalidParams
+		message = "tool not found"
 	case errors.Is(err, packs.ErrPackDisconnected):
-		s.sendJSONError(w, http.StatusServiceUnavailable, "tool pack unavailable")
+		message = "tool pack unavailable"
 	case errors.Is(err, packs.ErrDuplicateRequestID):
-		s.sendJSONError(w, http.StatusConflict, "duplicate request ID")
+		message = "duplicate request ID"
 	case errors.Is(err, context.DeadlineExceeded):
-		s.sendJSONError(w, http.StatusGatewayTimeout, "tool execution timed out")
+		message = "tool execution timed out"
 	case errors.Is(err, context.Canceled):
-		s.sendJSONError(w, http.StatusRequestTimeout, "request cancelled")
-	default:
-		s.sendJSONError(w, http.StatusInternalServerError, "tool execution failed")
+		message = "request cancelled"
+	}
+
+	s.sendJSONRPCError(w, id, code, message, nil)
+}
+
+// sendJSONRPCResult sends a successful JSON-RPC response.
+func (s *Server) sendJSONRPCResult(w http.ResponseWriter, id json.RawMessage, result any) {
+	resp := JSONRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result:  result,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		s.logger.Warn("failed to encode JSON-RPC response", "error", err)
 	}
 }
 
-// sendJSONError writes a JSON error response.
-func (s *Server) sendJSONError(w http.ResponseWriter, status int, message string) {
+// sendJSONRPCError sends a JSON-RPC error response.
+func (s *Server) sendJSONRPCError(w http.ResponseWriter, id json.RawMessage, code int, message string, data any) {
+	resp := JSONRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error: &JSONRPCError{
+			Code:    code,
+			Message: message,
+			Data:    data,
+		},
+	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(ExecuteToolResponse{Error: message}); err != nil {
-		s.logger.Warn("failed to encode error response", "error", err)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		s.logger.Warn("failed to encode JSON-RPC error response", "error", err)
 	}
 }

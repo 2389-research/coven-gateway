@@ -79,6 +79,52 @@ func StreamInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenV
 	}
 }
 
+// NoAuthUnaryInterceptor returns a gRPC unary interceptor that injects an anonymous
+// auth context when authentication is disabled. This prevents handlers that call
+// MustFromContext from panicking.
+func NoAuthUnaryInterceptor() grpc.UnaryServerInterceptor {
+	return func(
+		ctx context.Context,
+		req interface{},
+		info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (interface{}, error) {
+		// Inject anonymous auth context
+		authCtx := &AuthContext{
+			PrincipalID:   "anonymous",
+			PrincipalType: "anonymous",
+			MemberID:      nil,
+			Roles:         []string{"admin"}, // Grant admin role when auth is disabled
+		}
+		ctx = WithAuth(ctx, authCtx)
+		return handler(ctx, req)
+	}
+}
+
+// NoAuthStreamInterceptor returns a gRPC stream interceptor that injects an anonymous
+// auth context when authentication is disabled.
+func NoAuthStreamInterceptor() grpc.StreamServerInterceptor {
+	return func(
+		srv interface{},
+		ss grpc.ServerStream,
+		info *grpc.StreamServerInfo,
+		handler grpc.StreamHandler,
+	) error {
+		// Inject anonymous auth context
+		authCtx := &AuthContext{
+			PrincipalID:   "anonymous",
+			PrincipalType: "anonymous",
+			MemberID:      nil,
+			Roles:         []string{"admin"}, // Grant admin role when auth is disabled
+		}
+		wrapped := &wrappedServerStream{
+			ServerStream: ss,
+			ctx:          WithAuth(ss.Context(), authCtx),
+		}
+		return handler(srv, wrapped)
+	}
+}
+
 // wrappedServerStream wraps a grpc.ServerStream with a custom context
 type wrappedServerStream struct {
 	grpc.ServerStream
