@@ -259,6 +259,7 @@ func (s *Server) handleExecuteTool(w http.ResponseWriter, r *http.Request) {
 	)
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", requestID)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		s.logger.Warn("failed to encode tool execution response", "error", err)
 	}
@@ -328,6 +329,8 @@ func (s *Server) handleToolError(w http.ResponseWriter, toolName, requestID stri
 		s.sendJSONError(w, http.StatusNotFound, "tool not found")
 	case errors.Is(err, packs.ErrPackDisconnected):
 		s.sendJSONError(w, http.StatusServiceUnavailable, "tool pack unavailable")
+	case errors.Is(err, packs.ErrDuplicateRequestID):
+		s.sendJSONError(w, http.StatusConflict, "duplicate request ID")
 	case errors.Is(err, context.DeadlineExceeded):
 		s.sendJSONError(w, http.StatusGatewayTimeout, "tool execution timed out")
 	case errors.Is(err, context.Canceled):

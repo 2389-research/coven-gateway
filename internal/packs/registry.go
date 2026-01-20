@@ -259,3 +259,21 @@ type PackInfo struct {
 	Version   string
 	ToolNames []string
 }
+
+// Close closes all registered packs and clears the registry.
+// This should be called during graceful shutdown.
+func (r *Registry) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Close all pack channels
+	for _, pack := range r.packs {
+		pack.Close()
+	}
+
+	// Clear the maps
+	r.packs = make(map[string]*Pack)
+	r.tools = make(map[string]*Tool)
+
+	r.logger.Info("registry closed", "packs_closed", len(r.packs))
+}

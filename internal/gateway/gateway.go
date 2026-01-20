@@ -546,6 +546,16 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 		g.webAdmin.Close()
 	}
 
+	// Close pack router (cancels pending tool requests)
+	if g.packRouter != nil {
+		g.packRouter.Close()
+	}
+
+	// Close pack registry (disconnects all packs)
+	if g.packRegistry != nil {
+		g.packRegistry.Close()
+	}
+
 	if len(errs) > 0 {
 		return fmt.Errorf("shutdown errors: %v", errs)
 	}

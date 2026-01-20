@@ -799,6 +799,11 @@ func TestHandleToolError(t *testing.T) {
 			expectedStatus: http.StatusRequestTimeout,
 		},
 		{
+			name:           "duplicate request ID",
+			err:            packs.ErrDuplicateRequestID,
+			expectedStatus: http.StatusConflict,
+		},
+		{
 			name:           "unknown error",
 			err:            errors.New("something went wrong"),
 			expectedStatus: http.StatusInternalServerError,

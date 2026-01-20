@@ -231,3 +231,18 @@ func (r *Router) PendingCount() int {
 	defer r.mu.RUnlock()
 	return len(r.pending)
 }
+
+// Close cancels all pending requests and clears the router state.
+// This should be called during graceful shutdown to unblock any waiting callers.
+func (r *Router) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Close all pending response channels to unblock waiters
+	for requestID, ch := range r.pending {
+		close(ch)
+		delete(r.pending, requestID)
+	}
+
+	r.logger.Info("router closed", "pending_cancelled", len(r.pending))
+}
