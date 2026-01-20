@@ -769,3 +769,155 @@ var ClientService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "fold.proto",
 }
+
+const (
+	PackService_Register_FullMethodName   = "/fold.PackService/Register"
+	PackService_ToolResult_FullMethodName = "/fold.PackService/ToolResult"
+)
+
+// PackServiceClient is the client API for PackService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// PackService allows tool packs to connect and provide tools to agents
+type PackServiceClient interface {
+	// Pack registers with manifest, receives tool execution requests
+	Register(ctx context.Context, in *PackManifest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecuteToolRequest], error)
+	// Pack sends tool execution results back
+	ToolResult(ctx context.Context, in *ExecuteToolResponse, opts ...grpc.CallOption) (*emptypb.Empty, error)
+}
+
+type packServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewPackServiceClient(cc grpc.ClientConnInterface) PackServiceClient {
+	return &packServiceClient{cc}
+}
+
+func (c *packServiceClient) Register(ctx context.Context, in *PackManifest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecuteToolRequest], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PackService_ServiceDesc.Streams[0], PackService_Register_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[PackManifest, ExecuteToolRequest]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PackService_RegisterClient = grpc.ServerStreamingClient[ExecuteToolRequest]
+
+func (c *packServiceClient) ToolResult(ctx context.Context, in *ExecuteToolResponse, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, PackService_ToolResult_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// PackServiceServer is the server API for PackService service.
+// All implementations must embed UnimplementedPackServiceServer
+// for forward compatibility.
+//
+// PackService allows tool packs to connect and provide tools to agents
+type PackServiceServer interface {
+	// Pack registers with manifest, receives tool execution requests
+	Register(*PackManifest, grpc.ServerStreamingServer[ExecuteToolRequest]) error
+	// Pack sends tool execution results back
+	ToolResult(context.Context, *ExecuteToolResponse) (*emptypb.Empty, error)
+	mustEmbedUnimplementedPackServiceServer()
+}
+
+// UnimplementedPackServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedPackServiceServer struct{}
+
+func (UnimplementedPackServiceServer) Register(*PackManifest, grpc.ServerStreamingServer[ExecuteToolRequest]) error {
+	return status.Error(codes.Unimplemented, "method Register not implemented")
+}
+func (UnimplementedPackServiceServer) ToolResult(context.Context, *ExecuteToolResponse) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ToolResult not implemented")
+}
+func (UnimplementedPackServiceServer) mustEmbedUnimplementedPackServiceServer() {}
+func (UnimplementedPackServiceServer) testEmbeddedByValue()                     {}
+
+// UnsafePackServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to PackServiceServer will
+// result in compilation errors.
+type UnsafePackServiceServer interface {
+	mustEmbedUnimplementedPackServiceServer()
+}
+
+func RegisterPackServiceServer(s grpc.ServiceRegistrar, srv PackServiceServer) {
+	// If the following call panics, it indicates UnimplementedPackServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&PackService_ServiceDesc, srv)
+}
+
+func _PackService_Register_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(PackManifest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(PackServiceServer).Register(m, &grpc.GenericServerStream[PackManifest, ExecuteToolRequest]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PackService_RegisterServer = grpc.ServerStreamingServer[ExecuteToolRequest]
+
+func _PackService_ToolResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecuteToolResponse)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PackServiceServer).ToolResult(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PackService_ToolResult_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PackServiceServer).ToolResult(ctx, req.(*ExecuteToolResponse))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// PackService_ServiceDesc is the grpc.ServiceDesc for PackService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var PackService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "fold.PackService",
+	HandlerType: (*PackServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ToolResult",
+			Handler:    _PackService_ToolResult_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Register",
+			Handler:       _PackService_Register_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "fold.proto",
+}

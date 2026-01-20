@@ -4017,6 +4017,392 @@ func (x *GetEventsResponse) GetHasMore() bool {
 	return false
 }
 
+// Tool definitions for packs
+type ToolDefinition struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Name                 string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Description          string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	InputSchemaJson      string                 `protobuf:"bytes,3,opt,name=input_schema_json,json=inputSchemaJson,proto3" json:"input_schema_json,omitempty"` // MCP-compatible JSON Schema
+	RequiredCapabilities []string               `protobuf:"bytes,4,rep,name=required_capabilities,json=requiredCapabilities,proto3" json:"required_capabilities,omitempty"`
+	TimeoutSeconds       int32                  `protobuf:"varint,5,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"` // optional, default 30
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *ToolDefinition) Reset() {
+	*x = ToolDefinition{}
+	mi := &file_fold_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ToolDefinition) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ToolDefinition) ProtoMessage() {}
+
+func (x *ToolDefinition) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ToolDefinition.ProtoReflect.Descriptor instead.
+func (*ToolDefinition) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *ToolDefinition) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ToolDefinition) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *ToolDefinition) GetInputSchemaJson() string {
+	if x != nil {
+		return x.InputSchemaJson
+	}
+	return ""
+}
+
+func (x *ToolDefinition) GetRequiredCapabilities() []string {
+	if x != nil {
+		return x.RequiredCapabilities
+	}
+	return nil
+}
+
+func (x *ToolDefinition) GetTimeoutSeconds() int32 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
+}
+
+type PackManifest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PackId        string                 `protobuf:"bytes,1,opt,name=pack_id,json=packId,proto3" json:"pack_id,omitempty"`
+	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Tools         []*ToolDefinition      `protobuf:"bytes,3,rep,name=tools,proto3" json:"tools,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PackManifest) Reset() {
+	*x = PackManifest{}
+	mi := &file_fold_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PackManifest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PackManifest) ProtoMessage() {}
+
+func (x *PackManifest) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PackManifest.ProtoReflect.Descriptor instead.
+func (*PackManifest) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *PackManifest) GetPackId() string {
+	if x != nil {
+		return x.PackId
+	}
+	return ""
+}
+
+func (x *PackManifest) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *PackManifest) GetTools() []*ToolDefinition {
+	if x != nil {
+		return x.Tools
+	}
+	return nil
+}
+
+// Tool execution messages
+type ExecuteToolRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ToolName      string                 `protobuf:"bytes,1,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	InputJson     string                 `protobuf:"bytes,2,opt,name=input_json,json=inputJson,proto3" json:"input_json,omitempty"`
+	RequestId     string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecuteToolRequest) Reset() {
+	*x = ExecuteToolRequest{}
+	mi := &file_fold_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecuteToolRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecuteToolRequest) ProtoMessage() {}
+
+func (x *ExecuteToolRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecuteToolRequest.ProtoReflect.Descriptor instead.
+func (*ExecuteToolRequest) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *ExecuteToolRequest) GetToolName() string {
+	if x != nil {
+		return x.ToolName
+	}
+	return ""
+}
+
+func (x *ExecuteToolRequest) GetInputJson() string {
+	if x != nil {
+		return x.InputJson
+	}
+	return ""
+}
+
+func (x *ExecuteToolRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+type ExecuteToolResponse struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// Types that are valid to be assigned to Result:
+	//
+	//	*ExecuteToolResponse_OutputJson
+	//	*ExecuteToolResponse_Error
+	Result        isExecuteToolResponse_Result `protobuf_oneof:"result"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExecuteToolResponse) Reset() {
+	*x = ExecuteToolResponse{}
+	mi := &file_fold_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecuteToolResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecuteToolResponse) ProtoMessage() {}
+
+func (x *ExecuteToolResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecuteToolResponse.ProtoReflect.Descriptor instead.
+func (*ExecuteToolResponse) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *ExecuteToolResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *ExecuteToolResponse) GetResult() isExecuteToolResponse_Result {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+func (x *ExecuteToolResponse) GetOutputJson() string {
+	if x != nil {
+		if x, ok := x.Result.(*ExecuteToolResponse_OutputJson); ok {
+			return x.OutputJson
+		}
+	}
+	return ""
+}
+
+func (x *ExecuteToolResponse) GetError() string {
+	if x != nil {
+		if x, ok := x.Result.(*ExecuteToolResponse_Error); ok {
+			return x.Error
+		}
+	}
+	return ""
+}
+
+type isExecuteToolResponse_Result interface {
+	isExecuteToolResponse_Result()
+}
+
+type ExecuteToolResponse_OutputJson struct {
+	OutputJson string `protobuf:"bytes,2,opt,name=output_json,json=outputJson,proto3,oneof"`
+}
+
+type ExecuteToolResponse_Error struct {
+	Error string `protobuf:"bytes,3,opt,name=error,proto3,oneof"`
+}
+
+func (*ExecuteToolResponse_OutputJson) isExecuteToolResponse_Result() {}
+
+func (*ExecuteToolResponse_Error) isExecuteToolResponse_Result() {}
+
+// Pack registration acknowledgment
+type PackWelcome struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PackId        string                 `protobuf:"bytes,1,opt,name=pack_id,json=packId,proto3" json:"pack_id,omitempty"`
+	RejectedTools []string               `protobuf:"bytes,2,rep,name=rejected_tools,json=rejectedTools,proto3" json:"rejected_tools,omitempty"` // Tools that collided with existing names
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PackWelcome) Reset() {
+	*x = PackWelcome{}
+	mi := &file_fold_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PackWelcome) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PackWelcome) ProtoMessage() {}
+
+func (x *PackWelcome) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PackWelcome.ProtoReflect.Descriptor instead.
+func (*PackWelcome) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *PackWelcome) GetPackId() string {
+	if x != nil {
+		return x.PackId
+	}
+	return ""
+}
+
+func (x *PackWelcome) GetRejectedTools() []string {
+	if x != nil {
+		return x.RejectedTools
+	}
+	return nil
+}
+
+// Available tools list for agents
+type AvailableTools struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tools         []*ToolDefinition      `protobuf:"bytes,1,rep,name=tools,proto3" json:"tools,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AvailableTools) Reset() {
+	*x = AvailableTools{}
+	mi := &file_fold_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AvailableTools) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AvailableTools) ProtoMessage() {}
+
+func (x *AvailableTools) ProtoReflect() protoreflect.Message {
+	mi := &file_fold_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AvailableTools.ProtoReflect.Descriptor instead.
+func (*AvailableTools) Descriptor() ([]byte, []int) {
+	return file_fold_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *AvailableTools) GetTools() []*ToolDefinition {
+	if x != nil {
+		return x.Tools
+	}
+	return nil
+}
+
 var File_fold_proto protoreflect.FileDescriptor
 
 const file_fold_proto_rawDesc = "" +
@@ -4335,7 +4721,35 @@ const file_fold_proto_rawDesc = "" +
 	"\vnext_cursor\x18\x02 \x01(\tH\x00R\n" +
 	"nextCursor\x88\x01\x01\x12\x19\n" +
 	"\bhas_more\x18\x03 \x01(\bR\ahasMoreB\x0e\n" +
-	"\f_next_cursor*\xf3\x01\n" +
+	"\f_next_cursor\"\xd0\x01\n" +
+	"\x0eToolDefinition\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12*\n" +
+	"\x11input_schema_json\x18\x03 \x01(\tR\x0finputSchemaJson\x123\n" +
+	"\x15required_capabilities\x18\x04 \x03(\tR\x14requiredCapabilities\x12'\n" +
+	"\x0ftimeout_seconds\x18\x05 \x01(\x05R\x0etimeoutSeconds\"m\n" +
+	"\fPackManifest\x12\x17\n" +
+	"\apack_id\x18\x01 \x01(\tR\x06packId\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12*\n" +
+	"\x05tools\x18\x03 \x03(\v2\x14.fold.ToolDefinitionR\x05tools\"o\n" +
+	"\x12ExecuteToolRequest\x12\x1b\n" +
+	"\ttool_name\x18\x01 \x01(\tR\btoolName\x12\x1d\n" +
+	"\n" +
+	"input_json\x18\x02 \x01(\tR\tinputJson\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\"y\n" +
+	"\x13ExecuteToolResponse\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12!\n" +
+	"\voutput_json\x18\x02 \x01(\tH\x00R\n" +
+	"outputJson\x12\x16\n" +
+	"\x05error\x18\x03 \x01(\tH\x00R\x05errorB\b\n" +
+	"\x06result\"M\n" +
+	"\vPackWelcome\x12\x17\n" +
+	"\apack_id\x18\x01 \x01(\tR\x06packId\x12%\n" +
+	"\x0erejected_tools\x18\x02 \x03(\tR\rrejectedTools\"<\n" +
+	"\x0eAvailableTools\x12*\n" +
+	"\x05tools\x18\x01 \x03(\v2\x14.fold.ToolDefinitionR\x05tools*\xf3\x01\n" +
 	"\tToolState\x12\x1a\n" +
 	"\x16TOOL_STATE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12TOOL_STATE_PENDING\x10\x01\x12 \n" +
@@ -4368,7 +4782,11 @@ const file_fold_proto_rawDesc = "" +
 	"\vSendMessage\x12\x1e.fold.ClientSendMessageRequest\x1a\x1f.fold.ClientSendMessageResponse\x12D\n" +
 	"\fStreamEvents\x12\x19.fold.StreamEventsRequest\x1a\x17.fold.ClientStreamEvent0\x01\x12?\n" +
 	"\n" +
-	"ListAgents\x12\x17.fold.ListAgentsRequest\x1a\x18.fold.ListAgentsResponseb\x06proto3"
+	"ListAgents\x12\x17.fold.ListAgentsRequest\x1a\x18.fold.ListAgentsResponse2\x8a\x01\n" +
+	"\vPackService\x12:\n" +
+	"\bRegister\x12\x12.fold.PackManifest\x1a\x18.fold.ExecuteToolRequest0\x01\x12?\n" +
+	"\n" +
+	"ToolResult\x12\x19.fold.ExecuteToolResponse\x1a\x16.google.protobuf.Emptyb\x06proto3"
 
 var (
 	file_fold_proto_rawDescOnce sync.Once
@@ -4383,7 +4801,7 @@ func file_fold_proto_rawDescGZIP() []byte {
 }
 
 var file_fold_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_fold_proto_msgTypes = make([]protoimpl.MessageInfo, 56)
+var file_fold_proto_msgTypes = make([]protoimpl.MessageInfo, 62)
 var file_fold_proto_goTypes = []any{
 	(ToolState)(0),                    // 0: fold.ToolState
 	(InjectionPriority)(0),            // 1: fold.InjectionPriority
@@ -4443,7 +4861,13 @@ var file_fold_proto_goTypes = []any{
 	(*Event)(nil),                     // 55: fold.Event
 	(*GetEventsRequest)(nil),          // 56: fold.GetEventsRequest
 	(*GetEventsResponse)(nil),         // 57: fold.GetEventsResponse
-	(*emptypb.Empty)(nil),             // 58: google.protobuf.Empty
+	(*ToolDefinition)(nil),            // 58: fold.ToolDefinition
+	(*PackManifest)(nil),              // 59: fold.PackManifest
+	(*ExecuteToolRequest)(nil),        // 60: fold.ExecuteToolRequest
+	(*ExecuteToolResponse)(nil),       // 61: fold.ExecuteToolResponse
+	(*PackWelcome)(nil),               // 62: fold.PackWelcome
+	(*AvailableTools)(nil),            // 63: fold.AvailableTools
+	(*emptypb.Empty)(nil),             // 64: google.protobuf.Empty
 }
 var file_fold_proto_depIdxs = []int32{
 	5,  // 0: fold.AgentMessage.register:type_name -> fold.RegisterAgent
@@ -4487,39 +4911,45 @@ var file_fold_proto_depIdxs = []int32{
 	49, // 38: fold.ListAgentsResponse.agents:type_name -> fold.AgentInfo
 	26, // 39: fold.ClientSendMessageRequest.attachments:type_name -> fold.FileAttachment
 	55, // 40: fold.GetEventsResponse.events:type_name -> fold.Event
-	2,  // 41: fold.FoldControl.AgentStream:input_type -> fold.AgentMessage
-	29, // 42: fold.AdminService.ListBindings:input_type -> fold.ListBindingsRequest
-	31, // 43: fold.AdminService.CreateBinding:input_type -> fold.CreateBindingRequest
-	32, // 44: fold.AdminService.UpdateBinding:input_type -> fold.UpdateBindingRequest
-	33, // 45: fold.AdminService.DeleteBinding:input_type -> fold.DeleteBindingRequest
-	35, // 46: fold.AdminService.CreateToken:input_type -> fold.CreateTokenRequest
-	38, // 47: fold.AdminService.ListPrincipals:input_type -> fold.ListPrincipalsRequest
-	40, // 48: fold.AdminService.CreatePrincipal:input_type -> fold.CreatePrincipalRequest
-	41, // 49: fold.AdminService.DeletePrincipal:input_type -> fold.DeletePrincipalRequest
-	56, // 50: fold.ClientService.GetEvents:input_type -> fold.GetEventsRequest
-	58, // 51: fold.ClientService.GetMe:input_type -> google.protobuf.Empty
-	52, // 52: fold.ClientService.SendMessage:input_type -> fold.ClientSendMessageRequest
-	43, // 53: fold.ClientService.StreamEvents:input_type -> fold.StreamEventsRequest
-	50, // 54: fold.ClientService.ListAgents:input_type -> fold.ListAgentsRequest
-	21, // 55: fold.FoldControl.AgentStream:output_type -> fold.ServerMessage
-	30, // 56: fold.AdminService.ListBindings:output_type -> fold.ListBindingsResponse
-	28, // 57: fold.AdminService.CreateBinding:output_type -> fold.Binding
-	28, // 58: fold.AdminService.UpdateBinding:output_type -> fold.Binding
-	34, // 59: fold.AdminService.DeleteBinding:output_type -> fold.DeleteBindingResponse
-	36, // 60: fold.AdminService.CreateToken:output_type -> fold.CreateTokenResponse
-	39, // 61: fold.AdminService.ListPrincipals:output_type -> fold.ListPrincipalsResponse
-	37, // 62: fold.AdminService.CreatePrincipal:output_type -> fold.Principal
-	42, // 63: fold.AdminService.DeletePrincipal:output_type -> fold.DeletePrincipalResponse
-	57, // 64: fold.ClientService.GetEvents:output_type -> fold.GetEventsResponse
-	54, // 65: fold.ClientService.GetMe:output_type -> fold.MeResponse
-	53, // 66: fold.ClientService.SendMessage:output_type -> fold.ClientSendMessageResponse
-	44, // 67: fold.ClientService.StreamEvents:output_type -> fold.ClientStreamEvent
-	51, // 68: fold.ClientService.ListAgents:output_type -> fold.ListAgentsResponse
-	55, // [55:69] is the sub-list for method output_type
-	41, // [41:55] is the sub-list for method input_type
-	41, // [41:41] is the sub-list for extension type_name
-	41, // [41:41] is the sub-list for extension extendee
-	0,  // [0:41] is the sub-list for field type_name
+	58, // 41: fold.PackManifest.tools:type_name -> fold.ToolDefinition
+	58, // 42: fold.AvailableTools.tools:type_name -> fold.ToolDefinition
+	2,  // 43: fold.FoldControl.AgentStream:input_type -> fold.AgentMessage
+	29, // 44: fold.AdminService.ListBindings:input_type -> fold.ListBindingsRequest
+	31, // 45: fold.AdminService.CreateBinding:input_type -> fold.CreateBindingRequest
+	32, // 46: fold.AdminService.UpdateBinding:input_type -> fold.UpdateBindingRequest
+	33, // 47: fold.AdminService.DeleteBinding:input_type -> fold.DeleteBindingRequest
+	35, // 48: fold.AdminService.CreateToken:input_type -> fold.CreateTokenRequest
+	38, // 49: fold.AdminService.ListPrincipals:input_type -> fold.ListPrincipalsRequest
+	40, // 50: fold.AdminService.CreatePrincipal:input_type -> fold.CreatePrincipalRequest
+	41, // 51: fold.AdminService.DeletePrincipal:input_type -> fold.DeletePrincipalRequest
+	56, // 52: fold.ClientService.GetEvents:input_type -> fold.GetEventsRequest
+	64, // 53: fold.ClientService.GetMe:input_type -> google.protobuf.Empty
+	52, // 54: fold.ClientService.SendMessage:input_type -> fold.ClientSendMessageRequest
+	43, // 55: fold.ClientService.StreamEvents:input_type -> fold.StreamEventsRequest
+	50, // 56: fold.ClientService.ListAgents:input_type -> fold.ListAgentsRequest
+	59, // 57: fold.PackService.Register:input_type -> fold.PackManifest
+	61, // 58: fold.PackService.ToolResult:input_type -> fold.ExecuteToolResponse
+	21, // 59: fold.FoldControl.AgentStream:output_type -> fold.ServerMessage
+	30, // 60: fold.AdminService.ListBindings:output_type -> fold.ListBindingsResponse
+	28, // 61: fold.AdminService.CreateBinding:output_type -> fold.Binding
+	28, // 62: fold.AdminService.UpdateBinding:output_type -> fold.Binding
+	34, // 63: fold.AdminService.DeleteBinding:output_type -> fold.DeleteBindingResponse
+	36, // 64: fold.AdminService.CreateToken:output_type -> fold.CreateTokenResponse
+	39, // 65: fold.AdminService.ListPrincipals:output_type -> fold.ListPrincipalsResponse
+	37, // 66: fold.AdminService.CreatePrincipal:output_type -> fold.Principal
+	42, // 67: fold.AdminService.DeletePrincipal:output_type -> fold.DeletePrincipalResponse
+	57, // 68: fold.ClientService.GetEvents:output_type -> fold.GetEventsResponse
+	54, // 69: fold.ClientService.GetMe:output_type -> fold.MeResponse
+	53, // 70: fold.ClientService.SendMessage:output_type -> fold.ClientSendMessageResponse
+	44, // 71: fold.ClientService.StreamEvents:output_type -> fold.ClientStreamEvent
+	51, // 72: fold.ClientService.ListAgents:output_type -> fold.ListAgentsResponse
+	60, // 73: fold.PackService.Register:output_type -> fold.ExecuteToolRequest
+	64, // 74: fold.PackService.ToolResult:output_type -> google.protobuf.Empty
+	59, // [59:75] is the sub-list for method output_type
+	43, // [43:59] is the sub-list for method input_type
+	43, // [43:43] is the sub-list for extension type_name
+	43, // [43:43] is the sub-list for extension extendee
+	0,  // [0:43] is the sub-list for field type_name
 }
 
 func init() { file_fold_proto_init() }
@@ -4585,15 +5015,19 @@ func file_fold_proto_init() {
 	file_fold_proto_msgTypes[53].OneofWrappers = []any{}
 	file_fold_proto_msgTypes[54].OneofWrappers = []any{}
 	file_fold_proto_msgTypes[55].OneofWrappers = []any{}
+	file_fold_proto_msgTypes[59].OneofWrappers = []any{
+		(*ExecuteToolResponse_OutputJson)(nil),
+		(*ExecuteToolResponse_Error)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_fold_proto_rawDesc), len(file_fold_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   56,
+			NumMessages:   62,
 			NumExtensions: 0,
-			NumServices:   3,
+			NumServices:   4,
 		},
 		GoTypes:           file_fold_proto_goTypes,
 		DependencyIndexes: file_fold_proto_depIdxs,
