@@ -91,7 +91,8 @@ func (m *mockRegisterStream) RecvMsg(msg any) error {
 func createTestService() (*PackServiceServer, *Registry) {
 	logger := slog.Default()
 	registry := NewRegistry(logger)
-	service := NewPackServiceServer(registry, logger)
+	// Pass nil router for tests that don't need Router integration
+	service := NewPackServiceServer(registry, nil, logger)
 	return service, registry
 }
 

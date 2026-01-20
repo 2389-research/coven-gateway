@@ -25,6 +25,8 @@ import (
 	"github.com/2389/fold-gateway/internal/config"
 	"github.com/2389/fold-gateway/internal/conversation"
 	"github.com/2389/fold-gateway/internal/dedupe"
+	"github.com/2389/fold-gateway/internal/mcp"
+	"github.com/2389/fold-gateway/internal/packs"
 	"github.com/2389/fold-gateway/internal/store"
 	"github.com/2389/fold-gateway/internal/webadmin"
 	pb "github.com/2389/fold-gateway/proto/fold"
@@ -48,6 +50,12 @@ type Gateway struct {
 
 	// dedupe is used to prevent duplicate bridge message processing
 	dedupe *dedupe.Cache
+
+	// packRegistry tracks connected tool packs
+	packRegistry *packs.Registry
+
+	// packRouter routes tool calls to packs
+	packRouter *packs.Router
 
 	// mockSender is used for testing to inject a mock message sender
 	mockSender messageSender
@@ -151,6 +159,13 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		logger.With("component", "conversation"),
 	)
 
+	// Create pack registry and router for tool pack support
+	packRegistry := packs.NewRegistry(logger.With("component", "pack-registry"))
+	packRouter := packs.NewRouter(packs.RouterConfig{
+		Registry: packRegistry,
+		Logger:   logger.With("component", "pack-router"),
+	})
+
 	// Create gateway
 	gw := &Gateway{
 		config:       cfg,
@@ -161,6 +176,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		logger:       logger.With("component", "gateway"),
 		serverID:     generateServerID(),
 		dedupe:       dedupeCache,
+		packRegistry: packRegistry,
+		packRouter:   packRouter,
 	}
 
 	// Register FoldControl service (agent streaming - no auth required for now)
@@ -181,6 +198,10 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 
 	clientService := client.NewClientServiceFull(sqliteStore, sqliteStore, dedupeCache, agentMgr)
 	pb.RegisterClientServiceServer(grpcServer, clientService)
+
+	// Register PackService for tool pack support
+	packService := packs.NewPackServiceServer(gw.packRegistry, gw.packRouter, logger.With("component", "pack-service"))
+	pb.RegisterPackServiceServer(grpcServer, packService)
 
 	// Create HTTP server for health checks and API
 	mux := http.NewServeMux()
@@ -257,6 +278,20 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	gw.webAdmin = webadmin.New(sqliteStore, gw.agentManager, convService, webAdminCfg)
 	gw.webAdmin.RegisterRoutes(mux)
 	logger.Info("admin web UI enabled at /admin/", "base_url", webAdminBaseURL)
+
+	// Register MCP server routes for tool pack access
+	// MCP endpoints allow external agents (like Claude Code) to list and execute pack tools
+	mcpServer, err := mcp.NewServer(mcp.Config{
+		Registry:    packRegistry,
+		Router:      packRouter,
+		Logger:      logger.With("component", "mcp"),
+		RequireAuth: false, // MCP endpoints don't require auth for now
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating MCP server: %w", err)
+	}
+	mcpServer.RegisterRoutes(mux)
+	logger.Info("MCP server enabled at /mcp/tools and /mcp/tool")
 
 	gw.httpServer = &http.Server{
 		Addr:    cfg.Server.HTTPAddr,

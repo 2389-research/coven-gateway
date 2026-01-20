@@ -32,6 +32,7 @@ var ErrPackChannelClosed = errors.New("pack channel closed")
 type PackServiceServer struct {
 	pb.UnimplementedPackServiceServer
 	registry *Registry
+	router   *Router // Router for delivering tool responses
 	logger   *slog.Logger
 
 	// pendingRequests maps request_id to a channel that receives the result.
@@ -40,10 +41,12 @@ type PackServiceServer struct {
 	pendingRequests map[string]chan *pb.ExecuteToolResponse
 }
 
-// NewPackServiceServer creates a new PackService with the given registry.
-func NewPackServiceServer(registry *Registry, logger *slog.Logger) *PackServiceServer {
+// NewPackServiceServer creates a new PackService with the given registry and router.
+// The router is used to deliver tool responses to waiting callers.
+func NewPackServiceServer(registry *Registry, router *Router, logger *slog.Logger) *PackServiceServer {
 	return &PackServiceServer{
 		registry:        registry,
+		router:          router,
 		logger:          logger,
 		pendingRequests: make(map[string]chan *pb.ExecuteToolResponse),
 	}
@@ -124,7 +127,7 @@ func (s *PackServiceServer) Register(manifest *pb.PackManifest, stream grpc.Serv
 }
 
 // ToolResult handles a pack sending back the result of a tool execution.
-// Matches the result to a pending request by request_id and delivers it.
+// Routes the result to the Router which will deliver it to the waiting caller.
 func (s *PackServiceServer) ToolResult(ctx context.Context, resp *pb.ExecuteToolResponse) (*emptypb.Empty, error) {
 	requestID := resp.GetRequestId()
 
@@ -134,32 +137,35 @@ func (s *PackServiceServer) ToolResult(ctx context.Context, resp *pb.ExecuteTool
 		"has_error", resp.GetError() != "",
 	)
 
-	// Find and remove the pending request channel
-	s.pendingMu.Lock()
-	ch, exists := s.pendingRequests[requestID]
-	if exists {
-		delete(s.pendingRequests, requestID)
-	}
-	s.pendingMu.Unlock()
+	// Route the response to the waiting caller via the Router
+	if s.router != nil {
+		s.router.HandleToolResponse(resp)
+	} else {
+		// Fallback to local pending requests (for backward compatibility)
+		s.pendingMu.Lock()
+		ch, exists := s.pendingRequests[requestID]
+		if exists {
+			delete(s.pendingRequests, requestID)
+		}
+		s.pendingMu.Unlock()
 
-	if !exists {
-		// No waiter for this request - it may have timed out or been cancelled
-		s.logger.Warn("received result for unknown request",
-			"request_id", requestID,
-		)
-		return &emptypb.Empty{}, nil
-	}
+		if !exists {
+			s.logger.Warn("received result for unknown request",
+				"request_id", requestID,
+			)
+			return &emptypb.Empty{}, nil
+		}
 
-	// Deliver the result (non-blocking - channel is buffered)
-	select {
-	case ch <- resp:
-		s.logger.Debug("delivered tool result",
-			"request_id", requestID,
-		)
-	default:
-		s.logger.Warn("failed to deliver tool result (channel full or closed)",
-			"request_id", requestID,
-		)
+		select {
+		case ch <- resp:
+			s.logger.Debug("delivered tool result",
+				"request_id", requestID,
+			)
+		default:
+			s.logger.Warn("failed to deliver tool result (channel full or closed)",
+				"request_id", requestID,
+			)
+		}
 	}
 
 	return &emptypb.Empty{}, nil
