@@ -113,7 +113,11 @@ func (s *ClientService) processClientMessage(ctx context.Context, req *pb.Client
 		return messageID, nil
 	}
 
-	respChan, err := s.router.SendMessage(ctx, &agent.SendRequest{
+	// Use a detached context for routing - the response handling should continue
+	// even after the RPC returns to the client. The RPC context would cancel
+	// when the client gets the response, but we need to keep processing
+	// agent responses asynchronously.
+	respChan, err := s.router.SendMessage(context.Background(), &agent.SendRequest{
 		AgentID:  conversationKey,
 		ThreadID: messageID,
 		Content:  req.Content,
