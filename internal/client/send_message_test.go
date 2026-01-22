@@ -1,11 +1,12 @@
 // ABOUTME: Tests for ClientService SendMessage RPC with idempotency key deduplication.
-// ABOUTME: Validates idempotency key validation, duplicate detection, and successful message handling.
+// ABOUTME: Validates idempotency key validation, duplicate detection, and message routing.
 
 package client
 
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,7 +15,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/2389/fold-gateway/internal/agent"
 	"github.com/2389/fold-gateway/internal/dedupe"
+	"github.com/2389/fold-gateway/internal/store"
 	pb "github.com/2389/fold-gateway/proto/fold"
 )
 
@@ -181,4 +184,270 @@ func newTestClientService(t *testing.T) *ClientService {
 	})
 
 	return NewClientServiceWithDedupe(nil, nil, dedupeCache)
+}
+
+// mockEventStore implements EventStore for testing
+type mockEventStore struct {
+	mu     sync.Mutex
+	events []*store.LedgerEvent
+}
+
+func (m *mockEventStore) GetEvents(ctx context.Context, params store.GetEventsParams) (*store.GetEventsResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var filtered []store.LedgerEvent
+	for _, e := range m.events {
+		if e.ConversationKey == params.ConversationKey {
+			filtered = append(filtered, *e)
+		}
+	}
+	return &store.GetEventsResult{Events: filtered}, nil
+}
+
+func (m *mockEventStore) SaveEvent(ctx context.Context, event *store.LedgerEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = append(m.events, event)
+	return nil
+}
+
+func (m *mockEventStore) getEvents() []*store.LedgerEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]*store.LedgerEvent, len(m.events))
+	copy(result, m.events)
+	return result
+}
+
+// mockRouter implements MessageRouter for testing
+type mockRouter struct {
+	mu          sync.Mutex
+	requests    []*agent.SendRequest
+	responses   []*agent.Response
+	err         error
+	agentOnline bool
+}
+
+func (m *mockRouter) SendMessage(ctx context.Context, req *agent.SendRequest) (<-chan *agent.Response, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.requests = append(m.requests, req)
+
+	if m.err != nil {
+		return nil, m.err
+	}
+
+	ch := make(chan *agent.Response, len(m.responses)+1)
+	for _, r := range m.responses {
+		ch <- r
+	}
+	close(ch)
+	return ch, nil
+}
+
+func (m *mockRouter) getRequests() []*agent.SendRequest {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make([]*agent.SendRequest, len(m.requests))
+	copy(result, m.requests)
+	return result
+}
+
+// newTestClientServiceWithRouting creates a ClientService with routing support for testing
+func newTestClientServiceWithRouting(t *testing.T, eventStore *mockEventStore, router *mockRouter) *ClientService {
+	t.Helper()
+
+	dedupeCache := dedupe.New(5*time.Minute, 1000)
+	t.Cleanup(func() {
+		dedupeCache.Close()
+	})
+
+	return NewClientServiceWithRouter(eventStore, nil, dedupeCache, nil, router)
+}
+
+// Tests for message routing functionality
+
+func TestProcessClientMessage_StoresInboundEvent(t *testing.T) {
+	eventStore := &mockEventStore{}
+	router := &mockRouter{agentOnline: true}
+	svc := newTestClientServiceWithRouting(t, eventStore, router)
+
+	req := &pb.ClientSendMessageRequest{
+		ConversationKey: "agent-123",
+		Content:         "Hello, agent!",
+		IdempotencyKey:  "test-key-1",
+	}
+
+	resp, err := svc.SendMessage(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", resp.Status)
+	assert.NotEmpty(t, resp.MessageId)
+
+	// Give async processing time to complete
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify inbound event was stored
+	events := eventStore.getEvents()
+	require.NotEmpty(t, events, "expected at least one event to be stored")
+
+	// Find the inbound event
+	var inboundEvent *store.LedgerEvent
+	for _, e := range events {
+		if e.Direction == store.EventDirectionInbound {
+			inboundEvent = e
+			break
+		}
+	}
+	require.NotNil(t, inboundEvent, "expected inbound event to be stored")
+	assert.Equal(t, "agent-123", inboundEvent.ConversationKey)
+	assert.Equal(t, store.EventTypeMessage, inboundEvent.Type)
+	assert.Equal(t, "Hello, agent!", *inboundEvent.Text)
+}
+
+func TestProcessClientMessage_RoutesToAgent(t *testing.T) {
+	eventStore := &mockEventStore{}
+	router := &mockRouter{agentOnline: true}
+	svc := newTestClientServiceWithRouting(t, eventStore, router)
+
+	req := &pb.ClientSendMessageRequest{
+		ConversationKey: "agent-456",
+		Content:         "Route this message",
+		IdempotencyKey:  "test-key-2",
+	}
+
+	resp, err := svc.SendMessage(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", resp.Status)
+
+	// Verify message was routed to agent
+	requests := router.getRequests()
+	require.Len(t, requests, 1, "expected one request to be sent to router")
+	assert.Equal(t, "agent-456", requests[0].AgentID)
+	assert.Equal(t, "Route this message", requests[0].Content)
+}
+
+func TestProcessClientMessage_AgentNotFound(t *testing.T) {
+	eventStore := &mockEventStore{}
+	router := &mockRouter{err: agent.ErrAgentNotFound}
+	svc := newTestClientServiceWithRouting(t, eventStore, router)
+
+	req := &pb.ClientSendMessageRequest{
+		ConversationKey: "nonexistent-agent",
+		Content:         "Hello?",
+		IdempotencyKey:  "test-key-3",
+	}
+
+	_, err := svc.SendMessage(context.Background(), req)
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.NotFound, st.Code())
+	assert.Contains(t, st.Message(), "agent not found")
+}
+
+func TestProcessClientMessage_StoresAgentResponses(t *testing.T) {
+	eventStore := &mockEventStore{}
+	textContent := "Hello from the agent!"
+	router := &mockRouter{
+		agentOnline: true,
+		responses: []*agent.Response{
+			{Event: agent.EventText, Text: textContent},
+			{Event: agent.EventDone, Done: true},
+		},
+	}
+	svc := newTestClientServiceWithRouting(t, eventStore, router)
+
+	req := &pb.ClientSendMessageRequest{
+		ConversationKey: "agent-789",
+		Content:         "Test message",
+		IdempotencyKey:  "test-key-4",
+	}
+
+	resp, err := svc.SendMessage(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", resp.Status)
+
+	// Give async processing time to complete
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify both inbound and outbound events were stored
+	events := eventStore.getEvents()
+	require.GreaterOrEqual(t, len(events), 2, "expected at least 2 events")
+
+	// Find outbound text event
+	var textEvent *store.LedgerEvent
+	for _, e := range events {
+		if e.Direction == store.EventDirectionOutbound && e.Type == store.EventTypeMessage {
+			textEvent = e
+			break
+		}
+	}
+	require.NotNil(t, textEvent, "expected outbound text event to be stored")
+	assert.Equal(t, textContent, *textEvent.Text)
+}
+
+func TestProcessClientMessage_AgentError(t *testing.T) {
+	eventStore := &mockEventStore{}
+	router := &mockRouter{
+		agentOnline: true,
+		responses: []*agent.Response{
+			{Event: agent.EventError, Error: "something went wrong", Done: true},
+		},
+	}
+	svc := newTestClientServiceWithRouting(t, eventStore, router)
+
+	req := &pb.ClientSendMessageRequest{
+		ConversationKey: "agent-error",
+		Content:         "Trigger error",
+		IdempotencyKey:  "test-key-5",
+	}
+
+	resp, err := svc.SendMessage(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", resp.Status)
+
+	// Give async processing time to complete
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify error event was stored
+	events := eventStore.getEvents()
+	var errorEvent *store.LedgerEvent
+	for _, e := range events {
+		if e.Type == store.EventTypeError {
+			errorEvent = e
+			break
+		}
+	}
+	require.NotNil(t, errorEvent, "expected error event to be stored")
+	assert.Equal(t, "something went wrong", *errorEvent.Text)
+}
+
+func TestProcessClientMessage_NoRouterConfigured(t *testing.T) {
+	// Test that message is accepted even without a router (just stores inbound event)
+	eventStore := &mockEventStore{}
+	dedupeCache := dedupe.New(5*time.Minute, 1000)
+	t.Cleanup(func() {
+		dedupeCache.Close()
+	})
+
+	// Create service without router
+	svc := NewClientServiceWithRouter(eventStore, nil, dedupeCache, nil, nil)
+
+	req := &pb.ClientSendMessageRequest{
+		ConversationKey: "some-agent",
+		Content:         "Hello",
+		IdempotencyKey:  "test-key-6",
+	}
+
+	resp, err := svc.SendMessage(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", resp.Status)
+	assert.NotEmpty(t, resp.MessageId)
+
+	// Verify inbound event was still stored
+	events := eventStore.getEvents()
+	require.Len(t, events, 1)
+	assert.Equal(t, store.EventDirectionInbound, events[0].Direction)
 }

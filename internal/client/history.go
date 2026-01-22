@@ -14,9 +14,10 @@ import (
 	pb "github.com/2389/fold-gateway/proto/fold"
 )
 
-// EventStore defines the store operations needed for event retrieval
+// EventStore defines the store operations needed for event retrieval and storage
 type EventStore interface {
 	GetEvents(ctx context.Context, params store.GetEventsParams) (*store.GetEventsResult, error)
+	SaveEvent(ctx context.Context, event *store.LedgerEvent) error
 }
 
 // PrincipalStore defines the store operations needed for principal retrieval
@@ -31,6 +32,7 @@ type ClientService struct {
 	principals PrincipalStore
 	dedupe     DedupeCache
 	agents     AgentLister
+	router     MessageRouter
 }
 
 // NewClientService creates a new ClientService with the given stores
