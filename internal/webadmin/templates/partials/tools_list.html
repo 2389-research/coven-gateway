@@ -1,15 +1,55 @@
-{{if .Packs}}
-{{range .Packs}}
-<div class="pack-item">
-  <h3>{{.ID}} <span>v{{.Version}}</span></h3>
-  {{range .Tools}}
-  <div class="tool-item">
-    <strong>{{.Name}}</strong>
-    <p>{{.Description}}</p>
-  </div>
-  {{end}}
+{{/* ABOUTME: HTMX partial listing connected packs and their tools */}}
+{{/* ABOUTME: Shows pack cards with nested tool details, capabilities, and timeouts */}}
+<div class="space-y-4">
+    {{if .Packs}}
+    {{range .Packs}}
+    <div class="p-4 bg-warm-50 border border-warm-200 rounded-lg">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-3">
+                <div class="relative">
+                    <div class="w-10 h-10 rounded-lg bg-forest/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+                        </svg>
+                    </div>
+                    <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-forest rounded-full border-2 border-white"></div>
+                </div>
+                <div>
+                    <p class="font-medium text-ink">{{.ID}}</p>
+                    <p class="text-xs text-warm-400">{{len .Tools}} tool{{if ne (len .Tools) 1}}s{{end}} registered</p>
+                </div>
+            </div>
+            {{if .Version}}<span class="px-2 py-0.5 text-xs rounded-full bg-forest/10 text-forest">v{{.Version}}</span>{{end}}
+        </div>
+        {{if .Tools}}
+        <div class="mt-3 space-y-2">
+            {{range .Tools}}
+            <div class="border-l-2 border-warm-200 ml-4 pl-4 py-2">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-mono text-sm font-medium text-ink">{{.Name}}</span>
+                    {{if .TimeoutSeconds}}
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-warm-100 text-warm-600">{{.TimeoutSeconds}}s</span>
+                    {{end}}
+                    {{range .RequiredCapabilities}}
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-forest/10 text-forest">{{.}}</span>
+                    {{end}}
+                </div>
+                {{if .Description}}
+                <p class="text-sm text-warm-500 mt-1">{{.Description}}</p>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+    {{else}}
+    <div class="flex flex-col items-center justify-center py-16 text-warm-400">
+        <svg class="w-16 h-16 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+        </svg>
+        <p class="text-sm font-medium">No packs connected</p>
+        <p class="text-xs text-warm-300 mt-1">Waiting for pack registration...</p>
+    </div>
+    {{end}}
 </div>
-{{end}}
-{{else}}
-<p>No packs registered.</p>
-{{end}}

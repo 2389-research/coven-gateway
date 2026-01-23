@@ -66,6 +66,14 @@
                             </a>
                         </li>
                         <li>
+                            <a href="/admin/tools" class="flex items-center gap-3 px-4 py-3 text-warm-600 hover:text-forest hover:bg-warm-50 font-medium rounded-lg">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+                                </svg>
+                                Tools
+                            </a>
+                        </li>
+                        <li>
                             <a href="/admin/threads" class="flex items-center gap-3 px-4 py-3 text-warm-600 hover:text-forest hover:bg-warm-50 font-medium rounded-lg">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
@@ -114,7 +122,7 @@
                 </div>
 
                 <!-- Stats Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div class="bg-white rounded-xl p-6 shadow-card card-hover border border-warm-100">
                         <div class="flex items-center justify-between mb-4">
                             <span class="text-sm font-medium text-warm-500">Agents Online</span>
@@ -153,6 +161,20 @@
                         <p class="font-serif text-4xl text-ink">--</p>
                         <p class="text-xs text-warm-400 mt-1">Conversations</p>
                     </div>
+                    <div class="bg-white rounded-xl p-6 shadow-card card-hover border border-warm-100">
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-sm font-medium text-warm-500">Packs Online</span>
+                            <div class="w-10 h-10 rounded-lg bg-forest/10 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <p class="font-serif text-4xl text-ink" hx-get="/admin/stats/packs" hx-trigger="every 5s">
+                            --
+                        </p>
+                        <p class="text-xs text-warm-400 mt-1">Tool packs</p>
+                    </div>
                 </div>
 
                 <!-- Connected Agents Panel -->
@@ -175,6 +197,31 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                                 </svg>
                                 <span class="text-sm">Loading agents...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Connected Packs Panel -->
+                <div class="bg-white rounded-xl shadow-card border border-warm-100">
+                    <div class="px-6 py-4 border-b border-warm-100 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+                                </svg>
+                            </div>
+                            <h3 class="font-serif text-xl text-ink">Connected Packs</h3>
+                        </div>
+                        <span class="text-xs text-warm-400 font-medium">Auto-refresh: 10s</span>
+                    </div>
+                    <div class="p-6" hx-get="/admin/tools/list" hx-trigger="load, every 10s" hx-swap="innerHTML">
+                        <div class="flex items-center justify-center py-12">
+                            <div class="flex items-center gap-3 text-warm-400">
+                                <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                <span class="text-sm">Loading packs...</span>
                             </div>
                         </div>
                     </div>
