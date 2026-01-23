@@ -1,5 +1,5 @@
 // ABOUTME: MCP-compatible HTTP server for external agents like Claude Code.
-// ABOUTME: Implements JSON-RPC 2.0 protocol over HTTP at /mcp endpoint.
+// ABOUTME: Implements Streamable HTTP transport (spec 2025-11-25) with session management.
 
 package mcp
 
@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -18,6 +20,15 @@ import (
 	"github.com/2389/fold-gateway/internal/packs"
 	pb "github.com/2389/fold-gateway/proto/fold"
 )
+
+// Supported MCP protocol versions
+var supportedProtocolVersions = map[string]bool{
+	"2025-03-26": true,
+	"2025-11-25": true,
+}
+
+// latestProtocolVersion is the version we advertise in initialize responses
+const latestProtocolVersion = "2025-11-25"
 
 // MaxRequestBodySize is the maximum allowed size for request bodies (1MB).
 const MaxRequestBodySize = 1 << 20
@@ -88,6 +99,52 @@ type MCPContent struct {
 	Text string `json:"text,omitempty"`
 }
 
+// mcpSession tracks an active MCP client session.
+type mcpSession struct {
+	id              string
+	protocolVersion string
+	capabilities    []string
+	createdAt       time.Time
+}
+
+// sessionStore manages active MCP sessions (in-memory).
+type sessionStore struct {
+	mu       sync.RWMutex
+	sessions map[string]*mcpSession
+}
+
+func newSessionStore() *sessionStore {
+	return &sessionStore{sessions: make(map[string]*mcpSession)}
+}
+
+func (s *sessionStore) create(protocolVersion string, caps []string) *mcpSession {
+	sess := &mcpSession{
+		id:              uuid.New().String(),
+		protocolVersion: protocolVersion,
+		capabilities:    caps,
+		createdAt:       time.Now(),
+	}
+	s.mu.Lock()
+	s.sessions[sess.id] = sess
+	s.mu.Unlock()
+	return sess
+}
+
+func (s *sessionStore) get(id string) (*mcpSession, bool) {
+	s.mu.RLock()
+	sess, ok := s.sessions[id]
+	s.mu.RUnlock()
+	return sess, ok
+}
+
+func (s *sessionStore) delete(id string) bool {
+	s.mu.Lock()
+	_, existed := s.sessions[id]
+	delete(s.sessions, id)
+	s.mu.Unlock()
+	return existed
+}
+
 // Config holds configuration for the MCP server.
 type Config struct {
 	Registry      *packs.Registry
@@ -100,6 +157,7 @@ type Config struct {
 }
 
 // Server implements MCP-compatible HTTP endpoints for external agents.
+// Conforms to MCP Streamable HTTP transport specification (2025-11-25).
 type Server struct {
 	registry    *packs.Registry
 	router      *packs.Router
@@ -108,6 +166,7 @@ type Server struct {
 	tokenStore  *TokenStore
 	requireAuth bool
 	defaultCaps []string
+	sessions    *sessionStore
 }
 
 // NewServer creates a new MCP server with the given configuration.
@@ -141,6 +200,7 @@ func NewServer(cfg Config) (*Server, error) {
 		tokenStore:  cfg.TokenStore,
 		requireAuth: cfg.RequireAuth,
 		defaultCaps: defaultCaps,
+		sessions:    newSessionStore(),
 	}, nil
 }
 
@@ -149,32 +209,47 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/mcp", s.handleMCP)
 }
 
-// handleMCP handles all MCP JSON-RPC requests at POST /mcp.
+// handleMCP is the single MCP endpoint supporting POST, GET, and DELETE per the
+// Streamable HTTP transport spec (2025-11-25).
 func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", "POST")
-		s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "method not allowed", nil)
+	switch r.Method {
+	case http.MethodPost:
+		s.handlePost(w, r)
+	case http.MethodGet:
+		// We don't support server-initiated SSE streams
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	case http.MethodDelete:
+		s.handleDelete(w, r)
+	default:
+		w.Header().Set("Allow", "POST, GET, DELETE")
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleDelete terminates a session per the Streamable HTTP spec.
+func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.Header.Get("Mcp-Session-Id")
+	if sessionID == "" {
+		http.Error(w, "Bad Request: missing Mcp-Session-Id", http.StatusBadRequest)
 		return
 	}
 
-	// Extract capabilities from auth
-	caps, err := s.extractCapabilities(r)
-	if err != nil {
-		// If a token was explicitly provided but is invalid, always reject
-		// This prevents privilege escalation from invalid->unauthenticated access
-		if errors.Is(err, errInvalidToken) {
-			s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "invalid or expired token", nil)
-			return
-		}
-		// For other auth errors, check if auth is required
-		if s.requireAuth {
-			s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "authentication required", nil)
-			return
-		}
-		caps = s.defaultCaps
+	if s.sessions.delete(sessionID) {
+		s.logger.Info("MCP session terminated", "session_id", sessionID)
+		w.WriteHeader(http.StatusNoContent)
+	} else {
+		http.Error(w, "Not Found", http.StatusNotFound)
 	}
+}
 
-	// Read request body
+// handlePost processes JSON-RPC messages sent via HTTP POST.
+func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
+	// Validate MCP-Protocol-Version header on non-initialize requests.
+	// Per spec: server default assumption if missing is 2025-03-26.
+	sessionID := r.Header.Get("Mcp-Session-Id")
+	protoVersion := r.Header.Get("Mcp-Protocol-Version")
+
+	// Read and parse the body first so we can check if this is an initialize request
 	body, err := io.ReadAll(io.LimitReader(r.Body, MaxRequestBodySize+1))
 	if err != nil {
 		s.sendJSONRPCError(w, nil, JSONRPCParseError, "failed to read request body", nil)
@@ -185,7 +260,6 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse JSON-RPC request
 	var req JSONRPCRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		s.sendJSONRPCError(w, nil, JSONRPCParseError, "invalid JSON", nil)
@@ -197,28 +271,94 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isInitialize := req.Method == "initialize"
+	isNotification := len(req.ID) == 0 || string(req.ID) == "null"
+
+	// Validate protocol version header (not required on initialize)
+	if !isInitialize && protoVersion != "" {
+		if !supportedProtocolVersions[protoVersion] {
+			http.Error(w, "Bad Request: unsupported MCP-Protocol-Version", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Validate session on non-initialize requests
+	var caps []string
+	if isInitialize {
+		// Extract capabilities from auth for the new session
+		authCaps, authErr := s.extractCapabilities(r)
+		if authErr != nil {
+			if errors.Is(authErr, errInvalidToken) {
+				s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "invalid or expired token", nil)
+				return
+			}
+			if s.requireAuth {
+				s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "authentication required", nil)
+				return
+			}
+			authCaps = s.defaultCaps
+		}
+		caps = authCaps
+	} else {
+		// Non-initialize requests require a valid session
+		if sessionID == "" {
+			http.Error(w, "Bad Request: missing Mcp-Session-Id", http.StatusBadRequest)
+			return
+		}
+		sess, ok := s.sessions.get(sessionID)
+		if !ok {
+			// Session expired or invalid - client must re-initialize
+			http.Error(w, "Not Found", http.StatusNotFound)
+			return
+		}
+		caps = sess.capabilities
+	}
+
 	s.logger.Debug("MCP request",
 		"method", req.Method,
-		"capabilities", caps,
+		"is_notification", isNotification,
+		"session_id", sessionID,
 	)
+
+	// Handle notifications: accept and return HTTP 202 with no body
+	if isNotification {
+		if strings.HasPrefix(req.Method, "notifications/") {
+			s.logger.Debug("accepted MCP notification", "method", req.Method)
+		} else {
+			s.logger.Warn("received notification for non-notification method", "method", req.Method)
+		}
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
 
 	// Route to appropriate handler
 	switch req.Method {
+	case "initialize":
+		s.handleInitialize(w, r, req, caps)
 	case "tools/list":
 		s.handleToolsList(w, r, req, caps)
 	case "tools/call":
 		s.handleToolsCall(w, r, req, caps)
-	case "initialize":
-		s.handleInitialize(w, r, req)
 	default:
 		s.sendJSONRPCError(w, req.ID, JSONRPCMethodNotFound, "method not found", nil)
 	}
 }
 
-// handleInitialize handles the MCP initialize handshake.
-func (s *Server) handleInitialize(w http.ResponseWriter, _ *http.Request, req JSONRPCRequest) {
+// handleInitialize handles the MCP initialize handshake and creates a session.
+func (s *Server) handleInitialize(w http.ResponseWriter, _ *http.Request, req JSONRPCRequest, caps []string) {
+	// Create a new session for this client
+	sess := s.sessions.create(latestProtocolVersion, caps)
+
+	s.logger.Info("MCP session created",
+		"session_id", sess.id,
+		"protocol_version", sess.protocolVersion,
+	)
+
+	// Set the session ID header so the client can use it on subsequent requests
+	w.Header().Set("Mcp-Session-Id", sess.id)
+
 	result := map[string]any{
-		"protocolVersion": "2024-11-05",
+		"protocolVersion": latestProtocolVersion,
 		"capabilities": map[string]any{
 			"tools": map[string]any{},
 		},
