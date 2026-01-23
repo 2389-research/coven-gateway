@@ -766,17 +766,16 @@ func (a *Admin) handleToolsPage(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleToolsList(w http.ResponseWriter, r *http.Request) {
 	var items []packItem
 	if a.registry != nil {
-		// Get all pack info for version lookup
+		// Get all registered packs
 		packInfos := a.registry.ListPacks()
-		versionByID := make(map[string]string, len(packInfos))
-		for _, pi := range packInfos {
-			versionByID[pi.ID] = pi.Version
-		}
 
 		// Get all tools and group by pack
 		allTools := a.registry.GetAllTools()
 		toolsByPack := make(map[string][]toolItem)
 		for _, t := range allTools {
+			if t.Definition == nil {
+				continue
+			}
 			ti := toolItem{
 				Name:                 t.Definition.GetName(),
 				Description:          t.Definition.GetDescription(),
@@ -786,14 +785,15 @@ func (a *Admin) handleToolsList(w http.ResponseWriter, r *http.Request) {
 			toolsByPack[t.PackID] = append(toolsByPack[t.PackID], ti)
 		}
 
-		// Build pack items sorted by pack ID for stable ordering
-		for packID, tools := range toolsByPack {
+		// Build pack items for all registered packs (including those with zero tools)
+		for _, pi := range packInfos {
+			tools := toolsByPack[pi.ID]
 			sort.Slice(tools, func(i, j int) bool {
 				return tools[i].Name < tools[j].Name
 			})
 			items = append(items, packItem{
-				ID:      packID,
-				Version: versionByID[packID],
+				ID:      pi.ID,
+				Version: pi.Version,
 				Tools:   tools,
 			})
 		}
