@@ -131,10 +131,14 @@ func (s *PackServiceServer) Register(manifest *pb.PackManifest, stream grpc.Serv
 func (s *PackServiceServer) ToolResult(ctx context.Context, resp *pb.ExecuteToolResponse) (*emptypb.Empty, error) {
 	requestID := resp.GetRequestId()
 
-	s.logger.Debug("received tool result",
+	status := "success"
+	if resp.GetError() != "" {
+		status = "error"
+	}
+	s.logger.Info("  ← tool result from pack",
 		"request_id", requestID,
-		"has_output", resp.GetOutputJson() != "",
-		"has_error", resp.GetError() != "",
+		"status", status,
+		"output_bytes", len(resp.GetOutputJson()),
 	)
 
 	// Route the response to the waiting caller via the Router

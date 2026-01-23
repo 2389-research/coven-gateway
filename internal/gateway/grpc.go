@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -224,7 +225,9 @@ func (s *foldControlServer) handleResponse(conn *agent.Connection, resp *pb.Mess
 // handleExecutePackTool routes a pack tool execution request through the pack router
 // and sends the result back to the agent.
 func (s *foldControlServer) handleExecutePackTool(stream pb.FoldControl_AgentStreamServer, conn *agent.Connection, req *pb.ExecutePackTool) {
-	s.logger.Debug("received pack tool execution request",
+	started := time.Now()
+
+	s.logger.Info("→ pack tool request",
 		"agent_id", conn.ID,
 		"request_id", req.GetRequestId(),
 		"tool_name", req.GetToolName(),
@@ -244,11 +247,14 @@ func (s *foldControlServer) handleExecutePackTool(stream pb.FoldControl_AgentStr
 		req.GetRequestId(),
 	)
 
+	elapsed := time.Since(started)
+
 	if err != nil {
-		s.logger.Warn("pack tool execution failed",
+		s.logger.Warn("✗ pack tool failed",
 			"agent_id", conn.ID,
 			"request_id", req.GetRequestId(),
 			"tool_name", req.GetToolName(),
+			"duration_ms", elapsed.Milliseconds(),
 			"error", err,
 		)
 		s.sendPackToolError(stream, req.GetRequestId(), err.Error())
@@ -265,8 +271,10 @@ func (s *foldControlServer) handleExecutePackTool(stream pb.FoldControl_AgentStr
 	}
 
 	// Set the result based on the pack response
+	status := "success"
 	if errMsg := resp.GetError(); errMsg != "" {
 		result.GetPackToolResult().Result = &pb.PackToolResult_Error{Error: errMsg}
+		status = "error"
 	} else {
 		result.GetPackToolResult().Result = &pb.PackToolResult_OutputJson{OutputJson: resp.GetOutputJson()}
 	}
@@ -278,10 +286,12 @@ func (s *foldControlServer) handleExecutePackTool(stream pb.FoldControl_AgentStr
 			"error", err,
 		)
 	} else {
-		s.logger.Debug("pack tool result sent",
+		s.logger.Info("← pack tool result",
 			"agent_id", conn.ID,
 			"request_id", req.GetRequestId(),
 			"tool_name", req.GetToolName(),
+			"status", status,
+			"duration_ms", elapsed.Milliseconds(),
 		)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 
 	"github.com/2389/fold-gateway/internal/agent"
 	"github.com/2389/fold-gateway/internal/conversation"
+	"github.com/2389/fold-gateway/internal/packs"
 	"github.com/2389/fold-gateway/internal/store"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -80,6 +82,7 @@ type Admin struct {
 	store            FullStore
 	manager          *agent.Manager
 	conversation     *conversation.Service
+	registry         *packs.Registry
 	config           Config
 	logger           *slog.Logger
 	webauthn         *webauthn.WebAuthn
@@ -88,11 +91,12 @@ type Admin struct {
 }
 
 // New creates a new Admin handler
-func New(fullStore FullStore, manager *agent.Manager, convService *conversation.Service, cfg Config) *Admin {
+func New(fullStore FullStore, manager *agent.Manager, convService *conversation.Service, registry *packs.Registry, cfg Config) *Admin {
 	a := &Admin{
 		store:        fullStore,
 		manager:      manager,
 		conversation: convService,
+		registry:     registry,
 		config:       cfg,
 		logger:       slog.Default().With("component", "admin"),
 		chatHub:      newChatHub(),
@@ -131,12 +135,17 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 
 	// Stats (htmx partials)
 	mux.HandleFunc("GET /admin/stats/agents", a.requireAuth(a.handleStatsAgents))
+	mux.HandleFunc("GET /admin/stats/packs", a.requireAuth(a.handleStatsPacks))
 
 	// Agent management
 	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsList))
 	mux.HandleFunc("GET /admin/agents/{id}", a.requireAuth(a.handleAgentDetail))
 	mux.HandleFunc("POST /admin/agents/{id}/approve", a.requireAuth(a.handleAgentApprove))
 	mux.HandleFunc("POST /admin/agents/{id}/revoke", a.requireAuth(a.handleAgentRevoke))
+
+	// Tools management
+	mux.HandleFunc("GET /admin/tools", a.requireAuth(a.handleToolsPage))
+	mux.HandleFunc("GET /admin/tools/list", a.requireAuth(a.handleToolsList))
 
 	// Principals management
 	mux.HandleFunc("GET /admin/principals", a.requireAuth(a.handlePrincipalsPage))
@@ -740,6 +749,69 @@ func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 
 	// Return the invite URL using template for proper escaping
 	a.renderInviteCreated(w, inviteURL)
+}
+
+// =============================================================================
+// Tools Handlers
+// =============================================================================
+
+// handleToolsPage renders the tools management page
+func (a *Admin) handleToolsPage(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderToolsPage(w, user, csrfToken)
+}
+
+// handleToolsList returns the tools list grouped by pack (htmx partial)
+func (a *Admin) handleToolsList(w http.ResponseWriter, r *http.Request) {
+	var items []packItem
+	if a.registry != nil {
+		// Get all pack info for version lookup
+		packInfos := a.registry.ListPacks()
+		versionByID := make(map[string]string, len(packInfos))
+		for _, pi := range packInfos {
+			versionByID[pi.ID] = pi.Version
+		}
+
+		// Get all tools and group by pack
+		allTools := a.registry.GetAllTools()
+		toolsByPack := make(map[string][]toolItem)
+		for _, t := range allTools {
+			ti := toolItem{
+				Name:                 t.Definition.GetName(),
+				Description:          t.Definition.GetDescription(),
+				TimeoutSeconds:       t.Definition.GetTimeoutSeconds(),
+				RequiredCapabilities: t.Definition.GetRequiredCapabilities(),
+			}
+			toolsByPack[t.PackID] = append(toolsByPack[t.PackID], ti)
+		}
+
+		// Build pack items sorted by pack ID for stable ordering
+		for packID, tools := range toolsByPack {
+			sort.Slice(tools, func(i, j int) bool {
+				return tools[i].Name < tools[j].Name
+			})
+			items = append(items, packItem{
+				ID:      packID,
+				Version: versionByID[packID],
+				Tools:   tools,
+			})
+		}
+		sort.Slice(items, func(i, j int) bool {
+			return items[i].ID < items[j].ID
+		})
+	}
+	a.renderToolsList(w, items)
+}
+
+// handleStatsPacks returns the registered pack count (htmx partial)
+func (a *Admin) handleStatsPacks(w http.ResponseWriter, r *http.Request) {
+	count := 0
+	if a.registry != nil {
+		count = len(a.registry.ListPacks())
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, "%d", count)
 }
 
 // =============================================================================

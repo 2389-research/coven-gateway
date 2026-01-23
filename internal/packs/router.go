@@ -112,7 +112,7 @@ func (r *Router) RouteToolCall(ctx context.Context, toolName, inputJSON, request
 			)
 			return nil, ErrPackDisconnected
 		}
-		r.logger.Debug("tool response received",
+		r.logger.Info("  ← pack responded",
 			"tool_name", toolName,
 			"pack_id", pack.ID,
 			"request_id", requestID,
@@ -145,7 +145,7 @@ func (r *Router) sendToPackChannel(ctx context.Context, pack *Pack, req *pb.Exec
 	if err != nil {
 		return err
 	}
-	r.logger.Debug("tool request sent to pack",
+	r.logger.Info("  → routed to pack",
 		"tool_name", toolName,
 		"pack_id", pack.ID,
 		"request_id", requestID,

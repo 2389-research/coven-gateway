@@ -84,6 +84,29 @@ type chatPageData struct {
 	CSRFToken string
 }
 
+type toolItem struct {
+	Name                 string
+	Description          string
+	TimeoutSeconds       int32
+	RequiredCapabilities []string
+}
+
+type packItem struct {
+	ID      string
+	Version string
+	Tools   []toolItem
+}
+
+type toolsPageData struct {
+	Title     string
+	User      *store.AdminUser
+	CSRFToken string
+}
+
+type toolsListData struct {
+	Packs []packItem
+}
+
 type agentDetailItem struct {
 	ID           string
 	Name         string
@@ -294,6 +317,36 @@ func (a *Admin) renderChatPage(w http.ResponseWriter, user *store.AdminUser, age
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render chat page", "error", err)
+	}
+}
+
+// renderToolsPage renders the tools management page
+func (a *Admin) renderToolsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/tools.html"))
+
+	data := toolsPageData{
+		Title:     "Tools",
+		User:      user,
+		CSRFToken: csrfToken,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render tools page", "error", err)
+	}
+}
+
+// renderToolsList renders the tools list partial grouped by pack
+func (a *Admin) renderToolsList(w http.ResponseWriter, packItems []packItem) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/tools_list.html"))
+
+	data := toolsListData{
+		Packs: packItems,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render tools list", "error", err)
 	}
 }
 

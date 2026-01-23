@@ -309,7 +309,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	webAdminCfg := webadmin.Config{
 		BaseURL: webAdminBaseURL,
 	}
-	gw.webAdmin = webadmin.New(sqliteStore, gw.agentManager, convService, webAdminCfg)
+	gw.webAdmin = webadmin.New(sqliteStore, gw.agentManager, convService, packRegistry, webAdminCfg)
 	gw.webAdmin.RegisterRoutes(mux)
 	logger.Info("admin web UI enabled at /admin/", "base_url", webAdminBaseURL)
 

@@ -1,0 +1,8 @@
+{{define "content"}}
+<div id="tools-content">
+  <h1>Tools</h1>
+  <div id="tools-list" hx-get="/admin/tools/list" hx-trigger="load" hx-swap="innerHTML">
+    Loading...
+  </div>
+</div>
+{{end}}

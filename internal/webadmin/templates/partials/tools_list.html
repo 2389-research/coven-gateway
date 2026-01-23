@@ -1,0 +1,15 @@
+{{if .Packs}}
+{{range .Packs}}
+<div class="pack-item">
+  <h3>{{.ID}} <span>v{{.Version}}</span></h3>
+  {{range .Tools}}
+  <div class="tool-item">
+    <strong>{{.Name}}</strong>
+    <p>{{.Description}}</p>
+  </div>
+  {{end}}
+</div>
+{{end}}
+{{else}}
+<p>No packs registered.</p>
+{{end}}
