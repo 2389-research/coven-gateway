@@ -349,12 +349,15 @@ func TestProcessClientMessage_AgentNotFound(t *testing.T) {
 
 func TestProcessClientMessage_StoresAgentResponses(t *testing.T) {
 	eventStore := &mockEventStore{}
-	textContent := "Hello from the agent!"
+	finalContent := "Hello from the agent!"
 	router := &mockRouter{
 		agentOnline: true,
 		responses: []*agent.Response{
-			{Event: agent.EventText, Text: textContent},
-			{Event: agent.EventDone, Done: true},
+			// EventText chunks are skipped for ledger storage to avoid
+			// duplicating with EventDone which carries the final text.
+			{Event: agent.EventText, Text: "Hello from"},
+			{Event: agent.EventText, Text: " the agent!"},
+			{Event: agent.EventDone, Text: finalContent, Done: true},
 		},
 	}
 	svc := newTestClientServiceWithRouting(t, eventStore, router)
@@ -374,9 +377,9 @@ func TestProcessClientMessage_StoresAgentResponses(t *testing.T) {
 
 	// Verify both inbound and outbound events were stored
 	events := eventStore.getEvents()
-	require.GreaterOrEqual(t, len(events), 2, "expected at least 2 events")
+	require.GreaterOrEqual(t, len(events), 2, "expected at least 2 events (inbound + done)")
 
-	// Find outbound text event
+	// Find outbound final message event (from EventDone)
 	var textEvent *store.LedgerEvent
 	for _, e := range events {
 		if e.Direction == store.EventDirectionOutbound && e.Type == store.EventTypeMessage {
@@ -384,8 +387,8 @@ func TestProcessClientMessage_StoresAgentResponses(t *testing.T) {
 			break
 		}
 	}
-	require.NotNil(t, textEvent, "expected outbound text event to be stored")
-	assert.Equal(t, textContent, *textEvent.Text)
+	require.NotNil(t, textEvent, "expected outbound message event from EventDone")
+	assert.Equal(t, finalContent, *textEvent.Text)
 }
 
 func TestProcessClientMessage_AgentError(t *testing.T) {

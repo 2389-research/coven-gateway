@@ -113,25 +113,49 @@ func (s *ClientService) processClientMessage(ctx context.Context, req *pb.Client
 		return messageID, nil
 	}
 
-	// Use a detached context for routing - the response handling should continue
-	// even after the RPC returns to the client. The RPC context would cancel
-	// when the client gets the response, but we need to keep processing
-	// agent responses asynchronously.
-	respChan, err := s.router.SendMessage(context.Background(), &agent.SendRequest{
+	// Use a detached context that preserves request-scoped values (auth, tracing)
+	// but won't cancel when the RPC returns. Agent response handling must continue
+	// after the client gets the acceptance response.
+	routingCtx := context.WithoutCancel(ctx)
+
+	respChan, err := s.router.SendMessage(routingCtx, &agent.SendRequest{
 		AgentID:  conversationKey,
 		ThreadID: messageID,
 		Content:  req.Content,
 		Sender:   "client",
 	})
 	if err != nil {
+		// Store error event so the ledger reflects the failed delivery attempt
+		if s.store != nil {
+			errText := err.Error()
+			errEvent := &store.LedgerEvent{
+				ID:              uuid.New().String(),
+				ConversationKey: conversationKey,
+				Direction:       store.EventDirectionOutbound,
+				Author:          "system",
+				Timestamp:       time.Now(),
+				Type:            store.EventTypeError,
+				Text:            &errText,
+			}
+			if storeErr := s.store.SaveEvent(ctx, errEvent); storeErr != nil {
+				slog.Error("failed to store routing error event",
+					"error", storeErr,
+					"original_error", err,
+				)
+			}
+		}
 		if errors.Is(err, agent.ErrAgentNotFound) {
 			return "", status.Error(codes.NotFound, "agent not found")
 		}
 		return "", status.Error(codes.Unavailable, "agent unavailable")
 	}
 
-	// Spawn goroutine to consume responses asynchronously
-	go s.consumeAgentResponses(context.Background(), conversationKey, messageID, respChan)
+	// Spawn goroutine to consume responses with a bounded timeout to prevent leaks
+	consumeCtx, cancel := context.WithTimeout(routingCtx, 10*time.Minute)
+	go func() {
+		defer cancel()
+		s.consumeAgentResponses(consumeCtx, conversationKey, messageID, respChan)
+	}()
 
 	return messageID, nil
 }
@@ -144,15 +168,30 @@ func (s *ClientService) consumeAgentResponses(
 	threadID string,
 	respChan <-chan *agent.Response,
 ) {
-	for resp := range respChan {
-		event := s.responseToLedgerEvent(conversationKey, threadID, resp)
-		if event != nil {
-			if err := s.store.SaveEvent(ctx, event); err != nil {
-				slog.Error("failed to store agent response",
-					"error", err,
-					"conversation_key", conversationKey,
-					"event_type", resp.Event,
-				)
+	if respChan == nil {
+		return
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Warn("agent response consumption cancelled",
+				"conversation_key", conversationKey,
+				"reason", ctx.Err(),
+			)
+			return
+		case resp, ok := <-respChan:
+			if !ok {
+				return
+			}
+			event := s.responseToLedgerEvent(conversationKey, threadID, resp)
+			if event != nil && s.store != nil {
+				if err := s.store.SaveEvent(ctx, event); err != nil {
+					slog.Error("failed to store agent response",
+						"error", err,
+						"conversation_key", conversationKey,
+						"event_type", resp.Event,
+					)
+				}
 			}
 		}
 	}
@@ -171,8 +210,9 @@ func (s *ClientService) responseToLedgerEvent(convKey, threadID string, resp *ag
 
 	switch resp.Event {
 	case agent.EventText:
-		event.Type = store.EventTypeMessage
-		event.Text = &resp.Text
+		// Skip streaming text chunks for ledger storage. EventDone carries
+		// the final accumulated text, so storing chunks would create duplicates.
+		return nil
 	case agent.EventThinking:
 		// Skip thinking events
 		return nil

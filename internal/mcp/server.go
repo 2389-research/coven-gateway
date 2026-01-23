@@ -104,6 +104,7 @@ type mcpSession struct {
 	id              string
 	protocolVersion string
 	capabilities    []string
+	ownerToken      string // auth token hash used to verify session ownership on DELETE
 	createdAt       time.Time
 }
 
@@ -117,11 +118,12 @@ func newSessionStore() *sessionStore {
 	return &sessionStore{sessions: make(map[string]*mcpSession)}
 }
 
-func (s *sessionStore) create(protocolVersion string, caps []string) *mcpSession {
+func (s *sessionStore) create(protocolVersion string, caps []string, ownerToken string) *mcpSession {
 	sess := &mcpSession{
 		id:              uuid.New().String(),
 		protocolVersion: protocolVersion,
 		capabilities:    caps,
+		ownerToken:      ownerToken,
 		createdAt:       time.Now(),
 	}
 	s.mu.Lock()
@@ -229,6 +231,7 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDelete terminates a session per the Streamable HTTP spec.
+// Verifies the caller owns the session to prevent unauthorized termination.
 func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.Header.Get("Mcp-Session-Id")
 	if sessionID == "" {
@@ -236,12 +239,24 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.sessions.delete(sessionID) {
-		s.logger.Info("MCP session terminated", "session_id", sessionID)
-		w.WriteHeader(http.StatusNoContent)
-	} else {
+	sess, ok := s.sessions.get(sessionID)
+	if !ok {
 		http.Error(w, "Not Found", http.StatusNotFound)
+		return
 	}
+
+	// Verify ownership: the DELETE request must carry the same auth as initialize
+	if sess.ownerToken != "" {
+		callerToken := s.extractOwnerToken(r)
+		if callerToken != sess.ownerToken {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
+	s.sessions.delete(sessionID)
+	s.logger.Info("MCP session terminated", "session_id", sessionID)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handlePost processes JSON-RPC messages sent via HTTP POST.
@@ -347,9 +362,13 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleInitialize handles the MCP initialize handshake and creates a session.
-func (s *Server) handleInitialize(w http.ResponseWriter, _ *http.Request, req JSONRPCRequest, caps []string) {
+func (s *Server) handleInitialize(w http.ResponseWriter, r *http.Request, req JSONRPCRequest, caps []string) {
+	// Derive an owner token from the request auth for session ownership verification.
+	// Uses the raw path token or Authorization header as the identity binding.
+	ownerToken := s.extractOwnerToken(r)
+
 	// Create a new session for this client
-	sess := s.sessions.create(latestProtocolVersion, caps)
+	sess := s.sessions.create(latestProtocolVersion, caps, ownerToken)
 
 	s.logger.Info("MCP session created",
 		"session_id", sess.id,
@@ -486,6 +505,11 @@ var errInvalidToken = errors.New("invalid or expired token")
 func (s *Server) extractCapabilities(r *http.Request) ([]string, error) {
 	// First try token from URL path (e.g., /mcp/<token>)
 	if pathToken := strings.TrimPrefix(r.URL.Path, "/mcp/"); pathToken != "" && pathToken != r.URL.Path {
+		// Normalize: trim trailing slashes and reject extra path segments
+		pathToken = strings.TrimRight(pathToken, "/")
+		if strings.Contains(pathToken, "/") {
+			return nil, errInvalidToken
+		}
 		if s.tokenStore != nil {
 			if caps := s.tokenStore.GetCapabilities(pathToken); caps != nil {
 				return caps, nil
@@ -529,6 +553,24 @@ func (s *Server) extractCapabilities(r *http.Request) ([]string, error) {
 	}
 
 	return []string{principalID}, nil
+}
+
+// extractOwnerToken derives a stable identity string from the request's auth
+// credentials. Used to bind sessions to their creator for ownership verification.
+func (s *Server) extractOwnerToken(r *http.Request) string {
+	// Path token takes priority
+	if pathToken := strings.TrimPrefix(r.URL.Path, "/mcp/"); pathToken != "" && pathToken != r.URL.Path {
+		return strings.TrimRight(pathToken, "/")
+	}
+	// Query token
+	if token := r.URL.Query().Get("token"); token != "" {
+		return token
+	}
+	// Authorization header
+	if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+		return strings.TrimPrefix(authHeader, "Bearer ")
+	}
+	return ""
 }
 
 // hasRequiredCapabilities checks if the caller has all required capabilities.
