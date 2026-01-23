@@ -205,8 +205,10 @@ func NewServer(cfg Config) (*Server, error) {
 }
 
 // RegisterRoutes registers the MCP endpoint on the given ServeMux.
+// Supports both /mcp (bare) and /mcp/<token> (token-in-path) access patterns.
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/mcp", s.handleMCP)
+	mux.HandleFunc("/mcp/", s.handleMCP)
 }
 
 // handleMCP is the single MCP endpoint supporting POST, GET, and DELETE per the
@@ -482,15 +484,23 @@ var errInvalidToken = errors.New("invalid or expired token")
 
 // extractCapabilities extracts capabilities from the request.
 func (s *Server) extractCapabilities(r *http.Request) ([]string, error) {
-	// First try token query parameter (preferred for agent MCP access)
+	// First try token from URL path (e.g., /mcp/<token>)
+	if pathToken := strings.TrimPrefix(r.URL.Path, "/mcp/"); pathToken != "" && pathToken != r.URL.Path {
+		if s.tokenStore != nil {
+			if caps := s.tokenStore.GetCapabilities(pathToken); caps != nil {
+				return caps, nil
+			}
+		}
+		return nil, errInvalidToken
+	}
+
+	// Fall back to token query parameter
 	if token := r.URL.Query().Get("token"); token != "" {
 		if s.tokenStore != nil {
 			if caps := s.tokenStore.GetCapabilities(token); caps != nil {
 				return caps, nil
 			}
 		}
-		// Token was provided but is invalid - this should always error
-		// (don't fall through to unauthenticated access)
 		return nil, errInvalidToken
 	}
 

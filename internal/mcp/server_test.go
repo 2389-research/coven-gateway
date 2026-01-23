@@ -90,6 +90,7 @@ func makeJSONRPCRequest(method string, params any) []byte {
 }
 
 // initializeSession sends an initialize request and returns the session ID.
+// tokenQueryParam is appended as ?token= query parameter if non-empty.
 func initializeSession(t *testing.T, mux http.Handler, tokenQueryParam string) string {
 	t.Helper()
 	body := makeJSONRPCRequest("initialize", nil)
@@ -103,6 +104,25 @@ func initializeSession(t *testing.T, mux http.Handler, tokenQueryParam string) s
 	mux.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("initialize failed with status %d: %s", rr.Code, rr.Body.String())
+	}
+	sessionID := rr.Header().Get("Mcp-Session-Id")
+	if sessionID == "" {
+		t.Fatal("initialize did not return Mcp-Session-Id header")
+	}
+	return sessionID
+}
+
+// initializeSessionWithPathToken sends an initialize request using /mcp/<token> path format.
+func initializeSessionWithPathToken(t *testing.T, mux http.Handler, token string) string {
+	t.Helper()
+	body := makeJSONRPCRequest("initialize", nil)
+	url := "/mcp/" + token
+	req := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("initialize with path token failed with status %d: %s", rr.Code, rr.Body.String())
 	}
 	sessionID := rr.Header().Get("Mcp-Session-Id")
 	if sessionID == "" {
@@ -275,6 +295,63 @@ func TestHandleToolsList(t *testing.T) {
 		// Should get public-tool and admin-tool (not multi-cap-tool which needs admin+superuser)
 		if len(tools) != 2 {
 			t.Errorf("expected 2 tools for admin capability, got %d", len(tools))
+		}
+	})
+
+	t.Run("filters tools by path-based token", func(t *testing.T) {
+		registry := setupTestRegistry(t)
+		router := setupTestRouter(t, registry)
+
+		tokenStore := NewTokenStore()
+		token := tokenStore.CreateToken([]string{"admin"})
+
+		server, err := NewServer(Config{
+			Registry:    registry,
+			Router:      router,
+			TokenStore:  tokenStore,
+			Logger:      slog.Default(),
+			RequireAuth: false,
+		})
+		if err != nil {
+			t.Fatalf("failed to create server: %v", err)
+		}
+
+		mux := http.NewServeMux()
+		server.RegisterRoutes(mux)
+
+		// Initialize session with token in URL path (/mcp/<token>)
+		sessionID := initializeSessionWithPathToken(t, mux, token)
+
+		body := makeJSONRPCRequest("tools/list", nil)
+		req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Mcp-Session-Id", sessionID)
+		rr := httptest.NewRecorder()
+
+		mux.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rr.Code)
+		}
+
+		var resp JSONRPCResponse
+		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		result, ok := resp.Result.(map[string]any)
+		if !ok {
+			t.Fatalf("expected result to be map")
+		}
+
+		tools, ok := result["tools"].([]any)
+		if !ok {
+			t.Fatalf("expected tools array")
+		}
+
+		// Same filtering as query param: admin gets public-tool + admin-tool
+		if len(tools) != 2 {
+			t.Errorf("expected 2 tools for path-based admin token, got %d", len(tools))
 		}
 	})
 
