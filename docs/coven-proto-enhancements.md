@@ -424,7 +424,7 @@ message ServerMessage {
 
 ### Phase 1: Token Usage (Low effort, high value)
 1. Add `TokenUsage` message to proto
-2. Update fold-agent to emit usage after LLM calls
+2. Update coven-agent to emit usage after LLM calls
 3. Gateway stores in ledger, forwards to clients
 4. TUI displays token counts
 
@@ -436,7 +436,7 @@ message ServerMessage {
 
 ### Phase 3: Structured Tool States (Medium effort, better UX)
 1. Add `ToolState` enum and `ToolStateUpdate` message
-2. Update fold-agent to emit state transitions
+2. Update coven-agent to emit state transitions
 3. Gateway forwards to clients
 4. TUI shows tool progress indicators
 
