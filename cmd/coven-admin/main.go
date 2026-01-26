@@ -25,11 +25,11 @@ import (
 )
 
 const banner = `
-  __       _     _                 _           _
- / _| ___ | | __| |       __ _  __| |_ __ ___ (_)_ __
-| |_ / _ \| |/ _' |_____ / _' |/ _' | '_ ' _ \| | '_ \
-|  _| (_) | | (_| |_____| (_| | (_| | | | | | | | | | |
-|_|  \___/|_|\__,_|      \__,_|\__,_|_| |_| |_|_|_| |_|
+                                      _           _
+  ___ _____   _____ _ __         __ _| |_ __ ___ (_)_ __
+ / __/ _ \ \ / / _ \ '_ \ _____ / _' | | '_ ' _ \| | '_ \
+| (_| (_) \ V /  __/ | | |_____| (_| | | | | | | | | | | |
+ \___\___/ \_/ \___|_| |_|      \__,_|_|_| |_| |_|_|_| |_|
 `
 
 func main() {
@@ -39,11 +39,11 @@ func main() {
 	}
 
 	// Get config from environment or token file
-	// FOLD_GATEWAY_HOST is preferred; derives gRPC and HTTP URLs
-	// Falls back to legacy FOLD_GATEWAY_GRPC for backwards compatibility
-	grpcAddr := os.Getenv("FOLD_GATEWAY_GRPC")
+	// COVEN_GATEWAY_HOST is preferred; derives gRPC and HTTP URLs
+	// Falls back to legacy COVEN_GATEWAY_GRPC for backwards compatibility
+	grpcAddr := os.Getenv("COVEN_GATEWAY_GRPC")
 	if grpcAddr == "" {
-		if host := os.Getenv("FOLD_GATEWAY_HOST"); host != "" {
+		if host := os.Getenv("COVEN_GATEWAY_HOST"); host != "" {
 			grpcAddr = host + ":50051"
 		} else {
 			grpcAddr = "localhost:50051"
@@ -105,15 +105,15 @@ func printUsage() {
 	fmt.Println("  invite create           Generate an admin web UI invite link")
 	fmt.Println()
 	yellow.Println("Environment:")
-	fmt.Println("  FOLD_GATEWAY_HOST       Gateway hostname (derives gRPC :50051 and HTTPS URLs)")
-	fmt.Println("  FOLD_TOKEN              JWT authentication token (required)")
+	fmt.Println("  COVEN_GATEWAY_HOST       Gateway hostname (derives gRPC :50051 and HTTPS URLs)")
+	fmt.Println("  COVEN_TOKEN              JWT authentication token (required)")
 	fmt.Println()
-	yellow.Println("Legacy (overrides FOLD_GATEWAY_HOST if set):")
-	fmt.Println("  FOLD_GATEWAY_GRPC       Gateway gRPC address (default: localhost:50051)")
-	fmt.Println("  FOLD_ADMIN_URL          Gateway admin URL (default: http://localhost:8080)")
+	yellow.Println("Legacy (overrides COVEN_GATEWAY_HOST if set):")
+	fmt.Println("  COVEN_GATEWAY_GRPC       Gateway gRPC address (default: localhost:50051)")
+	fmt.Println("  COVEN_ADMIN_URL          Gateway admin URL (default: http://localhost:8080)")
 	fmt.Println()
 	yellow.Println("Examples:")
-	fmt.Println("  export FOLD_TOKEN=\"eyJhbG...\"")
+	fmt.Println("  export COVEN_TOKEN=\"eyJhbG...\"")
 	fmt.Println("  coven-admin me")
 	fmt.Println("  coven-admin bindings")
 	fmt.Println("  coven-admin agents create --name 'My Agent' --pubkey-fp <fingerprint>")
@@ -149,7 +149,7 @@ func authContext(token string) context.Context {
 // cmdMe shows the current user's identity
 func cmdMe(addr, token string) error {
 	if token == "" {
-		return fmt.Errorf("FOLD_TOKEN environment variable is required")
+		return fmt.Errorf("COVEN_TOKEN environment variable is required")
 	}
 
 	conn, err := createClient(addr)
@@ -233,7 +233,7 @@ func cmdStatus(addr, token string) error {
 		}
 	} else {
 		yellow.Printf("  Identity: ")
-		fmt.Println("(no token - set FOLD_TOKEN)")
+		fmt.Println("(no token - set COVEN_TOKEN)")
 	}
 
 	fmt.Println()
@@ -243,7 +243,7 @@ func cmdStatus(addr, token string) error {
 // cmdBindings handles bindings subcommands
 func cmdBindings(addr, token string, args []string) error {
 	if token == "" {
-		return fmt.Errorf("FOLD_TOKEN environment variable is required")
+		return fmt.Errorf("COVEN_TOKEN environment variable is required")
 	}
 
 	// Default to list
@@ -401,7 +401,7 @@ func cmdBindingsDelete(addr, token string, args []string) error {
 // cmdToken handles token subcommands
 func cmdToken(addr, token string, args []string) error {
 	if token == "" {
-		return fmt.Errorf("FOLD_TOKEN environment variable is required")
+		return fmt.Errorf("COVEN_TOKEN environment variable is required")
 	}
 
 	// Default to showing usage
@@ -496,7 +496,7 @@ func parseIntArg(s string) (int64, error) {
 // cmdAgents handles agent subcommands
 func cmdAgents(addr, token string, args []string) error {
 	if token == "" {
-		return fmt.Errorf("FOLD_TOKEN environment variable is required")
+		return fmt.Errorf("COVEN_TOKEN environment variable is required")
 	}
 
 	// Default to list
@@ -685,10 +685,10 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-// getToken returns the JWT token from FOLD_TOKEN env var or ~/.config/coven/token file
+// getToken returns the JWT token from COVEN_TOKEN env var or ~/.config/coven/token file
 func getToken() string {
 	// Check env var first
-	if token := os.Getenv("FOLD_TOKEN"); token != "" {
+	if token := os.Getenv("COVEN_TOKEN"); token != "" {
 		return token
 	}
 
@@ -760,9 +760,9 @@ func cmdInviteCreate(args []string) error {
 	}
 
 	// Default database path
-	// FOLD_DB_PATH env var takes precedence for Docker deployments
+	// COVEN_DB_PATH env var takes precedence for Docker deployments
 	if dbPath == "" {
-		if envPath := os.Getenv("FOLD_DB_PATH"); envPath != "" {
+		if envPath := os.Getenv("COVEN_DB_PATH"); envPath != "" {
 			dbPath = envPath
 		} else {
 			configDir := os.Getenv("XDG_CONFIG_HOME")

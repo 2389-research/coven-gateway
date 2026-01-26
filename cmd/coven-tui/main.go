@@ -19,10 +19,10 @@ import (
 	"syscall"
 )
 
-// getToken returns the JWT token from FOLD_TOKEN env var or ~/.config/coven/token file
+// getToken returns the JWT token from COVEN_TOKEN env var or ~/.config/coven/token file
 func getToken() string {
 	// Check env var first
-	if token := os.Getenv("FOLD_TOKEN"); token != "" {
+	if token := os.Getenv("COVEN_TOKEN"); token != "" {
 		return token
 	}
 
@@ -75,9 +75,9 @@ func main() {
 
 	fmt.Printf("coven-tui connected to %s\n", *server)
 	if getToken() != "" {
-		fmt.Println("Auth: JWT token configured (FOLD_TOKEN)")
+		fmt.Println("Auth: JWT token configured (COVEN_TOKEN)")
 	} else {
-		fmt.Println("Auth: none (set FOLD_TOKEN for authentication)")
+		fmt.Println("Auth: none (set COVEN_TOKEN for authentication)")
 	}
 	fmt.Println("Type a message and press Enter. /help for commands. Ctrl+C to quit.")
 	fmt.Println()

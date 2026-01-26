@@ -70,12 +70,12 @@ type Gateway struct {
 // New creates a new Gateway instance with the given configuration.
 func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	// Initialize store
-	// FOLD_DB_PATH env var overrides config for Docker deployments
+	// COVEN_DB_PATH env var overrides config for Docker deployments
 	var s store.Store
 	var err error
 
 	dbPath := cfg.Database.Path
-	if envPath := os.Getenv("FOLD_DB_PATH"); envPath != "" {
+	if envPath := os.Getenv("COVEN_DB_PATH"); envPath != "" {
 		dbPath = envPath
 	}
 
@@ -179,11 +179,11 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	mcpTokens := mcp.NewTokenStore()
 
 	// Determine MCP endpoint URL
-	// Priority: FOLD_MCP_ENDPOINT env > FOLD_GATEWAY_URL + /mcp > derived from config
+	// Priority: COVEN_MCP_ENDPOINT env > COVEN_GATEWAY_URL + /mcp > derived from config
 	var mcpEndpoint string
-	if envEndpoint := os.Getenv("FOLD_MCP_ENDPOINT"); envEndpoint != "" {
+	if envEndpoint := os.Getenv("COVEN_MCP_ENDPOINT"); envEndpoint != "" {
 		mcpEndpoint = envEndpoint
-	} else if envGatewayURL := os.Getenv("FOLD_GATEWAY_URL"); envGatewayURL != "" {
+	} else if envGatewayURL := os.Getenv("COVEN_GATEWAY_URL"); envGatewayURL != "" {
 		mcpEndpoint = envGatewayURL + "/mcp"
 	} else if cfg.Tailscale.Enabled {
 		// Derive from tailscale config
@@ -287,15 +287,15 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	// The admin UI has its own session-based auth (separate from JWT)
 	webAdminBaseURL := cfg.WebAdmin.BaseURL
 	if webAdminBaseURL == "" {
-		// Check FOLD_GATEWAY_URL env var (includes full tailnet DNS name)
-		if envURL := os.Getenv("FOLD_GATEWAY_URL"); envURL != "" {
+		// Check COVEN_GATEWAY_URL env var (includes full tailnet DNS name)
+		if envURL := os.Getenv("COVEN_GATEWAY_URL"); envURL != "" {
 			webAdminBaseURL = envURL
 		} else if cfg.Tailscale.Enabled {
 			// Auto-detect based on deployment mode
-			// With Tailscale HTTPS, user MUST set FOLD_GATEWAY_URL or webadmin.base_url
+			// With Tailscale HTTPS, user MUST set COVEN_GATEWAY_URL or webadmin.base_url
 			// to the full tailnet DNS name for WebAuthn to work
 			if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
-				logger.Warn("webadmin.base_url/FOLD_GATEWAY_URL not set - WebAuthn/passkeys may fail. Set FOLD_GATEWAY_URL to full tailnet URL (e.g., https://coven-gateway.your-tailnet.ts.net)")
+				logger.Warn("webadmin.base_url/COVEN_GATEWAY_URL not set - WebAuthn/passkeys may fail. Set COVEN_GATEWAY_URL to full tailnet URL (e.g., https://coven-gateway.your-tailnet.ts.net)")
 			}
 			scheme := "http"
 			if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
