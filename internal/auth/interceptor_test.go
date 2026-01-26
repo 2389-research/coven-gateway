@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/store"
 	"golang.org/x/crypto/ssh"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

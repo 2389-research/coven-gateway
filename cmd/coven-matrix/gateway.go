@@ -1,5 +1,5 @@
-// ABOUTME: Gateway API client for fold-matrix bridge
-// ABOUTME: Sends messages and streams SSE responses from fold-gateway
+// ABOUTME: Gateway API client for coven-matrix bridge
+// ABOUTME: Sends messages and streams SSE responses from coven-gateway
 
 package main
 
@@ -88,7 +88,7 @@ type AgentInfo struct {
 	Workspaces []string `json:"workspaces"`
 }
 
-// GatewayClient communicates with fold-gateway HTTP API.
+// GatewayClient communicates with coven-gateway HTTP API.
 type GatewayClient struct {
 	baseURL string
 	client  *http.Client

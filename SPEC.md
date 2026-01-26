@@ -1,12 +1,12 @@
-# fold-gateway Specification
+# coven-gateway Specification
 
 ## Overview
 
-fold-gateway is the production control plane for fold agents. It manages agent connections via GRPC, routes messages from various frontends (Slack, Matrix, web) to agents, and handles streaming responses back to users.
+coven-gateway is the production control plane for coven agents. It manages agent connections via GRPC, routes messages from various frontends (Slack, Matrix, web) to agents, and handles streaming responses back to users.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        fold-gateway                              │
+│                        coven-gateway                              │
 │  ┌─────────────────┐  ┌──────────────┐  ┌───────────────────┐   │
 │  │  Agent Manager  │  │   Router     │  │  Frontend Manager │   │
 │  │  (GRPC Server)  │  │              │  │                   │   │
@@ -15,9 +15,9 @@ fold-gateway is the production control plane for fold agents. It manages agent c
 └───────────┼──────────────────┼────────────────────┼─────────────┘
             │                  │                    │
     ┌───────▼───────┐          │          ┌────────▼────────┐
-    │  fold-agent   │          │          │    Frontends    │
-    │  fold-agent   │          │          │  - Slack Bot    │
-    │  fold-agent   │          │          │  - Matrix Bot   │
+    │  coven-agent   │          │          │    Frontends    │
+    │  coven-agent   │          │          │  - Slack Bot    │
+    │  coven-agent   │          │          │  - Matrix Bot   │
     └───────────────┘          │          │  - Web UI       │
                                │          └─────────────────┘
                                │
@@ -29,7 +29,7 @@ fold-gateway is the production control plane for fold agents. It manages agent c
 
 ## Core Responsibilities
 
-1. **Agent Management**: Accept GRPC connections from fold-agents, track their state, route messages to them
+1. **Agent Management**: Accept GRPC connections from coven-agents, track their state, route messages to them
 2. **Frontend Integration**: Connect to Slack, Matrix, and other chat platforms to receive user messages
 3. **Message Routing**: Route incoming messages to appropriate agents based on capabilities, load, or affinity
 4. **Response Streaming**: Stream agent responses back to the originating frontend in real-time
@@ -50,10 +50,10 @@ fold-gateway is the production control plane for fold agents. It manages agent c
 
 ## GRPC Protocol
 
-Uses the existing `proto/fold.proto` from the fold repository. The gateway implements the `FoldControl` service:
+Uses the existing `proto/coven.proto` from the fold repository. The gateway implements the `CovenControl` service:
 
 ```protobuf
-service FoldControl {
+service CovenControl {
   rpc AgentStream(stream AgentMessage) returns (stream ServerMessage);
 }
 ```
@@ -79,9 +79,9 @@ service FoldControl {
 ### Package Structure
 
 ```
-fold-gateway/
+coven-gateway/
 ├── cmd/
-│   └── fold-gateway/
+│   └── coven-gateway/
 │       └── main.go           # Entry point
 ├── internal/
 │   ├── agent/
@@ -104,7 +104,7 @@ fold-gateway/
 │       └── gateway.go        # Main orchestrator
 ├── proto/
 │   └── fold/
-│       └── fold.pb.go        # Generated from fold.proto
+│       └── fold.pb.go        # Generated from coven.proto
 ├── config.example.yaml
 ├── go.mod
 ├── go.sum
@@ -156,7 +156,7 @@ type Connection struct {
     ID           string
     Name         string
     Capabilities []string
-    stream       pb.FoldControl_AgentStreamServer
+    stream       pb.CovenControl_AgentStreamServer
     pending      map[string]chan *pb.MessageResponse  // request_id -> response channel
     mu           sync.RWMutex
 }
@@ -243,7 +243,7 @@ server:
   http_addr: "0.0.0.0:8080"  # health checks, metrics
 
 database:
-  path: "./fold-gateway.db"
+  path: "./coven-gateway.db"
 
 agents:
   heartbeat_interval: "30s"
@@ -412,12 +412,12 @@ GET /metrics         # Prometheus metrics
 
 ### Phase 1: Core Infrastructure
 1. [ ] Project setup (go.mod, directory structure)
-2. [ ] Generate Go code from fold.proto
+2. [ ] Generate Go code from coven.proto
 3. [ ] Implement config loading
 4. [ ] Implement SQLite store
 5. [ ] Implement Agent Manager + Connection
-6. [ ] Implement GRPC server (FoldControl service)
-7. [ ] Basic integration test with fold-agent
+6. [ ] Implement GRPC server (CovenControl service)
+7. [ ] Basic integration test with coven-agent
 
 ### Phase 2: Routing & Reliability
 8. [ ] Implement routing strategies (affinity first)
@@ -442,16 +442,16 @@ GET /metrics         # Prometheus metrics
 
 ```bash
 # Run the gateway
-fold-gateway serve --config config.yaml
+coven-gateway serve --config config.yaml
 
 # Check health
-fold-gateway health
+coven-gateway health
 
 # List connected agents (connects to running gateway)
-fold-gateway agents list
+coven-gateway agents list
 
 # Send test message
-fold-gateway test --agent <id> --message "Hello"
+coven-gateway test --agent <id> --message "Hello"
 ```
 
 ## Testing Strategy
@@ -468,7 +468,7 @@ fold-gateway test --agent <id> --message "Hello"
 - Full request/response cycle
 
 ### End-to-End Tests
-- Gateway + real fold-agent
+- Gateway + real coven-agent
 - Gateway + Slack test workspace
 - Gateway + Matrix test server
 

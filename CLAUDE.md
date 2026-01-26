@@ -4,25 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-fold-gateway is the production control plane for fold agents. It manages fold-agent connections via gRPC, routes messages from frontends (HTTP clients, Matrix) to agents, and streams responses back in real-time.
+coven-gateway is the production control plane for coven agents. It manages coven-agent connections via gRPC, routes messages from frontends (HTTP clients, Matrix) to agents, and streams responses back in real-time.
 
-The fold-agent is a separate Rust project at `../fold-agent` that connects to this gateway. The shared protobuf definition is at `../fold-agent/proto/fold.proto`.
+The coven-agent is a separate Rust project at `../coven-agent` that connects to this gateway. The shared protobuf definition is at `../coven-agent/proto/coven.proto`.
 
 ## Build Commands
 
 ```bash
 make                    # Generate proto + build all binaries
 make build              # Build all binaries (without proto regen)
-make proto              # Regenerate protobuf from ../fold-agent/proto/fold.proto
+make proto              # Regenerate protobuf from ../coven-agent/proto/coven.proto
 make proto-deps         # Install protoc plugins (one-time)
 ```
 
 Individual binaries:
 ```bash
-go build -o bin/fold-gateway ./cmd/fold-gateway
-go build -o bin/fold-tui ./cmd/fold-tui
-go build -o bin/fold-admin ./cmd/fold-admin
-go build -tags goolm -o bin/fold-matrix ./cmd/fold-matrix  # requires goolm tag
+go build -o bin/coven-gateway ./cmd/coven-gateway
+go build -o bin/coven-tui ./cmd/coven-tui
+go build -o bin/coven-admin ./cmd/coven-admin
+go build -tags goolm -o bin/coven-matrix ./cmd/coven-matrix  # requires goolm tag
 ```
 
 ## Testing
@@ -45,18 +45,18 @@ golangci-lint run
 
 ```bash
 cp config.example.yaml config.yaml      # Copy config template
-./bin/fold-gateway serve                # Start gateway (uses FOLD_CONFIG or ~/.config/fold/gateway.yaml)
-./bin/fold-tui                          # Interactive TUI client
-./bin/fold-admin -watch                 # Monitor status
+./bin/coven-gateway serve                # Start gateway (uses COVEN_CONFIG or ~/.config/coven/gateway.yaml)
+./bin/coven-tui                          # Interactive TUI client
+./bin/coven-admin -watch                 # Monitor status
 ```
 
 ## Architecture
 
 ```
                       ┌─────────────────────────────────────────┐
-                      │              fold-gateway               │
+                      │              coven-gateway               │
                       │                                         │
-  HTTP Clients ─────► │  api.go ──► Manager ──► Connection(s)   │ ◄──── fold-agent(s)
+  HTTP Clients ─────► │  api.go ──► Manager ──► Connection(s)   │ ◄──── coven-agent(s)
   (SSE streaming)     │             │                           │       (gRPC stream)
                       │             ▼                           │
                       │          Store (SQLite)                 │
@@ -79,14 +79,14 @@ cp config.example.yaml config.yaml      # Copy config template
 
 **Binaries:**
 
-- `fold-gateway` - Main server (gRPC + HTTP)
-- `fold-tui` - Interactive terminal client for testing
-- `fold-admin` - CLI for monitoring gateway status
-- `fold-matrix` - Standalone Matrix bridge (separate config: config.toml)
+- `coven-gateway` - Main server (gRPC + HTTP)
+- `coven-tui` - Interactive terminal client for testing
+- `coven-admin` - CLI for monitoring gateway status
+- `coven-matrix` - Standalone Matrix bridge (separate config: config.toml)
 
 ## gRPC Protocol
 
-The `FoldControl` service uses bidirectional streaming. Agents send `AgentMessage` (register, heartbeat, response events), gateway sends `ServerMessage` (welcome, send_message, shutdown).
+The `CovenControl` service uses bidirectional streaming. Agents send `AgentMessage` (register, heartbeat, response events), gateway sends `ServerMessage` (welcome, send_message, shutdown).
 
 Response events flow: Thinking → Text chunks → ToolUse/ToolResult → Done/Error
 
@@ -102,7 +102,7 @@ Response events flow: Thinking → Text chunks → ToolUse/ToolResult → Done/E
 **MockStore usage:**
 
 ```go
-import "github.com/2389/fold-gateway/internal/store"
+import "github.com/2389/coven-gateway/internal/store"
 
 func TestSomething(t *testing.T) {
     mockStore := store.NewMockStore()

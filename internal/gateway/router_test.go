@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/store"
 )
 
 // mockAgentChecker is a simple mock for testing router logic

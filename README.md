@@ -1,10 +1,10 @@
-# fold-gateway
+# coven-gateway
 
-Production control plane for [fold](https://github.com/2389-research/fold-agent) agents. Manages agent connections via gRPC, routes messages from frontends to agents, and streams responses back in real-time.
+Production control plane for [fold](https://github.com/2389-research/coven-agent) agents. Manages agent connections via gRPC, routes messages from frontends to agents, and streams responses back in real-time.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         fold-gateway                            │
+│                         coven-gateway                            │
 │                                                                 │
 │   ┌─────────────┐    ┌──────────┐    ┌───────────────────┐     │
 │   │   Agent     │    │  Router  │    │    HTTP API       │     │
@@ -15,9 +15,9 @@ Production control plane for [fold](https://github.com/2389-research/fold-agent)
 └──────────┼────────────────┼────────────────────┼───────────────┘
            │                │                    │
    ┌───────▼───────┐        │           ┌───────▼───────┐
-   │  fold-agent   │        │           │   Clients     │
-   │  fold-agent   │        │           │  - TUI        │
-   │  fold-agent   │        │           │  - Web        │
+   │  coven-agent   │        │           │   Clients     │
+   │  coven-agent   │        │           │  - TUI        │
+   │  coven-agent   │        │           │  - Web        │
    └───────────────┘        │           │  - Bots       │
                             │           └───────────────┘
                    ┌────────▼────────┐
@@ -31,23 +31,23 @@ Production control plane for [fold](https://github.com/2389-research/fold-agent)
 
 - Go 1.22+
 - Protocol Buffers compiler (`protoc`)
-- A running [fold-agent](https://github.com/2389-research/fold-agent)
+- A running [coven-agent](https://github.com/2389-research/coven-agent)
 
 ### Build
 
 ```bash
 # Clone
-git clone https://github.com/2389-research/fold-gateway.git
-cd fold-gateway
+git clone https://github.com/2389-research/coven-gateway.git
+cd coven-gateway
 
 # Build (regenerates proto and compiles)
 make
 
 # Or build individual binaries without proto regeneration
-go build -o bin/fold-gateway ./cmd/fold-gateway
-go build -o bin/fold-tui ./cmd/fold-tui
-go build -o bin/fold-admin ./cmd/fold-admin
-go build -o bin/fold-matrix ./cmd/fold-matrix
+go build -o bin/coven-gateway ./cmd/coven-gateway
+go build -o bin/coven-tui ./cmd/coven-tui
+go build -o bin/coven-admin ./cmd/coven-admin
+go build -o bin/coven-matrix ./cmd/coven-matrix
 ```
 
 ### Configure
@@ -63,14 +63,14 @@ cp config.example.yaml config.yaml
 
 ```bash
 # Start the gateway
-./bin/fold-gateway serve
+./bin/coven-gateway serve
 
-# In another terminal, start a fold-agent pointing at the gateway
+# In another terminal, start a coven-agent pointing at the gateway
 cd /path/to/fold
-cargo run -p fold-agent -- --server http://127.0.0.1:50051 --name "my-agent"
+cargo run -p coven-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 
 # In a third terminal, interact via TUI
-./bin/fold-tui
+./bin/coven-tui
 ```
 
 ## Features
@@ -85,7 +85,7 @@ cargo run -p fold-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 - **Health Endpoints**: Liveness and readiness checks
 - **Graceful Shutdown**: Clean termination with configurable timeout
 - **Tailscale Integration**: Run as a node on your tailnet via [tsnet](https://tailscale.com/kb/1244/tsnet)
-- **Matrix Bridge**: Standalone bridge (fold-matrix) connecting Matrix rooms to agents with E2EE support
+- **Matrix Bridge**: Standalone bridge (coven-matrix) connecting Matrix rooms to agents with E2EE support
 
 ### Planned
 
@@ -99,15 +99,15 @@ cargo run -p fold-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 
 ```bash
 # Start the gateway server
-./bin/fold-gateway serve
-# Config via: FOLD_CONFIG=path/to/config.yaml or ~/.config/fold/gateway.yaml
+./bin/coven-gateway serve
+# Config via: COVEN_CONFIG=path/to/config.yaml or ~/.config/coven/gateway.yaml
 
 # Check gateway health
-./bin/fold-gateway health
+./bin/coven-gateway health
 # Uses config file for gateway address
 
 # List connected agents
-./bin/fold-gateway agents
+./bin/coven-gateway agents
 # Uses config file for gateway address
 ```
 
@@ -115,7 +115,7 @@ cargo run -p fold-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 
 ```bash
 # Connect to gateway
-./bin/fold-tui [-server http://localhost:8080]
+./bin/coven-tui [-server http://localhost:8080]
 
 # Inside TUI:
 #   Type message + Enter  → Send to agent
@@ -129,13 +129,13 @@ cargo run -p fold-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 
 ```bash
 # Monitor gateway status
-./bin/fold-admin [-gateway http://localhost:8080]
+./bin/coven-admin [-gateway http://localhost:8080]
 
 # Watch mode (continuous updates)
-./bin/fold-admin -watch
+./bin/coven-admin -watch
 
 # Set refresh interval
-./bin/fold-admin -watch -interval 5s
+./bin/coven-admin -watch -interval 5s
 ```
 
 The admin CLI displays:
@@ -145,13 +145,13 @@ The admin CLI displays:
 
 ### Matrix Bridge
 
-Standalone bridge connecting Matrix rooms to fold agents:
+Standalone bridge connecting Matrix rooms to coven agents:
 
 ```bash
 # Run the Matrix bridge
-./bin/fold-matrix
+./bin/coven-matrix
 
-# Uses separate config file: config.toml (see cmd/fold-matrix/config.example.toml)
+# Uses separate config file: config.toml (see cmd/coven-matrix/config.example.toml)
 ```
 
 Features:
@@ -201,7 +201,7 @@ server:
   http_addr: "0.0.0.0:8080"   # HTTP API
 
 database:
-  path: "./fold-gateway.db"   # SQLite path (":memory:" for testing)
+  path: "./coven-gateway.db"   # SQLite path (":memory:" for testing)
 
 agents:
   heartbeat_interval: "30s"
@@ -221,7 +221,7 @@ slack:
 
 ## Tailscale Integration
 
-Run fold-gateway as a node on your [Tailscale](https://tailscale.com) network. This enables secure access from anywhere on your tailnet without port forwarding.
+Run coven-gateway as a node on your [Tailscale](https://tailscale.com) network. This enables secure access from anywhere on your tailnet without port forwarding.
 
 ### Setup
 
@@ -232,7 +232,7 @@ Run fold-gateway as a node on your [Tailscale](https://tailscale.com) network. T
 ```yaml
 tailscale:
   enabled: true
-  hostname: "fold-gateway"    # Becomes fold-gateway.tailnet-xxx.ts.net
+  hostname: "coven-gateway"    # Becomes coven-gateway.tailnet-xxx.ts.net
   auth_key: "${TS_AUTHKEY}"   # Or set via environment
   ephemeral: false            # Keep node after restart
   funnel: false               # Expose HTTP publicly (optional)
@@ -242,11 +242,11 @@ tailscale:
 
 ```bash
 export TS_AUTHKEY="tskey-auth-xxx"
-./bin/fold-gateway serve
+./bin/coven-gateway serve
 ```
 
 The gateway will:
-- Join your tailnet as `fold-gateway`
+- Join your tailnet as `coven-gateway`
 - Listen for gRPC on `:50051` (tailnet only)
 - Listen for HTTP on `:80` (or `:443` with Funnel)
 - Log its MagicDNS name and Tailscale IP
@@ -255,8 +255,8 @@ The gateway will:
 
 ```bash
 # Agent connects using MagicDNS name
-cargo run -p fold-agent -- \
-  --server http://fold-gateway.tailnet-xxx.ts.net:50051 \
+cargo run -p coven-agent -- \
+  --server http://coven-gateway.tailnet-xxx.ts.net:50051 \
   --name "remote-agent"
 ```
 
@@ -264,10 +264,10 @@ cargo run -p fold-agent -- \
 
 ```bash
 # TUI connects using MagicDNS
-./bin/fold-tui -server http://fold-gateway.tailnet-xxx.ts.net
+./bin/coven-tui -server http://coven-gateway.tailnet-xxx.ts.net
 
 # Or use Tailscale IP
-./bin/fold-tui -server http://100.x.y.z
+./bin/coven-tui -server http://100.x.y.z
 ```
 
 ### Funnel (Public Access)
@@ -277,8 +277,8 @@ Enable [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) to expose the HT
 ```yaml
 tailscale:
   enabled: true
-  hostname: "fold-gateway"
-  funnel: true  # Exposes https://fold-gateway.tailnet-xxx.ts.net publicly
+  hostname: "coven-gateway"
+  funnel: true  # Exposes https://coven-gateway.tailnet-xxx.ts.net publicly
 ```
 
 **Note:** Funnel requires HTTPS and only works on ports 443, 8443, or 10000. gRPC remains tailnet-only.
@@ -286,10 +286,10 @@ tailscale:
 ## Architecture
 
 ```
-fold-gateway/
+coven-gateway/
 ├── cmd/
-│   ├── fold-gateway/     # Gateway server binary
-│   └── fold-tui/         # Interactive TUI client
+│   ├── coven-gateway/     # Gateway server binary
+│   └── coven-tui/         # Interactive TUI client
 ├── internal/
 │   ├── agent/            # Agent connection management
 │   │   ├── manager.go    # Connection registry, message routing, and channel bindings
@@ -297,7 +297,7 @@ fold-gateway/
 │   ├── config/           # YAML configuration loading
 │   ├── gateway/          # Main orchestrator
 │   │   ├── gateway.go    # Server lifecycle management
-│   │   ├── grpc.go       # FoldControl gRPC service
+│   │   ├── grpc.go       # CovenControl gRPC service
 │   │   └── api.go        # HTTP API handlers
 │   └── store/            # SQLite persistence
 ├── proto/fold/           # Generated protobuf code
@@ -309,7 +309,7 @@ fold-gateway/
 
 ## Protocol Documentation
 
-- **[Agent Protocol](docs/AGENT_PROTOCOL.md)**: gRPC bidirectional streaming protocol for fold-agents
+- **[Agent Protocol](docs/AGENT_PROTOCOL.md)**: gRPC bidirectional streaming protocol for coven-agents
 - **[Client Protocol](docs/CLIENT_PROTOCOL.md)**: HTTP API with SSE for frontends and clients
 
 ## Development
@@ -332,7 +332,7 @@ go test ./internal/agent/...
 
 ### Proto Generation
 
-Requires the fold-agent repo checked out as a sibling:
+Requires the coven-agent repo checked out as a sibling:
 
 ```bash
 # Install protoc plugins (one time)
@@ -348,10 +348,10 @@ make proto
 |--------|-------------|
 | `make` | Generate proto + build all binaries (default) |
 | `make build` | Build all binaries |
-| `make build-gateway` | Build fold-gateway only |
-| `make build-tui` | Build fold-tui only |
-| `make build-admin` | Build fold-admin only |
-| `make build-matrix` | Build fold-matrix only |
+| `make build-gateway` | Build coven-gateway only |
+| `make build-tui` | Build coven-tui only |
+| `make build-admin` | Build coven-admin only |
+| `make build-matrix` | Build coven-matrix only |
 | `make proto` | Generate protobuf code |
 | `make proto-deps` | Install protoc plugins (one-time) |
 | `make test` | Run all tests |
@@ -387,7 +387,7 @@ See [Agent Protocol](docs/AGENT_PROTOCOL.md) for full details.
 ```rust
 let channel = Channel::from_static("http://localhost:50051")
     .connect().await?;
-let mut client = FoldControlClient::new(channel);
+let mut client = CovenControlClient::new(channel);
 
 let (tx, rx) = mpsc::channel(100);
 let response = client.agent_stream(ReceiverStream::new(rx)).await?;
@@ -410,5 +410,5 @@ MIT
 
 ## Related Projects
 
-- [fold-agent](https://github.com/2389-research/fold-agent) - The fold agent framework (Rust)
+- [coven-agent](https://github.com/2389-research/coven-agent) - The fold agent framework (Rust)
 - [mux](https://github.com/2389-research/mux-rs) - Claude API streaming library

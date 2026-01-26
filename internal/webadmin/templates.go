@@ -7,7 +7,7 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/store"
 )
 
 // Template data types

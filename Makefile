@@ -1,4 +1,4 @@
-# ABOUTME: Build and development commands for fold-gateway
+# ABOUTME: Build and development commands for coven-gateway
 # ABOUTME: Handles proto generation, building, and testing
 
 .PHONY: all build build-gateway build-matrix build-admin build-tui proto update-proto clean test lint fmt run
@@ -10,35 +10,35 @@ all: proto build
 build: build-gateway build-matrix build-admin build-tui
 
 build-gateway:
-	go build -o bin/fold-gateway ./cmd/fold-gateway
+	go build -o bin/coven-gateway ./cmd/coven-gateway
 
 build-matrix:
-	go build -tags goolm -o bin/fold-matrix ./cmd/fold-matrix
+	go build -tags goolm -o bin/coven-matrix ./cmd/coven-matrix
 
 build-admin:
-	go build -o bin/fold-admin ./cmd/fold-admin
+	go build -o bin/coven-admin ./cmd/coven-admin
 
 build-tui:
-	go build -o bin/fold-tui ./cmd/fold-tui
+	go build -o bin/coven-tui ./cmd/coven-tui
 
 # Generate protobuf code from shared proto submodule
 proto:
-	@mkdir -p proto/fold
+	@mkdir -p proto/coven
 	protoc \
 		--go_out=. \
-		--go_opt=module=github.com/2389/fold-gateway \
-		--go_opt=Mfold.proto=github.com/2389/fold-gateway/proto/fold \
+		--go_opt=module=github.com/2389/coven-gateway \
+		--go_opt=Mcoven.proto=github.com/2389/coven-gateway/proto/coven \
 		--go-grpc_out=. \
-		--go-grpc_opt=module=github.com/2389/fold-gateway \
-		--go-grpc_opt=Mfold.proto=github.com/2389/fold-gateway/proto/fold \
-		-I proto/fold-proto \
-		proto/fold-proto/fold.proto
+		--go-grpc_opt=module=github.com/2389/coven-gateway \
+		--go-grpc_opt=Mcoven.proto=github.com/2389/coven-gateway/proto/coven \
+		-I proto/coven-proto \
+		proto/coven-proto/coven.proto
 
 # Update proto submodule and regenerate
 update-proto:
-	git submodule update --remote proto/fold-proto
+	git submodule update --remote proto/coven-proto
 	$(MAKE) proto
-	@echo "Proto updated from fold-proto submodule"
+	@echo "Proto updated from coven-proto submodule"
 
 # Install protoc plugins (run once)
 proto-deps:
@@ -47,7 +47,7 @@ proto-deps:
 
 # Run the server
 run: build
-	FOLD_CONFIG=config.yaml ./bin/fold-gateway serve
+	COVEN_CONFIG=config.yaml ./bin/coven-gateway serve
 
 # Run tests
 test:
@@ -64,8 +64,8 @@ fmt:
 # Clean build artifacts
 clean:
 	rm -rf bin/
-	rm -rf proto/fold/*.pb.go
+	rm -rf proto/coven/*.pb.go
 
 # Development: watch and rebuild
 dev:
-	@echo "Run: go run ./cmd/fold-gateway serve --config config.yaml"
+	@echo "Run: go run ./cmd/coven-gateway serve --config config.yaml"

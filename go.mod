@@ -1,4 +1,4 @@
-module github.com/2389/fold-gateway
+module github.com/2389/coven-gateway
 
 go 1.25.5
 

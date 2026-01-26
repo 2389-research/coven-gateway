@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/2389/fold-gateway/internal/auth"
-	"github.com/2389/fold-gateway/internal/store"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/auth"
+	"github.com/2389/coven-gateway/internal/store"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // testSecret is a 32-byte secret that meets MinSecretLength requirement

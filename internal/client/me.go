@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/2389/fold-gateway/internal/auth"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/auth"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // GetMe returns the authenticated principal's identity information

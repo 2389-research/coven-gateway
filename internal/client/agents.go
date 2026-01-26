@@ -6,8 +6,8 @@ package client
 import (
 	"context"
 
-	"github.com/2389/fold-gateway/internal/agent"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/agent"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // AgentLister defines the interface for listing connected agents

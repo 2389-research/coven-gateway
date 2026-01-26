@@ -5,9 +5,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v6.33.3
-// source: fold.proto
+// source: coven.proto
 
-package fold
+package coven
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -77,11 +77,11 @@ func (x ToolState) String() string {
 }
 
 func (ToolState) Descriptor() protoreflect.EnumDescriptor {
-	return file_fold_proto_enumTypes[0].Descriptor()
+	return file_coven_proto_enumTypes[0].Descriptor()
 }
 
 func (ToolState) Type() protoreflect.EnumType {
-	return &file_fold_proto_enumTypes[0]
+	return &file_coven_proto_enumTypes[0]
 }
 
 func (x ToolState) Number() protoreflect.EnumNumber {
@@ -90,7 +90,7 @@ func (x ToolState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ToolState.Descriptor instead.
 func (ToolState) EnumDescriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{0}
+	return file_coven_proto_rawDescGZIP(), []int{0}
 }
 
 // Priority for context injection
@@ -130,11 +130,11 @@ func (x InjectionPriority) String() string {
 }
 
 func (InjectionPriority) Descriptor() protoreflect.EnumDescriptor {
-	return file_fold_proto_enumTypes[1].Descriptor()
+	return file_coven_proto_enumTypes[1].Descriptor()
 }
 
 func (InjectionPriority) Type() protoreflect.EnumType {
-	return &file_fold_proto_enumTypes[1]
+	return &file_coven_proto_enumTypes[1]
 }
 
 func (x InjectionPriority) Number() protoreflect.EnumNumber {
@@ -143,7 +143,7 @@ func (x InjectionPriority) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use InjectionPriority.Descriptor instead.
 func (InjectionPriority) EnumDescriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{1}
+	return file_coven_proto_rawDescGZIP(), []int{1}
 }
 
 // Messages from agent to server
@@ -163,7 +163,7 @@ type AgentMessage struct {
 
 func (x *AgentMessage) Reset() {
 	*x = AgentMessage{}
-	mi := &file_fold_proto_msgTypes[0]
+	mi := &file_coven_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -175,7 +175,7 @@ func (x *AgentMessage) String() string {
 func (*AgentMessage) ProtoMessage() {}
 
 func (x *AgentMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[0]
+	mi := &file_coven_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -188,7 +188,7 @@ func (x *AgentMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentMessage.ProtoReflect.Descriptor instead.
 func (*AgentMessage) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{0}
+	return file_coven_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *AgentMessage) GetPayload() isAgentMessage_Payload {
@@ -292,7 +292,7 @@ type GitInfo struct {
 
 func (x *GitInfo) Reset() {
 	*x = GitInfo{}
-	mi := &file_fold_proto_msgTypes[1]
+	mi := &file_coven_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -304,7 +304,7 @@ func (x *GitInfo) String() string {
 func (*GitInfo) ProtoMessage() {}
 
 func (x *GitInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[1]
+	mi := &file_coven_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -317,7 +317,7 @@ func (x *GitInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitInfo.ProtoReflect.Descriptor instead.
 func (*GitInfo) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{1}
+	return file_coven_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *GitInfo) GetBranch() string {
@@ -377,7 +377,7 @@ type AgentMetadata struct {
 
 func (x *AgentMetadata) Reset() {
 	*x = AgentMetadata{}
-	mi := &file_fold_proto_msgTypes[2]
+	mi := &file_coven_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -389,7 +389,7 @@ func (x *AgentMetadata) String() string {
 func (*AgentMetadata) ProtoMessage() {}
 
 func (x *AgentMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[2]
+	mi := &file_coven_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -402,7 +402,7 @@ func (x *AgentMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentMetadata.ProtoReflect.Descriptor instead.
 func (*AgentMetadata) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{2}
+	return file_coven_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *AgentMetadata) GetWorkingDirectory() string {
@@ -461,7 +461,7 @@ type RegisterAgent struct {
 
 func (x *RegisterAgent) Reset() {
 	*x = RegisterAgent{}
-	mi := &file_fold_proto_msgTypes[3]
+	mi := &file_coven_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -473,7 +473,7 @@ func (x *RegisterAgent) String() string {
 func (*RegisterAgent) ProtoMessage() {}
 
 func (x *RegisterAgent) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[3]
+	mi := &file_coven_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -486,7 +486,7 @@ func (x *RegisterAgent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterAgent.ProtoReflect.Descriptor instead.
 func (*RegisterAgent) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{3}
+	return file_coven_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *RegisterAgent) GetAgentId() string {
@@ -550,7 +550,7 @@ type MessageResponse struct {
 
 func (x *MessageResponse) Reset() {
 	*x = MessageResponse{}
-	mi := &file_fold_proto_msgTypes[4]
+	mi := &file_coven_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -562,7 +562,7 @@ func (x *MessageResponse) String() string {
 func (*MessageResponse) ProtoMessage() {}
 
 func (x *MessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[4]
+	mi := &file_coven_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -575,7 +575,7 @@ func (x *MessageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageResponse.ProtoReflect.Descriptor instead.
 func (*MessageResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{4}
+	return file_coven_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *MessageResponse) GetRequestId() string {
@@ -801,7 +801,7 @@ type SessionInit struct {
 
 func (x *SessionInit) Reset() {
 	*x = SessionInit{}
-	mi := &file_fold_proto_msgTypes[5]
+	mi := &file_coven_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -813,7 +813,7 @@ func (x *SessionInit) String() string {
 func (*SessionInit) ProtoMessage() {}
 
 func (x *SessionInit) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[5]
+	mi := &file_coven_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -826,7 +826,7 @@ func (x *SessionInit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionInit.ProtoReflect.Descriptor instead.
 func (*SessionInit) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{5}
+	return file_coven_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SessionInit) GetSessionId() string {
@@ -846,7 +846,7 @@ type SessionOrphaned struct {
 
 func (x *SessionOrphaned) Reset() {
 	*x = SessionOrphaned{}
-	mi := &file_fold_proto_msgTypes[6]
+	mi := &file_coven_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -858,7 +858,7 @@ func (x *SessionOrphaned) String() string {
 func (*SessionOrphaned) ProtoMessage() {}
 
 func (x *SessionOrphaned) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[6]
+	mi := &file_coven_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -871,7 +871,7 @@ func (x *SessionOrphaned) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionOrphaned.ProtoReflect.Descriptor instead.
 func (*SessionOrphaned) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{6}
+	return file_coven_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SessionOrphaned) GetReason() string {
@@ -895,7 +895,7 @@ type TokenUsage struct {
 
 func (x *TokenUsage) Reset() {
 	*x = TokenUsage{}
-	mi := &file_fold_proto_msgTypes[7]
+	mi := &file_coven_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -907,7 +907,7 @@ func (x *TokenUsage) String() string {
 func (*TokenUsage) ProtoMessage() {}
 
 func (x *TokenUsage) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[7]
+	mi := &file_coven_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -920,7 +920,7 @@ func (x *TokenUsage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TokenUsage.ProtoReflect.Descriptor instead.
 func (*TokenUsage) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{7}
+	return file_coven_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *TokenUsage) GetInputTokens() int32 {
@@ -961,16 +961,16 @@ func (x *TokenUsage) GetThinkingTokens() int32 {
 // Tool state transition notification
 type ToolStateUpdate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                            // Tool invocation ID (matches ToolUse.id)
-	State         ToolState              `protobuf:"varint,2,opt,name=state,proto3,enum=fold.ToolState" json:"state,omitempty"` // New state
-	Detail        *string                `protobuf:"bytes,3,opt,name=detail,proto3,oneof" json:"detail,omitempty"`              // Optional detail (error message, etc.)
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                             // Tool invocation ID (matches ToolUse.id)
+	State         ToolState              `protobuf:"varint,2,opt,name=state,proto3,enum=coven.ToolState" json:"state,omitempty"` // New state
+	Detail        *string                `protobuf:"bytes,3,opt,name=detail,proto3,oneof" json:"detail,omitempty"`               // Optional detail (error message, etc.)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ToolStateUpdate) Reset() {
 	*x = ToolStateUpdate{}
-	mi := &file_fold_proto_msgTypes[8]
+	mi := &file_coven_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -982,7 +982,7 @@ func (x *ToolStateUpdate) String() string {
 func (*ToolStateUpdate) ProtoMessage() {}
 
 func (x *ToolStateUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[8]
+	mi := &file_coven_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -995,7 +995,7 @@ func (x *ToolStateUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolStateUpdate.ProtoReflect.Descriptor instead.
 func (*ToolStateUpdate) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{8}
+	return file_coven_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ToolStateUpdate) GetId() string {
@@ -1029,7 +1029,7 @@ type Cancelled struct {
 
 func (x *Cancelled) Reset() {
 	*x = Cancelled{}
-	mi := &file_fold_proto_msgTypes[9]
+	mi := &file_coven_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1041,7 +1041,7 @@ func (x *Cancelled) String() string {
 func (*Cancelled) ProtoMessage() {}
 
 func (x *Cancelled) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[9]
+	mi := &file_coven_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1054,7 +1054,7 @@ func (x *Cancelled) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Cancelled.ProtoReflect.Descriptor instead.
 func (*Cancelled) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{9}
+	return file_coven_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Cancelled) GetReason() string {
@@ -1067,17 +1067,17 @@ func (x *Cancelled) GetReason() string {
 // Context injection request (server → agent)
 type InjectContext struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	InjectionId   string                 `protobuf:"bytes,1,opt,name=injection_id,json=injectionId,proto3" json:"injection_id,omitempty"`     // Unique ID for acknowledgment
-	Content       string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`                                // Content to inject
-	Priority      InjectionPriority      `protobuf:"varint,3,opt,name=priority,proto3,enum=fold.InjectionPriority" json:"priority,omitempty"` // When to process
-	Source        *string                `protobuf:"bytes,4,opt,name=source,proto3,oneof" json:"source,omitempty"`                            // Origin (e.g., "pack:elevenlabs", "system")
+	InjectionId   string                 `protobuf:"bytes,1,opt,name=injection_id,json=injectionId,proto3" json:"injection_id,omitempty"`      // Unique ID for acknowledgment
+	Content       string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`                                 // Content to inject
+	Priority      InjectionPriority      `protobuf:"varint,3,opt,name=priority,proto3,enum=coven.InjectionPriority" json:"priority,omitempty"` // When to process
+	Source        *string                `protobuf:"bytes,4,opt,name=source,proto3,oneof" json:"source,omitempty"`                             // Origin (e.g., "pack:elevenlabs", "system")
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *InjectContext) Reset() {
 	*x = InjectContext{}
-	mi := &file_fold_proto_msgTypes[10]
+	mi := &file_coven_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1089,7 +1089,7 @@ func (x *InjectContext) String() string {
 func (*InjectContext) ProtoMessage() {}
 
 func (x *InjectContext) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[10]
+	mi := &file_coven_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1102,7 +1102,7 @@ func (x *InjectContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InjectContext.ProtoReflect.Descriptor instead.
 func (*InjectContext) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{10}
+	return file_coven_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *InjectContext) GetInjectionId() string {
@@ -1145,7 +1145,7 @@ type InjectionAck struct {
 
 func (x *InjectionAck) Reset() {
 	*x = InjectionAck{}
-	mi := &file_fold_proto_msgTypes[11]
+	mi := &file_coven_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1157,7 +1157,7 @@ func (x *InjectionAck) String() string {
 func (*InjectionAck) ProtoMessage() {}
 
 func (x *InjectionAck) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[11]
+	mi := &file_coven_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1170,7 +1170,7 @@ func (x *InjectionAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InjectionAck.ProtoReflect.Descriptor instead.
 func (*InjectionAck) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{11}
+	return file_coven_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *InjectionAck) GetInjectionId() string {
@@ -1205,7 +1205,7 @@ type CancelRequest struct {
 
 func (x *CancelRequest) Reset() {
 	*x = CancelRequest{}
-	mi := &file_fold_proto_msgTypes[12]
+	mi := &file_coven_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1217,7 +1217,7 @@ func (x *CancelRequest) String() string {
 func (*CancelRequest) ProtoMessage() {}
 
 func (x *CancelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[12]
+	mi := &file_coven_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1230,7 +1230,7 @@ func (x *CancelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelRequest.ProtoReflect.Descriptor instead.
 func (*CancelRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{12}
+	return file_coven_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CancelRequest) GetRequestId() string {
@@ -1259,7 +1259,7 @@ type ToolApprovalRequest struct {
 
 func (x *ToolApprovalRequest) Reset() {
 	*x = ToolApprovalRequest{}
-	mi := &file_fold_proto_msgTypes[13]
+	mi := &file_coven_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1271,7 +1271,7 @@ func (x *ToolApprovalRequest) String() string {
 func (*ToolApprovalRequest) ProtoMessage() {}
 
 func (x *ToolApprovalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[13]
+	mi := &file_coven_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1284,7 +1284,7 @@ func (x *ToolApprovalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolApprovalRequest.ProtoReflect.Descriptor instead.
 func (*ToolApprovalRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{13}
+	return file_coven_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ToolApprovalRequest) GetId() string {
@@ -1319,7 +1319,7 @@ type ToolUse struct {
 
 func (x *ToolUse) Reset() {
 	*x = ToolUse{}
-	mi := &file_fold_proto_msgTypes[14]
+	mi := &file_coven_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1331,7 +1331,7 @@ func (x *ToolUse) String() string {
 func (*ToolUse) ProtoMessage() {}
 
 func (x *ToolUse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[14]
+	mi := &file_coven_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1344,7 +1344,7 @@ func (x *ToolUse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolUse.ProtoReflect.Descriptor instead.
 func (*ToolUse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{14}
+	return file_coven_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ToolUse) GetId() string {
@@ -1379,7 +1379,7 @@ type ToolResult struct {
 
 func (x *ToolResult) Reset() {
 	*x = ToolResult{}
-	mi := &file_fold_proto_msgTypes[15]
+	mi := &file_coven_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1391,7 +1391,7 @@ func (x *ToolResult) String() string {
 func (*ToolResult) ProtoMessage() {}
 
 func (x *ToolResult) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[15]
+	mi := &file_coven_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1404,7 +1404,7 @@ func (x *ToolResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolResult.ProtoReflect.Descriptor instead.
 func (*ToolResult) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{15}
+	return file_coven_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ToolResult) GetId() string {
@@ -1437,7 +1437,7 @@ type Done struct {
 
 func (x *Done) Reset() {
 	*x = Done{}
-	mi := &file_fold_proto_msgTypes[16]
+	mi := &file_coven_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1449,7 +1449,7 @@ func (x *Done) String() string {
 func (*Done) ProtoMessage() {}
 
 func (x *Done) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[16]
+	mi := &file_coven_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1462,7 +1462,7 @@ func (x *Done) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Done.ProtoReflect.Descriptor instead.
 func (*Done) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{16}
+	return file_coven_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *Done) GetFullResponse() string {
@@ -1483,7 +1483,7 @@ type FileData struct {
 
 func (x *FileData) Reset() {
 	*x = FileData{}
-	mi := &file_fold_proto_msgTypes[17]
+	mi := &file_coven_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1495,7 +1495,7 @@ func (x *FileData) String() string {
 func (*FileData) ProtoMessage() {}
 
 func (x *FileData) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[17]
+	mi := &file_coven_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1508,7 +1508,7 @@ func (x *FileData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileData.ProtoReflect.Descriptor instead.
 func (*FileData) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{17}
+	return file_coven_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *FileData) GetFilename() string {
@@ -1541,7 +1541,7 @@ type Heartbeat struct {
 
 func (x *Heartbeat) Reset() {
 	*x = Heartbeat{}
-	mi := &file_fold_proto_msgTypes[18]
+	mi := &file_coven_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1553,7 +1553,7 @@ func (x *Heartbeat) String() string {
 func (*Heartbeat) ProtoMessage() {}
 
 func (x *Heartbeat) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[18]
+	mi := &file_coven_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1566,7 +1566,7 @@ func (x *Heartbeat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Heartbeat.ProtoReflect.Descriptor instead.
 func (*Heartbeat) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{18}
+	return file_coven_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Heartbeat) GetTimestampMs() int64 {
@@ -1588,7 +1588,7 @@ type ExecutePackTool struct {
 
 func (x *ExecutePackTool) Reset() {
 	*x = ExecutePackTool{}
-	mi := &file_fold_proto_msgTypes[19]
+	mi := &file_coven_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1600,7 +1600,7 @@ func (x *ExecutePackTool) String() string {
 func (*ExecutePackTool) ProtoMessage() {}
 
 func (x *ExecutePackTool) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[19]
+	mi := &file_coven_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1613,7 +1613,7 @@ func (x *ExecutePackTool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecutePackTool.ProtoReflect.Descriptor instead.
 func (*ExecutePackTool) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{19}
+	return file_coven_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ExecutePackTool) GetRequestId() string {
@@ -1652,7 +1652,7 @@ type PackToolResult struct {
 
 func (x *PackToolResult) Reset() {
 	*x = PackToolResult{}
-	mi := &file_fold_proto_msgTypes[20]
+	mi := &file_coven_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1664,7 +1664,7 @@ func (x *PackToolResult) String() string {
 func (*PackToolResult) ProtoMessage() {}
 
 func (x *PackToolResult) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[20]
+	mi := &file_coven_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1677,7 +1677,7 @@ func (x *PackToolResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackToolResult.ProtoReflect.Descriptor instead.
 func (*PackToolResult) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{20}
+	return file_coven_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PackToolResult) GetRequestId() string {
@@ -1748,7 +1748,7 @@ type ServerMessage struct {
 
 func (x *ServerMessage) Reset() {
 	*x = ServerMessage{}
-	mi := &file_fold_proto_msgTypes[21]
+	mi := &file_coven_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1760,7 +1760,7 @@ func (x *ServerMessage) String() string {
 func (*ServerMessage) ProtoMessage() {}
 
 func (x *ServerMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[21]
+	mi := &file_coven_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1773,7 +1773,7 @@ func (x *ServerMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerMessage.ProtoReflect.Descriptor instead.
 func (*ServerMessage) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{21}
+	return file_coven_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ServerMessage) GetPayload() isServerMessage_Payload {
@@ -1918,7 +1918,7 @@ type RegistrationError struct {
 
 func (x *RegistrationError) Reset() {
 	*x = RegistrationError{}
-	mi := &file_fold_proto_msgTypes[22]
+	mi := &file_coven_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1930,7 +1930,7 @@ func (x *RegistrationError) String() string {
 func (*RegistrationError) ProtoMessage() {}
 
 func (x *RegistrationError) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[22]
+	mi := &file_coven_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1943,7 +1943,7 @@ func (x *RegistrationError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegistrationError.ProtoReflect.Descriptor instead.
 func (*RegistrationError) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{22}
+	return file_coven_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RegistrationError) GetReason() string {
@@ -1972,7 +1972,7 @@ type ToolApprovalResponse struct {
 
 func (x *ToolApprovalResponse) Reset() {
 	*x = ToolApprovalResponse{}
-	mi := &file_fold_proto_msgTypes[23]
+	mi := &file_coven_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1984,7 +1984,7 @@ func (x *ToolApprovalResponse) String() string {
 func (*ToolApprovalResponse) ProtoMessage() {}
 
 func (x *ToolApprovalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[23]
+	mi := &file_coven_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1997,7 +1997,7 @@ func (x *ToolApprovalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolApprovalResponse.ProtoReflect.Descriptor instead.
 func (*ToolApprovalResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{23}
+	return file_coven_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ToolApprovalResponse) GetId() string {
@@ -2037,7 +2037,7 @@ type Welcome struct {
 
 func (x *Welcome) Reset() {
 	*x = Welcome{}
-	mi := &file_fold_proto_msgTypes[24]
+	mi := &file_coven_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2049,7 +2049,7 @@ func (x *Welcome) String() string {
 func (*Welcome) ProtoMessage() {}
 
 func (x *Welcome) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[24]
+	mi := &file_coven_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2062,7 +2062,7 @@ func (x *Welcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Welcome.ProtoReflect.Descriptor instead.
 func (*Welcome) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{24}
+	return file_coven_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *Welcome) GetServerId() string {
@@ -2128,7 +2128,7 @@ type SendMessage struct {
 
 func (x *SendMessage) Reset() {
 	*x = SendMessage{}
-	mi := &file_fold_proto_msgTypes[25]
+	mi := &file_coven_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2140,7 +2140,7 @@ func (x *SendMessage) String() string {
 func (*SendMessage) ProtoMessage() {}
 
 func (x *SendMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[25]
+	mi := &file_coven_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2153,7 +2153,7 @@ func (x *SendMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendMessage.ProtoReflect.Descriptor instead.
 func (*SendMessage) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{25}
+	return file_coven_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SendMessage) GetRequestId() string {
@@ -2202,7 +2202,7 @@ type FileAttachment struct {
 
 func (x *FileAttachment) Reset() {
 	*x = FileAttachment{}
-	mi := &file_fold_proto_msgTypes[26]
+	mi := &file_coven_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2214,7 +2214,7 @@ func (x *FileAttachment) String() string {
 func (*FileAttachment) ProtoMessage() {}
 
 func (x *FileAttachment) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[26]
+	mi := &file_coven_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2227,7 +2227,7 @@ func (x *FileAttachment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileAttachment.ProtoReflect.Descriptor instead.
 func (*FileAttachment) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{26}
+	return file_coven_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *FileAttachment) GetFilename() string {
@@ -2261,7 +2261,7 @@ type Shutdown struct {
 
 func (x *Shutdown) Reset() {
 	*x = Shutdown{}
-	mi := &file_fold_proto_msgTypes[27]
+	mi := &file_coven_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2273,7 +2273,7 @@ func (x *Shutdown) String() string {
 func (*Shutdown) ProtoMessage() {}
 
 func (x *Shutdown) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[27]
+	mi := &file_coven_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2286,7 +2286,7 @@ func (x *Shutdown) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Shutdown.ProtoReflect.Descriptor instead.
 func (*Shutdown) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{27}
+	return file_coven_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *Shutdown) GetReason() string {
@@ -2311,7 +2311,7 @@ type Binding struct {
 
 func (x *Binding) Reset() {
 	*x = Binding{}
-	mi := &file_fold_proto_msgTypes[28]
+	mi := &file_coven_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2323,7 +2323,7 @@ func (x *Binding) String() string {
 func (*Binding) ProtoMessage() {}
 
 func (x *Binding) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[28]
+	mi := &file_coven_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2336,7 +2336,7 @@ func (x *Binding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Binding.ProtoReflect.Descriptor instead.
 func (*Binding) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{28}
+	return file_coven_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *Binding) GetId() string {
@@ -2391,7 +2391,7 @@ type ListBindingsRequest struct {
 
 func (x *ListBindingsRequest) Reset() {
 	*x = ListBindingsRequest{}
-	mi := &file_fold_proto_msgTypes[29]
+	mi := &file_coven_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2403,7 +2403,7 @@ func (x *ListBindingsRequest) String() string {
 func (*ListBindingsRequest) ProtoMessage() {}
 
 func (x *ListBindingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[29]
+	mi := &file_coven_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2416,7 +2416,7 @@ func (x *ListBindingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBindingsRequest.ProtoReflect.Descriptor instead.
 func (*ListBindingsRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{29}
+	return file_coven_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ListBindingsRequest) GetFrontend() string {
@@ -2442,7 +2442,7 @@ type ListBindingsResponse struct {
 
 func (x *ListBindingsResponse) Reset() {
 	*x = ListBindingsResponse{}
-	mi := &file_fold_proto_msgTypes[30]
+	mi := &file_coven_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2454,7 +2454,7 @@ func (x *ListBindingsResponse) String() string {
 func (*ListBindingsResponse) ProtoMessage() {}
 
 func (x *ListBindingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[30]
+	mi := &file_coven_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2467,7 +2467,7 @@ func (x *ListBindingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBindingsResponse.ProtoReflect.Descriptor instead.
 func (*ListBindingsResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{30}
+	return file_coven_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ListBindingsResponse) GetBindings() []*Binding {
@@ -2488,7 +2488,7 @@ type CreateBindingRequest struct {
 
 func (x *CreateBindingRequest) Reset() {
 	*x = CreateBindingRequest{}
-	mi := &file_fold_proto_msgTypes[31]
+	mi := &file_coven_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2500,7 +2500,7 @@ func (x *CreateBindingRequest) String() string {
 func (*CreateBindingRequest) ProtoMessage() {}
 
 func (x *CreateBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[31]
+	mi := &file_coven_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2513,7 +2513,7 @@ func (x *CreateBindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateBindingRequest.ProtoReflect.Descriptor instead.
 func (*CreateBindingRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{31}
+	return file_coven_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *CreateBindingRequest) GetFrontend() string {
@@ -2547,7 +2547,7 @@ type UpdateBindingRequest struct {
 
 func (x *UpdateBindingRequest) Reset() {
 	*x = UpdateBindingRequest{}
-	mi := &file_fold_proto_msgTypes[32]
+	mi := &file_coven_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2559,7 +2559,7 @@ func (x *UpdateBindingRequest) String() string {
 func (*UpdateBindingRequest) ProtoMessage() {}
 
 func (x *UpdateBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[32]
+	mi := &file_coven_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2572,7 +2572,7 @@ func (x *UpdateBindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateBindingRequest.ProtoReflect.Descriptor instead.
 func (*UpdateBindingRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{32}
+	return file_coven_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *UpdateBindingRequest) GetId() string {
@@ -2598,7 +2598,7 @@ type DeleteBindingRequest struct {
 
 func (x *DeleteBindingRequest) Reset() {
 	*x = DeleteBindingRequest{}
-	mi := &file_fold_proto_msgTypes[33]
+	mi := &file_coven_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2610,7 +2610,7 @@ func (x *DeleteBindingRequest) String() string {
 func (*DeleteBindingRequest) ProtoMessage() {}
 
 func (x *DeleteBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[33]
+	mi := &file_coven_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2623,7 +2623,7 @@ func (x *DeleteBindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteBindingRequest.ProtoReflect.Descriptor instead.
 func (*DeleteBindingRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{33}
+	return file_coven_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *DeleteBindingRequest) GetId() string {
@@ -2641,7 +2641,7 @@ type DeleteBindingResponse struct {
 
 func (x *DeleteBindingResponse) Reset() {
 	*x = DeleteBindingResponse{}
-	mi := &file_fold_proto_msgTypes[34]
+	mi := &file_coven_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2653,7 +2653,7 @@ func (x *DeleteBindingResponse) String() string {
 func (*DeleteBindingResponse) ProtoMessage() {}
 
 func (x *DeleteBindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[34]
+	mi := &file_coven_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2666,7 +2666,7 @@ func (x *DeleteBindingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteBindingResponse.ProtoReflect.Descriptor instead.
 func (*DeleteBindingResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{34}
+	return file_coven_proto_rawDescGZIP(), []int{34}
 }
 
 // Token management messages
@@ -2680,7 +2680,7 @@ type CreateTokenRequest struct {
 
 func (x *CreateTokenRequest) Reset() {
 	*x = CreateTokenRequest{}
-	mi := &file_fold_proto_msgTypes[35]
+	mi := &file_coven_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2692,7 +2692,7 @@ func (x *CreateTokenRequest) String() string {
 func (*CreateTokenRequest) ProtoMessage() {}
 
 func (x *CreateTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[35]
+	mi := &file_coven_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2705,7 +2705,7 @@ func (x *CreateTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTokenRequest.ProtoReflect.Descriptor instead.
 func (*CreateTokenRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{35}
+	return file_coven_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *CreateTokenRequest) GetPrincipalId() string {
@@ -2732,7 +2732,7 @@ type CreateTokenResponse struct {
 
 func (x *CreateTokenResponse) Reset() {
 	*x = CreateTokenResponse{}
-	mi := &file_fold_proto_msgTypes[36]
+	mi := &file_coven_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2744,7 +2744,7 @@ func (x *CreateTokenResponse) String() string {
 func (*CreateTokenResponse) ProtoMessage() {}
 
 func (x *CreateTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[36]
+	mi := &file_coven_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2757,7 +2757,7 @@ func (x *CreateTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTokenResponse.ProtoReflect.Descriptor instead.
 func (*CreateTokenResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{36}
+	return file_coven_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CreateTokenResponse) GetToken() string {
@@ -2790,7 +2790,7 @@ type Principal struct {
 
 func (x *Principal) Reset() {
 	*x = Principal{}
-	mi := &file_fold_proto_msgTypes[37]
+	mi := &file_coven_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2802,7 +2802,7 @@ func (x *Principal) String() string {
 func (*Principal) ProtoMessage() {}
 
 func (x *Principal) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[37]
+	mi := &file_coven_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2815,7 +2815,7 @@ func (x *Principal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Principal.ProtoReflect.Descriptor instead.
 func (*Principal) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{37}
+	return file_coven_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *Principal) GetId() string {
@@ -2877,7 +2877,7 @@ type ListPrincipalsRequest struct {
 
 func (x *ListPrincipalsRequest) Reset() {
 	*x = ListPrincipalsRequest{}
-	mi := &file_fold_proto_msgTypes[38]
+	mi := &file_coven_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2889,7 +2889,7 @@ func (x *ListPrincipalsRequest) String() string {
 func (*ListPrincipalsRequest) ProtoMessage() {}
 
 func (x *ListPrincipalsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[38]
+	mi := &file_coven_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2902,7 +2902,7 @@ func (x *ListPrincipalsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPrincipalsRequest.ProtoReflect.Descriptor instead.
 func (*ListPrincipalsRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{38}
+	return file_coven_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ListPrincipalsRequest) GetType() string {
@@ -2928,7 +2928,7 @@ type ListPrincipalsResponse struct {
 
 func (x *ListPrincipalsResponse) Reset() {
 	*x = ListPrincipalsResponse{}
-	mi := &file_fold_proto_msgTypes[39]
+	mi := &file_coven_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2940,7 +2940,7 @@ func (x *ListPrincipalsResponse) String() string {
 func (*ListPrincipalsResponse) ProtoMessage() {}
 
 func (x *ListPrincipalsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[39]
+	mi := &file_coven_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2953,7 +2953,7 @@ func (x *ListPrincipalsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPrincipalsResponse.ProtoReflect.Descriptor instead.
 func (*ListPrincipalsResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{39}
+	return file_coven_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ListPrincipalsResponse) GetPrincipals() []*Principal {
@@ -2976,7 +2976,7 @@ type CreatePrincipalRequest struct {
 
 func (x *CreatePrincipalRequest) Reset() {
 	*x = CreatePrincipalRequest{}
-	mi := &file_fold_proto_msgTypes[40]
+	mi := &file_coven_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2988,7 +2988,7 @@ func (x *CreatePrincipalRequest) String() string {
 func (*CreatePrincipalRequest) ProtoMessage() {}
 
 func (x *CreatePrincipalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[40]
+	mi := &file_coven_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3001,7 +3001,7 @@ func (x *CreatePrincipalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePrincipalRequest.ProtoReflect.Descriptor instead.
 func (*CreatePrincipalRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{40}
+	return file_coven_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *CreatePrincipalRequest) GetType() string {
@@ -3048,7 +3048,7 @@ type DeletePrincipalRequest struct {
 
 func (x *DeletePrincipalRequest) Reset() {
 	*x = DeletePrincipalRequest{}
-	mi := &file_fold_proto_msgTypes[41]
+	mi := &file_coven_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3060,7 +3060,7 @@ func (x *DeletePrincipalRequest) String() string {
 func (*DeletePrincipalRequest) ProtoMessage() {}
 
 func (x *DeletePrincipalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[41]
+	mi := &file_coven_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3073,7 +3073,7 @@ func (x *DeletePrincipalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePrincipalRequest.ProtoReflect.Descriptor instead.
 func (*DeletePrincipalRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{41}
+	return file_coven_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *DeletePrincipalRequest) GetId() string {
@@ -3091,7 +3091,7 @@ type DeletePrincipalResponse struct {
 
 func (x *DeletePrincipalResponse) Reset() {
 	*x = DeletePrincipalResponse{}
-	mi := &file_fold_proto_msgTypes[42]
+	mi := &file_coven_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3103,7 +3103,7 @@ func (x *DeletePrincipalResponse) String() string {
 func (*DeletePrincipalResponse) ProtoMessage() {}
 
 func (x *DeletePrincipalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[42]
+	mi := &file_coven_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3116,7 +3116,7 @@ func (x *DeletePrincipalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePrincipalResponse.ProtoReflect.Descriptor instead.
 func (*DeletePrincipalResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{42}
+	return file_coven_proto_rawDescGZIP(), []int{42}
 }
 
 // Request to stream events for a conversation
@@ -3130,7 +3130,7 @@ type StreamEventsRequest struct {
 
 func (x *StreamEventsRequest) Reset() {
 	*x = StreamEventsRequest{}
-	mi := &file_fold_proto_msgTypes[43]
+	mi := &file_coven_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3142,7 +3142,7 @@ func (x *StreamEventsRequest) String() string {
 func (*StreamEventsRequest) ProtoMessage() {}
 
 func (x *StreamEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[43]
+	mi := &file_coven_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3155,7 +3155,7 @@ func (x *StreamEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamEventsRequest.ProtoReflect.Descriptor instead.
 func (*StreamEventsRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{43}
+	return file_coven_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *StreamEventsRequest) GetConversationKey() string {
@@ -3195,7 +3195,7 @@ type ClientStreamEvent struct {
 
 func (x *ClientStreamEvent) Reset() {
 	*x = ClientStreamEvent{}
-	mi := &file_fold_proto_msgTypes[44]
+	mi := &file_coven_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3207,7 +3207,7 @@ func (x *ClientStreamEvent) String() string {
 func (*ClientStreamEvent) ProtoMessage() {}
 
 func (x *ClientStreamEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[44]
+	mi := &file_coven_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3220,7 +3220,7 @@ func (x *ClientStreamEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientStreamEvent.ProtoReflect.Descriptor instead.
 func (*ClientStreamEvent) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{44}
+	return file_coven_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ClientStreamEvent) GetConversationKey() string {
@@ -3397,7 +3397,7 @@ type TextChunk struct {
 
 func (x *TextChunk) Reset() {
 	*x = TextChunk{}
-	mi := &file_fold_proto_msgTypes[45]
+	mi := &file_coven_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3409,7 +3409,7 @@ func (x *TextChunk) String() string {
 func (*TextChunk) ProtoMessage() {}
 
 func (x *TextChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[45]
+	mi := &file_coven_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3422,7 +3422,7 @@ func (x *TextChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TextChunk.ProtoReflect.Descriptor instead.
 func (*TextChunk) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{45}
+	return file_coven_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *TextChunk) GetContent() string {
@@ -3442,7 +3442,7 @@ type ThinkingChunk struct {
 
 func (x *ThinkingChunk) Reset() {
 	*x = ThinkingChunk{}
-	mi := &file_fold_proto_msgTypes[46]
+	mi := &file_coven_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3454,7 +3454,7 @@ func (x *ThinkingChunk) String() string {
 func (*ThinkingChunk) ProtoMessage() {}
 
 func (x *ThinkingChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[46]
+	mi := &file_coven_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3467,7 +3467,7 @@ func (x *ThinkingChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ThinkingChunk.ProtoReflect.Descriptor instead.
 func (*ThinkingChunk) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{46}
+	return file_coven_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *ThinkingChunk) GetContent() string {
@@ -3487,7 +3487,7 @@ type StreamDone struct {
 
 func (x *StreamDone) Reset() {
 	*x = StreamDone{}
-	mi := &file_fold_proto_msgTypes[47]
+	mi := &file_coven_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3499,7 +3499,7 @@ func (x *StreamDone) String() string {
 func (*StreamDone) ProtoMessage() {}
 
 func (x *StreamDone) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[47]
+	mi := &file_coven_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3512,7 +3512,7 @@ func (x *StreamDone) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamDone.ProtoReflect.Descriptor instead.
 func (*StreamDone) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{47}
+	return file_coven_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *StreamDone) GetFullResponse() string {
@@ -3533,7 +3533,7 @@ type StreamError struct {
 
 func (x *StreamError) Reset() {
 	*x = StreamError{}
-	mi := &file_fold_proto_msgTypes[48]
+	mi := &file_coven_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3545,7 +3545,7 @@ func (x *StreamError) String() string {
 func (*StreamError) ProtoMessage() {}
 
 func (x *StreamError) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[48]
+	mi := &file_coven_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3558,7 +3558,7 @@ func (x *StreamError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamError.ProtoReflect.Descriptor instead.
 func (*StreamError) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{48}
+	return file_coven_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *StreamError) GetMessage() string {
@@ -3590,7 +3590,7 @@ type AgentInfo struct {
 
 func (x *AgentInfo) Reset() {
 	*x = AgentInfo{}
-	mi := &file_fold_proto_msgTypes[49]
+	mi := &file_coven_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3602,7 +3602,7 @@ func (x *AgentInfo) String() string {
 func (*AgentInfo) ProtoMessage() {}
 
 func (x *AgentInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[49]
+	mi := &file_coven_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3615,7 +3615,7 @@ func (x *AgentInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentInfo.ProtoReflect.Descriptor instead.
 func (*AgentInfo) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{49}
+	return file_coven_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *AgentInfo) GetId() string {
@@ -3669,7 +3669,7 @@ type ListAgentsRequest struct {
 
 func (x *ListAgentsRequest) Reset() {
 	*x = ListAgentsRequest{}
-	mi := &file_fold_proto_msgTypes[50]
+	mi := &file_coven_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3681,7 +3681,7 @@ func (x *ListAgentsRequest) String() string {
 func (*ListAgentsRequest) ProtoMessage() {}
 
 func (x *ListAgentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[50]
+	mi := &file_coven_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3694,7 +3694,7 @@ func (x *ListAgentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentsRequest.ProtoReflect.Descriptor instead.
 func (*ListAgentsRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{50}
+	return file_coven_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ListAgentsRequest) GetWorkspace() string {
@@ -3713,7 +3713,7 @@ type ListAgentsResponse struct {
 
 func (x *ListAgentsResponse) Reset() {
 	*x = ListAgentsResponse{}
-	mi := &file_fold_proto_msgTypes[51]
+	mi := &file_coven_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3725,7 +3725,7 @@ func (x *ListAgentsResponse) String() string {
 func (*ListAgentsResponse) ProtoMessage() {}
 
 func (x *ListAgentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[51]
+	mi := &file_coven_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3738,7 +3738,7 @@ func (x *ListAgentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentsResponse.ProtoReflect.Descriptor instead.
 func (*ListAgentsResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{51}
+	return file_coven_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ListAgentsResponse) GetAgents() []*AgentInfo {
@@ -3762,7 +3762,7 @@ type ClientSendMessageRequest struct {
 
 func (x *ClientSendMessageRequest) Reset() {
 	*x = ClientSendMessageRequest{}
-	mi := &file_fold_proto_msgTypes[52]
+	mi := &file_coven_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3774,7 +3774,7 @@ func (x *ClientSendMessageRequest) String() string {
 func (*ClientSendMessageRequest) ProtoMessage() {}
 
 func (x *ClientSendMessageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[52]
+	mi := &file_coven_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3787,7 +3787,7 @@ func (x *ClientSendMessageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientSendMessageRequest.ProtoReflect.Descriptor instead.
 func (*ClientSendMessageRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{52}
+	return file_coven_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *ClientSendMessageRequest) GetConversationKey() string {
@@ -3829,7 +3829,7 @@ type ClientSendMessageResponse struct {
 
 func (x *ClientSendMessageResponse) Reset() {
 	*x = ClientSendMessageResponse{}
-	mi := &file_fold_proto_msgTypes[53]
+	mi := &file_coven_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3841,7 +3841,7 @@ func (x *ClientSendMessageResponse) String() string {
 func (*ClientSendMessageResponse) ProtoMessage() {}
 
 func (x *ClientSendMessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[53]
+	mi := &file_coven_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3854,7 +3854,7 @@ func (x *ClientSendMessageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientSendMessageResponse.ProtoReflect.Descriptor instead.
 func (*ClientSendMessageResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{53}
+	return file_coven_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ClientSendMessageResponse) GetStatus() string {
@@ -3887,7 +3887,7 @@ type MeResponse struct {
 
 func (x *MeResponse) Reset() {
 	*x = MeResponse{}
-	mi := &file_fold_proto_msgTypes[54]
+	mi := &file_coven_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3899,7 +3899,7 @@ func (x *MeResponse) String() string {
 func (*MeResponse) ProtoMessage() {}
 
 func (x *MeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[54]
+	mi := &file_coven_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3912,7 +3912,7 @@ func (x *MeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeResponse.ProtoReflect.Descriptor instead.
 func (*MeResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{54}
+	return file_coven_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *MeResponse) GetPrincipalId() string {
@@ -3984,7 +3984,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_fold_proto_msgTypes[55]
+	mi := &file_coven_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3996,7 +3996,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[55]
+	mi := &file_coven_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4009,7 +4009,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{55}
+	return file_coven_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *Event) GetId() string {
@@ -4102,7 +4102,7 @@ type GetEventsRequest struct {
 
 func (x *GetEventsRequest) Reset() {
 	*x = GetEventsRequest{}
-	mi := &file_fold_proto_msgTypes[56]
+	mi := &file_coven_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4114,7 +4114,7 @@ func (x *GetEventsRequest) String() string {
 func (*GetEventsRequest) ProtoMessage() {}
 
 func (x *GetEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[56]
+	mi := &file_coven_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4127,7 +4127,7 @@ func (x *GetEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventsRequest.ProtoReflect.Descriptor instead.
 func (*GetEventsRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{56}
+	return file_coven_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *GetEventsRequest) GetConversationKey() string {
@@ -4176,7 +4176,7 @@ type GetEventsResponse struct {
 
 func (x *GetEventsResponse) Reset() {
 	*x = GetEventsResponse{}
-	mi := &file_fold_proto_msgTypes[57]
+	mi := &file_coven_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4188,7 +4188,7 @@ func (x *GetEventsResponse) String() string {
 func (*GetEventsResponse) ProtoMessage() {}
 
 func (x *GetEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[57]
+	mi := &file_coven_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4201,7 +4201,7 @@ func (x *GetEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventsResponse.ProtoReflect.Descriptor instead.
 func (*GetEventsResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{57}
+	return file_coven_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *GetEventsResponse) GetEvents() []*Event {
@@ -4239,7 +4239,7 @@ type ToolDefinition struct {
 
 func (x *ToolDefinition) Reset() {
 	*x = ToolDefinition{}
-	mi := &file_fold_proto_msgTypes[58]
+	mi := &file_coven_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4251,7 +4251,7 @@ func (x *ToolDefinition) String() string {
 func (*ToolDefinition) ProtoMessage() {}
 
 func (x *ToolDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[58]
+	mi := &file_coven_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4264,7 +4264,7 @@ func (x *ToolDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolDefinition.ProtoReflect.Descriptor instead.
 func (*ToolDefinition) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{58}
+	return file_coven_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ToolDefinition) GetName() string {
@@ -4313,7 +4313,7 @@ type PackManifest struct {
 
 func (x *PackManifest) Reset() {
 	*x = PackManifest{}
-	mi := &file_fold_proto_msgTypes[59]
+	mi := &file_coven_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4325,7 +4325,7 @@ func (x *PackManifest) String() string {
 func (*PackManifest) ProtoMessage() {}
 
 func (x *PackManifest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[59]
+	mi := &file_coven_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4338,7 +4338,7 @@ func (x *PackManifest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackManifest.ProtoReflect.Descriptor instead.
 func (*PackManifest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{59}
+	return file_coven_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *PackManifest) GetPackId() string {
@@ -4374,7 +4374,7 @@ type ExecuteToolRequest struct {
 
 func (x *ExecuteToolRequest) Reset() {
 	*x = ExecuteToolRequest{}
-	mi := &file_fold_proto_msgTypes[60]
+	mi := &file_coven_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4386,7 +4386,7 @@ func (x *ExecuteToolRequest) String() string {
 func (*ExecuteToolRequest) ProtoMessage() {}
 
 func (x *ExecuteToolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[60]
+	mi := &file_coven_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4399,7 +4399,7 @@ func (x *ExecuteToolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteToolRequest.ProtoReflect.Descriptor instead.
 func (*ExecuteToolRequest) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{60}
+	return file_coven_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ExecuteToolRequest) GetToolName() string {
@@ -4437,7 +4437,7 @@ type ExecuteToolResponse struct {
 
 func (x *ExecuteToolResponse) Reset() {
 	*x = ExecuteToolResponse{}
-	mi := &file_fold_proto_msgTypes[61]
+	mi := &file_coven_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4449,7 +4449,7 @@ func (x *ExecuteToolResponse) String() string {
 func (*ExecuteToolResponse) ProtoMessage() {}
 
 func (x *ExecuteToolResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[61]
+	mi := &file_coven_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4462,7 +4462,7 @@ func (x *ExecuteToolResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteToolResponse.ProtoReflect.Descriptor instead.
 func (*ExecuteToolResponse) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{61}
+	return file_coven_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ExecuteToolResponse) GetRequestId() string {
@@ -4524,7 +4524,7 @@ type PackWelcome struct {
 
 func (x *PackWelcome) Reset() {
 	*x = PackWelcome{}
-	mi := &file_fold_proto_msgTypes[62]
+	mi := &file_coven_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4536,7 +4536,7 @@ func (x *PackWelcome) String() string {
 func (*PackWelcome) ProtoMessage() {}
 
 func (x *PackWelcome) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[62]
+	mi := &file_coven_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4549,7 +4549,7 @@ func (x *PackWelcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackWelcome.ProtoReflect.Descriptor instead.
 func (*PackWelcome) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{62}
+	return file_coven_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *PackWelcome) GetPackId() string {
@@ -4576,7 +4576,7 @@ type AvailableTools struct {
 
 func (x *AvailableTools) Reset() {
 	*x = AvailableTools{}
-	mi := &file_fold_proto_msgTypes[63]
+	mi := &file_coven_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4588,7 +4588,7 @@ func (x *AvailableTools) String() string {
 func (*AvailableTools) ProtoMessage() {}
 
 func (x *AvailableTools) ProtoReflect() protoreflect.Message {
-	mi := &file_fold_proto_msgTypes[63]
+	mi := &file_coven_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4601,7 +4601,7 @@ func (x *AvailableTools) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AvailableTools.ProtoReflect.Descriptor instead.
 func (*AvailableTools) Descriptor() ([]byte, []int) {
-	return file_fold_proto_rawDescGZIP(), []int{63}
+	return file_coven_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *AvailableTools) GetTools() []*ToolDefinition {
@@ -4611,18 +4611,17 @@ func (x *AvailableTools) GetTools() []*ToolDefinition {
 	return nil
 }
 
-var File_fold_proto protoreflect.FileDescriptor
+var File_coven_proto protoreflect.FileDescriptor
 
-const file_fold_proto_rawDesc = "" +
+const file_coven_proto_rawDesc = "" +
 	"\n" +
-	"\n" +
-	"fold.proto\x12\x04fold\x1a\x1bgoogle/protobuf/empty.proto\"\xb2\x02\n" +
-	"\fAgentMessage\x121\n" +
-	"\bregister\x18\x01 \x01(\v2\x13.fold.RegisterAgentH\x00R\bregister\x123\n" +
-	"\bresponse\x18\x02 \x01(\v2\x15.fold.MessageResponseH\x00R\bresponse\x12/\n" +
-	"\theartbeat\x18\x03 \x01(\v2\x0f.fold.HeartbeatH\x00R\theartbeat\x129\n" +
-	"\rinjection_ack\x18\x04 \x01(\v2\x12.fold.InjectionAckH\x00R\finjectionAck\x12C\n" +
-	"\x11execute_pack_tool\x18\x05 \x01(\v2\x15.fold.ExecutePackToolH\x00R\x0fexecutePackToolB\t\n" +
+	"\vcoven.proto\x12\x05coven\x1a\x1bgoogle/protobuf/empty.proto\"\xb7\x02\n" +
+	"\fAgentMessage\x122\n" +
+	"\bregister\x18\x01 \x01(\v2\x14.coven.RegisterAgentH\x00R\bregister\x124\n" +
+	"\bresponse\x18\x02 \x01(\v2\x16.coven.MessageResponseH\x00R\bresponse\x120\n" +
+	"\theartbeat\x18\x03 \x01(\v2\x10.coven.HeartbeatH\x00R\theartbeat\x12:\n" +
+	"\rinjection_ack\x18\x04 \x01(\v2\x13.coven.InjectionAckH\x00R\finjectionAck\x12D\n" +
+	"\x11execute_pack_tool\x18\x05 \x01(\v2\x16.coven.ExecutePackToolH\x00R\x0fexecutePackToolB\t\n" +
 	"\apayload\"\x95\x01\n" +
 	"\aGitInfo\x12\x16\n" +
 	"\x06branch\x18\x01 \x01(\tR\x06branch\x12\x16\n" +
@@ -4630,42 +4629,41 @@ const file_fold_proto_rawDesc = "" +
 	"\x05dirty\x18\x03 \x01(\bR\x05dirty\x12\x16\n" +
 	"\x06remote\x18\x04 \x01(\tR\x06remote\x12\x14\n" +
 	"\x05ahead\x18\x05 \x01(\x05R\x05ahead\x12\x16\n" +
-	"\x06behind\x18\x06 \x01(\x05R\x06behind\"\xc3\x01\n" +
+	"\x06behind\x18\x06 \x01(\x05R\x06behind\"\xc4\x01\n" +
 	"\rAgentMetadata\x12+\n" +
-	"\x11working_directory\x18\x01 \x01(\tR\x10workingDirectory\x12\x1f\n" +
-	"\x03git\x18\x02 \x01(\v2\r.fold.GitInfoR\x03git\x12\x1a\n" +
+	"\x11working_directory\x18\x01 \x01(\tR\x10workingDirectory\x12 \n" +
+	"\x03git\x18\x02 \x01(\v2\x0e.coven.GitInfoR\x03git\x12\x1a\n" +
 	"\bhostname\x18\x03 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x04 \x01(\tR\x02os\x12\x1e\n" +
 	"\n" +
 	"workspaces\x18\x05 \x03(\tR\n" +
 	"workspaces\x12\x18\n" +
-	"\abackend\x18\x06 \x01(\tR\abackend\"\xc0\x01\n" +
+	"\abackend\x18\x06 \x01(\tR\abackend\"\xc1\x01\n" +
 	"\rRegisterAgent\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\"\n" +
-	"\fcapabilities\x18\x03 \x03(\tR\fcapabilities\x12/\n" +
-	"\bmetadata\x18\x04 \x01(\v2\x13.fold.AgentMetadataR\bmetadata\x12+\n" +
-	"\x11protocol_features\x18\x05 \x03(\tR\x10protocolFeatures\"\x8e\x05\n" +
+	"\fcapabilities\x18\x03 \x03(\tR\fcapabilities\x120\n" +
+	"\bmetadata\x18\x04 \x01(\v2\x14.coven.AgentMetadataR\bmetadata\x12+\n" +
+	"\x11protocol_features\x18\x05 \x03(\tR\x10protocolFeatures\"\x98\x05\n" +
 	"\x0fMessageResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1c\n" +
 	"\bthinking\x18\x02 \x01(\tH\x00R\bthinking\x12\x14\n" +
-	"\x04text\x18\x03 \x01(\tH\x00R\x04text\x12*\n" +
-	"\btool_use\x18\x04 \x01(\v2\r.fold.ToolUseH\x00R\atoolUse\x123\n" +
-	"\vtool_result\x18\x05 \x01(\v2\x10.fold.ToolResultH\x00R\n" +
-	"toolResult\x12 \n" +
-	"\x04done\x18\x06 \x01(\v2\n" +
-	".fold.DoneH\x00R\x04done\x12\x16\n" +
-	"\x05error\x18\a \x01(\tH\x00R\x05error\x12$\n" +
-	"\x04file\x18\b \x01(\v2\x0e.fold.FileDataH\x00R\x04file\x12O\n" +
-	"\x15tool_approval_request\x18\t \x01(\v2\x19.fold.ToolApprovalRequestH\x00R\x13toolApprovalRequest\x126\n" +
+	"\x04text\x18\x03 \x01(\tH\x00R\x04text\x12+\n" +
+	"\btool_use\x18\x04 \x01(\v2\x0e.coven.ToolUseH\x00R\atoolUse\x124\n" +
+	"\vtool_result\x18\x05 \x01(\v2\x11.coven.ToolResultH\x00R\n" +
+	"toolResult\x12!\n" +
+	"\x04done\x18\x06 \x01(\v2\v.coven.DoneH\x00R\x04done\x12\x16\n" +
+	"\x05error\x18\a \x01(\tH\x00R\x05error\x12%\n" +
+	"\x04file\x18\b \x01(\v2\x0f.coven.FileDataH\x00R\x04file\x12P\n" +
+	"\x15tool_approval_request\x18\t \x01(\v2\x1a.coven.ToolApprovalRequestH\x00R\x13toolApprovalRequest\x127\n" +
 	"\fsession_init\x18\n" +
-	" \x01(\v2\x11.fold.SessionInitH\x00R\vsessionInit\x12B\n" +
-	"\x10session_orphaned\x18\v \x01(\v2\x15.fold.SessionOrphanedH\x00R\x0fsessionOrphaned\x12(\n" +
-	"\x05usage\x18\f \x01(\v2\x10.fold.TokenUsageH\x00R\x05usage\x126\n" +
+	" \x01(\v2\x12.coven.SessionInitH\x00R\vsessionInit\x12C\n" +
+	"\x10session_orphaned\x18\v \x01(\v2\x16.coven.SessionOrphanedH\x00R\x0fsessionOrphaned\x12)\n" +
+	"\x05usage\x18\f \x01(\v2\x11.coven.TokenUsageH\x00R\x05usage\x127\n" +
 	"\n" +
-	"tool_state\x18\r \x01(\v2\x15.fold.ToolStateUpdateH\x00R\ttoolState\x12/\n" +
-	"\tcancelled\x18\x0e \x01(\v2\x0f.fold.CancelledH\x00R\tcancelledB\a\n" +
+	"tool_state\x18\r \x01(\v2\x16.coven.ToolStateUpdateH\x00R\ttoolState\x120\n" +
+	"\tcancelled\x18\x0e \x01(\v2\x10.coven.CancelledH\x00R\tcancelledB\a\n" +
 	"\x05event\",\n" +
 	"\vSessionInit\x12\x1d\n" +
 	"\n" +
@@ -4678,18 +4676,18 @@ const file_fold_proto_rawDesc = "" +
 	"\routput_tokens\x18\x02 \x01(\x05R\foutputTokens\x12*\n" +
 	"\x11cache_read_tokens\x18\x03 \x01(\x05R\x0fcacheReadTokens\x12,\n" +
 	"\x12cache_write_tokens\x18\x04 \x01(\x05R\x10cacheWriteTokens\x12'\n" +
-	"\x0fthinking_tokens\x18\x05 \x01(\x05R\x0ethinkingTokens\"p\n" +
+	"\x0fthinking_tokens\x18\x05 \x01(\x05R\x0ethinkingTokens\"q\n" +
 	"\x0fToolStateUpdate\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12%\n" +
-	"\x05state\x18\x02 \x01(\x0e2\x0f.fold.ToolStateR\x05state\x12\x1b\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12&\n" +
+	"\x05state\x18\x02 \x01(\x0e2\x10.coven.ToolStateR\x05state\x12\x1b\n" +
 	"\x06detail\x18\x03 \x01(\tH\x00R\x06detail\x88\x01\x01B\t\n" +
 	"\a_detail\"#\n" +
 	"\tCancelled\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xa9\x01\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xaa\x01\n" +
 	"\rInjectContext\x12!\n" +
 	"\finjection_id\x18\x01 \x01(\tR\vinjectionId\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\x123\n" +
-	"\bpriority\x18\x03 \x01(\x0e2\x17.fold.InjectionPriorityR\bpriority\x12\x1b\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\x124\n" +
+	"\bpriority\x18\x03 \x01(\x0e2\x18.coven.InjectionPriorityR\bpriority\x12\x1b\n" +
 	"\x06source\x18\x04 \x01(\tH\x00R\x06source\x88\x01\x01B\t\n" +
 	"\a_source\"u\n" +
 	"\fInjectionAck\x12!\n" +
@@ -4737,16 +4735,16 @@ const file_fold_proto_rawDesc = "" +
 	"\voutput_json\x18\x02 \x01(\tH\x00R\n" +
 	"outputJson\x12\x16\n" +
 	"\x05error\x18\x03 \x01(\tH\x00R\x05errorB\b\n" +
-	"\x06result\"\xf6\x03\n" +
-	"\rServerMessage\x12)\n" +
-	"\awelcome\x18\x01 \x01(\v2\r.fold.WelcomeH\x00R\awelcome\x126\n" +
-	"\fsend_message\x18\x02 \x01(\v2\x11.fold.SendMessageH\x00R\vsendMessage\x12,\n" +
-	"\bshutdown\x18\x03 \x01(\v2\x0e.fold.ShutdownH\x00R\bshutdown\x12A\n" +
-	"\rtool_approval\x18\x04 \x01(\v2\x1a.fold.ToolApprovalResponseH\x00R\ftoolApproval\x12H\n" +
-	"\x12registration_error\x18\x05 \x01(\v2\x17.fold.RegistrationErrorH\x00R\x11registrationError\x12<\n" +
-	"\x0einject_context\x18\x06 \x01(\v2\x13.fold.InjectContextH\x00R\rinjectContext\x12<\n" +
-	"\x0ecancel_request\x18\a \x01(\v2\x13.fold.CancelRequestH\x00R\rcancelRequest\x12@\n" +
-	"\x10pack_tool_result\x18\b \x01(\v2\x14.fold.PackToolResultH\x00R\x0epackToolResultB\t\n" +
+	"\x06result\"\xfe\x03\n" +
+	"\rServerMessage\x12*\n" +
+	"\awelcome\x18\x01 \x01(\v2\x0e.coven.WelcomeH\x00R\awelcome\x127\n" +
+	"\fsend_message\x18\x02 \x01(\v2\x12.coven.SendMessageH\x00R\vsendMessage\x12-\n" +
+	"\bshutdown\x18\x03 \x01(\v2\x0f.coven.ShutdownH\x00R\bshutdown\x12B\n" +
+	"\rtool_approval\x18\x04 \x01(\v2\x1b.coven.ToolApprovalResponseH\x00R\ftoolApproval\x12I\n" +
+	"\x12registration_error\x18\x05 \x01(\v2\x18.coven.RegistrationErrorH\x00R\x11registrationError\x12=\n" +
+	"\x0einject_context\x18\x06 \x01(\v2\x14.coven.InjectContextH\x00R\rinjectContext\x12=\n" +
+	"\x0ecancel_request\x18\a \x01(\v2\x14.coven.CancelRequestH\x00R\rcancelRequest\x12A\n" +
+	"\x10pack_tool_result\x18\b \x01(\v2\x15.coven.PackToolResultH\x00R\x0epackToolResultB\t\n" +
 	"\apayload\"N\n" +
 	"\x11RegistrationError\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\x12!\n" +
@@ -4755,23 +4753,23 @@ const file_fold_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bapproved\x18\x02 \x01(\bR\bapproved\x12\x1f\n" +
 	"\vapprove_all\x18\x03 \x01(\bR\n" +
-	"approveAll\"\x84\x02\n" +
+	"approveAll\"\x85\x02\n" +
 	"\aWelcome\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\x12\x19\n" +
 	"\bagent_id\x18\x02 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vinstance_id\x18\x03 \x01(\tR\n" +
 	"instanceId\x12!\n" +
-	"\fprincipal_id\x18\x04 \x01(\tR\vprincipalId\x12=\n" +
-	"\x0favailable_tools\x18\x05 \x03(\v2\x14.fold.ToolDefinitionR\x0eavailableTools\x12\x1b\n" +
+	"\fprincipal_id\x18\x04 \x01(\tR\vprincipalId\x12>\n" +
+	"\x0favailable_tools\x18\x05 \x03(\v2\x15.coven.ToolDefinitionR\x0eavailableTools\x12\x1b\n" +
 	"\tmcp_token\x18\x06 \x01(\tR\bmcpToken\x12!\n" +
-	"\fmcp_endpoint\x18\a \x01(\tR\vmcpEndpoint\"\xb3\x01\n" +
+	"\fmcp_endpoint\x18\a \x01(\tR\vmcpEndpoint\"\xb4\x01\n" +
 	"\vSendMessage\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1b\n" +
 	"\tthread_id\x18\x02 \x01(\tR\bthreadId\x12\x16\n" +
 	"\x06sender\x18\x03 \x01(\tR\x06sender\x12\x18\n" +
-	"\acontent\x18\x04 \x01(\tR\acontent\x126\n" +
-	"\vattachments\x18\x05 \x03(\v2\x14.fold.FileAttachmentR\vattachments\"]\n" +
+	"\acontent\x18\x04 \x01(\tR\acontent\x127\n" +
+	"\vattachments\x18\x05 \x03(\v2\x15.coven.FileAttachmentR\vattachments\"]\n" +
 	"\x0eFileAttachment\x12\x1a\n" +
 	"\bfilename\x18\x01 \x01(\tR\bfilename\x12\x1b\n" +
 	"\tmime_type\x18\x02 \x01(\tR\bmimeType\x12\x12\n" +
@@ -4793,9 +4791,9 @@ const file_fold_proto_rawDesc = "" +
 	"\bfrontend\x18\x01 \x01(\tH\x00R\bfrontend\x88\x01\x01\x12\x1e\n" +
 	"\bagent_id\x18\x02 \x01(\tH\x01R\aagentId\x88\x01\x01B\v\n" +
 	"\t_frontendB\v\n" +
-	"\t_agent_id\"A\n" +
-	"\x14ListBindingsResponse\x12)\n" +
-	"\bbindings\x18\x01 \x03(\v2\r.fold.BindingR\bbindings\"l\n" +
+	"\t_agent_id\"B\n" +
+	"\x14ListBindingsResponse\x12*\n" +
+	"\bbindings\x18\x01 \x03(\v2\x0e.coven.BindingR\bbindings\"l\n" +
 	"\x14CreateBindingRequest\x12\x1a\n" +
 	"\bfrontend\x18\x01 \x01(\tR\bfrontend\x12\x1d\n" +
 	"\n" +
@@ -4830,10 +4828,10 @@ const file_fold_proto_rawDesc = "" +
 	"\x04type\x18\x01 \x01(\tH\x00R\x04type\x88\x01\x01\x12\x1b\n" +
 	"\x06status\x18\x02 \x01(\tH\x01R\x06status\x88\x01\x01B\a\n" +
 	"\x05_typeB\t\n" +
-	"\a_status\"I\n" +
-	"\x16ListPrincipalsResponse\x12/\n" +
+	"\a_status\"J\n" +
+	"\x16ListPrincipalsResponse\x120\n" +
 	"\n" +
-	"principals\x18\x01 \x03(\v2\x0f.fold.PrincipalR\n" +
+	"principals\x18\x01 \x03(\v2\x10.coven.PrincipalR\n" +
 	"principals\"\xbd\x01\n" +
 	"\x16CreatePrincipalRequest\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12!\n" +
@@ -4850,22 +4848,22 @@ const file_fold_proto_rawDesc = "" +
 	"\x13StreamEventsRequest\x12)\n" +
 	"\x10conversation_key\x18\x01 \x01(\tR\x0fconversationKey\x12)\n" +
 	"\x0esince_event_id\x18\x02 \x01(\tH\x00R\fsinceEventId\x88\x01\x01B\x11\n" +
-	"\x0f_since_event_id\"\xfc\x03\n" +
+	"\x0f_since_event_id\"\x85\x04\n" +
 	"\x11ClientStreamEvent\x12)\n" +
 	"\x10conversation_key\x18\x01 \x01(\tR\x0fconversationKey\x12\x1c\n" +
-	"\ttimestamp\x18\x02 \x01(\tR\ttimestamp\x12%\n" +
-	"\x04text\x18\x03 \x01(\v2\x0f.fold.TextChunkH\x00R\x04text\x121\n" +
-	"\bthinking\x18\x04 \x01(\v2\x13.fold.ThinkingChunkH\x00R\bthinking\x12*\n" +
-	"\btool_use\x18\x05 \x01(\v2\r.fold.ToolUseH\x00R\atoolUse\x123\n" +
-	"\vtool_result\x18\x06 \x01(\v2\x10.fold.ToolResultH\x00R\n" +
-	"toolResult\x126\n" +
+	"\ttimestamp\x18\x02 \x01(\tR\ttimestamp\x12&\n" +
+	"\x04text\x18\x03 \x01(\v2\x10.coven.TextChunkH\x00R\x04text\x122\n" +
+	"\bthinking\x18\x04 \x01(\v2\x14.coven.ThinkingChunkH\x00R\bthinking\x12+\n" +
+	"\btool_use\x18\x05 \x01(\v2\x0e.coven.ToolUseH\x00R\atoolUse\x124\n" +
+	"\vtool_result\x18\x06 \x01(\v2\x11.coven.ToolResultH\x00R\n" +
+	"toolResult\x127\n" +
 	"\n" +
-	"tool_state\x18\a \x01(\v2\x15.fold.ToolStateUpdateH\x00R\ttoolState\x12(\n" +
-	"\x05usage\x18\b \x01(\v2\x10.fold.TokenUsageH\x00R\x05usage\x12&\n" +
-	"\x04done\x18\t \x01(\v2\x10.fold.StreamDoneH\x00R\x04done\x12)\n" +
+	"tool_state\x18\a \x01(\v2\x16.coven.ToolStateUpdateH\x00R\ttoolState\x12)\n" +
+	"\x05usage\x18\b \x01(\v2\x11.coven.TokenUsageH\x00R\x05usage\x12'\n" +
+	"\x04done\x18\t \x01(\v2\x11.coven.StreamDoneH\x00R\x04done\x12*\n" +
 	"\x05error\x18\n" +
-	" \x01(\v2\x11.fold.StreamErrorH\x00R\x05error\x12#\n" +
-	"\x05event\x18\v \x01(\v2\v.fold.EventH\x00R\x05eventB\t\n" +
+	" \x01(\v2\x12.coven.StreamErrorH\x00R\x05error\x12$\n" +
+	"\x05event\x18\v \x01(\v2\f.coven.EventH\x00R\x05eventB\t\n" +
 	"\apayload\"%\n" +
 	"\tTextChunk\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\")\n" +
@@ -4877,26 +4875,26 @@ const file_fold_proto_rawDesc = "" +
 	"\x0e_full_response\"I\n" +
 	"\vStreamError\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12 \n" +
-	"\vrecoverable\x18\x02 \x01(\bR\vrecoverable\"\xcb\x01\n" +
+	"\vrecoverable\x18\x02 \x01(\bR\vrecoverable\"\xcc\x01\n" +
 	"\tAgentInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
 	"\abackend\x18\x03 \x01(\tR\abackend\x12\x1f\n" +
 	"\vworking_dir\x18\x04 \x01(\tR\n" +
 	"workingDir\x12\x1c\n" +
-	"\tconnected\x18\x05 \x01(\bR\tconnected\x124\n" +
-	"\bmetadata\x18\x06 \x01(\v2\x13.fold.AgentMetadataH\x00R\bmetadata\x88\x01\x01B\v\n" +
+	"\tconnected\x18\x05 \x01(\bR\tconnected\x125\n" +
+	"\bmetadata\x18\x06 \x01(\v2\x14.coven.AgentMetadataH\x00R\bmetadata\x88\x01\x01B\v\n" +
 	"\t_metadata\"D\n" +
 	"\x11ListAgentsRequest\x12!\n" +
 	"\tworkspace\x18\x01 \x01(\tH\x00R\tworkspace\x88\x01\x01B\f\n" +
 	"\n" +
-	"_workspace\"=\n" +
-	"\x12ListAgentsResponse\x12'\n" +
-	"\x06agents\x18\x01 \x03(\v2\x0f.fold.AgentInfoR\x06agents\"\xc0\x01\n" +
+	"_workspace\">\n" +
+	"\x12ListAgentsResponse\x12(\n" +
+	"\x06agents\x18\x01 \x03(\v2\x10.coven.AgentInfoR\x06agents\"\xc1\x01\n" +
 	"\x18ClientSendMessageRequest\x12)\n" +
 	"\x10conversation_key\x18\x01 \x01(\tR\x0fconversationKey\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\x126\n" +
-	"\vattachments\x18\x03 \x03(\v2\x14.fold.FileAttachmentR\vattachments\x12'\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\x127\n" +
+	"\vattachments\x18\x03 \x03(\v2\x15.coven.FileAttachmentR\vattachments\x12'\n" +
 	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\"R\n" +
 	"\x19ClientSendMessageResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x1d\n" +
@@ -4941,9 +4939,9 @@ const file_fold_proto_rawDesc = "" +
 	"\x06_sinceB\b\n" +
 	"\x06_untilB\b\n" +
 	"\x06_limitB\t\n" +
-	"\a_cursor\"\x89\x01\n" +
-	"\x11GetEventsResponse\x12#\n" +
-	"\x06events\x18\x01 \x03(\v2\v.fold.EventR\x06events\x12$\n" +
+	"\a_cursor\"\x8a\x01\n" +
+	"\x11GetEventsResponse\x12$\n" +
+	"\x06events\x18\x01 \x03(\v2\f.coven.EventR\x06events\x12$\n" +
 	"\vnext_cursor\x18\x02 \x01(\tH\x00R\n" +
 	"nextCursor\x88\x01\x01\x12\x19\n" +
 	"\bhas_more\x18\x03 \x01(\bR\ahasMoreB\x0e\n" +
@@ -4953,11 +4951,11 @@ const file_fold_proto_rawDesc = "" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12*\n" +
 	"\x11input_schema_json\x18\x03 \x01(\tR\x0finputSchemaJson\x123\n" +
 	"\x15required_capabilities\x18\x04 \x03(\tR\x14requiredCapabilities\x12'\n" +
-	"\x0ftimeout_seconds\x18\x05 \x01(\x05R\x0etimeoutSeconds\"m\n" +
+	"\x0ftimeout_seconds\x18\x05 \x01(\x05R\x0etimeoutSeconds\"n\n" +
 	"\fPackManifest\x12\x17\n" +
 	"\apack_id\x18\x01 \x01(\tR\x06packId\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\x12*\n" +
-	"\x05tools\x18\x03 \x03(\v2\x14.fold.ToolDefinitionR\x05tools\"o\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12+\n" +
+	"\x05tools\x18\x03 \x03(\v2\x15.coven.ToolDefinitionR\x05tools\"o\n" +
 	"\x12ExecuteToolRequest\x12\x1b\n" +
 	"\ttool_name\x18\x01 \x01(\tR\btoolName\x12\x1d\n" +
 	"\n" +
@@ -4973,9 +4971,9 @@ const file_fold_proto_rawDesc = "" +
 	"\x06result\"M\n" +
 	"\vPackWelcome\x12\x17\n" +
 	"\apack_id\x18\x01 \x01(\tR\x06packId\x12%\n" +
-	"\x0erejected_tools\x18\x02 \x03(\tR\rrejectedTools\"<\n" +
-	"\x0eAvailableTools\x12*\n" +
-	"\x05tools\x18\x01 \x03(\v2\x14.fold.ToolDefinitionR\x05tools*\xf3\x01\n" +
+	"\x0erejected_tools\x18\x02 \x03(\tR\rrejectedTools\"=\n" +
+	"\x0eAvailableTools\x12+\n" +
+	"\x05tools\x18\x01 \x03(\v2\x15.coven.ToolDefinitionR\x05tools*\xf3\x01\n" +
 	"\tToolState\x12\x1a\n" +
 	"\x16TOOL_STATE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12TOOL_STATE_PENDING\x10\x01\x12 \n" +
@@ -4990,192 +4988,192 @@ const file_fold_proto_rawDesc = "" +
 	"\x1eINJECTION_PRIORITY_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cINJECTION_PRIORITY_IMMEDIATE\x10\x01\x12\x1d\n" +
 	"\x19INJECTION_PRIORITY_NORMAL\x10\x02\x12\x1f\n" +
-	"\x1bINJECTION_PRIORITY_DEFERRED\x10\x032I\n" +
-	"\vFoldControl\x12:\n" +
-	"\vAgentStream\x12\x12.fold.AgentMessage\x1a\x13.fold.ServerMessage(\x010\x012\xba\x04\n" +
-	"\fAdminService\x12E\n" +
-	"\fListBindings\x12\x19.fold.ListBindingsRequest\x1a\x1a.fold.ListBindingsResponse\x12:\n" +
-	"\rCreateBinding\x12\x1a.fold.CreateBindingRequest\x1a\r.fold.Binding\x12:\n" +
-	"\rUpdateBinding\x12\x1a.fold.UpdateBindingRequest\x1a\r.fold.Binding\x12H\n" +
-	"\rDeleteBinding\x12\x1a.fold.DeleteBindingRequest\x1a\x1b.fold.DeleteBindingResponse\x12B\n" +
-	"\vCreateToken\x12\x18.fold.CreateTokenRequest\x1a\x19.fold.CreateTokenResponse\x12K\n" +
-	"\x0eListPrincipals\x12\x1b.fold.ListPrincipalsRequest\x1a\x1c.fold.ListPrincipalsResponse\x12@\n" +
-	"\x0fCreatePrincipal\x12\x1c.fold.CreatePrincipalRequest\x1a\x0f.fold.Principal\x12N\n" +
-	"\x0fDeletePrincipal\x12\x1c.fold.DeletePrincipalRequest\x1a\x1d.fold.DeletePrincipalResponse2\xd7\x02\n" +
-	"\rClientService\x12<\n" +
-	"\tGetEvents\x12\x16.fold.GetEventsRequest\x1a\x17.fold.GetEventsResponse\x121\n" +
-	"\x05GetMe\x12\x16.google.protobuf.Empty\x1a\x10.fold.MeResponse\x12N\n" +
-	"\vSendMessage\x12\x1e.fold.ClientSendMessageRequest\x1a\x1f.fold.ClientSendMessageResponse\x12D\n" +
-	"\fStreamEvents\x12\x19.fold.StreamEventsRequest\x1a\x17.fold.ClientStreamEvent0\x01\x12?\n" +
+	"\x1bINJECTION_PRIORITY_DEFERRED\x10\x032L\n" +
+	"\fCovenControl\x12<\n" +
+	"\vAgentStream\x12\x13.coven.AgentMessage\x1a\x14.coven.ServerMessage(\x010\x012\xca\x04\n" +
+	"\fAdminService\x12G\n" +
+	"\fListBindings\x12\x1a.coven.ListBindingsRequest\x1a\x1b.coven.ListBindingsResponse\x12<\n" +
+	"\rCreateBinding\x12\x1b.coven.CreateBindingRequest\x1a\x0e.coven.Binding\x12<\n" +
+	"\rUpdateBinding\x12\x1b.coven.UpdateBindingRequest\x1a\x0e.coven.Binding\x12J\n" +
+	"\rDeleteBinding\x12\x1b.coven.DeleteBindingRequest\x1a\x1c.coven.DeleteBindingResponse\x12D\n" +
+	"\vCreateToken\x12\x19.coven.CreateTokenRequest\x1a\x1a.coven.CreateTokenResponse\x12M\n" +
+	"\x0eListPrincipals\x12\x1c.coven.ListPrincipalsRequest\x1a\x1d.coven.ListPrincipalsResponse\x12B\n" +
+	"\x0fCreatePrincipal\x12\x1d.coven.CreatePrincipalRequest\x1a\x10.coven.Principal\x12P\n" +
+	"\x0fDeletePrincipal\x12\x1d.coven.DeletePrincipalRequest\x1a\x1e.coven.DeletePrincipalResponse2\xe0\x02\n" +
+	"\rClientService\x12>\n" +
+	"\tGetEvents\x12\x17.coven.GetEventsRequest\x1a\x18.coven.GetEventsResponse\x122\n" +
+	"\x05GetMe\x12\x16.google.protobuf.Empty\x1a\x11.coven.MeResponse\x12P\n" +
+	"\vSendMessage\x12\x1f.coven.ClientSendMessageRequest\x1a .coven.ClientSendMessageResponse\x12F\n" +
+	"\fStreamEvents\x12\x1a.coven.StreamEventsRequest\x1a\x18.coven.ClientStreamEvent0\x01\x12A\n" +
 	"\n" +
-	"ListAgents\x12\x17.fold.ListAgentsRequest\x1a\x18.fold.ListAgentsResponse2\x8a\x01\n" +
-	"\vPackService\x12:\n" +
-	"\bRegister\x12\x12.fold.PackManifest\x1a\x18.fold.ExecuteToolRequest0\x01\x12?\n" +
+	"ListAgents\x12\x18.coven.ListAgentsRequest\x1a\x19.coven.ListAgentsResponse2\x8d\x01\n" +
+	"\vPackService\x12<\n" +
+	"\bRegister\x12\x13.coven.PackManifest\x1a\x19.coven.ExecuteToolRequest0\x01\x12@\n" +
 	"\n" +
-	"ToolResult\x12\x19.fold.ExecuteToolResponse\x1a\x16.google.protobuf.Emptyb\x06proto3"
+	"ToolResult\x12\x1a.coven.ExecuteToolResponse\x1a\x16.google.protobuf.Emptyb\x06proto3"
 
 var (
-	file_fold_proto_rawDescOnce sync.Once
-	file_fold_proto_rawDescData []byte
+	file_coven_proto_rawDescOnce sync.Once
+	file_coven_proto_rawDescData []byte
 )
 
-func file_fold_proto_rawDescGZIP() []byte {
-	file_fold_proto_rawDescOnce.Do(func() {
-		file_fold_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_fold_proto_rawDesc), len(file_fold_proto_rawDesc)))
+func file_coven_proto_rawDescGZIP() []byte {
+	file_coven_proto_rawDescOnce.Do(func() {
+		file_coven_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_coven_proto_rawDesc), len(file_coven_proto_rawDesc)))
 	})
-	return file_fold_proto_rawDescData
+	return file_coven_proto_rawDescData
 }
 
-var file_fold_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_fold_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
-var file_fold_proto_goTypes = []any{
-	(ToolState)(0),                    // 0: fold.ToolState
-	(InjectionPriority)(0),            // 1: fold.InjectionPriority
-	(*AgentMessage)(nil),              // 2: fold.AgentMessage
-	(*GitInfo)(nil),                   // 3: fold.GitInfo
-	(*AgentMetadata)(nil),             // 4: fold.AgentMetadata
-	(*RegisterAgent)(nil),             // 5: fold.RegisterAgent
-	(*MessageResponse)(nil),           // 6: fold.MessageResponse
-	(*SessionInit)(nil),               // 7: fold.SessionInit
-	(*SessionOrphaned)(nil),           // 8: fold.SessionOrphaned
-	(*TokenUsage)(nil),                // 9: fold.TokenUsage
-	(*ToolStateUpdate)(nil),           // 10: fold.ToolStateUpdate
-	(*Cancelled)(nil),                 // 11: fold.Cancelled
-	(*InjectContext)(nil),             // 12: fold.InjectContext
-	(*InjectionAck)(nil),              // 13: fold.InjectionAck
-	(*CancelRequest)(nil),             // 14: fold.CancelRequest
-	(*ToolApprovalRequest)(nil),       // 15: fold.ToolApprovalRequest
-	(*ToolUse)(nil),                   // 16: fold.ToolUse
-	(*ToolResult)(nil),                // 17: fold.ToolResult
-	(*Done)(nil),                      // 18: fold.Done
-	(*FileData)(nil),                  // 19: fold.FileData
-	(*Heartbeat)(nil),                 // 20: fold.Heartbeat
-	(*ExecutePackTool)(nil),           // 21: fold.ExecutePackTool
-	(*PackToolResult)(nil),            // 22: fold.PackToolResult
-	(*ServerMessage)(nil),             // 23: fold.ServerMessage
-	(*RegistrationError)(nil),         // 24: fold.RegistrationError
-	(*ToolApprovalResponse)(nil),      // 25: fold.ToolApprovalResponse
-	(*Welcome)(nil),                   // 26: fold.Welcome
-	(*SendMessage)(nil),               // 27: fold.SendMessage
-	(*FileAttachment)(nil),            // 28: fold.FileAttachment
-	(*Shutdown)(nil),                  // 29: fold.Shutdown
-	(*Binding)(nil),                   // 30: fold.Binding
-	(*ListBindingsRequest)(nil),       // 31: fold.ListBindingsRequest
-	(*ListBindingsResponse)(nil),      // 32: fold.ListBindingsResponse
-	(*CreateBindingRequest)(nil),      // 33: fold.CreateBindingRequest
-	(*UpdateBindingRequest)(nil),      // 34: fold.UpdateBindingRequest
-	(*DeleteBindingRequest)(nil),      // 35: fold.DeleteBindingRequest
-	(*DeleteBindingResponse)(nil),     // 36: fold.DeleteBindingResponse
-	(*CreateTokenRequest)(nil),        // 37: fold.CreateTokenRequest
-	(*CreateTokenResponse)(nil),       // 38: fold.CreateTokenResponse
-	(*Principal)(nil),                 // 39: fold.Principal
-	(*ListPrincipalsRequest)(nil),     // 40: fold.ListPrincipalsRequest
-	(*ListPrincipalsResponse)(nil),    // 41: fold.ListPrincipalsResponse
-	(*CreatePrincipalRequest)(nil),    // 42: fold.CreatePrincipalRequest
-	(*DeletePrincipalRequest)(nil),    // 43: fold.DeletePrincipalRequest
-	(*DeletePrincipalResponse)(nil),   // 44: fold.DeletePrincipalResponse
-	(*StreamEventsRequest)(nil),       // 45: fold.StreamEventsRequest
-	(*ClientStreamEvent)(nil),         // 46: fold.ClientStreamEvent
-	(*TextChunk)(nil),                 // 47: fold.TextChunk
-	(*ThinkingChunk)(nil),             // 48: fold.ThinkingChunk
-	(*StreamDone)(nil),                // 49: fold.StreamDone
-	(*StreamError)(nil),               // 50: fold.StreamError
-	(*AgentInfo)(nil),                 // 51: fold.AgentInfo
-	(*ListAgentsRequest)(nil),         // 52: fold.ListAgentsRequest
-	(*ListAgentsResponse)(nil),        // 53: fold.ListAgentsResponse
-	(*ClientSendMessageRequest)(nil),  // 54: fold.ClientSendMessageRequest
-	(*ClientSendMessageResponse)(nil), // 55: fold.ClientSendMessageResponse
-	(*MeResponse)(nil),                // 56: fold.MeResponse
-	(*Event)(nil),                     // 57: fold.Event
-	(*GetEventsRequest)(nil),          // 58: fold.GetEventsRequest
-	(*GetEventsResponse)(nil),         // 59: fold.GetEventsResponse
-	(*ToolDefinition)(nil),            // 60: fold.ToolDefinition
-	(*PackManifest)(nil),              // 61: fold.PackManifest
-	(*ExecuteToolRequest)(nil),        // 62: fold.ExecuteToolRequest
-	(*ExecuteToolResponse)(nil),       // 63: fold.ExecuteToolResponse
-	(*PackWelcome)(nil),               // 64: fold.PackWelcome
-	(*AvailableTools)(nil),            // 65: fold.AvailableTools
+var file_coven_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_coven_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
+var file_coven_proto_goTypes = []any{
+	(ToolState)(0),                    // 0: coven.ToolState
+	(InjectionPriority)(0),            // 1: coven.InjectionPriority
+	(*AgentMessage)(nil),              // 2: coven.AgentMessage
+	(*GitInfo)(nil),                   // 3: coven.GitInfo
+	(*AgentMetadata)(nil),             // 4: coven.AgentMetadata
+	(*RegisterAgent)(nil),             // 5: coven.RegisterAgent
+	(*MessageResponse)(nil),           // 6: coven.MessageResponse
+	(*SessionInit)(nil),               // 7: coven.SessionInit
+	(*SessionOrphaned)(nil),           // 8: coven.SessionOrphaned
+	(*TokenUsage)(nil),                // 9: coven.TokenUsage
+	(*ToolStateUpdate)(nil),           // 10: coven.ToolStateUpdate
+	(*Cancelled)(nil),                 // 11: coven.Cancelled
+	(*InjectContext)(nil),             // 12: coven.InjectContext
+	(*InjectionAck)(nil),              // 13: coven.InjectionAck
+	(*CancelRequest)(nil),             // 14: coven.CancelRequest
+	(*ToolApprovalRequest)(nil),       // 15: coven.ToolApprovalRequest
+	(*ToolUse)(nil),                   // 16: coven.ToolUse
+	(*ToolResult)(nil),                // 17: coven.ToolResult
+	(*Done)(nil),                      // 18: coven.Done
+	(*FileData)(nil),                  // 19: coven.FileData
+	(*Heartbeat)(nil),                 // 20: coven.Heartbeat
+	(*ExecutePackTool)(nil),           // 21: coven.ExecutePackTool
+	(*PackToolResult)(nil),            // 22: coven.PackToolResult
+	(*ServerMessage)(nil),             // 23: coven.ServerMessage
+	(*RegistrationError)(nil),         // 24: coven.RegistrationError
+	(*ToolApprovalResponse)(nil),      // 25: coven.ToolApprovalResponse
+	(*Welcome)(nil),                   // 26: coven.Welcome
+	(*SendMessage)(nil),               // 27: coven.SendMessage
+	(*FileAttachment)(nil),            // 28: coven.FileAttachment
+	(*Shutdown)(nil),                  // 29: coven.Shutdown
+	(*Binding)(nil),                   // 30: coven.Binding
+	(*ListBindingsRequest)(nil),       // 31: coven.ListBindingsRequest
+	(*ListBindingsResponse)(nil),      // 32: coven.ListBindingsResponse
+	(*CreateBindingRequest)(nil),      // 33: coven.CreateBindingRequest
+	(*UpdateBindingRequest)(nil),      // 34: coven.UpdateBindingRequest
+	(*DeleteBindingRequest)(nil),      // 35: coven.DeleteBindingRequest
+	(*DeleteBindingResponse)(nil),     // 36: coven.DeleteBindingResponse
+	(*CreateTokenRequest)(nil),        // 37: coven.CreateTokenRequest
+	(*CreateTokenResponse)(nil),       // 38: coven.CreateTokenResponse
+	(*Principal)(nil),                 // 39: coven.Principal
+	(*ListPrincipalsRequest)(nil),     // 40: coven.ListPrincipalsRequest
+	(*ListPrincipalsResponse)(nil),    // 41: coven.ListPrincipalsResponse
+	(*CreatePrincipalRequest)(nil),    // 42: coven.CreatePrincipalRequest
+	(*DeletePrincipalRequest)(nil),    // 43: coven.DeletePrincipalRequest
+	(*DeletePrincipalResponse)(nil),   // 44: coven.DeletePrincipalResponse
+	(*StreamEventsRequest)(nil),       // 45: coven.StreamEventsRequest
+	(*ClientStreamEvent)(nil),         // 46: coven.ClientStreamEvent
+	(*TextChunk)(nil),                 // 47: coven.TextChunk
+	(*ThinkingChunk)(nil),             // 48: coven.ThinkingChunk
+	(*StreamDone)(nil),                // 49: coven.StreamDone
+	(*StreamError)(nil),               // 50: coven.StreamError
+	(*AgentInfo)(nil),                 // 51: coven.AgentInfo
+	(*ListAgentsRequest)(nil),         // 52: coven.ListAgentsRequest
+	(*ListAgentsResponse)(nil),        // 53: coven.ListAgentsResponse
+	(*ClientSendMessageRequest)(nil),  // 54: coven.ClientSendMessageRequest
+	(*ClientSendMessageResponse)(nil), // 55: coven.ClientSendMessageResponse
+	(*MeResponse)(nil),                // 56: coven.MeResponse
+	(*Event)(nil),                     // 57: coven.Event
+	(*GetEventsRequest)(nil),          // 58: coven.GetEventsRequest
+	(*GetEventsResponse)(nil),         // 59: coven.GetEventsResponse
+	(*ToolDefinition)(nil),            // 60: coven.ToolDefinition
+	(*PackManifest)(nil),              // 61: coven.PackManifest
+	(*ExecuteToolRequest)(nil),        // 62: coven.ExecuteToolRequest
+	(*ExecuteToolResponse)(nil),       // 63: coven.ExecuteToolResponse
+	(*PackWelcome)(nil),               // 64: coven.PackWelcome
+	(*AvailableTools)(nil),            // 65: coven.AvailableTools
 	(*emptypb.Empty)(nil),             // 66: google.protobuf.Empty
 }
-var file_fold_proto_depIdxs = []int32{
-	5,  // 0: fold.AgentMessage.register:type_name -> fold.RegisterAgent
-	6,  // 1: fold.AgentMessage.response:type_name -> fold.MessageResponse
-	20, // 2: fold.AgentMessage.heartbeat:type_name -> fold.Heartbeat
-	13, // 3: fold.AgentMessage.injection_ack:type_name -> fold.InjectionAck
-	21, // 4: fold.AgentMessage.execute_pack_tool:type_name -> fold.ExecutePackTool
-	3,  // 5: fold.AgentMetadata.git:type_name -> fold.GitInfo
-	4,  // 6: fold.RegisterAgent.metadata:type_name -> fold.AgentMetadata
-	16, // 7: fold.MessageResponse.tool_use:type_name -> fold.ToolUse
-	17, // 8: fold.MessageResponse.tool_result:type_name -> fold.ToolResult
-	18, // 9: fold.MessageResponse.done:type_name -> fold.Done
-	19, // 10: fold.MessageResponse.file:type_name -> fold.FileData
-	15, // 11: fold.MessageResponse.tool_approval_request:type_name -> fold.ToolApprovalRequest
-	7,  // 12: fold.MessageResponse.session_init:type_name -> fold.SessionInit
-	8,  // 13: fold.MessageResponse.session_orphaned:type_name -> fold.SessionOrphaned
-	9,  // 14: fold.MessageResponse.usage:type_name -> fold.TokenUsage
-	10, // 15: fold.MessageResponse.tool_state:type_name -> fold.ToolStateUpdate
-	11, // 16: fold.MessageResponse.cancelled:type_name -> fold.Cancelled
-	0,  // 17: fold.ToolStateUpdate.state:type_name -> fold.ToolState
-	1,  // 18: fold.InjectContext.priority:type_name -> fold.InjectionPriority
-	26, // 19: fold.ServerMessage.welcome:type_name -> fold.Welcome
-	27, // 20: fold.ServerMessage.send_message:type_name -> fold.SendMessage
-	29, // 21: fold.ServerMessage.shutdown:type_name -> fold.Shutdown
-	25, // 22: fold.ServerMessage.tool_approval:type_name -> fold.ToolApprovalResponse
-	24, // 23: fold.ServerMessage.registration_error:type_name -> fold.RegistrationError
-	12, // 24: fold.ServerMessage.inject_context:type_name -> fold.InjectContext
-	14, // 25: fold.ServerMessage.cancel_request:type_name -> fold.CancelRequest
-	22, // 26: fold.ServerMessage.pack_tool_result:type_name -> fold.PackToolResult
-	60, // 27: fold.Welcome.available_tools:type_name -> fold.ToolDefinition
-	28, // 28: fold.SendMessage.attachments:type_name -> fold.FileAttachment
-	30, // 29: fold.ListBindingsResponse.bindings:type_name -> fold.Binding
-	39, // 30: fold.ListPrincipalsResponse.principals:type_name -> fold.Principal
-	47, // 31: fold.ClientStreamEvent.text:type_name -> fold.TextChunk
-	48, // 32: fold.ClientStreamEvent.thinking:type_name -> fold.ThinkingChunk
-	16, // 33: fold.ClientStreamEvent.tool_use:type_name -> fold.ToolUse
-	17, // 34: fold.ClientStreamEvent.tool_result:type_name -> fold.ToolResult
-	10, // 35: fold.ClientStreamEvent.tool_state:type_name -> fold.ToolStateUpdate
-	9,  // 36: fold.ClientStreamEvent.usage:type_name -> fold.TokenUsage
-	49, // 37: fold.ClientStreamEvent.done:type_name -> fold.StreamDone
-	50, // 38: fold.ClientStreamEvent.error:type_name -> fold.StreamError
-	57, // 39: fold.ClientStreamEvent.event:type_name -> fold.Event
-	4,  // 40: fold.AgentInfo.metadata:type_name -> fold.AgentMetadata
-	51, // 41: fold.ListAgentsResponse.agents:type_name -> fold.AgentInfo
-	28, // 42: fold.ClientSendMessageRequest.attachments:type_name -> fold.FileAttachment
-	57, // 43: fold.GetEventsResponse.events:type_name -> fold.Event
-	60, // 44: fold.PackManifest.tools:type_name -> fold.ToolDefinition
-	60, // 45: fold.AvailableTools.tools:type_name -> fold.ToolDefinition
-	2,  // 46: fold.FoldControl.AgentStream:input_type -> fold.AgentMessage
-	31, // 47: fold.AdminService.ListBindings:input_type -> fold.ListBindingsRequest
-	33, // 48: fold.AdminService.CreateBinding:input_type -> fold.CreateBindingRequest
-	34, // 49: fold.AdminService.UpdateBinding:input_type -> fold.UpdateBindingRequest
-	35, // 50: fold.AdminService.DeleteBinding:input_type -> fold.DeleteBindingRequest
-	37, // 51: fold.AdminService.CreateToken:input_type -> fold.CreateTokenRequest
-	40, // 52: fold.AdminService.ListPrincipals:input_type -> fold.ListPrincipalsRequest
-	42, // 53: fold.AdminService.CreatePrincipal:input_type -> fold.CreatePrincipalRequest
-	43, // 54: fold.AdminService.DeletePrincipal:input_type -> fold.DeletePrincipalRequest
-	58, // 55: fold.ClientService.GetEvents:input_type -> fold.GetEventsRequest
-	66, // 56: fold.ClientService.GetMe:input_type -> google.protobuf.Empty
-	54, // 57: fold.ClientService.SendMessage:input_type -> fold.ClientSendMessageRequest
-	45, // 58: fold.ClientService.StreamEvents:input_type -> fold.StreamEventsRequest
-	52, // 59: fold.ClientService.ListAgents:input_type -> fold.ListAgentsRequest
-	61, // 60: fold.PackService.Register:input_type -> fold.PackManifest
-	63, // 61: fold.PackService.ToolResult:input_type -> fold.ExecuteToolResponse
-	23, // 62: fold.FoldControl.AgentStream:output_type -> fold.ServerMessage
-	32, // 63: fold.AdminService.ListBindings:output_type -> fold.ListBindingsResponse
-	30, // 64: fold.AdminService.CreateBinding:output_type -> fold.Binding
-	30, // 65: fold.AdminService.UpdateBinding:output_type -> fold.Binding
-	36, // 66: fold.AdminService.DeleteBinding:output_type -> fold.DeleteBindingResponse
-	38, // 67: fold.AdminService.CreateToken:output_type -> fold.CreateTokenResponse
-	41, // 68: fold.AdminService.ListPrincipals:output_type -> fold.ListPrincipalsResponse
-	39, // 69: fold.AdminService.CreatePrincipal:output_type -> fold.Principal
-	44, // 70: fold.AdminService.DeletePrincipal:output_type -> fold.DeletePrincipalResponse
-	59, // 71: fold.ClientService.GetEvents:output_type -> fold.GetEventsResponse
-	56, // 72: fold.ClientService.GetMe:output_type -> fold.MeResponse
-	55, // 73: fold.ClientService.SendMessage:output_type -> fold.ClientSendMessageResponse
-	46, // 74: fold.ClientService.StreamEvents:output_type -> fold.ClientStreamEvent
-	53, // 75: fold.ClientService.ListAgents:output_type -> fold.ListAgentsResponse
-	62, // 76: fold.PackService.Register:output_type -> fold.ExecuteToolRequest
-	66, // 77: fold.PackService.ToolResult:output_type -> google.protobuf.Empty
+var file_coven_proto_depIdxs = []int32{
+	5,  // 0: coven.AgentMessage.register:type_name -> coven.RegisterAgent
+	6,  // 1: coven.AgentMessage.response:type_name -> coven.MessageResponse
+	20, // 2: coven.AgentMessage.heartbeat:type_name -> coven.Heartbeat
+	13, // 3: coven.AgentMessage.injection_ack:type_name -> coven.InjectionAck
+	21, // 4: coven.AgentMessage.execute_pack_tool:type_name -> coven.ExecutePackTool
+	3,  // 5: coven.AgentMetadata.git:type_name -> coven.GitInfo
+	4,  // 6: coven.RegisterAgent.metadata:type_name -> coven.AgentMetadata
+	16, // 7: coven.MessageResponse.tool_use:type_name -> coven.ToolUse
+	17, // 8: coven.MessageResponse.tool_result:type_name -> coven.ToolResult
+	18, // 9: coven.MessageResponse.done:type_name -> coven.Done
+	19, // 10: coven.MessageResponse.file:type_name -> coven.FileData
+	15, // 11: coven.MessageResponse.tool_approval_request:type_name -> coven.ToolApprovalRequest
+	7,  // 12: coven.MessageResponse.session_init:type_name -> coven.SessionInit
+	8,  // 13: coven.MessageResponse.session_orphaned:type_name -> coven.SessionOrphaned
+	9,  // 14: coven.MessageResponse.usage:type_name -> coven.TokenUsage
+	10, // 15: coven.MessageResponse.tool_state:type_name -> coven.ToolStateUpdate
+	11, // 16: coven.MessageResponse.cancelled:type_name -> coven.Cancelled
+	0,  // 17: coven.ToolStateUpdate.state:type_name -> coven.ToolState
+	1,  // 18: coven.InjectContext.priority:type_name -> coven.InjectionPriority
+	26, // 19: coven.ServerMessage.welcome:type_name -> coven.Welcome
+	27, // 20: coven.ServerMessage.send_message:type_name -> coven.SendMessage
+	29, // 21: coven.ServerMessage.shutdown:type_name -> coven.Shutdown
+	25, // 22: coven.ServerMessage.tool_approval:type_name -> coven.ToolApprovalResponse
+	24, // 23: coven.ServerMessage.registration_error:type_name -> coven.RegistrationError
+	12, // 24: coven.ServerMessage.inject_context:type_name -> coven.InjectContext
+	14, // 25: coven.ServerMessage.cancel_request:type_name -> coven.CancelRequest
+	22, // 26: coven.ServerMessage.pack_tool_result:type_name -> coven.PackToolResult
+	60, // 27: coven.Welcome.available_tools:type_name -> coven.ToolDefinition
+	28, // 28: coven.SendMessage.attachments:type_name -> coven.FileAttachment
+	30, // 29: coven.ListBindingsResponse.bindings:type_name -> coven.Binding
+	39, // 30: coven.ListPrincipalsResponse.principals:type_name -> coven.Principal
+	47, // 31: coven.ClientStreamEvent.text:type_name -> coven.TextChunk
+	48, // 32: coven.ClientStreamEvent.thinking:type_name -> coven.ThinkingChunk
+	16, // 33: coven.ClientStreamEvent.tool_use:type_name -> coven.ToolUse
+	17, // 34: coven.ClientStreamEvent.tool_result:type_name -> coven.ToolResult
+	10, // 35: coven.ClientStreamEvent.tool_state:type_name -> coven.ToolStateUpdate
+	9,  // 36: coven.ClientStreamEvent.usage:type_name -> coven.TokenUsage
+	49, // 37: coven.ClientStreamEvent.done:type_name -> coven.StreamDone
+	50, // 38: coven.ClientStreamEvent.error:type_name -> coven.StreamError
+	57, // 39: coven.ClientStreamEvent.event:type_name -> coven.Event
+	4,  // 40: coven.AgentInfo.metadata:type_name -> coven.AgentMetadata
+	51, // 41: coven.ListAgentsResponse.agents:type_name -> coven.AgentInfo
+	28, // 42: coven.ClientSendMessageRequest.attachments:type_name -> coven.FileAttachment
+	57, // 43: coven.GetEventsResponse.events:type_name -> coven.Event
+	60, // 44: coven.PackManifest.tools:type_name -> coven.ToolDefinition
+	60, // 45: coven.AvailableTools.tools:type_name -> coven.ToolDefinition
+	2,  // 46: coven.CovenControl.AgentStream:input_type -> coven.AgentMessage
+	31, // 47: coven.AdminService.ListBindings:input_type -> coven.ListBindingsRequest
+	33, // 48: coven.AdminService.CreateBinding:input_type -> coven.CreateBindingRequest
+	34, // 49: coven.AdminService.UpdateBinding:input_type -> coven.UpdateBindingRequest
+	35, // 50: coven.AdminService.DeleteBinding:input_type -> coven.DeleteBindingRequest
+	37, // 51: coven.AdminService.CreateToken:input_type -> coven.CreateTokenRequest
+	40, // 52: coven.AdminService.ListPrincipals:input_type -> coven.ListPrincipalsRequest
+	42, // 53: coven.AdminService.CreatePrincipal:input_type -> coven.CreatePrincipalRequest
+	43, // 54: coven.AdminService.DeletePrincipal:input_type -> coven.DeletePrincipalRequest
+	58, // 55: coven.ClientService.GetEvents:input_type -> coven.GetEventsRequest
+	66, // 56: coven.ClientService.GetMe:input_type -> google.protobuf.Empty
+	54, // 57: coven.ClientService.SendMessage:input_type -> coven.ClientSendMessageRequest
+	45, // 58: coven.ClientService.StreamEvents:input_type -> coven.StreamEventsRequest
+	52, // 59: coven.ClientService.ListAgents:input_type -> coven.ListAgentsRequest
+	61, // 60: coven.PackService.Register:input_type -> coven.PackManifest
+	63, // 61: coven.PackService.ToolResult:input_type -> coven.ExecuteToolResponse
+	23, // 62: coven.CovenControl.AgentStream:output_type -> coven.ServerMessage
+	32, // 63: coven.AdminService.ListBindings:output_type -> coven.ListBindingsResponse
+	30, // 64: coven.AdminService.CreateBinding:output_type -> coven.Binding
+	30, // 65: coven.AdminService.UpdateBinding:output_type -> coven.Binding
+	36, // 66: coven.AdminService.DeleteBinding:output_type -> coven.DeleteBindingResponse
+	38, // 67: coven.AdminService.CreateToken:output_type -> coven.CreateTokenResponse
+	41, // 68: coven.AdminService.ListPrincipals:output_type -> coven.ListPrincipalsResponse
+	39, // 69: coven.AdminService.CreatePrincipal:output_type -> coven.Principal
+	44, // 70: coven.AdminService.DeletePrincipal:output_type -> coven.DeletePrincipalResponse
+	59, // 71: coven.ClientService.GetEvents:output_type -> coven.GetEventsResponse
+	56, // 72: coven.ClientService.GetMe:output_type -> coven.MeResponse
+	55, // 73: coven.ClientService.SendMessage:output_type -> coven.ClientSendMessageResponse
+	46, // 74: coven.ClientService.StreamEvents:output_type -> coven.ClientStreamEvent
+	53, // 75: coven.ClientService.ListAgents:output_type -> coven.ListAgentsResponse
+	62, // 76: coven.PackService.Register:output_type -> coven.ExecuteToolRequest
+	66, // 77: coven.PackService.ToolResult:output_type -> google.protobuf.Empty
 	62, // [62:78] is the sub-list for method output_type
 	46, // [46:62] is the sub-list for method input_type
 	46, // [46:46] is the sub-list for extension type_name
@@ -5183,19 +5181,19 @@ var file_fold_proto_depIdxs = []int32{
 	0,  // [0:46] is the sub-list for field type_name
 }
 
-func init() { file_fold_proto_init() }
-func file_fold_proto_init() {
-	if File_fold_proto != nil {
+func init() { file_coven_proto_init() }
+func file_coven_proto_init() {
+	if File_coven_proto != nil {
 		return
 	}
-	file_fold_proto_msgTypes[0].OneofWrappers = []any{
+	file_coven_proto_msgTypes[0].OneofWrappers = []any{
 		(*AgentMessage_Register)(nil),
 		(*AgentMessage_Response)(nil),
 		(*AgentMessage_Heartbeat)(nil),
 		(*AgentMessage_InjectionAck)(nil),
 		(*AgentMessage_ExecutePackTool)(nil),
 	}
-	file_fold_proto_msgTypes[4].OneofWrappers = []any{
+	file_coven_proto_msgTypes[4].OneofWrappers = []any{
 		(*MessageResponse_Thinking)(nil),
 		(*MessageResponse_Text)(nil),
 		(*MessageResponse_ToolUse)(nil),
@@ -5210,15 +5208,15 @@ func file_fold_proto_init() {
 		(*MessageResponse_ToolState)(nil),
 		(*MessageResponse_Cancelled)(nil),
 	}
-	file_fold_proto_msgTypes[8].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[10].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[11].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[12].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[20].OneofWrappers = []any{
+	file_coven_proto_msgTypes[8].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[10].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[11].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[12].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[20].OneofWrappers = []any{
 		(*PackToolResult_OutputJson)(nil),
 		(*PackToolResult_Error)(nil),
 	}
-	file_fold_proto_msgTypes[21].OneofWrappers = []any{
+	file_coven_proto_msgTypes[21].OneofWrappers = []any{
 		(*ServerMessage_Welcome)(nil),
 		(*ServerMessage_SendMessage)(nil),
 		(*ServerMessage_Shutdown)(nil),
@@ -5228,13 +5226,13 @@ func file_fold_proto_init() {
 		(*ServerMessage_CancelRequest)(nil),
 		(*ServerMessage_PackToolResult)(nil),
 	}
-	file_fold_proto_msgTypes[28].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[29].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[37].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[38].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[40].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[43].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[44].OneofWrappers = []any{
+	file_coven_proto_msgTypes[28].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[29].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[37].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[38].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[40].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[43].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[44].OneofWrappers = []any{
 		(*ClientStreamEvent_Text)(nil),
 		(*ClientStreamEvent_Thinking)(nil),
 		(*ClientStreamEvent_ToolUse)(nil),
@@ -5245,14 +5243,14 @@ func file_fold_proto_init() {
 		(*ClientStreamEvent_Error)(nil),
 		(*ClientStreamEvent_Event)(nil),
 	}
-	file_fold_proto_msgTypes[47].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[49].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[50].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[54].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[55].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[56].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[57].OneofWrappers = []any{}
-	file_fold_proto_msgTypes[61].OneofWrappers = []any{
+	file_coven_proto_msgTypes[47].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[49].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[50].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[54].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[55].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[56].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[57].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[61].OneofWrappers = []any{
 		(*ExecuteToolResponse_OutputJson)(nil),
 		(*ExecuteToolResponse_Error)(nil),
 	}
@@ -5260,18 +5258,18 @@ func file_fold_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_fold_proto_rawDesc), len(file_fold_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_coven_proto_rawDesc), len(file_coven_proto_rawDesc)),
 			NumEnums:      2,
 			NumMessages:   64,
 			NumExtensions: 0,
 			NumServices:   4,
 		},
-		GoTypes:           file_fold_proto_goTypes,
-		DependencyIndexes: file_fold_proto_depIdxs,
-		EnumInfos:         file_fold_proto_enumTypes,
-		MessageInfos:      file_fold_proto_msgTypes,
+		GoTypes:           file_coven_proto_goTypes,
+		DependencyIndexes: file_coven_proto_depIdxs,
+		EnumInfos:         file_coven_proto_enumTypes,
+		MessageInfos:      file_coven_proto_msgTypes,
 	}.Build()
-	File_fold_proto = out.File
-	file_fold_proto_goTypes = nil
-	file_fold_proto_depIdxs = nil
+	File_coven_proto = out.File
+	file_coven_proto_goTypes = nil
+	file_coven_proto_depIdxs = nil
 }

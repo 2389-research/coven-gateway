@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/store"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

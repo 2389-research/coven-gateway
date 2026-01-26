@@ -17,7 +17,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/store"
 )
 
 // webAuthnUser wraps AdminUser to implement webauthn.User interface

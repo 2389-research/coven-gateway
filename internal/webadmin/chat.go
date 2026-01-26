@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/2389/fold-gateway/internal/agent"
+	"github.com/2389/coven-gateway/internal/agent"
 )
 
 // chatMessage represents a message in the chat stream

@@ -18,21 +18,21 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"tailscale.com/tsnet"
 
-	"github.com/2389/fold-gateway/internal/admin"
-	"github.com/2389/fold-gateway/internal/agent"
-	"github.com/2389/fold-gateway/internal/auth"
-	"github.com/2389/fold-gateway/internal/client"
-	"github.com/2389/fold-gateway/internal/config"
-	"github.com/2389/fold-gateway/internal/conversation"
-	"github.com/2389/fold-gateway/internal/dedupe"
-	"github.com/2389/fold-gateway/internal/mcp"
-	"github.com/2389/fold-gateway/internal/packs"
-	"github.com/2389/fold-gateway/internal/store"
-	"github.com/2389/fold-gateway/internal/webadmin"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/admin"
+	"github.com/2389/coven-gateway/internal/agent"
+	"github.com/2389/coven-gateway/internal/auth"
+	"github.com/2389/coven-gateway/internal/client"
+	"github.com/2389/coven-gateway/internal/config"
+	"github.com/2389/coven-gateway/internal/conversation"
+	"github.com/2389/coven-gateway/internal/dedupe"
+	"github.com/2389/coven-gateway/internal/mcp"
+	"github.com/2389/coven-gateway/internal/packs"
+	"github.com/2389/coven-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/webadmin"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// Gateway orchestrates the fold-gateway server components.
+// Gateway orchestrates the coven-gateway server components.
 // It manages the GRPC server for agent connections and HTTP server for health checks.
 type Gateway struct {
 	config       *config.Config
@@ -214,9 +214,9 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		mcpEndpoint:  mcpEndpoint,
 	}
 
-	// Register FoldControl service (agent streaming - no auth required for now)
-	foldService := newFoldControlServer(gw, logger.With("component", "grpc"))
-	pb.RegisterFoldControlServer(grpcServer, foldService)
+	// Register CovenControl service (agent streaming - no auth required for now)
+	foldService := newCovenControlServer(gw, logger.With("component", "grpc"))
+	pb.RegisterCovenControlServer(grpcServer, foldService)
 
 	// Register AdminService and ClientService
 	sqliteStore := s.(*store.SQLiteStore)
@@ -295,7 +295,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 			// With Tailscale HTTPS, user MUST set FOLD_GATEWAY_URL or webadmin.base_url
 			// to the full tailnet DNS name for WebAuthn to work
 			if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
-				logger.Warn("webadmin.base_url/FOLD_GATEWAY_URL not set - WebAuthn/passkeys may fail. Set FOLD_GATEWAY_URL to full tailnet URL (e.g., https://fold-gateway.your-tailnet.ts.net)")
+				logger.Warn("webadmin.base_url/FOLD_GATEWAY_URL not set - WebAuthn/passkeys may fail. Set FOLD_GATEWAY_URL to full tailnet URL (e.g., https://coven-gateway.your-tailnet.ts.net)")
 			}
 			scheme := "http"
 			if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
@@ -432,7 +432,7 @@ func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn n
 		if err != nil {
 			return nil, nil, fmt.Errorf("cannot determine home directory for tailscale state (set tailscale.state_dir explicitly): %w", err)
 		}
-		stateDir = filepath.Join(homeDir, ".local", "share", "fold-gateway", "tailscale")
+		stateDir = filepath.Join(homeDir, ".local", "share", "coven-gateway", "tailscale")
 	}
 
 	// Ensure state directory exists
@@ -617,5 +617,5 @@ func (g *Gateway) handleReady(w http.ResponseWriter, r *http.Request) {
 
 // generateServerID creates a unique identifier for this gateway instance
 func generateServerID() string {
-	return fmt.Sprintf("fold-gateway-%d", time.Now().UnixNano()%1000000)
+	return fmt.Sprintf("coven-gateway-%d", time.Now().UnixNano()%1000000)
 }

@@ -1,4 +1,4 @@
-// ABOUTME: TUI client for interacting with fold-gateway agents via HTTP API.
+// ABOUTME: TUI client for interacting with coven-gateway agents via HTTP API.
 // ABOUTME: Provides readline-style input and SSE streaming output with JWT auth.
 
 package main
@@ -19,7 +19,7 @@ import (
 	"syscall"
 )
 
-// getToken returns the JWT token from FOLD_TOKEN env var or ~/.config/fold/token file
+// getToken returns the JWT token from FOLD_TOKEN env var or ~/.config/coven/token file
 func getToken() string {
 	// Check env var first
 	if token := os.Getenv("FOLD_TOKEN"); token != "" {
@@ -73,7 +73,7 @@ func main() {
 	threadID := flag.String("thread", "", "Thread ID for conversation continuity")
 	flag.Parse()
 
-	fmt.Printf("fold-tui connected to %s\n", *server)
+	fmt.Printf("coven-tui connected to %s\n", *server)
 	if getToken() != "" {
 		fmt.Println("Auth: JWT token configured (FOLD_TOKEN)")
 	} else {

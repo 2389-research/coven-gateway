@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/2389/fold-gateway/internal/auth"
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/auth"
+	"github.com/2389/coven-gateway/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/emptypb"

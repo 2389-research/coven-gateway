@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	pb "github.com/2389/fold-gateway/proto/fold"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // createTestManifest creates a PackManifest for testing.

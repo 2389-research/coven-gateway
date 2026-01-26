@@ -16,9 +16,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/2389/fold-gateway/internal/agent"
-	"github.com/2389/fold-gateway/internal/conversation"
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/agent"
+	"github.com/2389/coven-gateway/internal/conversation"
+	"github.com/2389/coven-gateway/internal/store"
 )
 
 // SendMessageRequest is the JSON request body for POST /api/send.

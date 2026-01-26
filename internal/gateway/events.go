@@ -6,8 +6,8 @@ package gateway
 import (
 	"context"
 
-	"github.com/2389/fold-gateway/internal/auth"
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/auth"
+	"github.com/2389/coven-gateway/internal/store"
 )
 
 // recordEvent saves a ledger event to the store, populating actor fields from AuthContext.

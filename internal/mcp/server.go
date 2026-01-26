@@ -16,9 +16,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/2389/fold-gateway/internal/auth"
-	"github.com/2389/fold-gateway/internal/packs"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/auth"
+	"github.com/2389/coven-gateway/internal/packs"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // Supported MCP protocol versions
@@ -384,7 +384,7 @@ func (s *Server) handleInitialize(w http.ResponseWriter, r *http.Request, req JS
 			"tools": map[string]any{},
 		},
 		"serverInfo": map[string]any{
-			"name":    "fold-gateway",
+			"name":    "coven-gateway",
 			"version": "1.0.0",
 		},
 	}

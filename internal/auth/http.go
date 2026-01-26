@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/store"
 )
 
 // HTTPAuthMiddleware creates an HTTP middleware that extracts and validates JWT tokens.

@@ -5,9 +5,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v6.33.3
-// source: fold.proto
+// source: coven.proto
 
-package fold
+package coven
 
 import (
 	context "context"
@@ -23,30 +23,30 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	FoldControl_AgentStream_FullMethodName = "/fold.FoldControl/AgentStream"
+	CovenControl_AgentStream_FullMethodName = "/coven.CovenControl/AgentStream"
 )
 
-// FoldControlClient is the client API for FoldControl service.
+// CovenControlClient is the client API for CovenControl service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // Agent connects to server, receives commands, sends results
-type FoldControlClient interface {
+type CovenControlClient interface {
 	// Agent registration - bidirectional stream for lifecycle
 	AgentStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AgentMessage, ServerMessage], error)
 }
 
-type foldControlClient struct {
+type covenControlClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewFoldControlClient(cc grpc.ClientConnInterface) FoldControlClient {
-	return &foldControlClient{cc}
+func NewCovenControlClient(cc grpc.ClientConnInterface) CovenControlClient {
+	return &covenControlClient{cc}
 }
 
-func (c *foldControlClient) AgentStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AgentMessage, ServerMessage], error) {
+func (c *covenControlClient) AgentStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AgentMessage, ServerMessage], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &FoldControl_ServiceDesc.Streams[0], FoldControl_AgentStream_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &CovenControl_ServiceDesc.Streams[0], CovenControl_AgentStream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -55,84 +55,84 @@ func (c *foldControlClient) AgentStream(ctx context.Context, opts ...grpc.CallOp
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type FoldControl_AgentStreamClient = grpc.BidiStreamingClient[AgentMessage, ServerMessage]
+type CovenControl_AgentStreamClient = grpc.BidiStreamingClient[AgentMessage, ServerMessage]
 
-// FoldControlServer is the server API for FoldControl service.
-// All implementations must embed UnimplementedFoldControlServer
+// CovenControlServer is the server API for CovenControl service.
+// All implementations must embed UnimplementedCovenControlServer
 // for forward compatibility.
 //
 // Agent connects to server, receives commands, sends results
-type FoldControlServer interface {
+type CovenControlServer interface {
 	// Agent registration - bidirectional stream for lifecycle
 	AgentStream(grpc.BidiStreamingServer[AgentMessage, ServerMessage]) error
-	mustEmbedUnimplementedFoldControlServer()
+	mustEmbedUnimplementedCovenControlServer()
 }
 
-// UnimplementedFoldControlServer must be embedded to have
+// UnimplementedCovenControlServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedFoldControlServer struct{}
+type UnimplementedCovenControlServer struct{}
 
-func (UnimplementedFoldControlServer) AgentStream(grpc.BidiStreamingServer[AgentMessage, ServerMessage]) error {
+func (UnimplementedCovenControlServer) AgentStream(grpc.BidiStreamingServer[AgentMessage, ServerMessage]) error {
 	return status.Error(codes.Unimplemented, "method AgentStream not implemented")
 }
-func (UnimplementedFoldControlServer) mustEmbedUnimplementedFoldControlServer() {}
-func (UnimplementedFoldControlServer) testEmbeddedByValue()                     {}
+func (UnimplementedCovenControlServer) mustEmbedUnimplementedCovenControlServer() {}
+func (UnimplementedCovenControlServer) testEmbeddedByValue()                      {}
 
-// UnsafeFoldControlServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to FoldControlServer will
+// UnsafeCovenControlServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to CovenControlServer will
 // result in compilation errors.
-type UnsafeFoldControlServer interface {
-	mustEmbedUnimplementedFoldControlServer()
+type UnsafeCovenControlServer interface {
+	mustEmbedUnimplementedCovenControlServer()
 }
 
-func RegisterFoldControlServer(s grpc.ServiceRegistrar, srv FoldControlServer) {
-	// If the following call panics, it indicates UnimplementedFoldControlServer was
+func RegisterCovenControlServer(s grpc.ServiceRegistrar, srv CovenControlServer) {
+	// If the following call panics, it indicates UnimplementedCovenControlServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&FoldControl_ServiceDesc, srv)
+	s.RegisterService(&CovenControl_ServiceDesc, srv)
 }
 
-func _FoldControl_AgentStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(FoldControlServer).AgentStream(&grpc.GenericServerStream[AgentMessage, ServerMessage]{ServerStream: stream})
+func _CovenControl_AgentStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(CovenControlServer).AgentStream(&grpc.GenericServerStream[AgentMessage, ServerMessage]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type FoldControl_AgentStreamServer = grpc.BidiStreamingServer[AgentMessage, ServerMessage]
+type CovenControl_AgentStreamServer = grpc.BidiStreamingServer[AgentMessage, ServerMessage]
 
-// FoldControl_ServiceDesc is the grpc.ServiceDesc for FoldControl service.
+// CovenControl_ServiceDesc is the grpc.ServiceDesc for CovenControl service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var FoldControl_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "fold.FoldControl",
-	HandlerType: (*FoldControlServer)(nil),
+var CovenControl_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "coven.CovenControl",
+	HandlerType: (*CovenControlServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "AgentStream",
-			Handler:       _FoldControl_AgentStream_Handler,
+			Handler:       _CovenControl_AgentStream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 	},
-	Metadata: "fold.proto",
+	Metadata: "coven.proto",
 }
 
 const (
-	AdminService_ListBindings_FullMethodName    = "/fold.AdminService/ListBindings"
-	AdminService_CreateBinding_FullMethodName   = "/fold.AdminService/CreateBinding"
-	AdminService_UpdateBinding_FullMethodName   = "/fold.AdminService/UpdateBinding"
-	AdminService_DeleteBinding_FullMethodName   = "/fold.AdminService/DeleteBinding"
-	AdminService_CreateToken_FullMethodName     = "/fold.AdminService/CreateToken"
-	AdminService_ListPrincipals_FullMethodName  = "/fold.AdminService/ListPrincipals"
-	AdminService_CreatePrincipal_FullMethodName = "/fold.AdminService/CreatePrincipal"
-	AdminService_DeletePrincipal_FullMethodName = "/fold.AdminService/DeletePrincipal"
+	AdminService_ListBindings_FullMethodName    = "/coven.AdminService/ListBindings"
+	AdminService_CreateBinding_FullMethodName   = "/coven.AdminService/CreateBinding"
+	AdminService_UpdateBinding_FullMethodName   = "/coven.AdminService/UpdateBinding"
+	AdminService_DeleteBinding_FullMethodName   = "/coven.AdminService/DeleteBinding"
+	AdminService_CreateToken_FullMethodName     = "/coven.AdminService/CreateToken"
+	AdminService_ListPrincipals_FullMethodName  = "/coven.AdminService/ListPrincipals"
+	AdminService_CreatePrincipal_FullMethodName = "/coven.AdminService/CreatePrincipal"
+	AdminService_DeletePrincipal_FullMethodName = "/coven.AdminService/DeletePrincipal"
 )
 
 // AdminServiceClient is the client API for AdminService service.
@@ -462,7 +462,7 @@ func _AdminService_DeletePrincipal_Handler(srv interface{}, ctx context.Context,
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var AdminService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "fold.AdminService",
+	ServiceName: "coven.AdminService",
 	HandlerType: (*AdminServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -499,15 +499,15 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "fold.proto",
+	Metadata: "coven.proto",
 }
 
 const (
-	ClientService_GetEvents_FullMethodName    = "/fold.ClientService/GetEvents"
-	ClientService_GetMe_FullMethodName        = "/fold.ClientService/GetMe"
-	ClientService_SendMessage_FullMethodName  = "/fold.ClientService/SendMessage"
-	ClientService_StreamEvents_FullMethodName = "/fold.ClientService/StreamEvents"
-	ClientService_ListAgents_FullMethodName   = "/fold.ClientService/ListAgents"
+	ClientService_GetEvents_FullMethodName    = "/coven.ClientService/GetEvents"
+	ClientService_GetMe_FullMethodName        = "/coven.ClientService/GetMe"
+	ClientService_SendMessage_FullMethodName  = "/coven.ClientService/SendMessage"
+	ClientService_StreamEvents_FullMethodName = "/coven.ClientService/StreamEvents"
+	ClientService_ListAgents_FullMethodName   = "/coven.ClientService/ListAgents"
 )
 
 // ClientServiceClient is the client API for ClientService service.
@@ -740,7 +740,7 @@ func _ClientService_ListAgents_Handler(srv interface{}, ctx context.Context, dec
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ClientService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "fold.ClientService",
+	ServiceName: "coven.ClientService",
 	HandlerType: (*ClientServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -767,12 +767,12 @@ var ClientService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "fold.proto",
+	Metadata: "coven.proto",
 }
 
 const (
-	PackService_Register_FullMethodName   = "/fold.PackService/Register"
-	PackService_ToolResult_FullMethodName = "/fold.PackService/ToolResult"
+	PackService_Register_FullMethodName   = "/coven.PackService/Register"
+	PackService_ToolResult_FullMethodName = "/coven.PackService/ToolResult"
 )
 
 // PackServiceClient is the client API for PackService service.
@@ -904,7 +904,7 @@ func _PackService_ToolResult_Handler(srv interface{}, ctx context.Context, dec f
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var PackService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "fold.PackService",
+	ServiceName: "coven.PackService",
 	HandlerType: (*PackServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -919,5 +919,5 @@ var PackService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "fold.proto",
+	Metadata: "coven.proto",
 }

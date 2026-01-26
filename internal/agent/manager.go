@@ -1,4 +1,4 @@
-// ABOUTME: Manages connected fold-agents, handles registration, and routes messages.
+// ABOUTME: Manages connected coven-agents, handles registration, and routes messages.
 // ABOUTME: Central coordinator for agent connections and message dispatch.
 
 package agent
@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
-	pb "github.com/2389/fold-gateway/proto/fold"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // ErrAgentAlreadyRegistered indicates an agent with the same ID is already connected.

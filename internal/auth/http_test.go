@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/store"
 )
 
 // httpTestSecret is a 32-byte secret that meets MinSecretLength requirement

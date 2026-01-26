@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/proto/coven"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
@@ -19,11 +19,11 @@ var expectedServices = map[string]struct {
 	methods []string
 	streams []string
 }{
-	"fold.FoldControl": {
+	"coven.CovenControl": {
 		methods: []string{},
 		streams: []string{"AgentStream"},
 	},
-	"fold.AdminService": {
+	"coven.AdminService": {
 		methods: []string{
 			"ListBindings",
 			"CreateBinding",
@@ -32,7 +32,7 @@ var expectedServices = map[string]struct {
 		},
 		streams: []string{},
 	},
-	"fold.ClientService": {
+	"coven.ClientService": {
 		methods: []string{
 			"GetEvents",
 			"GetMe",
@@ -48,9 +48,9 @@ var expectedServices = map[string]struct {
 func TestProtoSurface(t *testing.T) {
 	// Build lookup maps from the actual ServiceDesc definitions
 	serviceDescs := map[string]grpc.ServiceDesc{
-		"fold.FoldControl":   fold.FoldControl_ServiceDesc,
-		"fold.AdminService":  fold.AdminService_ServiceDesc,
-		"fold.ClientService": fold.ClientService_ServiceDesc,
+		"coven.CovenControl":  coven.CovenControl_ServiceDesc,
+		"coven.AdminService":  coven.AdminService_ServiceDesc,
+		"coven.ClientService": coven.ClientService_ServiceDesc,
 	}
 
 	for serviceName, expected := range expectedServices {
@@ -128,15 +128,15 @@ func TestServiceDescriptorsExist(t *testing.T) {
 		desc        grpc.ServiceDesc
 		serviceName string
 	}{
-		{"FoldControl", fold.FoldControl_ServiceDesc, "fold.FoldControl"},
-		{"AdminService", fold.AdminService_ServiceDesc, "fold.AdminService"},
-		{"ClientService", fold.ClientService_ServiceDesc, "fold.ClientService"},
+		{"CovenControl", coven.CovenControl_ServiceDesc, "coven.CovenControl"},
+		{"AdminService", coven.AdminService_ServiceDesc, "coven.AdminService"},
+		{"ClientService", coven.ClientService_ServiceDesc, "coven.ClientService"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.serviceName, tt.desc.ServiceName, "ServiceName should match expected")
-			assert.Equal(t, "fold.proto", tt.desc.Metadata, "Metadata should reference fold.proto")
+			assert.Equal(t, "coven.proto", tt.desc.Metadata, "Metadata should reference coven.proto")
 			// HandlerType is intentionally (*ServerInterface)(nil) in gRPC, so we just verify
 			// the service has either methods or streams defined
 			hasEndpoints := len(tt.desc.Methods) > 0 || len(tt.desc.Streams) > 0

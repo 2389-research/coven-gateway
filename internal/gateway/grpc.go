@@ -1,4 +1,4 @@
-// ABOUTME: FoldControl gRPC service implementation for agent communication
+// ABOUTME: CovenControl gRPC service implementation for agent communication
 // ABOUTME: Handles bidirectional streaming for agent registration, heartbeats, and message routing
 
 package gateway
@@ -15,21 +15,21 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/2389/fold-gateway/internal/agent"
-	"github.com/2389/fold-gateway/internal/auth"
-	"github.com/2389/fold-gateway/internal/store"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/agent"
+	"github.com/2389/coven-gateway/internal/auth"
+	"github.com/2389/coven-gateway/internal/store"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// foldControlServer implements the FoldControl gRPC service.
+// foldControlServer implements the CovenControl gRPC service.
 type foldControlServer struct {
-	pb.UnimplementedFoldControlServer
+	pb.UnimplementedCovenControlServer
 	gateway *Gateway
 	logger  *slog.Logger
 }
 
-// newFoldControlServer creates a new FoldControl service instance.
-func newFoldControlServer(gw *Gateway, logger *slog.Logger) *foldControlServer {
+// newCovenControlServer creates a new CovenControl service instance.
+func newCovenControlServer(gw *Gateway, logger *slog.Logger) *foldControlServer {
 	return &foldControlServer{
 		gateway: gw,
 		logger:  logger,
@@ -42,7 +42,7 @@ func newFoldControlServer(gw *Gateway, logger *slog.Logger) *foldControlServer {
 // 2. Server responds with Welcome message
 // 3. Agent sends Heartbeat or MessageResponse messages
 // 4. Server sends SendMessage or Shutdown messages
-func (s *foldControlServer) AgentStream(stream pb.FoldControl_AgentStreamServer) error {
+func (s *foldControlServer) AgentStream(stream pb.CovenControl_AgentStreamServer) error {
 	s.logger.Debug("AgentStream handler invoked, waiting for registration")
 
 	// Send headers immediately to unblock tonic clients waiting for response headers
@@ -224,7 +224,7 @@ func (s *foldControlServer) handleResponse(conn *agent.Connection, resp *pb.Mess
 
 // handleExecutePackTool routes a pack tool execution request through the pack router
 // and sends the result back to the agent.
-func (s *foldControlServer) handleExecutePackTool(stream pb.FoldControl_AgentStreamServer, conn *agent.Connection, req *pb.ExecutePackTool) {
+func (s *foldControlServer) handleExecutePackTool(stream pb.CovenControl_AgentStreamServer, conn *agent.Connection, req *pb.ExecutePackTool) {
 	started := time.Now()
 
 	s.logger.Info("→ pack tool request",
@@ -297,7 +297,7 @@ func (s *foldControlServer) handleExecutePackTool(stream pb.FoldControl_AgentStr
 }
 
 // sendPackToolError sends an error result for a pack tool execution request
-func (s *foldControlServer) sendPackToolError(stream pb.FoldControl_AgentStreamServer, requestID, errMsg string) {
+func (s *foldControlServer) sendPackToolError(stream pb.CovenControl_AgentStreamServer, requestID, errMsg string) {
 	result := &pb.ServerMessage{
 		Payload: &pb.ServerMessage_PackToolResult{
 			PackToolResult: &pb.PackToolResult{

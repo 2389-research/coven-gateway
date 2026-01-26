@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
-	pb "github.com/2389/fold-gateway/proto/fold"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // Connection represents a connected agent with its GRPC stream.
@@ -21,7 +21,7 @@ type Connection struct {
 	InstanceID   string   // Short code for binding commands
 	Backend      string   // Backend type: "mux", "cli", "acp", "direct"
 
-	stream  pb.FoldControl_AgentStreamServer
+	stream  pb.CovenControl_AgentStreamServer
 	pending map[string]chan *pb.MessageResponse
 	mu      sync.RWMutex
 	logger  *slog.Logger
@@ -37,7 +37,7 @@ type ConnectionParams struct {
 	WorkingDir   string
 	InstanceID   string
 	Backend      string
-	Stream       pb.FoldControl_AgentStreamServer
+	Stream       pb.CovenControl_AgentStreamServer
 	Logger       *slog.Logger
 }
 

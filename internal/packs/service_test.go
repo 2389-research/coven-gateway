@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	pb "github.com/2389/fold-gateway/proto/fold"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // mockRegisterStream implements grpc.ServerStreamingServer[pb.ExecuteToolRequest] for testing.

@@ -1,4 +1,4 @@
-// ABOUTME: Configuration loading and parsing for fold-gateway
+// ABOUTME: Configuration loading and parsing for coven-gateway
 // ABOUTME: Supports YAML files with environment variable expansion and duration parsing
 
 package config
@@ -12,7 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents the complete fold-gateway configuration
+// Config represents the complete coven-gateway configuration
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Tailscale TailscaleConfig `yaml:"tailscale"`

@@ -13,8 +13,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/2389/fold-gateway/internal/store"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/store"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 const (

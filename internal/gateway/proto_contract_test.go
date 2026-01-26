@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/2389/fold-gateway/proto/fold"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // TestProtoContract_RegisterAgent verifies RegisterAgent message serializes

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/2389/fold-gateway/proto/fold"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // ErrToolNotFound indicates the requested tool is not registered.

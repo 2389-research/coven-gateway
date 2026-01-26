@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/2389/fold-gateway/internal/packs"
-	"github.com/2389/fold-gateway/internal/store"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/packs"
+	"github.com/2389/coven-gateway/internal/store"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // newTestAdmin creates a minimal Admin instance for handler testing.

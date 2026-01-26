@@ -1,4 +1,4 @@
-// ABOUTME: Tests for Gateway orchestrator and FoldControl gRPC service
+// ABOUTME: Tests for Gateway orchestrator and CovenControl gRPC service
 // ABOUTME: Uses real gRPC streaming to test bidirectional agent communication
 
 package gateway
@@ -16,9 +16,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/2389/fold-gateway/internal/agent"
-	"github.com/2389/fold-gateway/internal/config"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/agent"
+	"github.com/2389/coven-gateway/internal/config"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // testConfig creates a minimal config for testing with available ports
@@ -207,7 +207,7 @@ func TestAgentStreamRegistration(t *testing.T) {
 	}
 	defer conn.Close()
 
-	client := pb.NewFoldControlClient(conn)
+	client := pb.NewCovenControlClient(conn)
 
 	stream, err := client.AgentStream(ctx)
 	if err != nil {
@@ -293,7 +293,7 @@ func TestAgentStreamHeartbeat(t *testing.T) {
 	}
 	defer conn.Close()
 
-	client := pb.NewFoldControlClient(conn)
+	client := pb.NewCovenControlClient(conn)
 	stream, err := client.AgentStream(ctx)
 	if err != nil {
 		t.Fatalf("AgentStream() failed: %v", err)
@@ -367,7 +367,7 @@ func TestAgentStreamDisconnect(t *testing.T) {
 		t.Fatalf("failed to connect: %v", err)
 	}
 
-	client := pb.NewFoldControlClient(conn)
+	client := pb.NewCovenControlClient(conn)
 
 	agentCtx, agentCancel := context.WithCancel(ctx)
 	stream, err := client.AgentStream(agentCtx)
@@ -439,7 +439,7 @@ func TestAgentStream_NoRegistrationFirst(t *testing.T) {
 	}
 	defer conn.Close()
 
-	client := pb.NewFoldControlClient(conn)
+	client := pb.NewCovenControlClient(conn)
 	stream, err := client.AgentStream(ctx)
 	if err != nil {
 		t.Fatalf("AgentStream() failed: %v", err)
@@ -500,8 +500,8 @@ func TestAgentStream_DuplicateRegistration(t *testing.T) {
 	}
 	defer conn2.Close()
 
-	client1 := pb.NewFoldControlClient(conn1)
-	client2 := pb.NewFoldControlClient(conn2)
+	client1 := pb.NewCovenControlClient(conn1)
+	client2 := pb.NewCovenControlClient(conn2)
 
 	// First agent registers
 	stream1, err := client1.AgentStream(ctx)
@@ -586,7 +586,7 @@ func TestFullMessageRoundTrip(t *testing.T) {
 	}
 	defer conn.Close()
 
-	client := pb.NewFoldControlClient(conn)
+	client := pb.NewCovenControlClient(conn)
 	stream, err := client.AgentStream(ctx)
 	if err != nil {
 		t.Fatalf("AgentStream() failed: %v", err)
@@ -812,7 +812,7 @@ func TestMessageRoundTrip_ToolUse(t *testing.T) {
 	}
 	defer conn.Close()
 
-	client := pb.NewFoldControlClient(conn)
+	client := pb.NewCovenControlClient(conn)
 	stream, err := client.AgentStream(ctx)
 	if err != nil {
 		t.Fatalf("AgentStream() failed: %v", err)
@@ -994,7 +994,7 @@ func TestMessageRoundTrip_Error(t *testing.T) {
 	}
 	defer conn.Close()
 
-	client := pb.NewFoldControlClient(conn)
+	client := pb.NewCovenControlClient(conn)
 	stream, err := client.AgentStream(ctx)
 	if err != nil {
 		t.Fatalf("AgentStream() failed: %v", err)

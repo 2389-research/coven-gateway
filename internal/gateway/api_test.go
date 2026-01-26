@@ -17,10 +17,10 @@ import (
 
 	"log/slog"
 
-	"github.com/2389/fold-gateway/internal/agent"
-	"github.com/2389/fold-gateway/internal/config"
-	"github.com/2389/fold-gateway/internal/store"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/agent"
+	"github.com/2389/coven-gateway/internal/config"
+	"github.com/2389/coven-gateway/internal/store"
+	pb "github.com/2389/coven-gateway/proto/coven"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
@@ -567,7 +567,7 @@ func (m *mockAgentManager) ListAgents() []*agent.AgentInfo {
 	}}
 }
 
-// testMockStream implements pb.FoldControl_AgentStreamServer for testing.
+// testMockStream implements pb.CovenControl_AgentStreamServer for testing.
 type testMockStream struct {
 	grpc.ServerStream
 }

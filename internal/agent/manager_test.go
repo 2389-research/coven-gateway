@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/2389/fold-gateway/proto/fold"
+	pb "github.com/2389/coven-gateway/proto/coven"
 	"google.golang.org/grpc"
 )
 
-// mockStream implements pb.FoldControl_AgentStreamServer for testing.
+// mockStream implements pb.CovenControl_AgentStreamServer for testing.
 type mockStream struct {
 	grpc.ServerStream
 	sentMessages []*pb.ServerMessage

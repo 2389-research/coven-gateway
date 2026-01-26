@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/2389/fold-gateway/internal/packs"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/packs"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // mockTokenVerifier implements auth.TokenVerifier for testing.

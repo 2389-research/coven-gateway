@@ -1,4 +1,4 @@
-// ABOUTME: Encryption setup for fold-matrix bridge
+// ABOUTME: Encryption setup for coven-matrix bridge
 // ABOUTME: Configures E2EE with recovery key for Matrix rooms using mautrix crypto
 
 package main
@@ -131,7 +131,7 @@ func slugify(userID string) string {
 func deriveStoreKey(userID string) []byte {
 	// Use SHA-256 to derive a 32-byte key from the user ID.
 	// This provides per-user isolation while being deterministic.
-	h := sha256.Sum256([]byte("fold-matrix-crypto:" + userID))
+	h := sha256.Sum256([]byte("coven-matrix-crypto:" + userID))
 	return h[:]
 }
 

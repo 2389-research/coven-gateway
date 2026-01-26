@@ -1,4 +1,4 @@
-// ABOUTME: Configuration loading for fold-matrix bridge
+// ABOUTME: Configuration loading for coven-matrix bridge
 // ABOUTME: Loads TOML config from XDG path with environment variable expansion
 
 package main

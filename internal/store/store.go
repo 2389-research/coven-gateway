@@ -1,4 +1,4 @@
-// ABOUTME: Store interface and data types for fold-gateway persistence
+// ABOUTME: Store interface and data types for coven-gateway persistence
 // ABOUTME: Defines Thread, Message structs and the Store interface for database operations
 
 package store

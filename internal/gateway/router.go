@@ -1,4 +1,4 @@
-// ABOUTME: Router connects bindings to message routing for fold-gateway
+// ABOUTME: Router connects bindings to message routing for coven-gateway
 // ABOUTME: Resolves frontend+channel to agent, verifying agent is online
 
 package gateway
@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/store"
 )
 
 // Router errors

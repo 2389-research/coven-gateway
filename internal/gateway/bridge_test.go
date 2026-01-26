@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/2389/fold-gateway/internal/dedupe"
+	"github.com/2389/coven-gateway/internal/dedupe"
 )
 
 // testGatewayWithDedupe creates a minimal Gateway with a dedupe cache for testing.

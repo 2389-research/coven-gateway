@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"sync"
 
-	pb "github.com/2389/fold-gateway/proto/fold"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // ErrPackAlreadyRegistered indicates a pack with the same ID is already connected.

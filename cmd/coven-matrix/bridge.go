@@ -1,4 +1,4 @@
-// ABOUTME: Matrix bridge core for fold-matrix
+// ABOUTME: Matrix bridge core for coven-matrix
 // ABOUTME: Handles Matrix client connection and message routing to gateway
 
 package main
@@ -22,7 +22,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// Bridge connects Matrix to fold-gateway.
+// Bridge connects Matrix to coven-gateway.
 type Bridge struct {
 	config  *Config
 	matrix  *mautrix.Client
@@ -68,7 +68,7 @@ func (b *Bridge) Login(ctx context.Context) error {
 			User: b.config.Matrix.Username,
 		},
 		Password:                 b.config.Matrix.Password,
-		InitialDeviceDisplayName: "fold-matrix",
+		InitialDeviceDisplayName: "coven-matrix",
 		StoreCredentials:         true,
 	})
 	if err != nil {

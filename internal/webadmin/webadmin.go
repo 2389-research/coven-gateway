@@ -1,4 +1,4 @@
-// ABOUTME: Admin web UI package for fold-gateway management
+// ABOUTME: Admin web UI package for coven-gateway management
 // ABOUTME: Provides authentication, session management, and admin routes
 
 package webadmin
@@ -20,10 +20,10 @@ import (
 
 	"github.com/go-webauthn/webauthn/webauthn"
 
-	"github.com/2389/fold-gateway/internal/agent"
-	"github.com/2389/fold-gateway/internal/conversation"
-	"github.com/2389/fold-gateway/internal/packs"
-	"github.com/2389/fold-gateway/internal/store"
+	"github.com/2389/coven-gateway/internal/agent"
+	"github.com/2389/coven-gateway/internal/conversation"
+	"github.com/2389/coven-gateway/internal/packs"
+	"github.com/2389/coven-gateway/internal/store"
 	"golang.org/x/crypto/bcrypt"
 )
 

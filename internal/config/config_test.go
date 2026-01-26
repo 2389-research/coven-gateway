@@ -534,7 +534,7 @@ func TestValidate_TailscaleConfig(t *testing.T) {
 			name: "tailscale enabled allows empty server addresses",
 			cfg: Config{
 				Server:    ServerConfig{GRPCAddr: "", HTTPAddr: ""},
-				Tailscale: TailscaleConfig{Enabled: true, Hostname: "fold-gateway"},
+				Tailscale: TailscaleConfig{Enabled: true, Hostname: "coven-gateway"},
 				Database:  DatabaseConfig{Path: "./test.db"},
 			},
 			wantErr: false,
@@ -553,7 +553,7 @@ func TestValidate_TailscaleConfig(t *testing.T) {
 			name: "tailscale disabled requires server addresses",
 			cfg: Config{
 				Server:    ServerConfig{GRPCAddr: "", HTTPAddr: ""},
-				Tailscale: TailscaleConfig{Enabled: false, Hostname: "fold-gateway"},
+				Tailscale: TailscaleConfig{Enabled: false, Hostname: "coven-gateway"},
 				Database:  DatabaseConfig{Path: "./test.db"},
 			},
 			wantErr:       true,
@@ -565,7 +565,7 @@ func TestValidate_TailscaleConfig(t *testing.T) {
 				Server: ServerConfig{GRPCAddr: "", HTTPAddr: ""},
 				Tailscale: TailscaleConfig{
 					Enabled:   true,
-					Hostname:  "fold-gateway",
+					Hostname:  "coven-gateway",
 					AuthKey:   "tskey-auth-xxx",
 					StateDir:  "/tmp/ts-state",
 					Ephemeral: true,

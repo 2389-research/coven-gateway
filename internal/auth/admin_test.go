@@ -301,7 +301,7 @@ func TestAdminGateStream_NonAdminServicePassThrough(t *testing.T) {
 	}
 
 	// Non-admin service should pass through even for non-admin users
-	info := &grpc.StreamServerInfo{FullMethod: "/fold.FoldControl/Stream"}
+	info := &grpc.StreamServerInfo{FullMethod: "/fold.CovenControl/Stream"}
 	err := interceptor(nil, stream, info, handler)
 
 	if err != nil {

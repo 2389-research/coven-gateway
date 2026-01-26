@@ -1,4 +1,4 @@
-// ABOUTME: Admin CLI for fold-gateway identity and binding management
+// ABOUTME: Admin CLI for coven-gateway identity and binding management
 // ABOUTME: Uses gRPC with JWT authentication to manage principals and bindings
 
 package main
@@ -20,8 +20,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/2389/fold-gateway/internal/store"
-	pb "github.com/2389/fold-gateway/proto/fold"
+	"github.com/2389/coven-gateway/internal/store"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 const banner = `
@@ -88,7 +88,7 @@ func printUsage() {
 
 	cyan.Print(banner)
 	fmt.Println()
-	fmt.Println("Usage: fold-admin <command> [args]")
+	fmt.Println("Usage: coven-admin <command> [args]")
 	fmt.Println()
 	yellow.Println("Commands:")
 	fmt.Println("  me                      Show your identity (principal + roles)")
@@ -114,10 +114,10 @@ func printUsage() {
 	fmt.Println()
 	yellow.Println("Examples:")
 	fmt.Println("  export FOLD_TOKEN=\"eyJhbG...\"")
-	fmt.Println("  fold-admin me")
-	fmt.Println("  fold-admin bindings")
-	fmt.Println("  fold-admin agents create --name 'My Agent' --pubkey-fp <fingerprint>")
-	fmt.Println("  fold-admin bindings create --frontend matrix --channel '!room:example.org' --agent <agent-id>")
+	fmt.Println("  coven-admin me")
+	fmt.Println("  coven-admin bindings")
+	fmt.Println("  coven-admin agents create --name 'My Agent' --pubkey-fp <fingerprint>")
+	fmt.Println("  coven-admin bindings create --frontend matrix --channel '!room:example.org' --agent <agent-id>")
 	fmt.Println()
 }
 
@@ -685,7 +685,7 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-// getToken returns the JWT token from FOLD_TOKEN env var or ~/.config/fold/token file
+// getToken returns the JWT token from FOLD_TOKEN env var or ~/.config/coven/token file
 func getToken() string {
 	// Check env var first
 	if token := os.Getenv("FOLD_TOKEN"); token != "" {
