@@ -126,6 +126,19 @@ type agentDetailData struct {
 	CSRFToken string
 }
 
+type setupData struct {
+	Title     string
+	Error     string
+	CSRFToken string
+}
+
+type setupCompleteData struct {
+	Title       string
+	DisplayName string
+	APIToken    string
+	HasToken    bool
+}
+
 // renderLoginPage renders the login page
 func (a *Admin) renderLoginPage(w http.ResponseWriter, errorMsg, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/login.html"))
@@ -365,5 +378,38 @@ func (a *Admin) renderAgentDetail(w http.ResponseWriter, user *store.AdminUser, 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render agent detail page", "error", err)
+	}
+}
+
+// renderSetupPage renders the initial setup wizard page
+func (a *Admin) renderSetupPage(w http.ResponseWriter, errorMsg, csrfToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/setup.html"))
+
+	data := setupData{
+		Title:     "Initial Setup",
+		Error:     errorMsg,
+		CSRFToken: csrfToken,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render setup page", "error", err)
+	}
+}
+
+// renderSetupComplete renders the setup completion page with optional API token
+func (a *Admin) renderSetupComplete(w http.ResponseWriter, displayName, apiToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/setup_complete.html"))
+
+	data := setupCompleteData{
+		Title:       "Setup Complete",
+		DisplayName: displayName,
+		APIToken:    apiToken,
+		HasToken:    apiToken != "",
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render setup complete page", "error", err)
 	}
 }

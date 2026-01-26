@@ -1,0 +1,87 @@
+{{/* ABOUTME: Initial setup wizard page for first-time configuration */}}
+{{/* ABOUTME: Creates first admin user and optional API principal */}}
+{{define "content"}}
+<div class="min-h-screen flex items-center justify-center p-4 bg-warm-50">
+    <div class="w-full max-w-md">
+        <!-- Logo/Brand -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center gap-3 mb-4">
+                <div class="w-12 h-12 rounded-xl bg-forest flex items-center justify-center shadow-soft">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                    </svg>
+                </div>
+                <span class="font-serif text-3xl text-ink">Coven</span>
+            </div>
+            <p class="text-warm-500 text-sm font-medium tracking-wide">Initial Setup</p>
+        </div>
+
+        <!-- Setup Card -->
+        <div class="bg-white rounded-xl border border-warm-200 p-8 shadow-card">
+            <div class="flex items-center gap-3 mb-6 pb-4 border-b border-warm-100">
+                <div class="w-2 h-2 rounded-full bg-forest pulse-soft"></div>
+                <span class="text-xs text-warm-500 font-semibold uppercase tracking-wider">Welcome</span>
+            </div>
+
+            <p class="text-warm-600 text-sm mb-6">
+                Welcome to Coven! Create your admin account to get started managing your agent network.
+            </p>
+
+            {{if .Error}}
+            <div class="mb-4 p-4 bg-danger/5 border border-danger/20 rounded-lg text-danger text-sm">
+                {{.Error}}
+            </div>
+            {{end}}
+
+            <form method="POST" action="/admin/setup" class="space-y-5">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+                <div>
+                    <label for="username" class="block text-sm font-medium text-ink mb-2">Username</label>
+                    <input type="text" id="username" name="username" required autocomplete="username"
+                        class="w-full px-4 py-3 bg-warm-50 border border-warm-200 rounded-lg text-ink text-sm placeholder-warm-400 focus:border-forest focus:ring-1 focus:ring-forest/20 transition-colors"
+                        placeholder="admin">
+                    <p class="mt-1 text-xs text-warm-400">3-32 characters, letters, numbers, and underscores</p>
+                </div>
+
+                <div>
+                    <label for="display_name" class="block text-sm font-medium text-ink mb-2">Display Name</label>
+                    <input type="text" id="display_name" name="display_name" required autocomplete="name"
+                        class="w-full px-4 py-3 bg-warm-50 border border-warm-200 rounded-lg text-ink text-sm placeholder-warm-400 focus:border-forest focus:ring-1 focus:ring-forest/20 transition-colors"
+                        placeholder="Your Name">
+                </div>
+
+                <div>
+                    <label for="password" class="block text-sm font-medium text-ink mb-2">Password</label>
+                    <input type="password" id="password" name="password" required minlength="8" autocomplete="new-password"
+                        class="w-full px-4 py-3 bg-warm-50 border border-warm-200 rounded-lg text-ink text-sm placeholder-warm-400 focus:border-forest focus:ring-1 focus:ring-forest/20 transition-colors">
+                    <p class="mt-1 text-xs text-warm-400">Minimum 8 characters</p>
+                </div>
+
+                <div class="pt-2">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" name="create_principal" checked
+                            class="mt-0.5 w-4 h-4 rounded border-warm-300 text-forest focus:ring-forest/20">
+                        <div>
+                            <span class="text-sm font-medium text-ink">Create API owner principal</span>
+                            <p class="text-xs text-warm-500 mt-0.5">
+                                Required for agents and API clients to connect. A 30-day token will be generated.
+                            </p>
+                        </div>
+                    </label>
+                </div>
+
+                <button type="submit"
+                    class="w-full py-3 px-4 bg-forest text-white font-medium text-sm rounded-lg hover:bg-forest-light transition-colors shadow-soft mt-6">
+                    Complete Setup
+                </button>
+            </form>
+        </div>
+
+        <!-- Footer -->
+        <p class="text-center text-warm-400 text-xs mt-6">
+            Coven Gateway
+        </p>
+    </div>
+</div>
+{{end}}

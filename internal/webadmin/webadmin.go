@@ -16,9 +16,11 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/google/uuid"
 
 	"github.com/2389/coven-gateway/internal/agent"
 	"github.com/2389/coven-gateway/internal/conversation"
@@ -56,6 +58,17 @@ type Config struct {
 	BaseURL string
 }
 
+// TokenGenerator creates JWT tokens for principals
+type TokenGenerator interface {
+	Generate(principalID string, expiresIn time.Duration) (string, error)
+}
+
+// PrincipalStore provides methods for principal and role management
+type PrincipalStore interface {
+	CreatePrincipal(ctx context.Context, p *store.Principal) error
+	AddRole(ctx context.Context, subjectType store.RoleSubjectType, subjectID string, role store.RoleName) error
+}
+
 // FullStore combines AdminStore with thread/message/principal operations
 type FullStore interface {
 	store.AdminStore
@@ -80,6 +93,7 @@ type FullStore interface {
 // Admin handles admin UI routes and authentication
 type Admin struct {
 	store            FullStore
+	principalStore   PrincipalStore
 	manager          *agent.Manager
 	conversation     *conversation.Service
 	registry         *packs.Registry
@@ -88,18 +102,43 @@ type Admin struct {
 	webauthn         *webauthn.WebAuthn
 	webauthnSessions *webAuthnSessionStore
 	chatHub          *chatHub
+	tokenGenerator   TokenGenerator
+}
+
+// NewConfig contains dependencies for creating Admin
+type NewConfig struct {
+	Store          FullStore
+	PrincipalStore PrincipalStore
+	Manager        *agent.Manager
+	Conversation   *conversation.Service
+	Registry       *packs.Registry
+	Config         Config
+	TokenGenerator TokenGenerator
 }
 
 // New creates a new Admin handler
 func New(fullStore FullStore, manager *agent.Manager, convService *conversation.Service, registry *packs.Registry, cfg Config) *Admin {
+	return NewWithConfig(NewConfig{
+		Store:        fullStore,
+		Manager:      manager,
+		Conversation: convService,
+		Registry:     registry,
+		Config:       cfg,
+	})
+}
+
+// NewWithConfig creates a new Admin handler with full configuration
+func NewWithConfig(cfg NewConfig) *Admin {
 	a := &Admin{
-		store:        fullStore,
-		manager:      manager,
-		conversation: convService,
-		registry:     registry,
-		config:       cfg,
-		logger:       slog.Default().With("component", "admin"),
-		chatHub:      newChatHub(),
+		store:          cfg.Store,
+		principalStore: cfg.PrincipalStore,
+		manager:        cfg.Manager,
+		conversation:   cfg.Conversation,
+		registry:       cfg.Registry,
+		config:         cfg.Config,
+		logger:         slog.Default().With("component", "admin"),
+		chatHub:        newChatHub(),
+		tokenGenerator: cfg.TokenGenerator,
 	}
 
 	// Initialize WebAuthn (errors are logged but don't prevent startup)
@@ -122,6 +161,10 @@ func (a *Admin) Close() {
 
 // RegisterRoutes registers all admin routes on the given mux
 func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
+	// Setup wizard (only accessible when no admin users exist)
+	mux.HandleFunc("GET /admin/setup", a.handleSetupPage)
+	mux.HandleFunc("POST /admin/setup", a.handleSetupSubmit)
+
 	// Public routes (no auth required)
 	mux.HandleFunc("GET /admin/login", a.handleLoginPage)
 	mux.HandleFunc("POST /admin/login", a.handleLogin)
@@ -302,6 +345,13 @@ func (a *Admin) createSession(w http.ResponseWriter, r *http.Request, userID str
 
 // handleLoginPage renders the login page
 func (a *Admin) handleLoginPage(w http.ResponseWriter, r *http.Request) {
+	// If no admin users exist, redirect to setup wizard
+	count, err := a.store.CountAdminUsers(r.Context())
+	if err == nil && count == 0 {
+		http.Redirect(w, r, "/admin/setup", http.StatusSeeOther)
+		return
+	}
+
 	// If already logged in, redirect to dashboard
 	if _, err := a.getUserFromSession(r); err == nil {
 		http.Redirect(w, r, "/admin/", http.StatusSeeOther)
@@ -420,6 +470,144 @@ func (a *Admin) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 }
 
+// handleSetupPage renders the initial setup wizard
+func (a *Admin) handleSetupPage(w http.ResponseWriter, r *http.Request) {
+	// Only allow setup if no admin users exist
+	count, err := a.store.CountAdminUsers(r.Context())
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	if count > 0 {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		return
+	}
+
+	// Ensure CSRF token is set
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderSetupPage(w, "", csrfToken)
+}
+
+// handleSetupSubmit processes the initial setup form
+func (a *Admin) handleSetupSubmit(w http.ResponseWriter, r *http.Request) {
+	// Verify no admin users exist (race condition protection)
+	count, err := a.store.CountAdminUsers(r.Context())
+	if err != nil || count > 0 {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderSetupPage(w, "Invalid form data", csrfToken)
+		return
+	}
+
+	// Validate CSRF
+	if !a.validateCSRF(r) {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderSetupPage(w, "Invalid request, please try again", csrfToken)
+		return
+	}
+
+	// Parse form
+	username := strings.TrimSpace(r.FormValue("username"))
+	password := r.FormValue("password")
+	displayName := strings.TrimSpace(r.FormValue("display_name"))
+	createPrincipal := r.FormValue("create_principal") == "on"
+
+	// Validate
+	if username == "" || password == "" || displayName == "" {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderSetupPage(w, "All fields are required", csrfToken)
+		return
+	}
+
+	// Validate username format
+	if errMsg := validateUsername(username); errMsg != "" {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderSetupPage(w, errMsg, csrfToken)
+		return
+	}
+
+	if len(password) < 8 {
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderSetupPage(w, "Password must be at least 8 characters", csrfToken)
+		return
+	}
+
+	// Hash password
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		a.logger.Error("failed to hash password", "error", err)
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderSetupPage(w, "Failed to process password", csrfToken)
+		return
+	}
+
+	// Create admin user
+	userID := uuid.New().String()
+	user := &store.AdminUser{
+		ID:           userID,
+		Username:     username,
+		PasswordHash: string(hash),
+		DisplayName:  displayName,
+		CreatedAt:    time.Now(),
+	}
+	if err := a.store.CreateAdminUser(r.Context(), user); err != nil {
+		a.logger.Error("failed to create admin user", "error", err)
+		_, csrfToken := a.ensureCSRFToken(w, r)
+		a.renderSetupPage(w, "Failed to create user: "+err.Error(), csrfToken)
+		return
+	}
+
+	// Optionally create owner principal for API access
+	var apiToken string
+	if createPrincipal && a.principalStore != nil && a.tokenGenerator != nil {
+		principalID := uuid.New().String()
+		// Generate a unique fingerprint for this setup-created principal
+		fpBytes, err := generateSecureToken(32)
+		if err != nil {
+			a.logger.Error("failed to generate principal fingerprint", "error", err)
+		} else {
+			principal := &store.Principal{
+				ID:          principalID,
+				Type:        store.PrincipalTypeClient,
+				PubkeyFP:    fpBytes, // Use generated token as fingerprint (it's unique)
+				DisplayName: displayName + " (API)",
+				Status:      store.PrincipalStatusApproved,
+				CreatedAt:   time.Now(),
+			}
+			if err := a.principalStore.CreatePrincipal(r.Context(), principal); err == nil {
+				if err := a.principalStore.AddRole(r.Context(), store.RoleSubjectPrincipal, principalID, store.RoleOwner); err != nil {
+					a.logger.Error("failed to add owner role to principal", "principal_id", principalID, "error", err)
+				}
+				// Generate 30-day token
+				var tokenErr error
+				apiToken, tokenErr = a.tokenGenerator.Generate(principalID, 30*24*time.Hour)
+				if tokenErr != nil {
+					a.logger.Error("failed to generate API token", "principal_id", principalID, "error", tokenErr)
+				} else {
+					a.logger.Info("created owner principal via setup", "principal_id", principalID)
+				}
+			} else {
+				a.logger.Error("failed to create principal", "error", err)
+			}
+		}
+	}
+
+	// Create session
+	if err := a.createSession(w, r, userID); err != nil {
+		a.logger.Error("failed to create session", "error", err)
+		// Still show success page but user will need to log in
+	}
+
+	a.logger.Info("admin setup completed", "username", username)
+
+	// Show success page with token (don't redirect immediately)
+	a.renderSetupComplete(w, displayName, apiToken)
+}
+
 // handleInvitePage renders the signup page for an invite link
 func (a *Admin) handleInvitePage(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
@@ -476,9 +664,9 @@ func (a *Admin) handleInviteSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username := r.FormValue("username")
+	username := strings.TrimSpace(r.FormValue("username"))
 	password := r.FormValue("password")
-	displayName := r.FormValue("display_name")
+	displayName := strings.TrimSpace(r.FormValue("display_name"))
 
 	if username == "" || password == "" {
 		_, csrfToken := a.ensureCSRFToken(w, r)

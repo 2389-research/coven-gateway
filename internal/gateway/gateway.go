@@ -306,10 +306,18 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 			webAdminBaseURL = "http://" + cfg.Server.HTTPAddr
 		}
 	}
-	webAdminCfg := webadmin.Config{
-		BaseURL: webAdminBaseURL,
+	webAdminCfg := webadmin.NewConfig{
+		Store:        sqliteStore,
+		Manager:      gw.agentManager,
+		Conversation: convService,
+		Registry:     packRegistry,
+		Config: webadmin.Config{
+			BaseURL: webAdminBaseURL,
+		},
+		PrincipalStore: sqliteStore,
+		TokenGenerator: jwtVerifier, // May be nil if auth is disabled
 	}
-	gw.webAdmin = webadmin.New(sqliteStore, gw.agentManager, convService, packRegistry, webAdminCfg)
+	gw.webAdmin = webadmin.NewWithConfig(webAdminCfg)
 	gw.webAdmin.RegisterRoutes(mux)
 	logger.Info("admin web UI enabled at /admin/", "base_url", webAdminBaseURL)
 

@@ -1,0 +1,98 @@
+{{/* ABOUTME: Setup completion page showing success and optional API token */}}
+{{/* ABOUTME: Displays token that must be saved immediately */}}
+{{define "content"}}
+<div class="min-h-screen flex items-center justify-center p-4 bg-warm-50">
+    <div class="w-full max-w-lg">
+        <!-- Logo/Brand -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center gap-3 mb-4">
+                <div class="w-12 h-12 rounded-xl bg-forest flex items-center justify-center shadow-soft">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <span class="font-serif text-3xl text-ink">Coven</span>
+            </div>
+            <p class="text-success text-sm font-medium tracking-wide">Setup Complete</p>
+        </div>
+
+        <!-- Success Card -->
+        <div class="bg-white rounded-xl border border-warm-200 p-8 shadow-card">
+            <div class="flex items-center gap-3 mb-6 pb-4 border-b border-warm-100">
+                <div class="w-2 h-2 rounded-full bg-success"></div>
+                <span class="text-xs text-warm-500 font-semibold uppercase tracking-wider">Ready</span>
+            </div>
+
+            <p class="text-warm-700 mb-6">
+                Welcome, <strong class="text-ink">{{.DisplayName}}</strong>! Your admin account has been created and you're now logged in.
+            </p>
+
+            {{if .HasToken}}
+            <div class="bg-warm-50 border border-warm-200 rounded-lg p-5 mb-6">
+                <div class="flex items-center gap-2 mb-3">
+                    <svg class="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <h3 class="text-sm font-semibold text-ink">API Token - Save This Now!</h3>
+                </div>
+                <p class="text-xs text-warm-600 mb-3">
+                    Use this token for CLI tools like coven-admin. It expires in 30 days. This token will not be shown again.
+                </p>
+                <div class="relative">
+                    <textarea readonly id="api-token"
+                        class="w-full p-3 text-xs font-mono bg-white border border-warm-300 rounded-lg resize-none focus:outline-none"
+                        rows="3">{{.APIToken}}</textarea>
+                    <button type="button" id="copy-btn" onclick="copyToken(this)"
+                        class="absolute top-2 right-2 text-xs bg-forest text-white px-3 py-1.5 rounded hover:bg-forest-light transition-colors">
+                        Copy
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-warm-50 border border-warm-200 rounded-lg p-5 mb-6">
+                <h3 class="text-sm font-semibold text-ink mb-3">CLI Usage</h3>
+                <pre class="text-xs font-mono bg-white p-3 rounded-lg border border-warm-200 overflow-x-auto whitespace-pre-wrap">export COVEN_TOKEN="{{.APIToken}}"
+export COVEN_GATEWAY_GRPC="localhost:50051"
+coven-admin me</pre>
+            </div>
+            {{end}}
+
+            <a href="/admin/"
+                class="block w-full text-center py-3 px-4 bg-forest text-white font-medium text-sm rounded-lg hover:bg-forest-light transition-colors shadow-soft">
+                Go to Dashboard
+            </a>
+        </div>
+
+        <!-- Footer -->
+        <p class="text-center text-warm-400 text-xs mt-6">
+            Coven Gateway
+        </p>
+    </div>
+</div>
+
+<script>
+function copyToken(btn) {
+    const textarea = document.getElementById('api-token');
+    textarea.select();
+    textarea.setSelectionRange(0, 99999); // For mobile devices
+
+    try {
+        navigator.clipboard.writeText(textarea.value).then(function() {
+            // Show feedback
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            btn.classList.add('bg-success');
+            btn.classList.remove('bg-forest');
+            setTimeout(function() {
+                btn.textContent = originalText;
+                btn.classList.remove('bg-success');
+                btn.classList.add('bg-forest');
+            }, 2000);
+        });
+    } catch (err) {
+        // Fallback for older browsers
+        document.execCommand('copy');
+    }
+}
+</script>
+{{end}}
