@@ -21,16 +21,16 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// foldControlServer implements the CovenControl gRPC service.
-type foldControlServer struct {
+// covenControlServer implements the CovenControl gRPC service.
+type covenControlServer struct {
 	pb.UnimplementedCovenControlServer
 	gateway *Gateway
 	logger  *slog.Logger
 }
 
 // newCovenControlServer creates a new CovenControl service instance.
-func newCovenControlServer(gw *Gateway, logger *slog.Logger) *foldControlServer {
-	return &foldControlServer{
+func newCovenControlServer(gw *Gateway, logger *slog.Logger) *covenControlServer {
+	return &covenControlServer{
 		gateway: gw,
 		logger:  logger,
 	}
@@ -42,7 +42,7 @@ func newCovenControlServer(gw *Gateway, logger *slog.Logger) *foldControlServer 
 // 2. Server responds with Welcome message
 // 3. Agent sends Heartbeat or MessageResponse messages
 // 4. Server sends SendMessage or Shutdown messages
-func (s *foldControlServer) AgentStream(stream pb.CovenControl_AgentStreamServer) error {
+func (s *covenControlServer) AgentStream(stream pb.CovenControl_AgentStreamServer) error {
 	s.logger.Debug("AgentStream handler invoked, waiting for registration")
 
 	// Send headers immediately to unblock tonic clients waiting for response headers
@@ -205,7 +205,7 @@ func (s *foldControlServer) AgentStream(stream pb.CovenControl_AgentStreamServer
 }
 
 // handleHeartbeat processes a heartbeat message from an agent
-func (s *foldControlServer) handleHeartbeat(conn *agent.Connection, hb *pb.Heartbeat) {
+func (s *covenControlServer) handleHeartbeat(conn *agent.Connection, hb *pb.Heartbeat) {
 	s.logger.Debug("received heartbeat",
 		"agent_id", conn.ID,
 		"timestamp_ms", hb.GetTimestampMs(),
@@ -213,7 +213,7 @@ func (s *foldControlServer) handleHeartbeat(conn *agent.Connection, hb *pb.Heart
 }
 
 // handleResponse routes a message response to the appropriate request handler
-func (s *foldControlServer) handleResponse(conn *agent.Connection, resp *pb.MessageResponse) {
+func (s *covenControlServer) handleResponse(conn *agent.Connection, resp *pb.MessageResponse) {
 	s.logger.Debug("received response",
 		"agent_id", conn.ID,
 		"request_id", resp.GetRequestId(),
@@ -224,7 +224,7 @@ func (s *foldControlServer) handleResponse(conn *agent.Connection, resp *pb.Mess
 
 // handleExecutePackTool routes a pack tool execution request through the pack router
 // and sends the result back to the agent.
-func (s *foldControlServer) handleExecutePackTool(stream pb.CovenControl_AgentStreamServer, conn *agent.Connection, req *pb.ExecutePackTool) {
+func (s *covenControlServer) handleExecutePackTool(stream pb.CovenControl_AgentStreamServer, conn *agent.Connection, req *pb.ExecutePackTool) {
 	started := time.Now()
 
 	s.logger.Info("→ pack tool request",
@@ -297,7 +297,7 @@ func (s *foldControlServer) handleExecutePackTool(stream pb.CovenControl_AgentSt
 }
 
 // sendPackToolError sends an error result for a pack tool execution request
-func (s *foldControlServer) sendPackToolError(stream pb.CovenControl_AgentStreamServer, requestID, errMsg string) {
+func (s *covenControlServer) sendPackToolError(stream pb.CovenControl_AgentStreamServer, requestID, errMsg string) {
 	result := &pb.ServerMessage{
 		Payload: &pb.ServerMessage_PackToolResult{
 			PackToolResult: &pb.PackToolResult{
@@ -317,7 +317,7 @@ func (s *foldControlServer) sendPackToolError(stream pb.CovenControl_AgentStream
 // maybeGrantLeaderRole grants the "leader" role to a principal if the agent
 // has "leader" in its capabilities array. Errors are logged but don't fail
 // registration.
-func (s *foldControlServer) maybeGrantLeaderRole(ctx context.Context, principalID string, capabilities []string) {
+func (s *covenControlServer) maybeGrantLeaderRole(ctx context.Context, principalID string, capabilities []string) {
 	// Skip if no principal ID (unauthenticated connection)
 	if principalID == "" {
 		return

@@ -73,7 +73,7 @@ func TestScenario_AdminGateFullFlow(t *testing.T) {
 		return "admin-success", nil
 	}
 
-	adminInfo := &grpc.UnaryServerInfo{FullMethod: "/fold.AdminService/ListPrincipals"}
+	adminInfo := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/ListPrincipals"}
 	resp, err := adminGateInterceptor(authCtx, nil, adminInfo, adminHandler)
 
 	if err != nil {
@@ -157,7 +157,7 @@ func TestScenario_NonAdminBlockedByGate(t *testing.T) {
 		return nil, nil
 	}
 
-	adminInfo := &grpc.UnaryServerInfo{FullMethod: "/fold.AdminService/ListPrincipals"}
+	adminInfo := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/ListPrincipals"}
 	_, err = adminGateInterceptor(authCtx, nil, adminInfo, adminHandler)
 
 	if err == nil {
@@ -243,7 +243,7 @@ func TestScenario_OwnerPassesAdminGate(t *testing.T) {
 		return "owner-success", nil
 	}
 
-	adminInfo := &grpc.UnaryServerInfo{FullMethod: "/fold.AdminService/RevokePrincipal"}
+	adminInfo := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/RevokePrincipal"}
 	resp, err := adminGateInterceptor(authCtx, nil, adminInfo, adminHandler)
 
 	if err != nil {
@@ -329,7 +329,7 @@ func TestScenario_NonAdminServiceBypassesGate(t *testing.T) {
 	}
 
 	// ClientService should bypass the admin gate
-	clientInfo := &grpc.UnaryServerInfo{FullMethod: "/fold.ClientService/SendMessage"}
+	clientInfo := &grpc.UnaryServerInfo{FullMethod: "/coven.ClientService/SendMessage"}
 	resp, err := adminGateInterceptor(authCtx, nil, clientInfo, clientHandler)
 
 	if err != nil {
@@ -405,7 +405,7 @@ func TestScenario_StreamAdminGateFullFlow(t *testing.T) {
 		return nil
 	}
 
-	adminInfo := &grpc.StreamServerInfo{FullMethod: "/fold.AdminService/WatchPrincipals"}
+	adminInfo := &grpc.StreamServerInfo{FullMethod: "/coven.AdminService/WatchPrincipals"}
 	err = adminGateInterceptor(nil, authStream, adminInfo, adminHandler)
 
 	if err != nil {

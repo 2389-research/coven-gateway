@@ -1,5 +1,5 @@
 // ABOUTME: Entry point for coven-matrix bridge
-// ABOUTME: Connects Matrix rooms to fold agents via gateway API
+// ABOUTME: Connects Matrix rooms to coven agents via gateway API
 
 package main
 
@@ -18,17 +18,17 @@ import (
 )
 
 const banner = `
-  __       _     _                       _        _
- / _| ___ | | __| |      _ __ ___   __ _| |_ _ __(_)_  __
-| |_ / _ \| |/ _' |_____| '_ ' _ \ / _' | __| '__| \ \/ /
-|  _| (_) | | (_| |_____| | | | | | (_| | |_| |  | |>  <
-|_|  \___/|_|\__,_|     |_| |_| |_|\__,_|\__|_|  |_/_/\_\
+                                            _        _
+  ___ _____   _____ _ __        _ __ ___   __ _| |_ _ __(_)_  __
+ / __/ _ \ \ / / _ \ '_ \ _____| '_ ' _ \ / _' | __| '__| \ \/ /
+| (_| (_) \ V /  __/ | | |_____| | | | | | (_| | |_| |  | |>  <
+ \___\___/ \_/ \___|_| |_|     |_| |_| |_|\__,_|\__|_|  |_/_/\_\
 `
 
 // getConfigPath returns the path to the matrix bridge config file.
-// Priority: FOLD_MATRIX_CONFIG env var > XDG_CONFIG_HOME/coven/matrix-bridge.toml > ~/.config/coven/matrix-bridge.toml
+// Priority: COVEN_MATRIX_CONFIG env var > XDG_CONFIG_HOME/coven/matrix-bridge.toml > ~/.config/coven/matrix-bridge.toml
 func getConfigPath() string {
-	if envPath := os.Getenv("FOLD_MATRIX_CONFIG"); envPath != "" {
+	if envPath := os.Getenv("COVEN_MATRIX_CONFIG"); envPath != "" {
 		return envPath
 	}
 
@@ -41,11 +41,11 @@ func getConfigPath() string {
 		configDir = filepath.Join(homeDir, ".config")
 	}
 
-	return filepath.Join(configDir, "fold", "matrix-bridge.toml")
+	return filepath.Join(configDir, "coven", "matrix-bridge.toml")
 }
 
-// getDataPath returns the path to the fold data directory.
-// Priority: XDG_DATA_HOME/fold > ~/.local/share/fold
+// getDataPath returns the path to the coven data directory.
+// Priority: XDG_DATA_HOME/coven > ~/.local/share/coven
 func getDataPath() string {
 	dataDir := os.Getenv("XDG_DATA_HOME")
 	if dataDir == "" {
@@ -56,7 +56,7 @@ func getDataPath() string {
 		dataDir = filepath.Join(homeDir, ".local", "share")
 	}
 
-	return filepath.Join(dataDir, "fold")
+	return filepath.Join(dataDir, "coven")
 }
 
 func main() {
@@ -227,7 +227,7 @@ func runInit() error {
 	}
 
 	green.Print("    ▶ ")
-	fmt.Print("Command prefix (optional, e.g. '!fold '): ")
+	fmt.Print("Command prefix (optional, e.g. '!coven '): ")
 	prefix, _ := reader.ReadString('\n')
 	prefix = strings.TrimSpace(prefix)
 

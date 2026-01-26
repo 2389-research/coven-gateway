@@ -1,5 +1,5 @@
-# ABOUTME: Example configuration for fold-matrix bridge
-# ABOUTME: Copy to ~/.config/fold/matrix-bridge.toml and customize
+# ABOUTME: Example configuration for coven-matrix bridge
+# ABOUTME: Copy to ~/.config/coven/matrix-bridge.toml and customize
 
 # Matrix homeserver connection
 [matrix]
@@ -7,7 +7,7 @@
 homeserver = "https://matrix.org"
 
 # Bot user ID (must already exist)
-user_id = "@foldbot:matrix.org"
+user_id = "@covenbot:matrix.org"
 
 # Access token for the bot account
 # Get this from Element: Settings > Help & About > Advanced > Access Token
@@ -19,11 +19,11 @@ access_token = "${MATRIX_ACCESS_TOKEN}"
 # Get this from Element: Settings > Security > Encryption > Secure Backup
 recovery_key = "${MATRIX_RECOVERY_KEY}"
 
-# fold-gateway connection
+# coven-gateway connection
 [gateway]
 # Gateway HTTP API URL
 url = "http://localhost:8080"
-# For Tailscale: url = "http://fold-gateway.tailnet.ts.net"
+# For Tailscale: url = "http://coven-gateway.tailnet.ts.net"
 
 # Bridge behavior settings
 [bridge]
@@ -32,7 +32,7 @@ url = "http://localhost:8080"
 allowed_rooms = []
 
 # Require messages to start with this prefix (empty = respond to all)
-# Example: "!fold " - bot only responds to "!fold hello"
+# Example: "!coven " - bot only responds to "!coven hello"
 command_prefix = ""
 
 # Show typing indicator while waiting for agent response

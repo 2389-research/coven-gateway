@@ -32,10 +32,10 @@ var usernameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{2,31}$`)
 
 const (
 	// SessionCookieName is the name of the session cookie
-	SessionCookieName = "fold_admin_session"
+	SessionCookieName = "coven_admin_session"
 
 	// CSRFCookieName is the name of the CSRF token cookie
-	CSRFCookieName = "fold_admin_csrf"
+	CSRFCookieName = "coven_admin_csrf"
 
 	// SessionDuration is how long sessions last
 	SessionDuration = 7 * 24 * time.Hour // 7 days

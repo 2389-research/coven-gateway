@@ -1,31 +1,31 @@
-# ABOUTME: Docker Compose configuration for fold-gateway and fold-matrix
+# ABOUTME: Docker Compose configuration for coven-gateway and coven-matrix
 # ABOUTME: Uses Tailscale (tsnet) for networking
 
 services:
-  fold-gateway:
+  coven-gateway:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: fold-gateway
+    container_name: coven-gateway
     environment:
       - TS_AUTHKEY=${TS_AUTHKEY:-}
-      - FOLD_GATEWAY_HOST=${FOLD_GATEWAY_HOST:-}
-      - FOLD_GATEWAY_URL=${FOLD_GATEWAY_URL:-}
-      - FOLD_DB_PATH=/app/data/gateway.db
+      - COVEN_GATEWAY_HOST=${COVEN_GATEWAY_HOST:-}
+      - COVEN_GATEWAY_URL=${COVEN_GATEWAY_URL:-}
+      - COVEN_DB_PATH=/app/data/gateway.db
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data
       - ./tailscale:/app/tailscale
     restart: unless-stopped
 
-  # fold-matrix: Matrix bridge (disabled for now)
-  # fold-matrix:
+  # coven-matrix: Matrix bridge (disabled for now)
+  # coven-matrix:
   #   build:
   #     context: .
   #     dockerfile: Dockerfile.matrix
-  #   container_name: fold-matrix
+  #   container_name: coven-matrix
   #   depends_on:
-  #     - fold-gateway
+  #     - coven-gateway
   #   environment:
   #     - MATRIX_USERNAME=${MATRIX_USERNAME:-}
   #     - MATRIX_PASSWORD=${MATRIX_PASSWORD:-}

@@ -1,5 +1,5 @@
 // ABOUTME: Principal entity and store methods for identity management
-// ABOUTME: Principals are the cryptographic identities (client, agent, pack) in the fold system
+// ABOUTME: Principals are the cryptographic identities (client, agent, pack) in the coven system
 
 package store
 

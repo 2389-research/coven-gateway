@@ -164,9 +164,9 @@ func (b *Bridge) handleMessageEvent(ctx context.Context, evt *event.Event) {
 		return
 	}
 
-	// Check for /fold commands
-	if strings.HasPrefix(msgBody, "/fold ") || msgBody == "/fold" {
-		go b.handleFoldCommand(b.ctx, evt.RoomID, strings.TrimPrefix(msgBody, "/fold"))
+	// Check for /coven commands
+	if strings.HasPrefix(msgBody, "/coven ") || msgBody == "/coven" {
+		go b.handleCovenCommand(b.ctx, evt.RoomID, strings.TrimPrefix(msgBody, "/coven"))
 		return
 	}
 
@@ -342,20 +342,20 @@ func markdownToHTML(text string) string {
 	return buf.String()
 }
 
-// handleFoldCommand processes /fold commands for binding management.
-func (b *Bridge) handleFoldCommand(ctx context.Context, roomID id.RoomID, cmd string) {
+// handleCovenCommand processes /coven commands for binding management.
+func (b *Bridge) handleCovenCommand(ctx context.Context, roomID id.RoomID, cmd string) {
 	cmd = strings.TrimSpace(cmd)
 	parts := strings.Fields(cmd)
 
 	if len(parts) == 0 {
-		b.sendMessage(roomID, "**Usage:** `/fold <bind|unbind|status|agents>`")
+		b.sendMessage(roomID, "**Usage:** `/coven <bind|unbind|status|agents>`")
 		return
 	}
 
 	switch parts[0] {
 	case "bind":
 		if len(parts) < 2 {
-			b.sendMessage(roomID, "**Usage:** `/fold bind <instance-id>`\n\nUse `/fold agents` to list available agents.")
+			b.sendMessage(roomID, "**Usage:** `/coven bind <instance-id>`\n\nUse `/coven agents` to list available agents.")
 			return
 		}
 		b.handleBind(ctx, roomID, parts[1])
@@ -404,7 +404,7 @@ func (b *Bridge) handleUnbind(ctx context.Context, roomID id.RoomID) {
 		return
 	}
 
-	b.sendMessage(roomID, "Unbound from agent. Use `/fold bind <instance-id>` to bind to a new agent.")
+	b.sendMessage(roomID, "Unbound from agent. Use `/coven bind <instance-id>` to bind to a new agent.")
 }
 
 // handleStatus shows the current binding status for this room.
@@ -419,7 +419,7 @@ func (b *Bridge) handleStatus(ctx context.Context, roomID id.RoomID) {
 	}
 
 	if binding == nil {
-		b.sendMessage(roomID, "This room is not bound to any agent.\n\nUse `/fold agents` to list available agents, then `/fold bind <instance-id>` to bind.")
+		b.sendMessage(roomID, "This room is not bound to any agent.\n\nUse `/coven agents` to list available agents, then `/coven bind <instance-id>` to bind.")
 		return
 	}
 
@@ -458,7 +458,7 @@ func (b *Bridge) handleListAgents(ctx context.Context, roomID id.RoomID) {
 			agent.InstanceID, agent.Name, agent.WorkingDir))
 	}
 
-	sb.WriteString("\nUse `/fold bind <instance-id>` to bind this room to an agent.")
+	sb.WriteString("\nUse `/coven bind <instance-id>` to bind this room to an agent.")
 
 	b.sendMessage(roomID, sb.String())
 }

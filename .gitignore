@@ -1,8 +1,8 @@
 # Build artifacts
 bin/
-/fold-matrix
-/fold-gateway
-/fold-tui
+/coven-matrix
+/coven-gateway
+/coven-tui
 
 # Local config (use config.example.yaml as template)
 config.yaml

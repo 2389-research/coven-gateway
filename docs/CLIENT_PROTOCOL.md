@@ -1,6 +1,6 @@
 # Client Protocol
 
-This document describes the HTTP API for clients (TUIs, web apps, bots) to interact with fold-gateway.
+This document describes the HTTP API for clients (TUIs, web apps, bots) to interact with coven-gateway.
 
 ## Overview
 

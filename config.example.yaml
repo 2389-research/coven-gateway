@@ -1,4 +1,4 @@
-# fold-gateway configuration example
+# coven-gateway configuration example
 # Copy to config.yaml and customize
 
 server:
@@ -11,12 +11,12 @@ server:
 # When enabled, gateway listens on Tailscale network instead of local TCP
 tailscale:
   enabled: false
-  # Hostname for this node (e.g., "fold-gateway" -> fold-gateway.tailnet-xxx.ts.net)
-  hostname: "fold-gateway"
+  # Hostname for this node (e.g., "coven-gateway" -> coven-gateway.tailnet-xxx.ts.net)
+  hostname: "coven-gateway"
   # Auth key for automatic registration (or set TS_AUTHKEY env var)
   # Generate at: https://login.tailscale.com/admin/settings/keys
   auth_key: "${TS_AUTHKEY}"
-  # State directory (default: ~/.local/share/fold-gateway/tailscale)
+  # State directory (default: ~/.local/share/coven-gateway/tailscale)
   state_dir: ""
   # Ephemeral node - removed from tailnet when gateway stops
   ephemeral: false
@@ -61,7 +61,7 @@ frontends:
 auth:
   # JWT secret for token authentication (min 32 bytes)
   # Use environment variable - NEVER commit real secrets!
-  jwt_secret: "${FOLD_JWT_SECRET}"
+  jwt_secret: "${COVEN_JWT_SECRET}"
   # Agent auto-registration mode: approved (default), pending, or disabled
   # - approved: auto-create principal with approved status (can receive messages immediately)
   # - pending: auto-create principal with pending status (admin must approve)
@@ -83,6 +83,6 @@ metrics:
 webadmin:
   # External URL for admin UI (used for invite links and WebAuthn)
   # If not set, auto-detected from server.http_addr or tailscale.hostname
-  # For tsnet with Funnel: https://fold-gateway.your-tailnet.ts.net
-  # For tsnet without Funnel: http://fold-gateway (internal tailnet access)
+  # For tsnet with Funnel: https://coven-gateway.your-tailnet.ts.net
+  # For tsnet without Funnel: http://coven-gateway (internal tailnet access)
   base_url: ""

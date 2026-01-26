@@ -1,5 +1,5 @@
 #!/bin/bash
-# ABOUTME: Manual testing script for FOLD v1 identity foundation
+# ABOUTME: Manual testing script for COVEN v1 identity foundation
 # ABOUTME: Creates test data, generates JWT tokens, and starts the gateway
 
 set -e
@@ -13,11 +13,11 @@ NC='\033[0m' # No Color
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-DB_PATH="${1:-/tmp/fold-test.db}"
+DB_PATH="${1:-/tmp/coven-test.db}"
 JWT_SECRET="test-secret-key-for-jwt-signing-minimum-32-bytes!"
 CONFIG_PATH="/tmp/test-gateway.yaml"
 
-echo -e "${CYAN}=== FOLD v1 Identity Foundation Test ===${NC}"
+echo -e "${CYAN}=== COVEN v1 Identity Foundation Test ===${NC}"
 echo ""
 
 # Check for required tools
@@ -320,7 +320,7 @@ echo -e "${YELLOW}STEP 1: Start the gateway (in this terminal)${NC}"
 echo -e "${CYAN}════════════════════════════════════════════════════════════════${NC}"
 echo ""
 echo "cd $PROJECT_DIR"
-echo "FOLD_CONFIG=$CONFIG_PATH go run ./cmd/fold-gateway serve"
+echo "COVEN_CONFIG=$CONFIG_PATH go run ./cmd/coven-gateway serve"
 echo ""
 echo -e "${CYAN}════════════════════════════════════════════════════════════════${NC}"
 echo -e "${YELLOW}STEP 2: Test with grpcurl (in another terminal)${NC}"
@@ -335,18 +335,18 @@ echo "export CLIENT_TOKEN=\"$CLIENT_TOKEN\""
 echo "export AGENT_ID=\"$AGENT_ID\""
 echo ""
 echo "# Test GetMe as admin (should work):"
-echo 'grpcurl -plaintext -H "authorization: Bearer $ADMIN_TOKEN" localhost:50099 fold.ClientService/GetMe'
+echo 'grpcurl -plaintext -H "authorization: Bearer $ADMIN_TOKEN" localhost:50099 coven.ClientService/GetMe'
 echo ""
 echo "# Test GetMe as client (should work):"
-echo 'grpcurl -plaintext -H "authorization: Bearer $CLIENT_TOKEN" localhost:50099 fold.ClientService/GetMe'
+echo 'grpcurl -plaintext -H "authorization: Bearer $CLIENT_TOKEN" localhost:50099 coven.ClientService/GetMe'
 echo ""
 echo "# Test ListBindings as admin (should work - returns empty list):"
-echo 'grpcurl -plaintext -H "authorization: Bearer $ADMIN_TOKEN" localhost:50099 fold.AdminService/ListBindings'
+echo 'grpcurl -plaintext -H "authorization: Bearer $ADMIN_TOKEN" localhost:50099 coven.AdminService/ListBindings'
 echo ""
 echo "# Test ListBindings as client (should FAIL with PERMISSION_DENIED):"
-echo 'grpcurl -plaintext -H "authorization: Bearer $CLIENT_TOKEN" localhost:50099 fold.AdminService/ListBindings'
+echo 'grpcurl -plaintext -H "authorization: Bearer $CLIENT_TOKEN" localhost:50099 coven.AdminService/ListBindings'
 echo ""
 echo "# Create a binding as admin:"
-echo 'grpcurl -plaintext -H "authorization: Bearer $ADMIN_TOKEN" -d "{\"frontend\":\"matrix\",\"channel_id\":\"!test:example.org\",\"agent_id\":\"'$AGENT_ID'\"}" localhost:50099 fold.AdminService/CreateBinding'
+echo 'grpcurl -plaintext -H "authorization: Bearer $ADMIN_TOKEN" -d "{\"frontend\":\"matrix\",\"channel_id\":\"!test:example.org\",\"agent_id\":\"'$AGENT_ID'\"}" localhost:50099 coven.AdminService/CreateBinding'
 echo ""
 echo -e "${CYAN}════════════════════════════════════════════════════════════════${NC}"

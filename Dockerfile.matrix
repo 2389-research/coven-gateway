@@ -1,4 +1,4 @@
-# ABOUTME: Multi-stage Dockerfile for fold-matrix bridge
+# ABOUTME: Multi-stage Dockerfile for coven-matrix bridge
 # ABOUTME: Builds with libolm for E2EE Matrix support
 
 # Stage 1: Build
@@ -21,7 +21,7 @@ RUN go mod download
 COPY . .
 
 # Build with CGO enabled for libolm
-RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /fold-matrix ./cmd/fold-matrix
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /coven-matrix ./cmd/coven-matrix
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
@@ -38,7 +38,7 @@ RUN useradd --create-home --shell /bin/bash app
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /fold-matrix /usr/local/bin/fold-matrix
+COPY --from=builder /coven-matrix /usr/local/bin/coven-matrix
 
 # Copy example config
 COPY config.matrix.example.toml /app/config.matrix.example.toml
@@ -49,7 +49,7 @@ RUN mkdir -p /app/data && chown -R app:app /app
 USER app
 
 # Config path via environment variable
-ENV FOLD_MATRIX_CONFIG=/app/config.toml
+ENV COVEN_MATRIX_CONFIG=/app/config.toml
 
 # Default command
-CMD ["fold-matrix"]
+CMD ["coven-matrix"]

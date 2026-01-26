@@ -1,9 +1,9 @@
-# ABOUTME: GoReleaser configuration for building and releasing fold-gateway binaries
+# ABOUTME: GoReleaser configuration for building and releasing coven-gateway binaries
 # ABOUTME: Builds for macOS (native) and Linux (via Zig cross-compilation) with CGO support
 
 version: 2
 
-project_name: fold-gateway
+project_name: coven-gateway
 
 before:
   hooks:
@@ -12,8 +12,8 @@ before:
 builds:
   # Darwin builds use native CGO (macOS runner)
   - id: darwin
-    main: ./cmd/fold-gateway
-    binary: fold-gateway
+    main: ./cmd/coven-gateway
+    binary: coven-gateway
     goos:
       - darwin
     goarch:
@@ -28,8 +28,8 @@ builds:
 
   # Linux builds use Zig for cross-compilation
   - id: linux-amd64
-    main: ./cmd/fold-gateway
-    binary: fold-gateway
+    main: ./cmd/coven-gateway
+    binary: coven-gateway
     goos:
       - linux
     goarch:
@@ -44,8 +44,8 @@ builds:
       - -s -w -X main.version={{.Version}} -linkmode=external -extldflags=-static
 
   - id: linux-arm64
-    main: ./cmd/fold-gateway
-    binary: fold-gateway
+    main: ./cmd/coven-gateway
+    binary: coven-gateway
     goos:
       - linux
     goarch:
@@ -59,10 +59,10 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}} -linkmode=external -extldflags=-static
 
-  # fold-matrix bridge (pure Go with goolm, no CGO needed)
-  - id: fold-matrix
-    main: ./cmd/fold-matrix
-    binary: fold-matrix
+  # coven-matrix bridge (pure Go with goolm, no CGO needed)
+  - id: coven-matrix
+    main: ./cmd/coven-matrix
+    binary: coven-matrix
     goos:
       - darwin
       - linux
@@ -83,7 +83,7 @@ archives:
       - darwin
       - linux-amd64
       - linux-arm64
-    name_template: "fold-gateway_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "coven-gateway_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE*
       - README*
@@ -91,11 +91,11 @@ archives:
 
   - id: matrix
     builds:
-      - fold-matrix
-    name_template: "fold-matrix_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+      - coven-matrix
+    name_template: "coven-matrix_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE*
-      - cmd/fold-matrix/config.example.toml
+      - cmd/coven-matrix/config.example.toml
 
 brews:
   - repository:
@@ -103,12 +103,12 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
-    homepage: "https://github.com/2389-research/fold-gateway"
-    description: "fold-gateway - Gateway server for AI agent orchestration"
+    homepage: "https://github.com/2389-research/coven-gateway"
+    description: "coven-gateway - Gateway server for AI agent orchestration"
     install: |
-      bin.install "fold-gateway"
+      bin.install "coven-gateway"
     test: |
-      system "#{bin}/fold-gateway", "--help"
+      system "#{bin}/coven-gateway", "--help"
 
 changelog:
   sort: asc

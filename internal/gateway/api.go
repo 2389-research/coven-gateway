@@ -1021,7 +1021,7 @@ func (g *Gateway) handleSendToAgent(w http.ResponseWriter, r *http.Request) {
 		FrontendName: "leader",
 		ExternalID:   conversationKey,
 		AgentID:      agentID,
-		Sender:       "fold-leader",
+		Sender:       "coven-leader",
 		Content:      req.Message,
 	}
 

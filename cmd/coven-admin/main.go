@@ -702,7 +702,7 @@ func getToken() string {
 		configDir = filepath.Join(homeDir, ".config")
 	}
 
-	tokenPath := filepath.Join(configDir, "fold", "token")
+	tokenPath := filepath.Join(configDir, "coven", "token")
 	data, err := os.ReadFile(tokenPath)
 	if err != nil {
 		return ""
@@ -773,17 +773,17 @@ func cmdInviteCreate(args []string) error {
 				}
 				configDir = filepath.Join(homeDir, ".config")
 			}
-			dbPath = filepath.Join(configDir, "fold", "gateway.db")
+			dbPath = filepath.Join(configDir, "coven", "gateway.db")
 		}
 	}
 
 	// Default base URL
-	// FOLD_GATEWAY_URL takes full URL, or FOLD_GATEWAY_HOST derives http:// URL
+	// COVEN_GATEWAY_URL takes full URL, or COVEN_GATEWAY_HOST derives http:// URL
 	// (use http:// for tailnet-only; WireGuard already encrypts)
 	if baseURL == "" {
-		if url := os.Getenv("FOLD_GATEWAY_URL"); url != "" {
+		if url := os.Getenv("COVEN_GATEWAY_URL"); url != "" {
 			baseURL = url
-		} else if host := os.Getenv("FOLD_GATEWAY_HOST"); host != "" {
+		} else if host := os.Getenv("COVEN_GATEWAY_HOST"); host != "" {
 			baseURL = "http://" + host
 		} else {
 			baseURL = "http://localhost:8080"

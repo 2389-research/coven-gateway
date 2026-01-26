@@ -79,4 +79,4 @@ jobs:
           cache: true
 
       - name: Build
-        run: go build -o bin/fold-gateway ./cmd/fold-gateway
+        run: go build -o bin/coven-gateway ./cmd/coven-gateway

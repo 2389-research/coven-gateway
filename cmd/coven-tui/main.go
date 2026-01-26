@@ -36,7 +36,7 @@ func getToken() string {
 		configDir = filepath.Join(homeDir, ".config")
 	}
 
-	tokenPath := filepath.Join(configDir, "fold", "token")
+	tokenPath := filepath.Join(configDir, "coven", "token")
 	data, err := os.ReadFile(tokenPath)
 	if err != nil {
 		return ""

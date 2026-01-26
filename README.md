@@ -1,6 +1,6 @@
 # coven-gateway
 
-Production control plane for [fold](https://github.com/2389-research/coven-agent) agents. Manages agent connections via gRPC, routes messages from frontends to agents, and streams responses back in real-time.
+Production control plane for [coven](https://github.com/2389-research/coven-agent) agents. Manages agent connections via gRPC, routes messages from frontends to agents, and streams responses back in real-time.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -66,7 +66,7 @@ cp config.example.yaml config.yaml
 ./bin/coven-gateway serve
 
 # In another terminal, start a coven-agent pointing at the gateway
-cd /path/to/fold
+cd /path/to/coven-agent
 cargo run -p coven-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 
 # In a third terminal, interact via TUI
@@ -300,7 +300,7 @@ coven-gateway/
 │   │   ├── grpc.go       # CovenControl gRPC service
 │   │   └── api.go        # HTTP API handlers
 │   └── store/            # SQLite persistence
-├── proto/fold/           # Generated protobuf code
+├── proto/coven/          # Generated protobuf code
 ├── docs/
 │   ├── AGENT_PROTOCOL.md # gRPC protocol for agents
 │   └── CLIENT_PROTOCOL.md # HTTP API for clients
@@ -410,5 +410,5 @@ MIT
 
 ## Related Projects
 
-- [coven-agent](https://github.com/2389-research/coven-agent) - The fold agent framework (Rust)
+- [coven-agent](https://github.com/2389-research/coven-agent) - The coven agent framework (Rust)
 - [mux](https://github.com/2389-research/mux-rs) - Claude API streaming library

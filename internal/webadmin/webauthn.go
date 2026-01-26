@@ -166,7 +166,7 @@ func (a *Admin) initWebAuthn() error {
 	}
 
 	wconfig := &webauthn.Config{
-		RPDisplayName: "fold admin",
+		RPDisplayName: "coven admin",
 		RPID:          rpID,
 		RPOrigins:     rpOrigins,
 	}

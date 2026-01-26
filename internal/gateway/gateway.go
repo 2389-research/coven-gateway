@@ -215,8 +215,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	}
 
 	// Register CovenControl service (agent streaming - no auth required for now)
-	foldService := newCovenControlServer(gw, logger.With("component", "grpc"))
-	pb.RegisterCovenControlServer(grpcServer, foldService)
+	covenService := newCovenControlServer(gw, logger.With("component", "grpc"))
+	pb.RegisterCovenControlServer(grpcServer, covenService)
 
 	// Register AdminService and ClientService
 	sqliteStore := s.(*store.SQLiteStore)

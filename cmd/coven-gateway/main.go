@@ -1,5 +1,5 @@
 // ABOUTME: Entry point for coven-gateway control server
-// ABOUTME: Manages fold agents and frontend connections
+// ABOUTME: Manages coven agents and frontend connections
 
 package main
 
@@ -33,18 +33,18 @@ import (
 var version = "dev"
 
 const banner = `
-  __       _     _                   _
- / _| ___ | | __| |       __ _  __ _| |_ _____      ____ _ _   _
-| |_ / _ \| |/ _' |_____ / _' |/ _' | __/ _ \ \ /\ / / _' | | | |
-|  _| (_) | | (_| |_____| (_| | (_| | ||  __/\ V  V / (_| | |_| |
-|_|  \___/|_|\__,_|      \__, |\__,_|\__\___| \_/\_/ \__,_|\__, |
-                         |___/                             |___/
+                                            _
+  ___ _____   _____ _ __        __ _  __ _| |_ _____      ____ _ _   _
+ / __/ _ \ \ / / _ \ '_ \ _____/ _' |/ _' | __/ _ \ \ /\ / / _' | | | |
+| (_| (_) \ V /  __/ | | |_____| (_| | (_| | ||  __/\ V  V / (_| | |_| |
+ \___\___/ \_/ \___|_| |_|      \__, |\__,_|\__\___| \_/\_/ \__,_|\__, |
+                                |___/                             |___/
 `
 
 // getConfigPath returns the path to the gateway config file.
-// Priority: FOLD_CONFIG env var > XDG_CONFIG_HOME/coven/gateway.yaml > ~/.config/coven/gateway.yaml
+// Priority: COVEN_CONFIG env var > XDG_CONFIG_HOME/coven/gateway.yaml > ~/.config/coven/gateway.yaml
 func getConfigPath() string {
-	if envPath := os.Getenv("FOLD_CONFIG"); envPath != "" {
+	if envPath := os.Getenv("COVEN_CONFIG"); envPath != "" {
 		return envPath
 	}
 
@@ -57,11 +57,11 @@ func getConfigPath() string {
 		configDir = filepath.Join(homeDir, ".config")
 	}
 
-	return filepath.Join(configDir, "fold", "gateway.yaml")
+	return filepath.Join(configDir, "coven", "gateway.yaml")
 }
 
-// getDataPath returns the path to the fold data directory.
-// Priority: XDG_DATA_HOME/fold > ~/.local/share/fold
+// getDataPath returns the path to the coven data directory.
+// Priority: XDG_DATA_HOME/coven > ~/.local/share/coven
 func getDataPath() string {
 	dataDir := os.Getenv("XDG_DATA_HOME")
 	if dataDir == "" {
@@ -72,7 +72,7 @@ func getDataPath() string {
 		dataDir = filepath.Join(homeDir, ".local", "share")
 	}
 
-	return filepath.Join(dataDir, "fold")
+	return filepath.Join(dataDir, "coven")
 }
 
 func main() {

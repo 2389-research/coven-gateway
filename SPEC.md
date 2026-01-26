@@ -50,7 +50,7 @@ coven-gateway is the production control plane for coven agents. It manages agent
 
 ## GRPC Protocol
 
-Uses the existing `proto/coven.proto` from the fold repository. The gateway implements the `CovenControl` service:
+Uses the existing `proto/coven.proto` from the coven repository. The gateway implements the `CovenControl` service:
 
 ```protobuf
 service CovenControl {
@@ -103,8 +103,8 @@ coven-gateway/
 │   └── gateway/
 │       └── gateway.go        # Main orchestrator
 ├── proto/
-│   └── fold/
-│       └── fold.pb.go        # Generated from coven.proto
+│   └── coven/
+│       └── coven.pb.go       # Generated from coven.proto
 ├── config.example.yaml
 ├── go.mod
 ├── go.sum
@@ -261,7 +261,7 @@ frontends:
   matrix:
     enabled: true
     homeserver: "https://matrix.org"
-    user_id: "@fold:matrix.org"
+    user_id: "@coven:matrix.org"
     access_token: "${MATRIX_ACCESS_TOKEN}"
     allowed_users:
       - "@harper:matrix.org"
@@ -385,11 +385,11 @@ GET /metrics         # Prometheus metrics
 
 ### Metrics to Track
 
-- `fold_agents_connected` (gauge): Number of connected agents
-- `fold_requests_total` (counter): Total requests processed, labeled by frontend
-- `fold_request_duration_seconds` (histogram): Request latency
-- `fold_errors_total` (counter): Errors by type
-- `fold_agent_messages_total` (counter): Messages sent to agents
+- `coven_agents_connected` (gauge): Number of connected agents
+- `coven_requests_total` (counter): Total requests processed, labeled by frontend
+- `coven_request_duration_seconds` (histogram): Request latency
+- `coven_errors_total` (counter): Errors by type
+- `coven_agent_messages_total` (counter): Messages sent to agents
 
 ## Security Considerations
 

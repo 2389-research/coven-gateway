@@ -1,4 +1,4 @@
-# ABOUTME: Example configuration for fold-matrix bridge
+# ABOUTME: Example configuration for coven-matrix bridge
 # ABOUTME: Copy to config.matrix.toml and fill in your values
 
 [matrix]
@@ -14,9 +14,9 @@ password = "${MATRIX_PASSWORD}"
 recovery_key = "${MATRIX_RECOVERY_KEY}"
 
 [gateway]
-# fold-gateway HTTP API URL
+# coven-gateway HTTP API URL
 # Use container name when running in docker-compose
-url = "http://fold-gateway:8080"
+url = "http://coven-gateway:8080"
 
 [bridge]
 # Allowed Matrix room IDs (leave empty to allow all rooms)

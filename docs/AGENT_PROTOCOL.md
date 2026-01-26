@@ -1,6 +1,6 @@
 # Agent Protocol
 
-This document describes the gRPC protocol for fold-agents connecting to fold-gateway.
+This document describes the gRPC protocol for coven-agents connecting to coven-gateway.
 
 ## Overview
 
@@ -39,12 +39,12 @@ Agent                                    Gateway
 
 **Endpoint:** `grpc://<gateway-host>:50051`
 
-**Service:** `fold.FoldControl`
+**Service:** `coven.CovenControl`
 
 **RPC:** `AgentStream` - bidirectional streaming
 
 ```protobuf
-service FoldControl {
+service CovenControl {
   rpc AgentStream(stream AgentMessage) returns (stream ServerMessage);
 }
 ```
@@ -248,7 +248,7 @@ let channel = Channel::from_static("http://localhost:50051")
     .connect()
     .await?;
 
-let mut client = FoldControlClient::new(channel);
+let mut client = CovenControlClient::new(channel);
 
 let (tx, rx) = mpsc::channel(100);
 let outbound = ReceiverStream::new(rx);
@@ -283,7 +283,7 @@ while let Some(msg) = inbound.next().await {
 
 ```go
 conn, _ := grpc.Dial("localhost:50051", grpc.WithInsecure())
-client := pb.NewFoldControlClient(conn)
+client := pb.NewCovenControlClient(conn)
 
 stream, _ := client.AgentStream(context.Background())
 

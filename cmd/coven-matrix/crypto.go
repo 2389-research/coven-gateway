@@ -107,7 +107,7 @@ func (cm *CryptoManager) Close() error {
 }
 
 // slugify converts a Matrix user ID to a filesystem-safe string.
-// Example: @foldbot:matrix.org -> foldbot_matrix.org
+// Example: @covenbot:matrix.org -> covenbot_matrix.org
 func slugify(userID string) string {
 	// Remove leading @ and replace : with _
 	s := userID

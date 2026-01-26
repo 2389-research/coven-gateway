@@ -17,7 +17,7 @@ import (
 func RequireAdmin() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		// Skip for non-admin services
-		if !strings.HasPrefix(info.FullMethod, "/fold.AdminService/") {
+		if !strings.HasPrefix(info.FullMethod, "/coven.AdminService/") {
 			return handler(ctx, req)
 		}
 
@@ -39,7 +39,7 @@ func RequireAdmin() grpc.UnaryServerInterceptor {
 func RequireAdminStream() grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		// Skip for non-admin services
-		if !strings.HasPrefix(info.FullMethod, "/fold.AdminService/") {
+		if !strings.HasPrefix(info.FullMethod, "/coven.AdminService/") {
 			return handler(srv, ss)
 		}
 

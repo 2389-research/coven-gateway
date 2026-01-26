@@ -1,4 +1,4 @@
-# ABOUTME: Example config for running fold-gateway in Docker with Tailscale
+# ABOUTME: Example config for running coven-gateway in Docker with Tailscale
 # ABOUTME: Copy to config.yaml and set TS_AUTHKEY in environment
 
 # Server addresses not needed - tsnet handles networking
@@ -8,7 +8,7 @@ server:
 
 tailscale:
   enabled: true
-  hostname: "fold-gateway"
+  hostname: "coven-gateway"
   # Auth key via environment: TS_AUTHKEY
   auth_key: ""
   # Docker volume mount point for state persistence

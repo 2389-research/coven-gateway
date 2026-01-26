@@ -29,7 +29,7 @@ func TestAdminGate_AdminCan(t *testing.T) {
 		return "success", nil
 	}
 
-	info := &grpc.UnaryServerInfo{FullMethod: "/fold.AdminService/ListPrincipals"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/ListPrincipals"}
 	resp, err := interceptor(ctx, nil, info, handler)
 
 	if err != nil {
@@ -61,7 +61,7 @@ func TestAdminGate_NonAdminCannot(t *testing.T) {
 		return nil, nil
 	}
 
-	info := &grpc.UnaryServerInfo{FullMethod: "/fold.AdminService/ListPrincipals"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/ListPrincipals"}
 	_, err := interceptor(ctx, nil, info, handler)
 
 	if err == nil {
@@ -99,7 +99,7 @@ func TestAdminGate_OwnerCan(t *testing.T) {
 		return "owner-success", nil
 	}
 
-	info := &grpc.UnaryServerInfo{FullMethod: "/fold.AdminService/RevokePrincipal"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/RevokePrincipal"}
 	resp, err := interceptor(ctx, nil, info, handler)
 
 	if err != nil {
@@ -133,7 +133,7 @@ func TestAdminGate_ClientServiceOpen(t *testing.T) {
 	}
 
 	// ClientService is not an AdminService, should pass through
-	info := &grpc.UnaryServerInfo{FullMethod: "/fold.ClientService/SendMessage"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/coven.ClientService/SendMessage"}
 	resp, err := interceptor(ctx, nil, info, handler)
 
 	if err != nil {
@@ -167,7 +167,7 @@ func TestAdminGate_AgentServiceOpen(t *testing.T) {
 	}
 
 	// AgentService is not an AdminService, should pass through
-	info := &grpc.UnaryServerInfo{FullMethod: "/fold.AgentService/Register"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/coven.AgentService/Register"}
 	resp, err := interceptor(ctx, nil, info, handler)
 
 	if err != nil {
@@ -194,7 +194,7 @@ func TestAdminGate_NoAuthContext(t *testing.T) {
 		return nil, nil
 	}
 
-	info := &grpc.UnaryServerInfo{FullMethod: "/fold.AdminService/ListPrincipals"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/ListPrincipals"}
 	_, err := interceptor(ctx, nil, info, handler)
 
 	if err == nil {
@@ -234,7 +234,7 @@ func TestAdminGateStream_AdminCan(t *testing.T) {
 		return nil
 	}
 
-	info := &grpc.StreamServerInfo{FullMethod: "/fold.AdminService/WatchPrincipals"}
+	info := &grpc.StreamServerInfo{FullMethod: "/coven.AdminService/WatchPrincipals"}
 	err := interceptor(nil, stream, info, handler)
 
 	if err != nil {
@@ -264,7 +264,7 @@ func TestAdminGateStream_NonAdminCannot(t *testing.T) {
 		return nil
 	}
 
-	info := &grpc.StreamServerInfo{FullMethod: "/fold.AdminService/WatchPrincipals"}
+	info := &grpc.StreamServerInfo{FullMethod: "/coven.AdminService/WatchPrincipals"}
 	err := interceptor(nil, stream, info, handler)
 
 	if err == nil {
@@ -301,7 +301,7 @@ func TestAdminGateStream_NonAdminServicePassThrough(t *testing.T) {
 	}
 
 	// Non-admin service should pass through even for non-admin users
-	info := &grpc.StreamServerInfo{FullMethod: "/fold.CovenControl/Stream"}
+	info := &grpc.StreamServerInfo{FullMethod: "/coven.CovenControl/Stream"}
 	err := interceptor(nil, stream, info, handler)
 
 	if err != nil {
@@ -326,7 +326,7 @@ func TestAdminGateStream_NoAuthContext(t *testing.T) {
 		return nil
 	}
 
-	info := &grpc.StreamServerInfo{FullMethod: "/fold.AdminService/WatchPrincipals"}
+	info := &grpc.StreamServerInfo{FullMethod: "/coven.AdminService/WatchPrincipals"}
 	err := interceptor(nil, stream, info, handler)
 
 	if err == nil {
@@ -359,7 +359,7 @@ func TestAdminGate_EmptyRoles(t *testing.T) {
 		return nil, nil
 	}
 
-	info := &grpc.UnaryServerInfo{FullMethod: "/fold.AdminService/ListPrincipals"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/ListPrincipals"}
 	_, err := interceptor(ctx, nil, info, handler)
 
 	if err == nil {
@@ -393,7 +393,7 @@ func TestAdminGate_MultipleRolesIncludingAdmin(t *testing.T) {
 		return "multi-success", nil
 	}
 
-	info := &grpc.UnaryServerInfo{FullMethod: "/fold.AdminService/ListPrincipals"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/ListPrincipals"}
 	resp, err := interceptor(ctx, nil, info, handler)
 
 	if err != nil {
