@@ -1,4 +1,4 @@
-# Fold Protocol Enhancements
+# Coven Protocol Enhancements
 
 **Date:** 2026-01-19
 **Status:** Draft Proposal
