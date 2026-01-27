@@ -44,6 +44,12 @@ const (
 
 	// InviteDuration is how long invite links are valid
 	InviteDuration = 24 * time.Hour
+
+	// LinkCodeDuration is how long link codes are valid
+	LinkCodeDuration = 10 * time.Minute
+
+	// LinkCodeLength is the length of the short code
+	LinkCodeLength = 6
 )
 
 // contextKey is a custom type for context keys to avoid collisions
@@ -88,6 +94,10 @@ type FullStore interface {
 	GetPrincipal(ctx context.Context, id string) (*store.Principal, error)
 	UpdatePrincipalStatus(ctx context.Context, id string, status store.PrincipalStatus) error
 	DeletePrincipal(ctx context.Context, id string) error
+
+	// Link codes
+	CreateLinkCode(ctx context.Context, code *store.LinkCode) error
+	GetLinkCodeByCode(ctx context.Context, code string) (*store.LinkCode, error)
 }
 
 // Admin handles admin UI routes and authentication
@@ -164,6 +174,10 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	// Setup wizard (only accessible when no admin users exist)
 	mux.HandleFunc("GET /admin/setup", a.handleSetupPage)
 	mux.HandleFunc("POST /admin/setup", a.handleSetupSubmit)
+
+	// Device linking (unauthenticated API for devices, authenticated UI for admins)
+	mux.HandleFunc("POST /admin/api/link/request", a.handleLinkRequest)
+	mux.HandleFunc("GET /admin/api/link/status/{code}", a.handleLinkStatus)
 
 	// Public routes (no auth required)
 	mux.HandleFunc("GET /admin/login", a.handleLoginPage)
@@ -1454,6 +1468,109 @@ func (a *Admin) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			// But keep it open for subsequent messages in the same session
 		}
 	}
+}
+
+// =============================================================================
+// Device Linking Handlers
+// =============================================================================
+
+// handleLinkRequest creates a new link code for a device
+func (a *Admin) handleLinkRequest(w http.ResponseWriter, r *http.Request) {
+	// Parse JSON body
+	var req struct {
+		Fingerprint string `json:"fingerprint"`
+		DeviceName  string `json:"device_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Fingerprint == "" || req.DeviceName == "" {
+		http.Error(w, "fingerprint and device_name required", http.StatusBadRequest)
+		return
+	}
+
+	// Generate short code
+	code := generateLinkCode(LinkCodeLength)
+	now := time.Now()
+
+	linkCode := &store.LinkCode{
+		ID:          uuid.New().String(),
+		Code:        code,
+		Fingerprint: req.Fingerprint,
+		DeviceName:  req.DeviceName,
+		Status:      store.LinkCodeStatusPending,
+		CreatedAt:   now,
+		ExpiresAt:   now.Add(LinkCodeDuration),
+	}
+
+	if err := a.store.CreateLinkCode(r.Context(), linkCode); err != nil {
+		a.logger.Error("failed to create link code", "error", err)
+		http.Error(w, "Failed to create link code", http.StatusInternalServerError)
+		return
+	}
+
+	a.logger.Info("link code created", "code", code, "device", req.DeviceName, "fingerprint", req.Fingerprint[:16]+"...")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"code":       linkCode.Code,
+		"expires_at": linkCode.ExpiresAt.Format(time.RFC3339),
+	})
+}
+
+// generateLinkCode creates a random alphanumeric code
+func generateLinkCode(length int) string {
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // No I, O, 0, 1 for readability
+	b := make([]byte, length)
+	rand.Read(b)
+	for i := range b {
+		b[i] = charset[int(b[i])%len(charset)]
+	}
+	return string(b)
+}
+
+// handleLinkStatus checks the status of a link code (for device polling)
+func (a *Admin) handleLinkStatus(w http.ResponseWriter, r *http.Request) {
+	code := r.PathValue("code")
+	if code == "" {
+		http.Error(w, "Code required", http.StatusBadRequest)
+		return
+	}
+
+	linkCode, err := a.store.GetLinkCodeByCode(r.Context(), code)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Code not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to get link code", "error", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if expired
+	if time.Now().After(linkCode.ExpiresAt) && linkCode.Status == store.LinkCodeStatusPending {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"status": "expired",
+		})
+		return
+	}
+
+	response := map[string]any{
+		"status": string(linkCode.Status),
+	}
+
+	// If approved, include the token
+	if linkCode.Status == store.LinkCodeStatusApproved && linkCode.Token != nil {
+		response["token"] = *linkCode.Token
+		response["principal_id"] = *linkCode.PrincipalID
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 // generateSecureToken generates a cryptographically secure random token
