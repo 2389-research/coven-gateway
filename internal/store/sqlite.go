@@ -245,6 +245,24 @@ func (s *SQLiteStore) createSchema() error {
 
 		CREATE INDEX IF NOT EXISTS idx_admin_invites_expires ON admin_invites(expires_at);
 
+		-- Link codes for device linking (short-lived)
+		CREATE TABLE IF NOT EXISTS link_codes (
+			id TEXT PRIMARY KEY,
+			code TEXT UNIQUE NOT NULL,
+			fingerprint TEXT NOT NULL,
+			device_name TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'expired')),
+			created_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL,
+			approved_by TEXT REFERENCES admin_users(id),
+			approved_at TEXT,
+			principal_id TEXT REFERENCES principals(principal_id),
+			token TEXT
+		);
+		CREATE INDEX IF NOT EXISTS idx_link_codes_code ON link_codes(code);
+		CREATE INDEX IF NOT EXISTS idx_link_codes_expires ON link_codes(expires_at);
+		CREATE INDEX IF NOT EXISTS idx_link_codes_status ON link_codes(status);
+
 		-- WebAuthn credentials for passkeys
 		CREATE TABLE IF NOT EXISTS webauthn_credentials (
 			id TEXT PRIMARY KEY,
