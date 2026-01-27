@@ -5,6 +5,9 @@ package client
 
 import (
 	"context"
+	"encoding/hex"
+	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,19 +25,36 @@ type PrincipalWriter interface {
 	AddRole(ctx context.Context, subjectType store.RoleSubjectType, subjectID string, role store.RoleName) error
 }
 
+// Maximum display name length
+const maxDisplayNameLength = 100
+
 // RegisterAgent allows authenticated members to register an agent with their SSH key
 func (s *ClientService) RegisterAgent(ctx context.Context, req *pb.RegisterAgentRequest) (*pb.RegisterAgentResponse, error) {
 	authCtx := auth.MustFromContext(ctx)
 
+	// Require member role for registration
+	if !slices.Contains(authCtx.Roles, string(store.RoleMember)) &&
+		!slices.Contains(authCtx.Roles, string(store.RoleAdmin)) &&
+		!slices.Contains(authCtx.Roles, string(store.RoleOwner)) {
+		return nil, status.Error(codes.PermissionDenied, "member role required to register agents")
+	}
+
 	// Validate request
 	if req.DisplayName == "" {
 		return nil, status.Error(codes.InvalidArgument, "display_name required")
+	}
+	if len(req.DisplayName) > maxDisplayNameLength {
+		return nil, status.Errorf(codes.InvalidArgument, "display_name exceeds %d characters", maxDisplayNameLength)
 	}
 	if req.Fingerprint == "" {
 		return nil, status.Error(codes.InvalidArgument, "fingerprint required")
 	}
 	if len(req.Fingerprint) != 64 {
 		return nil, status.Error(codes.InvalidArgument, "fingerprint must be 64 hex characters (SHA256)")
+	}
+	// Validate fingerprint is valid hex
+	if _, err := hex.DecodeString(req.Fingerprint); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "fingerprint must be valid hex characters")
 	}
 
 	// Need principal writer capability
@@ -63,12 +83,18 @@ func (s *ClientService) RegisterAgent(ctx context.Context, req *pb.RegisterAgent
 
 	// Add member role
 	if err := writer.AddRole(ctx, store.RoleSubjectPrincipal, principalID, store.RoleMember); err != nil {
-		// Log but don't fail - principal is created
-		// TODO: add logging
+		slog.Error("failed to add member role to registered agent",
+			"agent_principal_id", principalID,
+			"registered_by", authCtx.PrincipalID,
+			"error", err)
 	}
 
-	// Log the registration (using caller's principal)
-	_ = authCtx.PrincipalID // registered by this principal
+	slog.Info("agent registered via self-registration",
+		"agent_principal_id", principalID,
+		"registered_by", authCtx.PrincipalID,
+		"display_name", req.DisplayName,
+		"fingerprint", req.Fingerprint[:16]+"...",
+	)
 
 	return &pb.RegisterAgentResponse{
 		PrincipalId: principalID,
