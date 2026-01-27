@@ -1,0 +1,79 @@
+{{/* ABOUTME: Device linking approval page */}}
+{{/* ABOUTME: Shows pending link requests for admin approval */}}
+{{define "content"}}
+<div class="p-6">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-serif text-ink">Device Linking</h1>
+            <p class="text-warm-500 text-sm mt-1">Approve devices requesting to connect</p>
+        </div>
+    </div>
+
+    {{if .Codes}}
+    <div class="bg-white rounded-xl border border-warm-200 shadow-card overflow-hidden">
+        <table class="w-full">
+            <thead class="bg-warm-50 border-b border-warm-200">
+                <tr>
+                    <th class="text-left px-4 py-3 text-xs font-semibold text-warm-600 uppercase tracking-wider">Code</th>
+                    <th class="text-left px-4 py-3 text-xs font-semibold text-warm-600 uppercase tracking-wider">Device</th>
+                    <th class="text-left px-4 py-3 text-xs font-semibold text-warm-600 uppercase tracking-wider">Fingerprint</th>
+                    <th class="text-left px-4 py-3 text-xs font-semibold text-warm-600 uppercase tracking-wider">Expires</th>
+                    <th class="text-left px-4 py-3 text-xs font-semibold text-warm-600 uppercase tracking-wider">Action</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-warm-100">
+                {{range .Codes}}
+                <tr class="hover:bg-warm-50 transition-colors">
+                    <td class="px-4 py-3">
+                        <span class="font-mono text-lg font-bold text-ink tracking-wider">{{.Code}}</span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="font-medium text-ink">{{.DeviceName}}</span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="font-mono text-xs text-warm-500">{{slice .Fingerprint 0 16}}...</span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="text-sm text-warm-600">{{.ExpiresAt.Format "15:04:05"}}</span>
+                    </td>
+                    <td class="px-4 py-3" id="action-{{.ID}}">
+                        <button
+                            hx-post="/admin/link/{{.ID}}/approve"
+                            hx-target="#action-{{.ID}}"
+                            hx-swap="innerHTML"
+                            hx-vals='{"csrf_token": "{{$.CSRFToken}}"}'
+                            class="px-3 py-1.5 bg-forest text-white text-sm font-medium rounded hover:bg-forest-light transition-colors">
+                            Approve
+                        </button>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{else}}
+    <div class="bg-white rounded-xl border border-warm-200 p-12 text-center">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-warm-100 flex items-center justify-center">
+            <svg class="w-8 h-8 text-warm-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+        </div>
+        <h3 class="text-lg font-medium text-ink mb-2">No Pending Requests</h3>
+        <p class="text-warm-500 text-sm max-w-sm mx-auto">
+            When a device runs <code class="bg-warm-100 px-1.5 py-0.5 rounded text-xs">coven-link</code>,
+            it will appear here for approval.
+        </p>
+    </div>
+    {{end}}
+
+    <div class="mt-8 bg-warm-50 rounded-xl border border-warm-200 p-6">
+        <h3 class="font-semibold text-ink mb-3">How to link a device</h3>
+        <ol class="space-y-2 text-sm text-warm-700">
+            <li class="flex gap-2"><span class="font-mono bg-white px-2 py-0.5 rounded border border-warm-200 text-xs">1</span> Install coven-link on the device</li>
+            <li class="flex gap-2"><span class="font-mono bg-white px-2 py-0.5 rounded border border-warm-200 text-xs">2</span> Run <code class="bg-white px-2 py-0.5 rounded border border-warm-200 text-xs">coven-link your-gateway-url</code></li>
+            <li class="flex gap-2"><span class="font-mono bg-white px-2 py-0.5 rounded border border-warm-200 text-xs">3</span> Enter the displayed code here and click Approve</li>
+            <li class="flex gap-2"><span class="font-mono bg-white px-2 py-0.5 rounded border border-warm-200 text-xs">4</span> The device is now configured!</li>
+        </ol>
+    </div>
+</div>
+{{end}}

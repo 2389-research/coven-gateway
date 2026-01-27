@@ -98,6 +98,10 @@ type FullStore interface {
 	// Link codes
 	CreateLinkCode(ctx context.Context, code *store.LinkCode) error
 	GetLinkCodeByCode(ctx context.Context, code string) (*store.LinkCode, error)
+	GetLinkCode(ctx context.Context, id string) (*store.LinkCode, error)
+	ListPendingLinkCodes(ctx context.Context) ([]*store.LinkCode, error)
+	ApproveLinkCode(ctx context.Context, id string, approvedBy string, principalID string, token string) error
+	DeleteExpiredLinkCodes(ctx context.Context) error
 }
 
 // Admin handles admin UI routes and authentication
@@ -178,6 +182,8 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	// Device linking (unauthenticated API for devices, authenticated UI for admins)
 	mux.HandleFunc("POST /admin/api/link/request", a.handleLinkRequest)
 	mux.HandleFunc("GET /admin/api/link/status/{code}", a.handleLinkStatus)
+	mux.HandleFunc("GET /admin/link", a.requireAuth(a.handleLinkPage))
+	mux.HandleFunc("POST /admin/link/{id}/approve", a.requireAuth(a.handleLinkApprove))
 
 	// Public routes (no auth required)
 	mux.HandleFunc("GET /admin/login", a.handleLoginPage)
@@ -1473,6 +1479,104 @@ func (a *Admin) handleChatStream(w http.ResponseWriter, r *http.Request) {
 // =============================================================================
 // Device Linking Handlers
 // =============================================================================
+
+// handleLinkPage shows pending link requests for approval
+func (a *Admin) handleLinkPage(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+
+	// Clean up expired codes
+	_ = a.store.DeleteExpiredLinkCodes(r.Context())
+
+	codes, err := a.store.ListPendingLinkCodes(r.Context())
+	if err != nil {
+		a.logger.Error("failed to list link codes", "error", err)
+		http.Error(w, "Failed to load link codes", http.StatusInternalServerError)
+		return
+	}
+
+	a.renderLinkPage(w, user, codes, csrfToken)
+}
+
+// handleLinkApprove approves a link code and creates the principal
+func (a *Admin) handleLinkApprove(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, "ID required", http.StatusBadRequest)
+		return
+	}
+
+	user := getUserFromContext(r)
+
+	// Get the link code
+	linkCode, err := a.store.GetLinkCode(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Code not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to get link code", "error", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if linkCode.Status != store.LinkCodeStatusPending {
+		http.Error(w, "Code already processed", http.StatusBadRequest)
+		return
+	}
+
+	// Create principal for the device
+	principalID := uuid.New().String()
+	principal := &store.Principal{
+		ID:          principalID,
+		Type:        store.PrincipalTypeAgent,
+		PubkeyFP:    linkCode.Fingerprint,
+		DisplayName: linkCode.DeviceName,
+		Status:      store.PrincipalStatusApproved,
+		CreatedAt:   time.Now(),
+	}
+
+	if err := a.principalStore.CreatePrincipal(r.Context(), principal); err != nil {
+		a.logger.Error("failed to create principal", "error", err)
+		http.Error(w, "Failed to create principal", http.StatusInternalServerError)
+		return
+	}
+
+	// Add member role
+	if err := a.principalStore.AddRole(r.Context(), store.RoleSubjectPrincipal, principalID, store.RoleMember); err != nil {
+		a.logger.Error("failed to add role", "error", err)
+	}
+
+	// Generate token (30 days)
+	var token string
+	if a.tokenGenerator != nil {
+		var err error
+		token, err = a.tokenGenerator.Generate(principalID, 30*24*time.Hour)
+		if err != nil {
+			a.logger.Error("failed to generate token", "error", err)
+			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Update link code with approval
+	if err := a.store.ApproveLinkCode(r.Context(), id, user.ID, principalID, token); err != nil {
+		a.logger.Error("failed to approve link code", "error", err)
+		http.Error(w, "Failed to approve", http.StatusInternalServerError)
+		return
+	}
+
+	a.logger.Info("link code approved", "code", linkCode.Code, "device", linkCode.DeviceName, "approved_by", user.Username)
+
+	// Return success for HTMX
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(`<span class="px-2 py-1 text-xs rounded-full bg-success/20 text-success font-medium">Approved</span>`))
+}
 
 // handleLinkRequest creates a new link code for a device
 func (a *Admin) handleLinkRequest(w http.ResponseWriter, r *http.Request) {

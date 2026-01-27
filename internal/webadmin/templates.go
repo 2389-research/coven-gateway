@@ -140,6 +140,13 @@ type setupCompleteData struct {
 	GRPCAddress string
 }
 
+type linkPageData struct {
+	Title     string
+	User      *store.AdminUser
+	Codes     []*store.LinkCode
+	CSRFToken string
+}
+
 // renderLoginPage renders the login page
 func (a *Admin) renderLoginPage(w http.ResponseWriter, errorMsg, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/login.html"))
@@ -413,5 +420,22 @@ func (a *Admin) renderSetupComplete(w http.ResponseWriter, displayName, apiToken
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render setup complete page", "error", err)
+	}
+}
+
+// renderLinkPage renders the device linking approval page
+func (a *Admin) renderLinkPage(w http.ResponseWriter, user *store.AdminUser, codes []*store.LinkCode, csrfToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/link.html"))
+
+	data := linkPageData{
+		Title:     "Device Linking",
+		User:      user,
+		Codes:     codes,
+		CSRFToken: csrfToken,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render link page", "error", err)
 	}
 }
