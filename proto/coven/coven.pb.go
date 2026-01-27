@@ -3748,6 +3748,112 @@ func (x *ListAgentsResponse) GetAgents() []*AgentInfo {
 	return nil
 }
 
+// RegisterAgentRequest allows a linked device to register an agent
+type RegisterAgentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DisplayName   string                 `protobuf:"bytes,1,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"` // Name for the agent
+	Fingerprint   string                 `protobuf:"bytes,2,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`                    // SSH key fingerprint (SHA256 hex, 64 chars)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterAgentRequest) Reset() {
+	*x = RegisterAgentRequest{}
+	mi := &file_coven_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterAgentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterAgentRequest) ProtoMessage() {}
+
+func (x *RegisterAgentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_coven_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterAgentRequest.ProtoReflect.Descriptor instead.
+func (*RegisterAgentRequest) Descriptor() ([]byte, []int) {
+	return file_coven_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *RegisterAgentRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *RegisterAgentRequest) GetFingerprint() string {
+	if x != nil {
+		return x.Fingerprint
+	}
+	return ""
+}
+
+// RegisterAgentResponse returns the created principal info
+type RegisterAgentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PrincipalId   string                 `protobuf:"bytes,1,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // "approved"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterAgentResponse) Reset() {
+	*x = RegisterAgentResponse{}
+	mi := &file_coven_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterAgentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterAgentResponse) ProtoMessage() {}
+
+func (x *RegisterAgentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_coven_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterAgentResponse.ProtoReflect.Descriptor instead.
+func (*RegisterAgentResponse) Descriptor() ([]byte, []int) {
+	return file_coven_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *RegisterAgentResponse) GetPrincipalId() string {
+	if x != nil {
+		return x.PrincipalId
+	}
+	return ""
+}
+
+func (x *RegisterAgentResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
 // ClientSendMessageRequest is the request for direct client message sending.
 // The idempotency_key is required and must be unique per message to prevent duplicates.
 type ClientSendMessageRequest struct {
@@ -3762,7 +3868,7 @@ type ClientSendMessageRequest struct {
 
 func (x *ClientSendMessageRequest) Reset() {
 	*x = ClientSendMessageRequest{}
-	mi := &file_coven_proto_msgTypes[52]
+	mi := &file_coven_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3774,7 +3880,7 @@ func (x *ClientSendMessageRequest) String() string {
 func (*ClientSendMessageRequest) ProtoMessage() {}
 
 func (x *ClientSendMessageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[52]
+	mi := &file_coven_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3787,7 +3893,7 @@ func (x *ClientSendMessageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientSendMessageRequest.ProtoReflect.Descriptor instead.
 func (*ClientSendMessageRequest) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{52}
+	return file_coven_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *ClientSendMessageRequest) GetConversationKey() string {
@@ -3829,7 +3935,7 @@ type ClientSendMessageResponse struct {
 
 func (x *ClientSendMessageResponse) Reset() {
 	*x = ClientSendMessageResponse{}
-	mi := &file_coven_proto_msgTypes[53]
+	mi := &file_coven_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3841,7 +3947,7 @@ func (x *ClientSendMessageResponse) String() string {
 func (*ClientSendMessageResponse) ProtoMessage() {}
 
 func (x *ClientSendMessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[53]
+	mi := &file_coven_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3854,7 +3960,7 @@ func (x *ClientSendMessageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientSendMessageResponse.ProtoReflect.Descriptor instead.
 func (*ClientSendMessageResponse) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{53}
+	return file_coven_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ClientSendMessageResponse) GetStatus() string {
@@ -3887,7 +3993,7 @@ type MeResponse struct {
 
 func (x *MeResponse) Reset() {
 	*x = MeResponse{}
-	mi := &file_coven_proto_msgTypes[54]
+	mi := &file_coven_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3899,7 +4005,7 @@ func (x *MeResponse) String() string {
 func (*MeResponse) ProtoMessage() {}
 
 func (x *MeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[54]
+	mi := &file_coven_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3912,7 +4018,7 @@ func (x *MeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeResponse.ProtoReflect.Descriptor instead.
 func (*MeResponse) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{54}
+	return file_coven_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *MeResponse) GetPrincipalId() string {
@@ -3984,7 +4090,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_coven_proto_msgTypes[55]
+	mi := &file_coven_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3996,7 +4102,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[55]
+	mi := &file_coven_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4009,7 +4115,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{55}
+	return file_coven_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *Event) GetId() string {
@@ -4102,7 +4208,7 @@ type GetEventsRequest struct {
 
 func (x *GetEventsRequest) Reset() {
 	*x = GetEventsRequest{}
-	mi := &file_coven_proto_msgTypes[56]
+	mi := &file_coven_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4114,7 +4220,7 @@ func (x *GetEventsRequest) String() string {
 func (*GetEventsRequest) ProtoMessage() {}
 
 func (x *GetEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[56]
+	mi := &file_coven_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4127,7 +4233,7 @@ func (x *GetEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventsRequest.ProtoReflect.Descriptor instead.
 func (*GetEventsRequest) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{56}
+	return file_coven_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *GetEventsRequest) GetConversationKey() string {
@@ -4176,7 +4282,7 @@ type GetEventsResponse struct {
 
 func (x *GetEventsResponse) Reset() {
 	*x = GetEventsResponse{}
-	mi := &file_coven_proto_msgTypes[57]
+	mi := &file_coven_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4188,7 +4294,7 @@ func (x *GetEventsResponse) String() string {
 func (*GetEventsResponse) ProtoMessage() {}
 
 func (x *GetEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[57]
+	mi := &file_coven_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4201,7 +4307,7 @@ func (x *GetEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventsResponse.ProtoReflect.Descriptor instead.
 func (*GetEventsResponse) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{57}
+	return file_coven_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *GetEventsResponse) GetEvents() []*Event {
@@ -4239,7 +4345,7 @@ type ToolDefinition struct {
 
 func (x *ToolDefinition) Reset() {
 	*x = ToolDefinition{}
-	mi := &file_coven_proto_msgTypes[58]
+	mi := &file_coven_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4251,7 +4357,7 @@ func (x *ToolDefinition) String() string {
 func (*ToolDefinition) ProtoMessage() {}
 
 func (x *ToolDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[58]
+	mi := &file_coven_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4264,7 +4370,7 @@ func (x *ToolDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolDefinition.ProtoReflect.Descriptor instead.
 func (*ToolDefinition) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{58}
+	return file_coven_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ToolDefinition) GetName() string {
@@ -4313,7 +4419,7 @@ type PackManifest struct {
 
 func (x *PackManifest) Reset() {
 	*x = PackManifest{}
-	mi := &file_coven_proto_msgTypes[59]
+	mi := &file_coven_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4325,7 +4431,7 @@ func (x *PackManifest) String() string {
 func (*PackManifest) ProtoMessage() {}
 
 func (x *PackManifest) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[59]
+	mi := &file_coven_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4338,7 +4444,7 @@ func (x *PackManifest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackManifest.ProtoReflect.Descriptor instead.
 func (*PackManifest) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{59}
+	return file_coven_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *PackManifest) GetPackId() string {
@@ -4374,7 +4480,7 @@ type ExecuteToolRequest struct {
 
 func (x *ExecuteToolRequest) Reset() {
 	*x = ExecuteToolRequest{}
-	mi := &file_coven_proto_msgTypes[60]
+	mi := &file_coven_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4386,7 +4492,7 @@ func (x *ExecuteToolRequest) String() string {
 func (*ExecuteToolRequest) ProtoMessage() {}
 
 func (x *ExecuteToolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[60]
+	mi := &file_coven_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4399,7 +4505,7 @@ func (x *ExecuteToolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteToolRequest.ProtoReflect.Descriptor instead.
 func (*ExecuteToolRequest) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{60}
+	return file_coven_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *ExecuteToolRequest) GetToolName() string {
@@ -4437,7 +4543,7 @@ type ExecuteToolResponse struct {
 
 func (x *ExecuteToolResponse) Reset() {
 	*x = ExecuteToolResponse{}
-	mi := &file_coven_proto_msgTypes[61]
+	mi := &file_coven_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4449,7 +4555,7 @@ func (x *ExecuteToolResponse) String() string {
 func (*ExecuteToolResponse) ProtoMessage() {}
 
 func (x *ExecuteToolResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[61]
+	mi := &file_coven_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4462,7 +4568,7 @@ func (x *ExecuteToolResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteToolResponse.ProtoReflect.Descriptor instead.
 func (*ExecuteToolResponse) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{61}
+	return file_coven_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *ExecuteToolResponse) GetRequestId() string {
@@ -4524,7 +4630,7 @@ type PackWelcome struct {
 
 func (x *PackWelcome) Reset() {
 	*x = PackWelcome{}
-	mi := &file_coven_proto_msgTypes[62]
+	mi := &file_coven_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4536,7 +4642,7 @@ func (x *PackWelcome) String() string {
 func (*PackWelcome) ProtoMessage() {}
 
 func (x *PackWelcome) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[62]
+	mi := &file_coven_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4549,7 +4655,7 @@ func (x *PackWelcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackWelcome.ProtoReflect.Descriptor instead.
 func (*PackWelcome) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{62}
+	return file_coven_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *PackWelcome) GetPackId() string {
@@ -4576,7 +4682,7 @@ type AvailableTools struct {
 
 func (x *AvailableTools) Reset() {
 	*x = AvailableTools{}
-	mi := &file_coven_proto_msgTypes[63]
+	mi := &file_coven_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4588,7 +4694,7 @@ func (x *AvailableTools) String() string {
 func (*AvailableTools) ProtoMessage() {}
 
 func (x *AvailableTools) ProtoReflect() protoreflect.Message {
-	mi := &file_coven_proto_msgTypes[63]
+	mi := &file_coven_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4601,7 +4707,7 @@ func (x *AvailableTools) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AvailableTools.ProtoReflect.Descriptor instead.
 func (*AvailableTools) Descriptor() ([]byte, []int) {
-	return file_coven_proto_rawDescGZIP(), []int{63}
+	return file_coven_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *AvailableTools) GetTools() []*ToolDefinition {
@@ -4890,7 +4996,13 @@ const file_coven_proto_rawDesc = "" +
 	"\n" +
 	"_workspace\">\n" +
 	"\x12ListAgentsResponse\x12(\n" +
-	"\x06agents\x18\x01 \x03(\v2\x10.coven.AgentInfoR\x06agents\"\xc1\x01\n" +
+	"\x06agents\x18\x01 \x03(\v2\x10.coven.AgentInfoR\x06agents\"[\n" +
+	"\x14RegisterAgentRequest\x12!\n" +
+	"\fdisplay_name\x18\x01 \x01(\tR\vdisplayName\x12 \n" +
+	"\vfingerprint\x18\x02 \x01(\tR\vfingerprint\"R\n" +
+	"\x15RegisterAgentResponse\x12!\n" +
+	"\fprincipal_id\x18\x01 \x01(\tR\vprincipalId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\"\xc1\x01\n" +
 	"\x18ClientSendMessageRequest\x12)\n" +
 	"\x10conversation_key\x18\x01 \x01(\tR\x0fconversationKey\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\x127\n" +
@@ -4999,14 +5111,15 @@ const file_coven_proto_rawDesc = "" +
 	"\vCreateToken\x12\x19.coven.CreateTokenRequest\x1a\x1a.coven.CreateTokenResponse\x12M\n" +
 	"\x0eListPrincipals\x12\x1c.coven.ListPrincipalsRequest\x1a\x1d.coven.ListPrincipalsResponse\x12B\n" +
 	"\x0fCreatePrincipal\x12\x1d.coven.CreatePrincipalRequest\x1a\x10.coven.Principal\x12P\n" +
-	"\x0fDeletePrincipal\x12\x1d.coven.DeletePrincipalRequest\x1a\x1e.coven.DeletePrincipalResponse2\xe0\x02\n" +
+	"\x0fDeletePrincipal\x12\x1d.coven.DeletePrincipalRequest\x1a\x1e.coven.DeletePrincipalResponse2\xac\x03\n" +
 	"\rClientService\x12>\n" +
 	"\tGetEvents\x12\x17.coven.GetEventsRequest\x1a\x18.coven.GetEventsResponse\x122\n" +
 	"\x05GetMe\x12\x16.google.protobuf.Empty\x1a\x11.coven.MeResponse\x12P\n" +
 	"\vSendMessage\x12\x1f.coven.ClientSendMessageRequest\x1a .coven.ClientSendMessageResponse\x12F\n" +
 	"\fStreamEvents\x12\x1a.coven.StreamEventsRequest\x1a\x18.coven.ClientStreamEvent0\x01\x12A\n" +
 	"\n" +
-	"ListAgents\x12\x18.coven.ListAgentsRequest\x1a\x19.coven.ListAgentsResponse2\x8d\x01\n" +
+	"ListAgents\x12\x18.coven.ListAgentsRequest\x1a\x19.coven.ListAgentsResponse\x12J\n" +
+	"\rRegisterAgent\x12\x1b.coven.RegisterAgentRequest\x1a\x1c.coven.RegisterAgentResponse2\x8d\x01\n" +
 	"\vPackService\x12<\n" +
 	"\bRegister\x12\x13.coven.PackManifest\x1a\x19.coven.ExecuteToolRequest0\x01\x12@\n" +
 	"\n" +
@@ -5025,7 +5138,7 @@ func file_coven_proto_rawDescGZIP() []byte {
 }
 
 var file_coven_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_coven_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
+var file_coven_proto_msgTypes = make([]protoimpl.MessageInfo, 66)
 var file_coven_proto_goTypes = []any{
 	(ToolState)(0),                    // 0: coven.ToolState
 	(InjectionPriority)(0),            // 1: coven.InjectionPriority
@@ -5081,19 +5194,21 @@ var file_coven_proto_goTypes = []any{
 	(*AgentInfo)(nil),                 // 51: coven.AgentInfo
 	(*ListAgentsRequest)(nil),         // 52: coven.ListAgentsRequest
 	(*ListAgentsResponse)(nil),        // 53: coven.ListAgentsResponse
-	(*ClientSendMessageRequest)(nil),  // 54: coven.ClientSendMessageRequest
-	(*ClientSendMessageResponse)(nil), // 55: coven.ClientSendMessageResponse
-	(*MeResponse)(nil),                // 56: coven.MeResponse
-	(*Event)(nil),                     // 57: coven.Event
-	(*GetEventsRequest)(nil),          // 58: coven.GetEventsRequest
-	(*GetEventsResponse)(nil),         // 59: coven.GetEventsResponse
-	(*ToolDefinition)(nil),            // 60: coven.ToolDefinition
-	(*PackManifest)(nil),              // 61: coven.PackManifest
-	(*ExecuteToolRequest)(nil),        // 62: coven.ExecuteToolRequest
-	(*ExecuteToolResponse)(nil),       // 63: coven.ExecuteToolResponse
-	(*PackWelcome)(nil),               // 64: coven.PackWelcome
-	(*AvailableTools)(nil),            // 65: coven.AvailableTools
-	(*emptypb.Empty)(nil),             // 66: google.protobuf.Empty
+	(*RegisterAgentRequest)(nil),      // 54: coven.RegisterAgentRequest
+	(*RegisterAgentResponse)(nil),     // 55: coven.RegisterAgentResponse
+	(*ClientSendMessageRequest)(nil),  // 56: coven.ClientSendMessageRequest
+	(*ClientSendMessageResponse)(nil), // 57: coven.ClientSendMessageResponse
+	(*MeResponse)(nil),                // 58: coven.MeResponse
+	(*Event)(nil),                     // 59: coven.Event
+	(*GetEventsRequest)(nil),          // 60: coven.GetEventsRequest
+	(*GetEventsResponse)(nil),         // 61: coven.GetEventsResponse
+	(*ToolDefinition)(nil),            // 62: coven.ToolDefinition
+	(*PackManifest)(nil),              // 63: coven.PackManifest
+	(*ExecuteToolRequest)(nil),        // 64: coven.ExecuteToolRequest
+	(*ExecuteToolResponse)(nil),       // 65: coven.ExecuteToolResponse
+	(*PackWelcome)(nil),               // 66: coven.PackWelcome
+	(*AvailableTools)(nil),            // 67: coven.AvailableTools
+	(*emptypb.Empty)(nil),             // 68: google.protobuf.Empty
 }
 var file_coven_proto_depIdxs = []int32{
 	5,  // 0: coven.AgentMessage.register:type_name -> coven.RegisterAgent
@@ -5123,7 +5238,7 @@ var file_coven_proto_depIdxs = []int32{
 	12, // 24: coven.ServerMessage.inject_context:type_name -> coven.InjectContext
 	14, // 25: coven.ServerMessage.cancel_request:type_name -> coven.CancelRequest
 	22, // 26: coven.ServerMessage.pack_tool_result:type_name -> coven.PackToolResult
-	60, // 27: coven.Welcome.available_tools:type_name -> coven.ToolDefinition
+	62, // 27: coven.Welcome.available_tools:type_name -> coven.ToolDefinition
 	28, // 28: coven.SendMessage.attachments:type_name -> coven.FileAttachment
 	30, // 29: coven.ListBindingsResponse.bindings:type_name -> coven.Binding
 	39, // 30: coven.ListPrincipalsResponse.principals:type_name -> coven.Principal
@@ -5135,13 +5250,13 @@ var file_coven_proto_depIdxs = []int32{
 	9,  // 36: coven.ClientStreamEvent.usage:type_name -> coven.TokenUsage
 	49, // 37: coven.ClientStreamEvent.done:type_name -> coven.StreamDone
 	50, // 38: coven.ClientStreamEvent.error:type_name -> coven.StreamError
-	57, // 39: coven.ClientStreamEvent.event:type_name -> coven.Event
+	59, // 39: coven.ClientStreamEvent.event:type_name -> coven.Event
 	4,  // 40: coven.AgentInfo.metadata:type_name -> coven.AgentMetadata
 	51, // 41: coven.ListAgentsResponse.agents:type_name -> coven.AgentInfo
 	28, // 42: coven.ClientSendMessageRequest.attachments:type_name -> coven.FileAttachment
-	57, // 43: coven.GetEventsResponse.events:type_name -> coven.Event
-	60, // 44: coven.PackManifest.tools:type_name -> coven.ToolDefinition
-	60, // 45: coven.AvailableTools.tools:type_name -> coven.ToolDefinition
+	59, // 43: coven.GetEventsResponse.events:type_name -> coven.Event
+	62, // 44: coven.PackManifest.tools:type_name -> coven.ToolDefinition
+	62, // 45: coven.AvailableTools.tools:type_name -> coven.ToolDefinition
 	2,  // 46: coven.CovenControl.AgentStream:input_type -> coven.AgentMessage
 	31, // 47: coven.AdminService.ListBindings:input_type -> coven.ListBindingsRequest
 	33, // 48: coven.AdminService.CreateBinding:input_type -> coven.CreateBindingRequest
@@ -5151,31 +5266,33 @@ var file_coven_proto_depIdxs = []int32{
 	40, // 52: coven.AdminService.ListPrincipals:input_type -> coven.ListPrincipalsRequest
 	42, // 53: coven.AdminService.CreatePrincipal:input_type -> coven.CreatePrincipalRequest
 	43, // 54: coven.AdminService.DeletePrincipal:input_type -> coven.DeletePrincipalRequest
-	58, // 55: coven.ClientService.GetEvents:input_type -> coven.GetEventsRequest
-	66, // 56: coven.ClientService.GetMe:input_type -> google.protobuf.Empty
-	54, // 57: coven.ClientService.SendMessage:input_type -> coven.ClientSendMessageRequest
+	60, // 55: coven.ClientService.GetEvents:input_type -> coven.GetEventsRequest
+	68, // 56: coven.ClientService.GetMe:input_type -> google.protobuf.Empty
+	56, // 57: coven.ClientService.SendMessage:input_type -> coven.ClientSendMessageRequest
 	45, // 58: coven.ClientService.StreamEvents:input_type -> coven.StreamEventsRequest
 	52, // 59: coven.ClientService.ListAgents:input_type -> coven.ListAgentsRequest
-	61, // 60: coven.PackService.Register:input_type -> coven.PackManifest
-	63, // 61: coven.PackService.ToolResult:input_type -> coven.ExecuteToolResponse
-	23, // 62: coven.CovenControl.AgentStream:output_type -> coven.ServerMessage
-	32, // 63: coven.AdminService.ListBindings:output_type -> coven.ListBindingsResponse
-	30, // 64: coven.AdminService.CreateBinding:output_type -> coven.Binding
-	30, // 65: coven.AdminService.UpdateBinding:output_type -> coven.Binding
-	36, // 66: coven.AdminService.DeleteBinding:output_type -> coven.DeleteBindingResponse
-	38, // 67: coven.AdminService.CreateToken:output_type -> coven.CreateTokenResponse
-	41, // 68: coven.AdminService.ListPrincipals:output_type -> coven.ListPrincipalsResponse
-	39, // 69: coven.AdminService.CreatePrincipal:output_type -> coven.Principal
-	44, // 70: coven.AdminService.DeletePrincipal:output_type -> coven.DeletePrincipalResponse
-	59, // 71: coven.ClientService.GetEvents:output_type -> coven.GetEventsResponse
-	56, // 72: coven.ClientService.GetMe:output_type -> coven.MeResponse
-	55, // 73: coven.ClientService.SendMessage:output_type -> coven.ClientSendMessageResponse
-	46, // 74: coven.ClientService.StreamEvents:output_type -> coven.ClientStreamEvent
-	53, // 75: coven.ClientService.ListAgents:output_type -> coven.ListAgentsResponse
-	62, // 76: coven.PackService.Register:output_type -> coven.ExecuteToolRequest
-	66, // 77: coven.PackService.ToolResult:output_type -> google.protobuf.Empty
-	62, // [62:78] is the sub-list for method output_type
-	46, // [46:62] is the sub-list for method input_type
+	54, // 60: coven.ClientService.RegisterAgent:input_type -> coven.RegisterAgentRequest
+	63, // 61: coven.PackService.Register:input_type -> coven.PackManifest
+	65, // 62: coven.PackService.ToolResult:input_type -> coven.ExecuteToolResponse
+	23, // 63: coven.CovenControl.AgentStream:output_type -> coven.ServerMessage
+	32, // 64: coven.AdminService.ListBindings:output_type -> coven.ListBindingsResponse
+	30, // 65: coven.AdminService.CreateBinding:output_type -> coven.Binding
+	30, // 66: coven.AdminService.UpdateBinding:output_type -> coven.Binding
+	36, // 67: coven.AdminService.DeleteBinding:output_type -> coven.DeleteBindingResponse
+	38, // 68: coven.AdminService.CreateToken:output_type -> coven.CreateTokenResponse
+	41, // 69: coven.AdminService.ListPrincipals:output_type -> coven.ListPrincipalsResponse
+	39, // 70: coven.AdminService.CreatePrincipal:output_type -> coven.Principal
+	44, // 71: coven.AdminService.DeletePrincipal:output_type -> coven.DeletePrincipalResponse
+	61, // 72: coven.ClientService.GetEvents:output_type -> coven.GetEventsResponse
+	58, // 73: coven.ClientService.GetMe:output_type -> coven.MeResponse
+	57, // 74: coven.ClientService.SendMessage:output_type -> coven.ClientSendMessageResponse
+	46, // 75: coven.ClientService.StreamEvents:output_type -> coven.ClientStreamEvent
+	53, // 76: coven.ClientService.ListAgents:output_type -> coven.ListAgentsResponse
+	55, // 77: coven.ClientService.RegisterAgent:output_type -> coven.RegisterAgentResponse
+	64, // 78: coven.PackService.Register:output_type -> coven.ExecuteToolRequest
+	68, // 79: coven.PackService.ToolResult:output_type -> google.protobuf.Empty
+	63, // [63:80] is the sub-list for method output_type
+	46, // [46:63] is the sub-list for method input_type
 	46, // [46:46] is the sub-list for extension type_name
 	46, // [46:46] is the sub-list for extension extendee
 	0,  // [0:46] is the sub-list for field type_name
@@ -5246,11 +5363,11 @@ func file_coven_proto_init() {
 	file_coven_proto_msgTypes[47].OneofWrappers = []any{}
 	file_coven_proto_msgTypes[49].OneofWrappers = []any{}
 	file_coven_proto_msgTypes[50].OneofWrappers = []any{}
-	file_coven_proto_msgTypes[54].OneofWrappers = []any{}
-	file_coven_proto_msgTypes[55].OneofWrappers = []any{}
 	file_coven_proto_msgTypes[56].OneofWrappers = []any{}
 	file_coven_proto_msgTypes[57].OneofWrappers = []any{}
-	file_coven_proto_msgTypes[61].OneofWrappers = []any{
+	file_coven_proto_msgTypes[58].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[59].OneofWrappers = []any{}
+	file_coven_proto_msgTypes[63].OneofWrappers = []any{
 		(*ExecuteToolResponse_OutputJson)(nil),
 		(*ExecuteToolResponse_Error)(nil),
 	}
@@ -5260,7 +5377,7 @@ func file_coven_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_coven_proto_rawDesc), len(file_coven_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   64,
+			NumMessages:   66,
 			NumExtensions: 0,
 			NumServices:   4,
 		},
