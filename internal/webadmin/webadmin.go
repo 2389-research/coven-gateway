@@ -604,8 +604,11 @@ func (a *Admin) handleSetupSubmit(w http.ResponseWriter, r *http.Request) {
 
 	a.logger.Info("admin setup completed", "username", username)
 
+	// Derive gRPC address from request host
+	grpcAddress := deriveGRPCAddress(r.Host)
+
 	// Show success page with token (don't redirect immediately)
-	a.renderSetupComplete(w, displayName, apiToken)
+	a.renderSetupComplete(w, displayName, apiToken, grpcAddress)
 }
 
 // handleInvitePage renders the signup page for an invite link
@@ -1484,4 +1487,17 @@ func validateUsername(username string) string {
 		return "Username must start with a letter and contain only letters, numbers, and underscores"
 	}
 	return ""
+}
+
+// deriveGRPCAddress extracts the hostname from a request Host header and appends the gRPC port
+func deriveGRPCAddress(host string) string {
+	// Strip port if present (e.g., "coven.example.com:443" -> "coven.example.com")
+	hostname := host
+	if idx := strings.LastIndex(host, ":"); idx != -1 {
+		// Check if this is an IPv6 address (contains brackets)
+		if !strings.Contains(host, "]") || strings.LastIndex(host, ":") > strings.LastIndex(host, "]") {
+			hostname = host[:idx]
+		}
+	}
+	return hostname + ":50051"
 }

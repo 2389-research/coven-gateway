@@ -137,6 +137,7 @@ type setupCompleteData struct {
 	DisplayName string
 	APIToken    string
 	HasToken    bool
+	GRPCAddress string
 }
 
 // renderLoginPage renders the login page
@@ -398,7 +399,7 @@ func (a *Admin) renderSetupPage(w http.ResponseWriter, errorMsg, csrfToken strin
 }
 
 // renderSetupComplete renders the setup completion page with optional API token
-func (a *Admin) renderSetupComplete(w http.ResponseWriter, displayName, apiToken string) {
+func (a *Admin) renderSetupComplete(w http.ResponseWriter, displayName, apiToken, grpcAddress string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/setup_complete.html"))
 
 	data := setupCompleteData{
@@ -406,6 +407,7 @@ func (a *Admin) renderSetupComplete(w http.ResponseWriter, displayName, apiToken
 		DisplayName: displayName,
 		APIToken:    apiToken,
 		HasToken:    apiToken != "",
+		GRPCAddress: grpcAddress,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
