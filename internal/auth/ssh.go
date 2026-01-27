@@ -12,11 +12,16 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+
+	"github.com/2389/coven-gateway/internal/dedupe"
 )
 
 const (
 	// SSHAuthMaxAge is the maximum age of a signature timestamp (5 minutes)
 	SSHAuthMaxAge = 5 * time.Minute
+
+	// SSHNonceCacheSize is the maximum number of nonces to track
+	SSHNonceCacheSize = 10000
 
 	// SSH auth metadata keys
 	SSHPubkeyHeader    = "x-ssh-pubkey"
@@ -35,18 +40,28 @@ type SSHAuthRequest struct {
 
 // SSHVerifier verifies SSH signatures for agent authentication
 type SSHVerifier struct {
-	maxAge time.Duration
+	maxAge     time.Duration
+	nonceCache *dedupe.Cache // Tracks used nonces to prevent replay attacks
 }
 
-// NewSSHVerifier creates a new SSH signature verifier
+// NewSSHVerifier creates a new SSH signature verifier with nonce replay protection
 func NewSSHVerifier() *SSHVerifier {
 	return &SSHVerifier{
-		maxAge: SSHAuthMaxAge,
+		maxAge:     SSHAuthMaxAge,
+		nonceCache: dedupe.New(SSHAuthMaxAge, SSHNonceCacheSize),
+	}
+}
+
+// Close releases resources used by the verifier
+func (v *SSHVerifier) Close() {
+	if v.nonceCache != nil {
+		v.nonceCache.Close()
 	}
 }
 
 // Verify checks the SSH signature and returns the pubkey fingerprint if valid.
 // The signature must be over the string "timestamp|nonce".
+// Nonces are tracked to prevent replay attacks within the timestamp window.
 func (v *SSHVerifier) Verify(req *SSHAuthRequest) (fingerprint string, err error) {
 	// Parse the public key
 	pubkey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(req.Pubkey))
@@ -64,6 +79,14 @@ func (v *SSHVerifier) Verify(req *SSHAuthRequest) (fingerprint string, err error
 		}
 	} else if age > v.maxAge {
 		return "", fmt.Errorf("signature expired (age: %v, max: %v)", age, v.maxAge)
+	}
+
+	// Check for nonce replay attack
+	// The nonce key includes the fingerprint to prevent cross-key replay
+	fp := ComputeFingerprint(pubkey)
+	nonceKey := fmt.Sprintf("%s:%d:%s", fp, req.Timestamp, req.Nonce)
+	if v.nonceCache.Check(nonceKey) {
+		return "", fmt.Errorf("nonce already used (possible replay attack)")
 	}
 
 	// Build the message that was signed: "timestamp|nonce"
@@ -86,8 +109,8 @@ func (v *SSHVerifier) Verify(req *SSHAuthRequest) (fingerprint string, err error
 		return "", fmt.Errorf("signature verification failed: %w", err)
 	}
 
-	// Compute the fingerprint (SHA256 of the public key)
-	fp := ComputeFingerprint(pubkey)
+	// Mark nonce as used AFTER successful verification
+	v.nonceCache.Mark(nonceKey)
 
 	return fp, nil
 }

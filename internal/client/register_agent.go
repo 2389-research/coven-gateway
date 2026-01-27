@@ -7,7 +7,9 @@ import (
 	"context"
 	"encoding/hex"
 	"log/slog"
+	"regexp"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,8 +27,56 @@ type PrincipalWriter interface {
 	AddRole(ctx context.Context, subjectType store.RoleSubjectType, subjectID string, role store.RoleName) error
 }
 
-// Maximum display name length
-const maxDisplayNameLength = 100
+const (
+	// Maximum display name length
+	maxDisplayNameLength = 100
+
+	// Rate limiting: max registrations per principal per window
+	maxRegistrationsPerWindow = 5
+	registrationRateWindow    = time.Minute
+)
+
+// displayNamePattern allows alphanumeric, hyphens, underscores, spaces, and basic punctuation
+var displayNamePattern = regexp.MustCompile(`^[a-zA-Z0-9\-_\.\s]+$`)
+
+// registrationRateLimiter tracks recent registration attempts per principal
+type registrationRateLimiter struct {
+	mu      sync.Mutex
+	records map[string][]time.Time
+}
+
+var regRateLimiter = &registrationRateLimiter{
+	records: make(map[string][]time.Time),
+}
+
+// checkAndRecord checks if a principal can register and records the attempt.
+// Returns true if allowed, false if rate limited.
+func (r *registrationRateLimiter) checkAndRecord(principalID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-registrationRateWindow)
+
+	// Get existing timestamps and filter out expired ones
+	timestamps := r.records[principalID]
+	valid := make([]time.Time, 0, len(timestamps))
+	for _, t := range timestamps {
+		if t.After(cutoff) {
+			valid = append(valid, t)
+		}
+	}
+
+	// Check rate limit
+	if len(valid) >= maxRegistrationsPerWindow {
+		r.records[principalID] = valid
+		return false
+	}
+
+	// Record this attempt
+	r.records[principalID] = append(valid, now)
+	return true
+}
 
 // RegisterAgent allows authenticated members to register an agent with their SSH key
 func (s *ClientService) RegisterAgent(ctx context.Context, req *pb.RegisterAgentRequest) (*pb.RegisterAgentResponse, error) {
@@ -39,20 +89,33 @@ func (s *ClientService) RegisterAgent(ctx context.Context, req *pb.RegisterAgent
 		return nil, status.Error(codes.PermissionDenied, "member role required to register agents")
 	}
 
-	// Validate request
+	// Rate limiting: prevent registration spam
+	if !regRateLimiter.checkAndRecord(authCtx.PrincipalID) {
+		slog.Warn("registration rate limit exceeded",
+			"principal_id", authCtx.PrincipalID,
+			"limit", maxRegistrationsPerWindow,
+			"window", registrationRateWindow)
+		return nil, status.Errorf(codes.ResourceExhausted, "rate limit exceeded: max %d registrations per %v", maxRegistrationsPerWindow, registrationRateWindow)
+	}
+
+	// Validate display name
 	if req.DisplayName == "" {
 		return nil, status.Error(codes.InvalidArgument, "display_name required")
 	}
 	if len(req.DisplayName) > maxDisplayNameLength {
 		return nil, status.Errorf(codes.InvalidArgument, "display_name exceeds %d characters", maxDisplayNameLength)
 	}
+	if !displayNamePattern.MatchString(req.DisplayName) {
+		return nil, status.Error(codes.InvalidArgument, "display_name contains invalid characters (allowed: alphanumeric, hyphens, underscores, periods, spaces)")
+	}
+
+	// Validate fingerprint
 	if req.Fingerprint == "" {
 		return nil, status.Error(codes.InvalidArgument, "fingerprint required")
 	}
 	if len(req.Fingerprint) != 64 {
 		return nil, status.Error(codes.InvalidArgument, "fingerprint must be 64 hex characters (SHA256)")
 	}
-	// Validate fingerprint is valid hex
 	if _, err := hex.DecodeString(req.Fingerprint); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "fingerprint must be valid hex characters")
 	}
@@ -81,19 +144,21 @@ func (s *ClientService) RegisterAgent(ctx context.Context, req *pb.RegisterAgent
 		return nil, status.Errorf(codes.Internal, "failed to create principal: %v", err)
 	}
 
-	// Add member role
+	// Add member role - if this fails, we still have a valid principal but it won't be able to do much
+	// Log and return error to let caller know the registration was incomplete
 	if err := writer.AddRole(ctx, store.RoleSubjectPrincipal, principalID, store.RoleMember); err != nil {
-		slog.Error("failed to add member role to registered agent",
+		slog.Error("failed to add member role to registered agent - registration incomplete",
 			"agent_principal_id", principalID,
 			"registered_by", authCtx.PrincipalID,
 			"error", err)
+		// Note: principal exists but has no role - admin will need to add role manually
+		return nil, status.Errorf(codes.Internal, "agent created but role assignment failed: %v", err)
 	}
 
 	slog.Info("agent registered via self-registration",
 		"agent_principal_id", principalID,
 		"registered_by", authCtx.PrincipalID,
 		"display_name", req.DisplayName,
-		"fingerprint", req.Fingerprint[:16]+"...",
 	)
 
 	return &pb.RegisterAgentResponse{
