@@ -834,3 +834,144 @@ func (s *SQLiteStore) DeleteBinding(ctx context.Context, frontend, channelID str
 
 // Ensure SQLiteStore implements Store interface
 var _ Store = (*SQLiteStore)(nil)
+
+// Ensure SQLiteStore implements LinkCodeStore interface
+var _ LinkCodeStore = (*SQLiteStore)(nil)
+
+// CreateLinkCode creates a new pending link code
+func (s *SQLiteStore) CreateLinkCode(ctx context.Context, code *LinkCode) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO link_codes (id, code, fingerprint, device_name, status, created_at, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, code.ID, code.Code, code.Fingerprint, code.DeviceName, code.Status,
+		code.CreatedAt.UTC().Format(time.RFC3339),
+		code.ExpiresAt.UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("creating link code: %w", err)
+	}
+	s.logger.Debug("created link code", "id", code.ID, "code", code.Code)
+	return nil
+}
+
+// GetLinkCode retrieves a link code by ID
+func (s *SQLiteStore) GetLinkCode(ctx context.Context, id string) (*LinkCode, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, code, fingerprint, device_name, status, created_at, expires_at,
+		       approved_by, approved_at, principal_id, token
+		FROM link_codes WHERE id = ?
+	`, id)
+	return s.scanLinkCode(row)
+}
+
+// GetLinkCodeByCode retrieves a link code by its short code
+func (s *SQLiteStore) GetLinkCodeByCode(ctx context.Context, code string) (*LinkCode, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, code, fingerprint, device_name, status, created_at, expires_at,
+		       approved_by, approved_at, principal_id, token
+		FROM link_codes WHERE code = ?
+	`, code)
+	return s.scanLinkCode(row)
+}
+
+func (s *SQLiteStore) scanLinkCode(row *sql.Row) (*LinkCode, error) {
+	var lc LinkCode
+	var createdAt, expiresAt string
+	var approvedBy, approvedAt, principalID, token sql.NullString
+
+	err := row.Scan(&lc.ID, &lc.Code, &lc.Fingerprint, &lc.DeviceName, &lc.Status,
+		&createdAt, &expiresAt, &approvedBy, &approvedAt, &principalID, &token)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("scanning link code: %w", err)
+	}
+
+	lc.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	lc.ExpiresAt, _ = time.Parse(time.RFC3339, expiresAt)
+
+	if approvedBy.Valid {
+		lc.ApprovedBy = &approvedBy.String
+	}
+	if approvedAt.Valid {
+		t, _ := time.Parse(time.RFC3339, approvedAt.String)
+		lc.ApprovedAt = &t
+	}
+	if principalID.Valid {
+		lc.PrincipalID = &principalID.String
+	}
+	if token.Valid {
+		lc.Token = &token.String
+	}
+
+	return &lc, nil
+}
+
+// ApproveLinkCode marks a code as approved and stores the principal/token
+func (s *SQLiteStore) ApproveLinkCode(ctx context.Context, id string, approvedBy string, principalID string, token string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE link_codes
+		SET status = ?, approved_by = ?, approved_at = ?, principal_id = ?, token = ?
+		WHERE id = ? AND status = ?
+	`, LinkCodeStatusApproved, approvedBy, now, principalID, token, id, LinkCodeStatusPending)
+	if err != nil {
+		return fmt.Errorf("approving link code: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return ErrNotFound
+	}
+	s.logger.Info("approved link code", "id", id, "approved_by", approvedBy)
+	return nil
+}
+
+// ListPendingLinkCodes returns all pending (non-expired) link codes
+func (s *SQLiteStore) ListPendingLinkCodes(ctx context.Context) ([]*LinkCode, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, code, fingerprint, device_name, status, created_at, expires_at,
+		       approved_by, approved_at, principal_id, token
+		FROM link_codes
+		WHERE status = ? AND expires_at > ?
+		ORDER BY created_at DESC
+	`, LinkCodeStatusPending, now)
+	if err != nil {
+		return nil, fmt.Errorf("listing pending link codes: %w", err)
+	}
+	defer rows.Close()
+
+	var codes []*LinkCode
+	for rows.Next() {
+		var lc LinkCode
+		var createdAt, expiresAt string
+		var approvedBy, approvedAt, principalID, token sql.NullString
+
+		err := rows.Scan(&lc.ID, &lc.Code, &lc.Fingerprint, &lc.DeviceName, &lc.Status,
+			&createdAt, &expiresAt, &approvedBy, &approvedAt, &principalID, &token)
+		if err != nil {
+			return nil, fmt.Errorf("scanning link code row: %w", err)
+		}
+
+		lc.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		lc.ExpiresAt, _ = time.Parse(time.RFC3339, expiresAt)
+		codes = append(codes, &lc)
+	}
+	return codes, rows.Err()
+}
+
+// DeleteExpiredLinkCodes removes expired link codes
+func (s *SQLiteStore) DeleteExpiredLinkCodes(ctx context.Context) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := s.db.ExecContext(ctx, `
+		DELETE FROM link_codes WHERE expires_at <= ? AND status = ?
+	`, now, LinkCodeStatusPending)
+	if err != nil {
+		return fmt.Errorf("deleting expired link codes: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		s.logger.Debug("deleted expired link codes", "count", rowsAffected)
+	}
+	return nil
+}
