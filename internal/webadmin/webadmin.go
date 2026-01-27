@@ -1530,6 +1530,13 @@ func (a *Admin) handleLinkApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify we have a principal store
+	if a.principalStore == nil {
+		a.logger.Error("principal store not configured")
+		http.Error(w, "Server not configured for link approval", http.StatusInternalServerError)
+		return
+	}
+
 	// Create principal for the device
 	principalID := uuid.New().String()
 	principal := &store.Principal{
@@ -1553,15 +1560,16 @@ func (a *Admin) handleLinkApprove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate token (30 days)
-	var token string
-	if a.tokenGenerator != nil {
-		var err error
-		token, err = a.tokenGenerator.Generate(principalID, 30*24*time.Hour)
-		if err != nil {
-			a.logger.Error("failed to generate token", "error", err)
-			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-			return
-		}
+	if a.tokenGenerator == nil {
+		a.logger.Error("token generator not configured")
+		http.Error(w, "Server not configured for token generation", http.StatusInternalServerError)
+		return
+	}
+	token, err := a.tokenGenerator.Generate(principalID, 30*24*time.Hour)
+	if err != nil {
+		a.logger.Error("failed to generate token", "error", err)
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
 	}
 
 	// Update link code with approval
@@ -1595,6 +1603,12 @@ func (a *Admin) handleLinkRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate fingerprint format (SHA256 hex = 64 chars)
+	if len(req.Fingerprint) != 64 {
+		http.Error(w, "invalid fingerprint format (expected 64 hex chars)", http.StatusBadRequest)
+		return
+	}
+
 	// Generate short code
 	code := generateLinkCode(LinkCodeLength)
 	now := time.Now()
@@ -1615,7 +1629,12 @@ func (a *Admin) handleLinkRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.logger.Info("link code created", "code", code, "device", req.DeviceName, "fingerprint", req.Fingerprint[:16]+"...")
+	// Log with truncated fingerprint (safe since we validated length above)
+	fpPreview := req.Fingerprint
+	if len(fpPreview) > 16 {
+		fpPreview = fpPreview[:16] + "..."
+	}
+	a.logger.Info("link code created", "code", code, "device", req.DeviceName, "fingerprint", fpPreview)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{

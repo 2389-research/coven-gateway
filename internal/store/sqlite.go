@@ -887,14 +887,24 @@ func (s *SQLiteStore) scanLinkCode(row *sql.Row) (*LinkCode, error) {
 		return nil, fmt.Errorf("scanning link code: %w", err)
 	}
 
-	lc.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-	lc.ExpiresAt, _ = time.Parse(time.RFC3339, expiresAt)
+	var parseErr error
+	lc.CreatedAt, parseErr = time.Parse(time.RFC3339, createdAt)
+	if parseErr != nil {
+		return nil, fmt.Errorf("parsing created_at: %w", parseErr)
+	}
+	lc.ExpiresAt, parseErr = time.Parse(time.RFC3339, expiresAt)
+	if parseErr != nil {
+		return nil, fmt.Errorf("parsing expires_at: %w", parseErr)
+	}
 
 	if approvedBy.Valid {
 		lc.ApprovedBy = &approvedBy.String
 	}
 	if approvedAt.Valid {
-		t, _ := time.Parse(time.RFC3339, approvedAt.String)
+		t, parseErr := time.Parse(time.RFC3339, approvedAt.String)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parsing approved_at: %w", parseErr)
+		}
 		lc.ApprovedAt = &t
 	}
 	if principalID.Valid {

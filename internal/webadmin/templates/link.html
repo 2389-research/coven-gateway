@@ -31,7 +31,7 @@
                         <span class="font-medium text-ink">{{.DeviceName}}</span>
                     </td>
                     <td class="px-4 py-3">
-                        <span class="font-mono text-xs text-warm-500">{{slice .Fingerprint 0 16}}...</span>
+                        <span class="font-mono text-xs text-warm-500">{{if ge (len .Fingerprint) 16}}{{slice .Fingerprint 0 16}}...{{else}}{{.Fingerprint}}{{end}}</span>
                     </td>
                     <td class="px-4 py-3">
                         <span class="text-sm text-warm-600">{{.ExpiresAt.Format "15:04:05"}}</span>
