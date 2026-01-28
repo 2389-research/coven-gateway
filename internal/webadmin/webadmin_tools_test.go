@@ -409,8 +409,9 @@ func TestHandleToolsList_MultiplePacks(t *testing.T) {
 }
 
 // --- handleToolsPage tests ---
+// Note: handleToolsPage now redirects to /admin/ (chat app) since tools are in settings modal
 
-func TestHandleToolsPage_RendersSuccessfully(t *testing.T) {
+func TestHandleToolsPage_RedirectsToChatApp(t *testing.T) {
 	admin := newTestAdmin(nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/tools", nil)
@@ -419,62 +420,12 @@ func TestHandleToolsPage_RendersSuccessfully(t *testing.T) {
 
 	admin.handleToolsPage(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected status 303 (redirect), got %d", rec.Code)
 	}
 
-	body := rec.Body.String()
-
-	// Should contain the page title from the template
-	if !strings.Contains(body, "Registered Tools") {
-		t.Fatalf("expected 'Registered Tools' in page body, got:\n%s", body)
-	}
-}
-
-func TestHandleToolsPage_ContainsUserDisplayName(t *testing.T) {
-	admin := newTestAdmin(nil)
-
-	req := httptest.NewRequest(http.MethodGet, "/admin/tools", nil)
-	req = requestWithUser(req)
-	rec := httptest.NewRecorder()
-
-	admin.handleToolsPage(rec, req)
-
-	body := rec.Body.String()
-
-	if !strings.Contains(body, "Test Admin") {
-		t.Fatalf("expected user display name 'Test Admin' in page body, got:\n%s", body)
-	}
-}
-
-func TestHandleToolsPage_ContentTypeIsHTML(t *testing.T) {
-	admin := newTestAdmin(nil)
-
-	req := httptest.NewRequest(http.MethodGet, "/admin/tools", nil)
-	req = requestWithUser(req)
-	rec := httptest.NewRecorder()
-
-	admin.handleToolsPage(rec, req)
-
-	ct := rec.Header().Get("Content-Type")
-	if ct != "text/html; charset=utf-8" {
-		t.Fatalf("expected Content-Type %q, got %q", "text/html; charset=utf-8", ct)
-	}
-}
-
-func TestHandleToolsPage_ContainsHTMXToolsListEndpoint(t *testing.T) {
-	admin := newTestAdmin(nil)
-
-	req := httptest.NewRequest(http.MethodGet, "/admin/tools", nil)
-	req = requestWithUser(req)
-	rec := httptest.NewRecorder()
-
-	admin.handleToolsPage(rec, req)
-
-	body := rec.Body.String()
-
-	// The page should contain the HTMX endpoint for loading the tools list
-	if !strings.Contains(body, "/admin/tools/list") {
-		t.Fatalf("expected HTMX tools list endpoint in page body, got:\n%s", body)
+	location := rec.Header().Get("Location")
+	if location != "/admin/" {
+		t.Fatalf("expected redirect to /admin/, got %q", location)
 	}
 }

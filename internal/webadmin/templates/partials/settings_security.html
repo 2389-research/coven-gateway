@@ -1,0 +1,108 @@
+{{/* ABOUTME: Settings modal security tab partial */}}
+{{/* ABOUTME: Shows principals (API keys) and invite link codes */}}
+
+<!-- Principals Section -->
+<div class="settings-section">
+    <h3 class="settings-section-title">API Keys (Principals)</h3>
+    {{if .Principals}}
+    <div class="border border-warm-200 rounded-lg overflow-hidden">
+        <table class="settings-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Principals}}
+                <tr>
+                    <td class="font-medium">{{.Name}}</td>
+                    <td>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                            {{if eq .Type "agent"}}bg-blue-50 text-blue-700{{else if eq .Type "client"}}bg-purple-50 text-purple-700{{else}}bg-warm-100 text-warm-600{{end}}">
+                            {{.Type}}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="inline-flex items-center gap-1 text-xs
+                            {{if eq .Status "approved"}}text-forest{{else if eq .Status "pending"}}text-amber-600{{else}}text-danger{{end}}">
+                            <span class="w-1.5 h-1.5 rounded-full
+                                {{if eq .Status "approved"}}bg-forest{{else if eq .Status "pending"}}bg-amber-500{{else}}bg-danger{{end}}"></span>
+                            {{.Status}}
+                        </span>
+                    </td>
+                    <td class="text-warm-400 text-xs">{{.CreatedAt.Format "Jan 2, 2006"}}</td>
+                    <td class="text-right">
+                        {{if eq .Status "pending"}}
+                        <form method="POST" action="/admin/principals/{{.ID}}/approve" class="inline"
+                              hx-post="/admin/principals/{{.ID}}/approve"
+                              hx-target="#settings-content"
+                              hx-swap="innerHTML">
+                            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                            <button type="submit" class="text-xs text-forest hover:text-forest-light font-medium">Approve</button>
+                        </form>
+                        {{else if eq .Status "approved"}}
+                        <form method="POST" action="/admin/principals/{{.ID}}/revoke" class="inline"
+                              hx-post="/admin/principals/{{.ID}}/revoke"
+                              hx-target="#settings-content"
+                              hx-swap="innerHTML">
+                            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                            <button type="submit" class="text-xs text-warm-400 hover:text-danger font-medium">Revoke</button>
+                        </form>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{else}}
+    <div class="text-center py-6 text-warm-400 border border-dashed border-warm-200 rounded-lg">
+        <p class="text-sm">No API keys configured</p>
+    </div>
+    {{end}}
+</div>
+
+<!-- Link Codes Section -->
+<div class="settings-section">
+    <div class="flex items-center justify-between mb-3">
+        <h3 class="settings-section-title mb-0">Pending Invite Links</h3>
+    </div>
+    {{if .LinkCodes}}
+    <div class="border border-warm-200 rounded-lg overflow-hidden">
+        <table class="settings-table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Expires</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .LinkCodes}}
+                <tr>
+                    <td class="font-mono text-xs">{{.Code}}</td>
+                    <td>
+                        <span class="inline-flex items-center gap-1 text-xs text-amber-600">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            Pending
+                        </span>
+                    </td>
+                    <td class="text-warm-400 text-xs">{{.CreatedAt.Format "Jan 2, 2006"}}</td>
+                    <td class="text-warm-400 text-xs">{{.ExpiresAt.Format "Jan 2, 2006"}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{else}}
+    <div class="text-center py-6 text-warm-400 border border-dashed border-warm-200 rounded-lg">
+        <p class="text-sm">No pending invite links</p>
+        <p class="text-xs mt-1">Use the Device Linking page to create invites</p>
+    </div>
+    {{end}}
+</div>

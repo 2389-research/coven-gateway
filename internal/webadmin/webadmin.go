@@ -210,6 +210,11 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/chatview/{id}", a.requireAuth(a.handleThreadView))
 	mux.HandleFunc("GET /admin/agents/picker", a.requireAuth(a.handleAgentPicker))
 
+	// Settings modal tabs (htmx partials)
+	mux.HandleFunc("GET /admin/settings/agents", a.requireAuth(a.handleSettingsAgents))
+	mux.HandleFunc("GET /admin/settings/tools", a.requireAuth(a.handleSettingsTools))
+	mux.HandleFunc("GET /admin/settings/security", a.requireAuth(a.handleSettingsSecurity))
+
 	// Stats (htmx partials)
 	mux.HandleFunc("GET /admin/stats/agents", a.requireAuth(a.handleStatsAgents))
 	mux.HandleFunc("GET /admin/stats/packs", a.requireAuth(a.handleStatsPacks))
@@ -806,9 +811,8 @@ func (a *Admin) handleInviteSignup(w http.ResponseWriter, r *http.Request) {
 
 // handleDashboard renders the main admin dashboard
 func (a *Admin) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	user := getUserFromContext(r)
-	r, csrfToken := a.ensureCSRFToken(w, r)
-	a.renderDashboard(w, user, csrfToken)
+	// Dashboard is deprecated - redirect to the chat app which is now the primary interface
+	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
 }
 
 // handleStatsAgents returns connected agent count (htmx partial)
@@ -980,11 +984,9 @@ func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 // Tools Handlers
 // =============================================================================
 
-// handleToolsPage renders the tools management page
+// handleToolsPage is deprecated - redirect to chat app
 func (a *Admin) handleToolsPage(w http.ResponseWriter, r *http.Request) {
-	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
-	a.renderToolsPage(w, user, csrfToken)
+	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
 }
 
 // handleToolsList returns the tools list grouped by pack (htmx partial)
@@ -1043,11 +1045,9 @@ func (a *Admin) handleStatsPacks(w http.ResponseWriter, r *http.Request) {
 // Principals Handlers
 // =============================================================================
 
-// handlePrincipalsPage renders the principals management page
+// handlePrincipalsPage is deprecated - redirect to chat app
 func (a *Admin) handlePrincipalsPage(w http.ResponseWriter, r *http.Request) {
-	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
-	a.renderPrincipalsPage(w, user, csrfToken)
+	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
 }
 
 // handlePrincipalsList returns the principals list (htmx partial)

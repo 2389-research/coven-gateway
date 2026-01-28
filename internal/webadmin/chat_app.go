@@ -503,3 +503,131 @@ func getAgentDisplayName(agentID string, connectedAgents map[string]string) stri
 	}
 	return agentID
 }
+
+// handleSettingsAgents returns the agents settings tab content (HTMX)
+func (a *Admin) handleSettingsAgents(w http.ResponseWriter, r *http.Request) {
+	_, csrfToken := a.ensureCSRFToken(w, r)
+
+	// Get connected agents from manager
+	type agentData struct {
+		ID        string
+		Name      string
+		Connected bool
+	}
+	var agents []agentData
+	if a.manager != nil {
+		for _, info := range a.manager.ListAgents() {
+			agents = append(agents, agentData{
+				ID:        info.ID,
+				Name:      info.Name,
+				Connected: true,
+			})
+		}
+	}
+
+	data := struct {
+		Agents    []agentData
+		CSRFToken string
+	}{
+		Agents:    agents,
+		CSRFToken: csrfToken,
+	}
+
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/settings_agents.html"))
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render settings agents", "error", err)
+	}
+}
+
+// handleSettingsTools returns the tools settings tab content (HTMX)
+func (a *Admin) handleSettingsTools(w http.ResponseWriter, r *http.Request) {
+	// Group tools by pack (similar to handleToolsList)
+	type toolData struct {
+		Name        string
+		Description string
+	}
+	type packData struct {
+		ID      string
+		Version string
+		Tools   []toolData
+	}
+
+	var packs []packData
+	if a.registry != nil {
+		packInfos := a.registry.ListPacks()
+		allTools := a.registry.GetAllTools()
+
+		toolsByPack := make(map[string][]toolData)
+		for _, t := range allTools {
+			if t.Definition == nil {
+				continue
+			}
+			toolsByPack[t.PackID] = append(toolsByPack[t.PackID], toolData{
+				Name:        t.Definition.GetName(),
+				Description: t.Definition.GetDescription(),
+			})
+		}
+
+		for _, pi := range packInfos {
+			tools := toolsByPack[pi.ID]
+			if len(tools) > 0 {
+				packs = append(packs, packData{
+					ID:      pi.ID,
+					Version: pi.Version,
+					Tools:   tools,
+				})
+			}
+		}
+	}
+
+	data := struct {
+		Packs []packData
+	}{
+		Packs: packs,
+	}
+
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/settings_tools.html"))
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render settings tools", "error", err)
+	}
+}
+
+// handleSettingsSecurity returns the security settings tab content (HTMX)
+func (a *Admin) handleSettingsSecurity(w http.ResponseWriter, r *http.Request) {
+	_, csrfToken := a.ensureCSRFToken(w, r)
+
+	// Get principals (empty filter = all)
+	principals, err := a.store.ListPrincipals(r.Context(), store.PrincipalFilter{})
+	if err != nil {
+		a.logger.Error("failed to list principals", "error", err)
+		principals = nil
+	}
+
+	// Get pending link codes
+	codes, err := a.store.ListPendingLinkCodes(r.Context())
+	if err != nil {
+		a.logger.Error("failed to list link codes", "error", err)
+		codes = nil
+	}
+
+	data := struct {
+		Principals []store.Principal
+		LinkCodes  []*store.LinkCode
+		CSRFToken  string
+	}{
+		Principals: principals,
+		LinkCodes:  codes,
+		CSRFToken:  csrfToken,
+	}
+
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/settings_security.html"))
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render settings security", "error", err)
+	}
+}

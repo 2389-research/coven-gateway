@@ -22,25 +22,14 @@
             </a>
         </div>
 
-        <!-- Right side: user + settings -->
-        <div class="flex items-center gap-4">
-            <div class="hidden sm:flex items-center gap-2 text-sm text-warm-600">
-                <div class="w-2 h-2 rounded-full bg-forest pulse-soft"></div>
-                <span class="font-medium">{{.User.DisplayName}}</span>
-            </div>
-            <a href="/admin/link" class="p-2 text-warm-400 hover:text-forest rounded-lg hover:bg-warm-100" title="Device Linking">
+        <!-- Right side: settings -->
+        <div class="flex items-center gap-2">
+            <button id="settings-btn" class="p-2 text-warm-400 hover:text-forest rounded-lg hover:bg-warm-100" title="Settings">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                 </svg>
-            </a>
-            <form method="POST" action="/admin/logout" class="inline">
-                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                <button type="submit" class="p-2 text-warm-400 hover:text-danger rounded-lg hover:bg-warm-100" title="Sign Out">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                    </svg>
-                </button>
-            </form>
+            </button>
         </div>
     </header>
 
@@ -68,26 +57,26 @@
             </div>
         </div>
 
-        <!-- Sidebar Footer: Admin Navigation -->
+        <!-- Sidebar Footer: Settings shortcuts -->
         <div class="sidebar-footer">
-            <a href="/admin/agents" class="sidebar-nav-link">
+            <button class="sidebar-nav-link" data-settings-tab="agents">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                 </svg>
                 <span>Agents</span>
-            </a>
-            <a href="/admin/tools" class="sidebar-nav-link">
+            </button>
+            <button class="sidebar-nav-link" data-settings-tab="tools">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
                 </svg>
                 <span>Tools</span>
-            </a>
-            <a href="/admin/principals" class="sidebar-nav-link">
+            </button>
+            <button class="sidebar-nav-link" data-settings-tab="security">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                 </svg>
-                <span>Principals</span>
-            </a>
+                <span>Security</span>
+            </button>
         </div>
     </aside>
 
@@ -139,6 +128,64 @@
             </div>
             <div id="search-results" class="search-results">
                 <p class="text-sm text-warm-400 text-center py-8">Type to search threads...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="settings-container">
+            <div class="settings-header">
+                <h2 class="font-serif text-xl text-ink">Settings</h2>
+                <button id="close-settings" class="p-1 text-warm-400 hover:text-ink rounded">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="settings-body">
+                <nav class="settings-nav">
+                    <button class="settings-tab active" data-tab="agents">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                        Agents
+                    </button>
+                    <button class="settings-tab" data-tab="tools">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+                        </svg>
+                        Tools
+                    </button>
+                    <button class="settings-tab" data-tab="security">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                        Security
+                    </button>
+                </nav>
+                <div class="settings-content" id="settings-content">
+                    <div class="flex items-center justify-center py-12">
+                        <div class="flex items-center gap-2 text-warm-400">
+                            <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            <span class="text-sm">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-footer">
+                <div class="flex items-center gap-2 text-sm text-warm-600">
+                    <div class="w-2 h-2 rounded-full bg-forest pulse-soft"></div>
+                    <span class="font-medium">{{.User.DisplayName}}</span>
+                </div>
+                <form method="POST" action="/admin/logout" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <button type="submit" class="text-sm text-warm-500 hover:text-danger font-medium">
+                        Sign Out
+                    </button>
+                </form>
             </div>
         </div>
     </div>
@@ -532,6 +579,203 @@
     font-size: 0.625rem;
     font-family: inherit;
 }
+
+/* Settings Modal */
+.settings-container {
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    width: 90%;
+    max-width: 900px;
+    height: 80vh;
+    max-height: 700px;
+    display: flex;
+    flex-direction: column;
+    animation: modal-in 0.15s ease;
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #E8E2DA;
+    flex-shrink: 0;
+}
+
+.settings-body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.settings-nav {
+    width: 180px;
+    padding: 1rem;
+    border-right: 1px solid #E8E2DA;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+.settings-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6B5C4D;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.1s ease;
+}
+
+.settings-tab:hover {
+    background: #F5F1EC;
+    color: #2D5A47;
+}
+
+.settings-tab.active {
+    background: #2D5A47;
+    color: white;
+}
+
+.settings-tab.active svg {
+    opacity: 1;
+}
+
+.settings-tab svg {
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.settings-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+}
+
+.settings-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #E8E2DA;
+    background: #FDFCFB;
+    border-radius: 0 0 0.75rem 0.75rem;
+    flex-shrink: 0;
+}
+
+/* Settings Content Sections */
+.settings-section {
+    margin-bottom: 2rem;
+}
+
+.settings-section:last-child {
+    margin-bottom: 0;
+}
+
+.settings-section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #9A8A78;
+    margin-bottom: 1rem;
+}
+
+.settings-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.settings-table th {
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #9A8A78;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #E8E2DA;
+}
+
+.settings-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid #F5F1EC;
+    font-size: 0.875rem;
+    color: #3D3228;
+}
+
+.settings-table tr:hover td {
+    background: #FDFCFB;
+}
+
+/* Agent list in settings */
+.settings-agent-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    border: 1px solid #E8E2DA;
+    border-radius: 0.5rem;
+    margin-bottom: 0.5rem;
+    transition: all 0.1s ease;
+}
+
+.settings-agent-item:hover {
+    border-color: #D4C9BC;
+    background: #FDFCFB;
+}
+
+.settings-agent-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.settings-agent-name {
+    font-weight: 500;
+    color: #3D3228;
+}
+
+.settings-agent-meta {
+    font-size: 0.75rem;
+    color: #9A8A78;
+}
+
+/* Responsive settings modal */
+@media (max-width: 768px) {
+    .settings-container {
+        width: 100%;
+        height: 100%;
+        max-height: none;
+        border-radius: 0;
+    }
+
+    .settings-body {
+        flex-direction: column;
+    }
+
+    .settings-nav {
+        width: 100%;
+        flex-direction: row;
+        border-right: none;
+        border-bottom: 1px solid #E8E2DA;
+        padding: 0.5rem;
+        overflow-x: auto;
+    }
+
+    .settings-tab {
+        white-space: nowrap;
+        padding: 0.5rem 0.75rem;
+    }
+}
 </style>
 
 <script>
@@ -552,6 +796,10 @@
     const closeAgentPicker = document.getElementById('close-agent-picker');
     const searchModal = document.getElementById('search-modal');
     const searchInput = document.getElementById('search-input');
+    const settingsModal = document.getElementById('settings-modal');
+    const settingsBtn = document.getElementById('settings-btn');
+    const closeSettings = document.getElementById('close-settings');
+    const settingsContent = document.getElementById('settings-content');
 
     // Mobile sidebar toggle
     function toggleSidebar() {
@@ -596,6 +844,60 @@
         if (e.target === searchModal) closeSearch();
     });
 
+    // Settings modal
+    let currentSettingsTab = 'agents';
+
+    function openSettings(tab = 'agents') {
+        currentSettingsTab = tab;
+        settingsModal?.classList.remove('hidden');
+        // Update active tab
+        document.querySelectorAll('.settings-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.tab === tab);
+        });
+        // Load tab content
+        loadSettingsTab(tab);
+    }
+
+    function closeSettingsModal() {
+        settingsModal?.classList.add('hidden');
+    }
+
+    function loadSettingsTab(tab) {
+        if (settingsContent) {
+            settingsContent.innerHTML = '<div class="flex items-center justify-center py-12"><div class="flex items-center gap-2 text-warm-400"><svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span class="text-sm">Loading...</span></div></div>';
+            htmx.ajax('GET', '/admin/settings/' + tab, {
+                target: '#settings-content',
+                swap: 'innerHTML'
+            });
+        }
+    }
+
+    settingsBtn?.addEventListener('click', () => openSettings());
+    closeSettings?.addEventListener('click', closeSettingsModal);
+
+    settingsModal?.addEventListener('click', (e) => {
+        if (e.target === settingsModal) closeSettingsModal();
+    });
+
+    // Settings tab switching
+    document.querySelectorAll('.settings-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabName = tab.dataset.tab;
+            if (tabName && tabName !== currentSettingsTab) {
+                openSettings(tabName);
+            }
+        });
+    });
+
+    // Sidebar footer buttons that open settings to specific tab
+    document.querySelectorAll('[data-settings-tab]').forEach(btn => {
+        if (!btn.classList.contains('settings-tab')) {
+            btn.addEventListener('click', () => {
+                openSettings(btn.dataset.settingsTab);
+            });
+        }
+    });
+
     // Keyboard shortcuts
     document.addEventListener('keydown', function(e) {
         // Cmd/Ctrl + K = Search
@@ -622,6 +924,9 @@
 
         // Escape = Close modals
         if (e.key === 'Escape') {
+            if (!settingsModal?.classList.contains('hidden')) {
+                closeSettingsModal();
+            }
             if (!agentPickerModal?.classList.contains('hidden')) {
                 closeAgentPickerModal();
             }
