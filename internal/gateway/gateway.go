@@ -187,9 +187,14 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		mcpEndpoint = envGatewayURL + "/mcp"
 	} else if cfg.Tailscale.Enabled {
 		// Derive from tailscale config
-		scheme := "http"
-		if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
-			scheme = "https"
+		// Default to HTTPS since Tailscale auto-provisions certs for all nodes
+		// Only use HTTP if explicitly disabled via config (not recommended)
+		scheme := "https"
+		if !cfg.Tailscale.HTTPS && !cfg.Tailscale.Funnel {
+			// Check if HTTP-only mode is explicitly configured
+			// For now, still default to HTTPS as it's the common case
+			// Users can override via COVEN_MCP_ENDPOINT if needed
+			logger.Info("Tailscale HTTPS not explicitly enabled, but defaulting to HTTPS for MCP endpoint")
 		}
 		mcpEndpoint = scheme + "://" + cfg.Tailscale.Hostname + "/mcp"
 	} else {
