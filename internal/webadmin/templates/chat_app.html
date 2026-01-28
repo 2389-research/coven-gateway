@@ -1307,14 +1307,20 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 .chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 1.5rem;
+    padding: 1.5rem 1.5rem 2rem;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem;
 }
 
 .message {
-    max-width: 80%;
+    max-width: 85%;
+    animation: message-appear 0.2s ease-out;
+}
+
+@keyframes message-appear {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .message-user {
@@ -1323,6 +1329,12 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 
 .message-agent {
     align-self: flex-start;
+}
+
+/* Tool/result messages span full width */
+.message-tool-block {
+    max-width: 100%;
+    align-self: stretch;
 }
 
 .message-header {
@@ -1350,13 +1362,23 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 }
 
 .message-sender.tool {
-    background: rgba(184, 134, 11, 0.1);
-    color: #B8860B;
+    background: rgba(184, 134, 11, 0.15);
+    color: #96750A;
 }
 
 .message-sender.result {
-    background: rgba(45, 90, 71, 0.1);
+    background: rgba(45, 90, 71, 0.15);
     color: #2D5A47;
+}
+
+.message-sender.thinking {
+    background: rgba(128, 90, 213, 0.1);
+    color: #6B46C1;
+}
+
+.message-sender.error {
+    background: rgba(169, 68, 66, 0.1);
+    color: #A94442;
 }
 
 .message-time {
@@ -1370,28 +1392,195 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     border: 1px solid #E8E2DA;
     border-radius: 0.75rem;
     font-size: 0.875rem;
-    line-height: 1.5;
+    line-height: 1.6;
     white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .message-user .message-content {
     background: #2D5A47;
     color: white;
     border-color: #2D5A47;
+    border-radius: 0.75rem 0.75rem 0.25rem 0.75rem;
 }
 
+.message-agent .message-content {
+    border-radius: 0.75rem 0.75rem 0.75rem 0.25rem;
+}
+
+/* Tool blocks - darker terminal style */
 .message-content.tool {
-    background: rgba(184, 134, 11, 0.05);
-    border-color: rgba(184, 134, 11, 0.2);
+    background: #1a1d21;
+    border-color: #2d3138;
+    border-radius: 0.5rem;
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
+    color: #c4cad6;
+    overflow-x: auto;
+    max-height: 300px;
+    overflow-y: auto;
 }
 
+/* Result blocks - success themed */
 .message-content.result {
-    background: rgba(45, 90, 71, 0.05);
-    border-color: rgba(45, 90, 71, 0.2);
+    background: rgba(45, 90, 71, 0.04);
+    border-color: rgba(45, 90, 71, 0.25);
+    border-left: 3px solid #2D5A47;
+    border-radius: 0 0.5rem 0.5rem 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    color: #3D3228;
+    overflow-x: auto;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Thinking blocks */
+.message-content.thinking {
+    background: rgba(128, 90, 213, 0.04);
+    border-color: rgba(128, 90, 213, 0.2);
+    border-left: 3px solid #805AD5;
+    border-radius: 0 0.5rem 0.5rem 0;
+    font-style: italic;
+    color: #6B46C1;
+}
+
+/* Error blocks */
+.message-content.error {
+    background: rgba(169, 68, 66, 0.04);
+    border-color: rgba(169, 68, 66, 0.2);
+    border-left: 3px solid #A94442;
+    border-radius: 0 0.5rem 0.5rem 0;
+    color: #A94442;
+}
+
+/* Collapsible tool blocks */
+.tool-block-wrapper {
+    border: 1px solid #2d3138;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: #1a1d21;
+}
+
+.tool-block-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #22262c;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+
+.tool-block-header:hover {
+    background: #2a2f36;
+}
+
+.tool-block-header .chevron {
+    width: 16px;
+    height: 16px;
+    color: #6b7280;
+    transition: transform 0.2s ease;
+}
+
+.tool-block-header.collapsed .chevron {
+    transform: rotate(-90deg);
+}
+
+.tool-block-header .tool-icon {
+    width: 16px;
+    height: 16px;
+    color: #D4A017;
+}
+
+.tool-block-header .tool-label {
+    flex: 1;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.75rem;
+    font-weight: 500;
+    color: #D4A017;
+}
+
+.tool-block-body {
+    padding: 0.75rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    color: #c4cad6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: auto;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.tool-block-body.collapsed {
+    display: none;
+}
+
+/* Result block wrapper */
+.result-block-wrapper {
+    border: 1px solid rgba(45, 90, 71, 0.25);
+    border-left: 3px solid #2D5A47;
+    border-radius: 0 0.5rem 0.5rem 0;
+    overflow: hidden;
+    background: rgba(45, 90, 71, 0.04);
+}
+
+.result-block-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(45, 90, 71, 0.08);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+
+.result-block-header:hover {
+    background: rgba(45, 90, 71, 0.12);
+}
+
+.result-block-header .chevron {
+    width: 16px;
+    height: 16px;
+    color: #2D5A47;
+    transition: transform 0.2s ease;
+}
+
+.result-block-header.collapsed .chevron {
+    transform: rotate(-90deg);
+}
+
+.result-block-header .result-icon {
+    width: 16px;
+    height: 16px;
+    color: #2D5A47;
+}
+
+.result-block-header .result-label {
+    flex: 1;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #2D5A47;
+}
+
+.result-block-body {
+    padding: 0.75rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    color: #3D3228;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: auto;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.result-block-body.collapsed {
+    display: none;
 }
 
 .chat-input-area {
@@ -1418,12 +1607,14 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     min-height: 44px;
     max-height: 200px;
     font-family: inherit;
+    transition: all 0.15s ease;
 }
 
 .chat-textarea:focus {
     outline: none;
     border-color: #2D5A47;
     background: white;
+    box-shadow: 0 0 0 3px rgba(45, 90, 71, 0.08);
 }
 
 .chat-send-btn {
@@ -1436,16 +1627,22 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     background: #2D5A47;
     color: white;
     border-radius: 0.75rem;
-    transition: background 0.15s ease;
+    transition: all 0.15s ease;
 }
 
 .chat-send-btn:hover {
     background: #3D7A5F;
+    transform: translateY(-1px);
+}
+
+.chat-send-btn:active {
+    transform: translateY(0);
 }
 
 .chat-send-btn:disabled {
     background: #D4C9BC;
     cursor: not-allowed;
+    transform: none;
 }
 </style>
 
@@ -1482,9 +1679,6 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     let currentStreamingMessage = null;
     let streamingContent = '';
     let isStreaming = false;
-    let throbberInterval = null;
-    const throbberFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-    let throbberIndex = 0;
 
     // SSE connection
     let evtSource = null;
@@ -1573,17 +1767,11 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         currentStreamingMessage.innerHTML = `
             <div class="message-header">
                 <span class="message-sender agent">{{.AgentName}}</span>
-                <span class="throbber">${throbberFrames[0]}</span>
+                <span class="throbber"></span>
             </div>
             <div class="message-content"></div>
         `;
         chatMessages.appendChild(currentStreamingMessage);
-
-        throbberInterval = setInterval(() => {
-            throbberIndex = (throbberIndex + 1) % throbberFrames.length;
-            const throbber = currentStreamingMessage?.querySelector('.throbber');
-            if (throbber) throbber.textContent = throbberFrames[throbberIndex];
-        }, 80);
 
         scrollToBottom();
     }
@@ -1598,7 +1786,6 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 
     function finalizeStreaming() {
         if (!currentStreamingMessage) return;
-        clearInterval(throbberInterval);
         isStreaming = false;
 
         currentStreamingMessage.querySelector('.throbber')?.remove();
@@ -1624,9 +1811,9 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         msg.className = 'message message-agent';
         msg.innerHTML = `
             <div class="message-header">
-                <span class="message-sender" style="background: rgba(128, 90, 213, 0.1); color: #805AD5;">Thinking...</span>
+                <span class="message-sender thinking">Thinking...</span>
             </div>
-            <div class="message-content" style="background: rgba(128, 90, 213, 0.05); border-color: rgba(128, 90, 213, 0.2); font-style: italic; color: #805AD5;">${escapeHtml(content)}</div>
+            <div class="message-content thinking">${escapeHtml(content)}</div>
         `;
         chatMessages.appendChild(msg);
         scrollToBottom();
@@ -1639,17 +1826,44 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         }
 
         const msg = document.createElement('div');
-        msg.className = 'message message-agent';
-        const label = type === 'use' ? (toolName ? 'Tool: ' + toolName : 'Tool') : 'Result';
-        const senderClass = type === 'use' ? 'tool' : 'result';
-        const contentClass = type === 'use' ? 'tool' : 'result';
+        msg.className = 'message message-agent message-tool-block';
 
-        msg.innerHTML = `
-            <div class="message-header">
-                <span class="message-sender ${senderClass}">${escapeHtml(label)}</span>
-            </div>
-            ${content ? `<div class="message-content ${contentClass}">${escapeHtml(content)}</div>` : ''}
-        `;
+        if (type === 'use') {
+            // Collapsible tool use block
+            const blockId = 'tool-' + Date.now();
+            msg.innerHTML = `
+                <div class="tool-block-wrapper">
+                    <div class="tool-block-header" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.classList.toggle('collapsed');">
+                        <svg class="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                        <svg class="tool-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        <span class="tool-label">${escapeHtml(toolName || 'Tool')}</span>
+                    </div>
+                    ${content ? `<div class="tool-block-body">${escapeHtml(content)}</div>` : ''}
+                </div>
+            `;
+        } else {
+            // Collapsible result block
+            msg.innerHTML = `
+                <div class="result-block-wrapper">
+                    <div class="result-block-header" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.classList.toggle('collapsed');">
+                        <svg class="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                        <svg class="result-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span class="result-label">Result</span>
+                    </div>
+                    ${content ? `<div class="result-block-body">${escapeHtml(content)}</div>` : ''}
+                </div>
+            `;
+        }
+
         chatMessages.appendChild(msg);
         scrollToBottom();
     }
@@ -1664,9 +1878,9 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         msg.className = 'message message-agent';
         msg.innerHTML = `
             <div class="message-header">
-                <span class="message-sender" style="background: rgba(169, 68, 66, 0.1); color: #A94442;">Error</span>
+                <span class="message-sender error">Error</span>
             </div>
-            <div class="message-content" style="background: rgba(169, 68, 66, 0.05); border-color: rgba(169, 68, 66, 0.2); color: #A94442;">${escapeHtml(content)}</div>
+            <div class="message-content error">${escapeHtml(content)}</div>
         `;
         chatMessages.appendChild(msg);
         scrollToBottom();
@@ -1735,45 +1949,86 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 </script>
 
 <style>
+/* Streaming state */
 .streaming .message-content {
     border-left: 3px solid #2D5A47;
-    background: linear-gradient(90deg, rgba(45, 90, 71, 0.05) 0%, transparent 100%) !important;
+    background: linear-gradient(90deg, rgba(45, 90, 71, 0.04) 0%, transparent 100%) !important;
+    position: relative;
+}
+
+.streaming .message-content::after {
+    content: '';
+    display: inline-block;
+    width: 2px;
+    height: 1.1em;
+    background: #2D5A47;
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: cursor-blink 0.8s step-end infinite;
+}
+
+@keyframes cursor-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
 }
 
 .throbber {
-    font-family: monospace;
-    color: #2D5A47;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     margin-left: 0.5rem;
+}
+
+.throbber::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: #2D5A47;
+    border-radius: 50%;
+    animation: throbber-pulse 1s ease-in-out infinite;
+}
+
+@keyframes throbber-pulse {
+    0%, 100% { opacity: 0.4; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1); }
 }
 
 /* Markdown styles */
 .message-content pre {
-    background: #1f2937;
+    background: #1a1d21;
     color: #e5e7eb;
-    padding: 0.75rem;
-    border-radius: 0.375rem;
+    padding: 0.875rem 1rem;
+    border-radius: 0.5rem;
     overflow-x: auto;
-    margin: 0.5rem 0;
+    margin: 0.75rem 0;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.8rem;
+    line-height: 1.5;
+    border: 1px solid #2d3138;
 }
 
 .message-content code {
-    background: rgba(0, 0, 0, 0.05);
-    padding: 0.125rem 0.25rem;
+    background: rgba(45, 90, 71, 0.08);
+    padding: 0.15rem 0.35rem;
     border-radius: 0.25rem;
     font-size: 0.85em;
     font-family: 'IBM Plex Mono', monospace;
+    color: #2D5A47;
 }
 
 .message-content pre code {
     background: transparent;
     padding: 0;
+    color: inherit;
 }
 
 .message-content ul, .message-content ol {
     padding-left: 1.5rem;
     margin: 0.5rem 0;
+}
+
+.message-content li {
+    margin: 0.25rem 0;
 }
 
 .message-content p {
@@ -1786,6 +2041,80 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 
 .message-content p:last-child {
     margin-bottom: 0;
+}
+
+.message-content blockquote {
+    border-left: 3px solid #D4C9BC;
+    padding-left: 1rem;
+    margin: 0.75rem 0;
+    color: #7A6A58;
+    font-style: italic;
+}
+
+.message-content h1, .message-content h2, .message-content h3 {
+    margin: 1rem 0 0.5rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.message-content h1:first-child,
+.message-content h2:first-child,
+.message-content h3:first-child {
+    margin-top: 0;
+}
+
+.message-content hr {
+    border: none;
+    border-top: 1px solid #E8E2DA;
+    margin: 1rem 0;
+}
+
+.message-content a {
+    color: #2D5A47;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.message-content a:hover {
+    color: #3D7A5F;
+}
+
+.message-content table {
+    border-collapse: collapse;
+    margin: 0.75rem 0;
+    width: 100%;
+    font-size: 0.85rem;
+}
+
+.message-content th, .message-content td {
+    border: 1px solid #E8E2DA;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+}
+
+.message-content th {
+    background: #F5F1EC;
+    font-weight: 600;
+}
+
+/* User message markdown overrides */
+.message-user .message-content code {
+    background: rgba(255, 255, 255, 0.15);
+    color: inherit;
+}
+
+.message-user .message-content pre {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.message-user .message-content a {
+    color: #a8d5c2;
+}
+
+.message-user .message-content blockquote {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.8);
 }
 </style>
 {{end}}
