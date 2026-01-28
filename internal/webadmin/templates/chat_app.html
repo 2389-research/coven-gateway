@@ -656,11 +656,15 @@
             const agentId = agentItem.dataset.agentId;
             closeAgentPickerModal();
 
+            // Extract CSRF token for the POST request
+            const csrfToken = document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
+
             // Create new thread with this agent
             htmx.ajax('POST', '/admin/threads', {
                 values: { agent_id: agentId },
                 target: '#chat-content',
-                swap: 'innerHTML'
+                swap: 'innerHTML',
+                headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
             }).then(() => {
                 // Refresh thread list
                 htmx.trigger('#thread-list', 'load');
