@@ -669,9 +669,14 @@ func (a *Admin) handleSettingsHelp(w http.ResponseWriter, r *http.Request) {
 	// Sort topics in a logical order
 	topicOrder := map[string]int{
 		"getting-started":    1,
-		"agents":             2,
-		"tools":              3,
-		"keyboard-shortcuts": 4,
+		"installation":       2,
+		"configuration":      3,
+		"tailscale":          4,
+		"docker":             5,
+		"agents":             6,
+		"tools":              7,
+		"keyboard-shortcuts": 8,
+		"troubleshooting":    9,
 	}
 	sort.Slice(topics, func(i, j int) bool {
 		orderI, okI := topicOrder[topics[i].Slug]
