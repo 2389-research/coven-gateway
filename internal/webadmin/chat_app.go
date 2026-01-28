@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"runtime"
 	"strings"
 	"time"
 
@@ -21,7 +20,6 @@ type chatAppData struct {
 	Title        string
 	User         *store.AdminUser
 	CSRFToken    string
-	Platform     string
 	ActiveThread *threadViewData
 }
 
@@ -76,17 +74,10 @@ func (a *Admin) handleChatApp(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	_, csrfToken := a.ensureCSRFToken(w, r)
 
-	// Determine platform for keyboard shortcut display
-	platform := "other"
-	if runtime.GOOS == "darwin" {
-		platform = "darwin"
-	}
-
 	data := chatAppData{
 		Title:     "Chat",
 		User:      user,
 		CSRFToken: csrfToken,
-		Platform:  platform,
 	}
 
 	tmpl := template.Must(template.ParseFS(templateFS,
@@ -308,17 +299,6 @@ func (a *Admin) handleThreadView(w http.ResponseWriter, r *http.Request) {
 
 // handleEmptyState returns the empty state partial (HTMX)
 func (a *Admin) handleEmptyState(w http.ResponseWriter, r *http.Request) {
-	platform := "other"
-	if runtime.GOOS == "darwin" {
-		platform = "darwin"
-	}
-
-	data := struct {
-		Platform string
-	}{
-		Platform: platform,
-	}
-
 	// Parse just the empty_state define from chat_app.html
 	tmpl := template.Must(template.New("empty_state").Parse(`
 <div class="flex-1 flex flex-col items-center justify-center p-8 text-center">
@@ -337,24 +317,32 @@ func (a *Admin) handleEmptyState(w http.ResponseWriter, r *http.Request) {
     </button>
     <div class="mt-8 flex gap-6 text-xs text-warm-400">
         <div class="keyboard-hint">
-            <kbd>{{if eq .Platform "darwin"}}⌘{{else}}Ctrl{{end}}+N</kbd>
+            <kbd><span class="mod-key">Ctrl</span>+N</kbd>
             <span>New Chat</span>
         </div>
         <div class="keyboard-hint">
-            <kbd>{{if eq .Platform "darwin"}}⌘{{else}}Ctrl{{end}}+K</kbd>
+            <kbd><span class="mod-key">Ctrl</span>+K</kbd>
             <span>Search</span>
         </div>
     </div>
 </div>
 <script>
-document.getElementById('welcome-new-chat')?.addEventListener('click', function() {
-    document.getElementById('new-chat-btn')?.click();
-});
+(function() {
+    // Detect client platform and update modifier key display
+    const isMac = navigator.platform?.toUpperCase().indexOf('MAC') >= 0 ||
+                  navigator.userAgentData?.platform?.toUpperCase().indexOf('MAC') >= 0;
+    document.querySelectorAll('.mod-key').forEach(el => {
+        el.textContent = isMac ? '⌘' : 'Ctrl';
+    });
+    document.getElementById('welcome-new-chat')?.addEventListener('click', function() {
+        document.getElementById('new-chat-btn')?.click();
+    });
+})();
 </script>
 `))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
+	if err := tmpl.Execute(w, nil); err != nil {
 		a.logger.Error("failed to render empty state", "error", err)
 	}
 }
@@ -372,11 +360,10 @@ func (a *Admin) handleDeleteThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For now, we just acknowledge - full delete would need store support
-	// In production, this would delete the thread and its messages
-	a.logger.Info("delete thread requested (soft delete)", "thread_id", threadID)
-
-	w.WriteHeader(http.StatusOK)
+	// TODO: Implement thread deletion in store
+	// For now, return 501 Not Implemented to avoid silent failure
+	a.logger.Info("delete thread requested (not implemented)", "thread_id", threadID)
+	http.Error(w, "Thread deletion not yet implemented", http.StatusNotImplemented)
 }
 
 // handleRenameThread renames a thread (HTMX)
@@ -399,10 +386,10 @@ func (a *Admin) handleRenameThread(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = r.FormValue("title") // Would update title if Thread had that field
 
-	// For now, just acknowledge - would need Thread.Title field
-	a.logger.Info("rename thread requested", "thread_id", threadID)
-
-	w.WriteHeader(http.StatusOK)
+	// TODO: Implement thread renaming - requires Thread.Title field in store
+	// For now, return 501 Not Implemented to avoid silent failure
+	a.logger.Info("rename thread requested (not implemented)", "thread_id", threadID)
+	http.Error(w, "Thread renaming not yet implemented", http.StatusNotImplemented)
 }
 
 // handleThreadSearch searches threads (HTMX partial)

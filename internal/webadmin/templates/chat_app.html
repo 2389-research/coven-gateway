@@ -530,6 +530,13 @@
 
 <script>
 (function() {
+    // Detect client platform and update modifier key display
+    const isMac = navigator.platform?.toUpperCase().indexOf('MAC') >= 0 ||
+                  navigator.userAgentData?.platform?.toUpperCase().indexOf('MAC') >= 0;
+    document.querySelectorAll('.mod-key').forEach(el => {
+        el.textContent = isMac ? '⌘' : 'Ctrl';
+    });
+
     // DOM elements
     const sidebar = document.getElementById('sidebar');
     const sidebarToggle = document.getElementById('sidebar-toggle');
@@ -730,11 +737,14 @@
         document.body.appendChild(menu);
 
         // Handle menu item clicks
+        const csrfToken = document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
         menu.addEventListener('click', function(e) {
             const action = e.target.closest('.context-menu-item')?.dataset.action;
             if (action === 'delete') {
                 if (confirm('Delete this conversation?')) {
-                    htmx.ajax('DELETE', '/admin/threads/' + threadId, {}).then(() => {
+                    htmx.ajax('DELETE', '/admin/threads/' + threadId, {
+                        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+                    }).then(() => {
                         htmx.trigger('#thread-list', 'load');
                         // If this was the active thread, show empty state
                         if (threadItem.classList.contains('active')) {
@@ -749,7 +759,8 @@
                 const newName = prompt('Enter new name:');
                 if (newName) {
                     htmx.ajax('PATCH', '/admin/threads/' + threadId, {
-                        values: { title: newName }
+                        values: { title: newName },
+                        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
                     }).then(() => {
                         htmx.trigger('#thread-list', 'load');
                     });
@@ -816,11 +827,11 @@
     </button>
     <div class="mt-8 flex gap-6 text-xs text-warm-400">
         <div class="keyboard-hint">
-            <kbd>{{if eq .Platform "darwin"}}⌘{{else}}Ctrl{{end}}+N</kbd>
+            <kbd><span class="mod-key">Ctrl</span>+N</kbd>
             <span>New Chat</span>
         </div>
         <div class="keyboard-hint">
-            <kbd>{{if eq .Platform "darwin"}}⌘{{else}}Ctrl{{end}}+K</kbd>
+            <kbd><span class="mod-key">Ctrl</span>+K</kbd>
             <span>Search</span>
         </div>
     </div>
@@ -1061,8 +1072,8 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 
 <script>
 (function() {
-    const agentId = "{{.AgentID}}";
-    const threadId = "{{.ThreadID}}";
+    const agentId = {{.AgentID | js}};
+    const threadId = {{.ThreadID | js}};
     const chatMessages = document.getElementById('chat-messages');
     const chatForm = document.getElementById('chat-form');
     const messageInput = document.getElementById('message-input');
@@ -1099,6 +1110,16 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     // SSE connection
     let evtSource = null;
     let reconnectAttempts = 0;
+
+    // Clean up SSE on page unload or HTMX swap
+    function cleanupSSE() {
+        if (evtSource) {
+            evtSource.close();
+            evtSource = null;
+        }
+    }
+    window.addEventListener('beforeunload', cleanupSSE);
+    document.body.addEventListener('htmx:beforeSwap', cleanupSSE);
 
     function connectSSE() {
         evtSource = new EventSource('/admin/chat/' + agentId + '/stream');

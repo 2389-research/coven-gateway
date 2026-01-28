@@ -206,8 +206,8 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/threads", a.requireAuth(a.handleCreateThread))
 	mux.HandleFunc("DELETE /admin/threads/{id}", a.requireAuth(a.handleDeleteThread))
 	mux.HandleFunc("PATCH /admin/threads/{id}", a.requireAuth(a.handleRenameThread))
-	mux.HandleFunc("GET /admin/chatview/{id}", a.requireAuth(a.handleThreadView))
 	mux.HandleFunc("GET /admin/chatview/empty", a.requireAuth(a.handleEmptyState))
+	mux.HandleFunc("GET /admin/chatview/{id}", a.requireAuth(a.handleThreadView))
 	mux.HandleFunc("GET /admin/agents/picker", a.requireAuth(a.handleAgentPicker))
 
 	// Stats (htmx partials)
