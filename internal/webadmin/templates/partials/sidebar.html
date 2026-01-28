@@ -1,7 +1,9 @@
-{{/* ABOUTME: Thread list sidebar partial with date grouping */}}
-{{/* ABOUTME: Loaded via HTMX for dynamic updates */}}
+{{/* ABOUTME: Thread list sidebar partial with connection status grouping */}}
+{{/* ABOUTME: Separates active (connected agent) vs archived (disconnected) threads */}}
 
 {{if .Threads}}
+    {{/* Connected agent threads - grouped by date */}}
+    {{if .HasConnected}}
     {{if .TodayThreads}}
     <div class="thread-group">
         <div class="thread-group-label">Today</div>
@@ -37,6 +39,25 @@
         {{end}}
     </div>
     {{end}}
+    {{end}}
+
+    {{/* Disconnected agent threads - collapsed section */}}
+    {{if .HasDisconnected}}
+    <div class="thread-group disconnected-group">
+        <button class="disconnected-toggle" onclick="this.parentElement.classList.toggle('expanded')">
+            <svg class="toggle-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+            </svg>
+            <span class="thread-group-label">Disconnected Agents</span>
+            <span class="disconnected-count">{{len .DisconnectedThreads}}</span>
+        </button>
+        <div class="disconnected-threads">
+            {{range .DisconnectedThreads}}
+            {{template "thread_item" .}}
+            {{end}}
+        </div>
+    </div>
+    {{end}}
 {{else}}
 <div class="flex flex-col items-center justify-center py-8 text-warm-400">
     <svg class="w-10 h-10 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -48,22 +69,22 @@
 {{end}}
 
 {{define "thread_item"}}
-<div class="thread-item{{if .Active}} active{{end}}" data-thread-id="{{.ID}}" role="button" tabindex="0">
+<div class="thread-item{{if .Active}} active{{end}}{{if not .AgentConnected}} disconnected{{end}}" data-thread-id="{{.ID}}" role="button" tabindex="0">
     <div class="thread-icon">
         {{if .AgentConnected}}
         <svg class="w-4 h-4 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
         </svg>
         {{else}}
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        <svg class="w-4 h-4 text-warm-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"/>
         </svg>
         {{end}}
     </div>
     <div class="thread-info">
         <div class="thread-title">{{if .Title}}{{.Title}}{{else}}New conversation{{end}}</div>
         <div class="thread-meta">
-            <span class="thread-agent-badge">
+            <span class="thread-agent-badge{{if not .AgentConnected}} offline{{end}}">
                 <span class="w-1 h-1 rounded-full {{if .AgentConnected}}bg-forest{{else}}bg-warm-300{{end}}"></span>
                 {{.AgentName}}
             </span>

@@ -361,6 +361,81 @@
     font-weight: 500;
 }
 
+.thread-agent-badge.offline {
+    background: rgba(154, 138, 120, 0.1);
+    color: #9A8A78;
+}
+
+/* Disconnected threads - collapsible section */
+.disconnected-group {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #E8E2DA;
+}
+
+.disconnected-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    border-radius: 0.375rem;
+    transition: background 0.1s ease;
+}
+
+.disconnected-toggle:hover {
+    background: #F5F1EC;
+}
+
+.disconnected-toggle .thread-group-label {
+    padding: 0;
+    flex: 1;
+}
+
+.disconnected-count {
+    font-size: 0.625rem;
+    font-weight: 600;
+    background: #E8E2DA;
+    color: #7A6A58;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+}
+
+.toggle-chevron {
+    color: #9A8A78;
+    transition: transform 0.2s ease;
+}
+
+.disconnected-group.expanded .toggle-chevron {
+    transform: rotate(90deg);
+}
+
+.disconnected-threads {
+    display: none;
+    padding-top: 0.25rem;
+}
+
+.disconnected-group.expanded .disconnected-threads {
+    display: block;
+}
+
+/* Disconnected thread item styling */
+.thread-item.disconnected {
+    opacity: 0.7;
+}
+
+.thread-item.disconnected .thread-title {
+    color: #7A6A58;
+}
+
+.thread-item.disconnected .thread-icon {
+    background: #F5F1EC;
+}
+
 /* Sidebar Footer */
 .sidebar-footer {
     display: flex;
@@ -1713,6 +1788,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         });
 
         evtSource.addEventListener('thinking', function(e) {
+            console.log('[chat] thinking event:', e.data);
             try {
                 const data = JSON.parse(e.data);
                 if (data.content) appendThinkingBlock(data.content);
@@ -1720,6 +1796,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         });
 
         evtSource.addEventListener('tool_use', function(e) {
+            console.log('[chat] tool_use event:', e.data);
             try {
                 const data = JSON.parse(e.data);
                 appendToolBlock('use', data.tool_name, data.content);
@@ -1809,6 +1886,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     }
 
     function appendThinkingBlock(content) {
+        console.log('[chat] appendThinkingBlock, currentThinkingBlock:', currentThinkingBlock);
         // Clear any pending messages first (streaming or previous thinking)
         clearPendingMessages();
 
@@ -1827,6 +1905,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 
     function removeThinkingBlock() {
         if (currentThinkingBlock) {
+            console.log('[chat] removing thinking block');
             currentThinkingBlock.remove();
             currentThinkingBlock = null;
         }
@@ -1850,6 +1929,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     }
 
     function appendToolBlock(type, toolName, content) {
+        console.log('[chat] appendToolBlock:', type, toolName, 'currentThinkingBlock:', currentThinkingBlock);
         // Clear any pending messages first
         clearPendingMessages();
 

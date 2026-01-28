@@ -43,11 +43,14 @@ type threadViewData struct {
 
 // sidebarData holds data for the thread list sidebar
 type sidebarData struct {
-	Threads          bool
-	TodayThreads     []threadItemData
-	YesterdayThreads []threadItemData
-	WeekThreads      []threadItemData
-	OlderThreads     []threadItemData
+	Threads             bool
+	HasConnected        bool
+	HasDisconnected     bool
+	TodayThreads        []threadItemData
+	YesterdayThreads    []threadItemData
+	WeekThreads         []threadItemData
+	OlderThreads        []threadItemData
+	DisconnectedThreads []threadItemData
 }
 
 // threadItemData represents a single thread in the sidebar
@@ -147,6 +150,13 @@ func (a *Admin) handleThreadsList(w http.ResponseWriter, r *http.Request) {
 
 		_, item.AgentConnected = connectedAgents[t.AgentID]
 
+		// Separate connected vs disconnected agents
+		if !item.AgentConnected {
+			data.DisconnectedThreads = append(data.DisconnectedThreads, item)
+			continue
+		}
+
+		// Group connected agent threads by date
 		switch {
 		case t.UpdatedAt.After(today) || t.UpdatedAt.Equal(today):
 			data.TodayThreads = append(data.TodayThreads, item)
@@ -160,6 +170,8 @@ func (a *Admin) handleThreadsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data.Threads = len(threads) > 0
+	data.HasConnected = len(data.TodayThreads)+len(data.YesterdayThreads)+len(data.WeekThreads)+len(data.OlderThreads) > 0
+	data.HasDisconnected = len(data.DisconnectedThreads) > 0
 
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/sidebar.html"))
 
