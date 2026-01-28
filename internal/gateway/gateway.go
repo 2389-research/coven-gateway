@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -500,6 +501,23 @@ func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn n
 		"tailscale_ip", tsAddr,
 		"dns_name", dnsName,
 	)
+
+	// Update MCP endpoint to use the actual DNS name from Tailscale
+	// The short hostname (e.g., "coven") won't resolve from the agent's machine,
+	// but the full DNS name (e.g., "coven.porpoise-alkaline.ts.net") will.
+	if dnsName != "" {
+		// Strip trailing dot from DNS name if present
+		cleanDNS := strings.TrimSuffix(dnsName, ".")
+		// Always use HTTPS for Tailscale - certs are auto-provisioned
+		newEndpoint := "https://" + cleanDNS + "/mcp"
+		if newEndpoint != g.mcpEndpoint {
+			g.logger.Info("updated MCP endpoint to use Tailscale DNS name",
+				"old", g.mcpEndpoint,
+				"new", newEndpoint,
+			)
+			g.mcpEndpoint = newEndpoint
+		}
+	}
 
 	// Create gRPC listener on port 50051
 	grpcLn, err = g.tsnetServer.Listen("tcp", ":50051")
