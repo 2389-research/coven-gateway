@@ -1,0 +1,29 @@
+{{/* ABOUTME: Agent picker modal content for selecting an agent to start a new chat */}}
+{{/* ABOUTME: Shows list of agents with online/offline status */}}
+
+{{if .Agents}}
+<div class="space-y-1">
+    {{range .Agents}}
+    <button class="agent-picker-item" data-agent-id="{{.ID}}">
+        <div class="agent-status-dot {{if .Connected}}online{{else}}offline{{end}}"></div>
+        <div class="flex-1 text-left">
+            <div class="font-medium text-sm text-ink">{{.Name}}</div>
+            <div class="text-xs text-warm-500">{{if .Connected}}Online{{else}}Offline{{end}}</div>
+        </div>
+        {{if .Connected}}
+        <svg class="w-4 h-4 text-warm-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7"/>
+        </svg>
+        {{end}}
+    </button>
+    {{end}}
+</div>
+{{else}}
+<div class="flex flex-col items-center justify-center py-8 text-warm-400">
+    <svg class="w-12 h-12 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+    </svg>
+    <p class="text-sm font-medium">No agents available</p>
+    <p class="text-xs text-warm-300 mt-1">Connect an agent to start chatting</p>
+</div>
+{{end}}

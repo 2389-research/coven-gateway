@@ -1,0 +1,38 @@
+{{/* ABOUTME: Thread search results partial for Cmd+K search modal */}}
+{{/* ABOUTME: Shows matching threads with highlighting */}}
+
+{{if .Results}}
+<div class="space-y-1">
+    {{range .Results}}
+    <button class="search-result-item thread-item" data-thread-id="{{.ID}}">
+        <div class="thread-icon">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+            </svg>
+        </div>
+        <div class="thread-info">
+            <div class="thread-title">{{if .Title}}{{.Title}}{{else}}Conversation{{end}}</div>
+            <div class="thread-meta">
+                <span class="thread-agent-badge">{{.AgentName}}</span>
+                <span>{{.UpdatedAt.Format "Jan 02"}}</span>
+            </div>
+        </div>
+    </button>
+    {{end}}
+</div>
+{{else}}
+<div class="flex flex-col items-center justify-center py-8 text-warm-400">
+    <p class="text-sm">No matching conversations</p>
+</div>
+{{end}}
+
+<style>
+.search-result-item {
+    width: 100%;
+    text-align: left;
+}
+
+.search-result-item:hover {
+    background: #F5F1EC;
+}
+</style>

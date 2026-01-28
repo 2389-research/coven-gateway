@@ -192,9 +192,23 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/invite/{token}", a.handleInviteSignup)
 
 	// Protected routes (auth required)
-	mux.HandleFunc("GET /admin/", a.requireAuth(a.handleDashboard))
-	mux.HandleFunc("GET /admin", a.requireAuth(a.handleDashboard))
+	// Main chat app (chat-centric redesign)
+	mux.HandleFunc("GET /admin/", a.requireAuth(a.handleChatApp))
+	mux.HandleFunc("GET /admin", a.requireAuth(a.handleChatApp))
 	mux.HandleFunc("POST /admin/logout", a.requireAuth(a.handleLogout))
+
+	// Dashboard (legacy, for direct access)
+	mux.HandleFunc("GET /admin/dashboard", a.requireAuth(a.handleDashboard))
+
+	// Chat app partials (HTMX)
+	mux.HandleFunc("GET /admin/threads/list", a.requireAuth(a.handleThreadsList))
+	mux.HandleFunc("GET /admin/threads/search", a.requireAuth(a.handleThreadSearch))
+	mux.HandleFunc("POST /admin/threads", a.requireAuth(a.handleCreateThread))
+	mux.HandleFunc("DELETE /admin/threads/{id}", a.requireAuth(a.handleDeleteThread))
+	mux.HandleFunc("PATCH /admin/threads/{id}", a.requireAuth(a.handleRenameThread))
+	mux.HandleFunc("GET /admin/chatview/{id}", a.requireAuth(a.handleThreadView))
+	mux.HandleFunc("GET /admin/chatview/empty", a.requireAuth(a.handleEmptyState))
+	mux.HandleFunc("GET /admin/agents/picker", a.requireAuth(a.handleAgentPicker))
 
 	// Stats (htmx partials)
 	mux.HandleFunc("GET /admin/stats/agents", a.requireAuth(a.handleStatsAgents))
@@ -217,12 +231,12 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/principals/{id}/revoke", a.requireAuth(a.handlePrincipalRevoke))
 	mux.HandleFunc("DELETE /admin/principals/{id}", a.requireAuth(a.handlePrincipalDelete))
 
-	// Threads and history
+	// Threads and history (legacy pages, still accessible)
 	mux.HandleFunc("GET /admin/threads", a.requireAuth(a.handleThreadsPage))
 	mux.HandleFunc("GET /admin/threads/{id}", a.requireAuth(a.handleThreadDetail))
 	mux.HandleFunc("GET /admin/threads/{id}/messages", a.requireAuth(a.handleThreadMessages))
 
-	// Chat with agents
+	// Chat with agents (SSE streaming)
 	mux.HandleFunc("GET /admin/chat/{id}", a.requireAuth(a.handleChatPage))
 	mux.HandleFunc("POST /admin/chat/{id}/send", a.requireAuth(a.handleChatSend))
 	mux.HandleFunc("GET /admin/chat/{id}/stream", a.requireAuth(a.handleChatStream))
