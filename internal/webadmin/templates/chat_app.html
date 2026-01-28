@@ -327,6 +327,11 @@
     background: rgba(45, 90, 71, 0.08);
 }
 
+/* Sidebar overlay - hidden on desktop, shown on mobile */
+.sidebar-overlay {
+    display: none;
+}
+
 /* Mobile Sidebar */
 @media (max-width: 1023px) {
     .chat-app {
@@ -350,6 +355,7 @@
     }
 
     .sidebar-overlay {
+        display: block;
         position: fixed;
         inset: 0;
         background: rgba(0, 0, 0, 0.3);
