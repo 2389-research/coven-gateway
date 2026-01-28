@@ -1126,6 +1126,8 @@
 
 {{/* Empty state template for when no thread is selected */}}
 {{define "empty_state"}}
+{{if gt .AgentCount 0}}
+{{/* Agents are connected - show normal welcome */}}
 <div class="flex-1 flex flex-col items-center justify-center p-8 text-center">
     <div class="w-20 h-20 rounded-2xl bg-forest/10 flex items-center justify-center mb-6">
         <svg class="w-10 h-10 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1156,6 +1158,57 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     document.getElementById('new-chat-btn')?.click();
 });
 </script>
+{{else}}
+{{/* No agents connected - show launch agent prompt */}}
+<div id="no-agents-state" class="flex-1 flex flex-col items-center justify-center p-8 text-center">
+    <div class="w-20 h-20 rounded-2xl bg-warm-100 flex items-center justify-center mb-6">
+        <svg class="w-10 h-10 text-warm-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+    </div>
+    <h2 class="font-serif text-2xl text-ink mb-2">No Agents Connected</h2>
+    <p class="text-warm-500 text-sm max-w-sm mb-6">Launch an agent to start chatting. The page will automatically refresh when an agent connects.</p>
+    <div class="bg-warm-50 border border-warm-200 rounded-lg p-4 max-w-md text-left mb-6">
+        <p class="text-xs font-medium text-warm-600 mb-2">Launch an agent with:</p>
+        <code class="block bg-white border border-warm-200 rounded px-3 py-2 text-sm font-mono text-ink">coven-agent</code>
+    </div>
+    <div class="flex items-center gap-2 text-sm text-warm-400">
+        <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        <span>Waiting for agents...</span>
+    </div>
+</div>
+<script>
+(function() {
+    // Poll for agent connections every 3 seconds
+    let pollInterval = setInterval(async function() {
+        try {
+            const response = await fetch('/admin/agents/count');
+            if (response.ok) {
+                const count = parseInt(await response.text(), 10);
+                if (count > 0) {
+                    clearInterval(pollInterval);
+                    // Reload the empty state to show the "Start New Chat" button
+                    htmx.ajax('GET', '/admin/chatview/empty', {
+                        target: '#chat-content',
+                        swap: 'innerHTML'
+                    });
+                }
+            }
+        } catch (e) {
+            // Ignore errors, will retry
+        }
+    }, 3000);
+
+    // Clean up on navigation
+    document.body.addEventListener('htmx:beforeSwap', function cleanup() {
+        clearInterval(pollInterval);
+        document.body.removeEventListener('htmx:beforeSwap', cleanup);
+    }, { once: true });
+})();
+</script>
+{{end}}
 {{end}}
 
 {{/* Chat view template for active conversation */}}

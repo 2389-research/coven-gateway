@@ -209,6 +209,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/chatview/empty", a.requireAuth(a.handleEmptyState))
 	mux.HandleFunc("GET /admin/chatview/{id}", a.requireAuth(a.handleThreadView))
 	mux.HandleFunc("GET /admin/agents/picker", a.requireAuth(a.handleAgentPicker))
+	mux.HandleFunc("GET /admin/agents/count", a.requireAuth(a.handleAgentCount))
 
 	// Settings modal tabs (htmx partials)
 	mux.HandleFunc("GET /admin/settings/agents", a.requireAuth(a.handleSettingsAgents))

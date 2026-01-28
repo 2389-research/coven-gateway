@@ -21,6 +21,7 @@ type chatAppData struct {
 	User         *store.AdminUser
 	CSRFToken    string
 	ActiveThread *threadViewData
+	AgentCount   int
 }
 
 // threadViewData holds data for the chat view partial
@@ -74,10 +75,17 @@ func (a *Admin) handleChatApp(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	_, csrfToken := a.ensureCSRFToken(w, r)
 
+	// Count connected agents
+	agentCount := 0
+	if a.manager != nil {
+		agentCount = len(a.manager.ListAgents())
+	}
+
 	data := chatAppData{
-		Title:     "Chat",
-		User:      user,
-		CSRFToken: csrfToken,
+		Title:      "Chat",
+		User:       user,
+		CSRFToken:  csrfToken,
+		AgentCount: agentCount,
 	}
 
 	tmpl := template.Must(template.ParseFS(templateFS,
@@ -299,52 +307,34 @@ func (a *Admin) handleThreadView(w http.ResponseWriter, r *http.Request) {
 
 // handleEmptyState returns the empty state partial (HTMX)
 func (a *Admin) handleEmptyState(w http.ResponseWriter, r *http.Request) {
-	// Parse just the empty_state define from chat_app.html
-	tmpl := template.Must(template.New("empty_state").Parse(`
-<div class="flex-1 flex flex-col items-center justify-center p-8 text-center">
-    <div class="w-20 h-20 rounded-2xl bg-forest/10 flex items-center justify-center mb-6">
-        <svg class="w-10 h-10 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-        </svg>
-    </div>
-    <h2 class="font-serif text-2xl text-ink mb-2">Welcome to Coven</h2>
-    <p class="text-warm-500 text-sm max-w-sm mb-6">Select a conversation from the sidebar or start a new chat with an agent.</p>
-    <button id="welcome-new-chat" class="inline-flex items-center gap-2 px-5 py-2.5 bg-forest text-white font-medium text-sm rounded-lg hover:bg-forest-light transition-colors">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/>
-        </svg>
-        Start New Chat
-    </button>
-    <div class="mt-8 flex gap-6 text-xs text-warm-400">
-        <div class="keyboard-hint">
-            <kbd><span class="mod-key">Ctrl</span>+N</kbd>
-            <span>New Chat</span>
-        </div>
-        <div class="keyboard-hint">
-            <kbd><span class="mod-key">Ctrl</span>+K</kbd>
-            <span>Search</span>
-        </div>
-    </div>
-</div>
-<script>
-(function() {
-    // Detect client platform and update modifier key display
-    const isMac = navigator.platform?.toUpperCase().indexOf('MAC') >= 0 ||
-                  navigator.userAgentData?.platform?.toUpperCase().indexOf('MAC') >= 0;
-    document.querySelectorAll('.mod-key').forEach(el => {
-        el.textContent = isMac ? '⌘' : 'Ctrl';
-    });
-    document.getElementById('welcome-new-chat')?.addEventListener('click', function() {
-        document.getElementById('new-chat-btn')?.click();
-    });
-})();
-</script>
-`))
+	// Count connected agents
+	agentCount := 0
+	if a.manager != nil {
+		agentCount = len(a.manager.ListAgents())
+	}
+
+	data := struct {
+		AgentCount int
+	}{
+		AgentCount: agentCount,
+	}
+
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/chat_app.html"))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, nil); err != nil {
+	if err := tmpl.ExecuteTemplate(w, "empty_state", data); err != nil {
 		a.logger.Error("failed to render empty state", "error", err)
 	}
+}
+
+// handleAgentCount returns the current agent count (for polling)
+func (a *Admin) handleAgentCount(w http.ResponseWriter, r *http.Request) {
+	agentCount := 0
+	if a.manager != nil {
+		agentCount = len(a.manager.ListAgents())
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	fmt.Fprintf(w, "%d", agentCount)
 }
 
 // handleDeleteThread deletes a thread (HTMX)
