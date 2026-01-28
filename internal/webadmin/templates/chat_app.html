@@ -1679,6 +1679,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     let currentStreamingMessage = null;
     let streamingContent = '';
     let isStreaming = false;
+    let currentThinkingBlock = null;
 
     // SSE connection
     let evtSource = null;
@@ -1777,6 +1778,9 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     }
 
     function appendStreamText(text) {
+        // Remove thinking block when actual text starts coming in
+        removeThinkingBlock();
+
         if (!currentStreamingMessage) startStreaming();
         streamingContent += text;
         const contentDiv = currentStreamingMessage.querySelector('.message-content');
@@ -1785,6 +1789,9 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     }
 
     function finalizeStreaming() {
+        // Remove any lingering thinking block
+        removeThinkingBlock();
+
         if (!currentStreamingMessage) return;
         isStreaming = false;
 
@@ -1802,13 +1809,11 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     }
 
     function appendThinkingBlock(content) {
-        // Finalize any current streaming message first so thinking appears after it
-        if (currentStreamingMessage && streamingContent) {
-            finalizeStreaming();
-        }
+        // Clear any pending messages first (streaming or previous thinking)
+        clearPendingMessages();
 
         const msg = document.createElement('div');
-        msg.className = 'message message-agent';
+        msg.className = 'message message-agent thinking-block';
         msg.innerHTML = `
             <div class="message-header">
                 <span class="message-sender thinking">Thinking...</span>
@@ -1816,14 +1821,37 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
             <div class="message-content thinking">${escapeHtml(content)}</div>
         `;
         chatMessages.appendChild(msg);
+        currentThinkingBlock = msg;
         scrollToBottom();
     }
 
-    function appendToolBlock(type, toolName, content) {
-        // Finalize any current streaming message first so tool blocks appear in correct order
-        if (currentStreamingMessage && streamingContent) {
-            finalizeStreaming();
+    function removeThinkingBlock() {
+        if (currentThinkingBlock) {
+            currentThinkingBlock.remove();
+            currentThinkingBlock = null;
         }
+    }
+
+    function clearPendingMessages() {
+        // Remove thinking block
+        removeThinkingBlock();
+
+        // Handle any current streaming message
+        if (currentStreamingMessage) {
+            if (streamingContent) {
+                finalizeStreaming();
+            } else {
+                // Remove empty streaming message
+                currentStreamingMessage.remove();
+                currentStreamingMessage = null;
+                isStreaming = false;
+            }
+        }
+    }
+
+    function appendToolBlock(type, toolName, content) {
+        // Clear any pending messages first
+        clearPendingMessages();
 
         const msg = document.createElement('div');
         msg.className = 'message message-agent message-tool-block';
@@ -1869,10 +1897,8 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     }
 
     function appendError(content) {
-        // Finalize any current streaming message first
-        if (currentStreamingMessage && streamingContent) {
-            finalizeStreaming();
-        }
+        // Clear any pending messages first
+        clearPendingMessages();
 
         const msg = document.createElement('div');
         msg.className = 'message message-agent';
