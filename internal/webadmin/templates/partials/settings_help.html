@@ -1,0 +1,131 @@
+{{/* ABOUTME: Settings modal help tab partial */}}
+{{/* ABOUTME: Shows help documentation with topic navigation */}}
+
+<div class="settings-section">
+    <div class="flex gap-4 h-full">
+        <!-- Topic Navigation -->
+        <nav class="help-nav shrink-0 w-48 border-r border-warm-200 pr-4">
+            {{range .Topics}}
+            <button class="help-topic-btn {{if .Active}}active{{end}}"
+                    hx-get="/admin/settings/help?topic={{.Slug}}"
+                    hx-target="#settings-content"
+                    hx-swap="innerHTML">
+                {{.Title}}
+            </button>
+            {{end}}
+        </nav>
+
+        <!-- Content -->
+        <div class="help-content flex-1 overflow-auto prose prose-warm max-w-none">
+            {{.Content}}
+        </div>
+    </div>
+</div>
+
+<style>
+.help-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.help-topic-btn {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    color: #6B5E54;
+    transition: all 0.15s ease;
+}
+
+.help-topic-btn:hover {
+    background: #F5F1EC;
+    color: #2D5A47;
+}
+
+.help-topic-btn.active {
+    background: #2D5A47;
+    color: white;
+}
+
+.help-content {
+    padding-left: 1rem;
+}
+
+.help-content h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: #1E1E1E;
+}
+
+.help-content h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: #1E1E1E;
+}
+
+.help-content p {
+    margin-bottom: 0.75rem;
+    color: #6B5E54;
+    line-height: 1.6;
+}
+
+.help-content ul, .help-content ol {
+    margin-bottom: 0.75rem;
+    padding-left: 1.5rem;
+    color: #6B5E54;
+}
+
+.help-content li {
+    margin-bottom: 0.25rem;
+}
+
+.help-content code {
+    background: #F5F1EC;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.help-content pre {
+    background: #1E1E1E;
+    color: #E5E5E5;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+}
+
+.help-content pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+}
+
+.help-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+.help-content th, .help-content td {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #E8E4E0;
+    text-align: left;
+}
+
+.help-content th {
+    background: #F5F1EC;
+    font-weight: 600;
+    color: #1E1E1E;
+}
+
+.help-content strong {
+    font-weight: 600;
+    color: #1E1E1E;
+}
+</style>

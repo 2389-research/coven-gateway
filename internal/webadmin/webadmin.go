@@ -215,6 +215,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/settings/agents", a.requireAuth(a.handleSettingsAgents))
 	mux.HandleFunc("GET /admin/settings/tools", a.requireAuth(a.handleSettingsTools))
 	mux.HandleFunc("GET /admin/settings/security", a.requireAuth(a.handleSettingsSecurity))
+	mux.HandleFunc("GET /admin/settings/help", a.requireAuth(a.handleSettingsHelp))
 
 	// Stats (htmx partials)
 	mux.HandleFunc("GET /admin/stats/agents", a.requireAuth(a.handleStatsAgents))

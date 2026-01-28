@@ -4,16 +4,24 @@
 package webadmin
 
 import (
+	"bytes"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/2389/coven-gateway/internal/store"
 	"github.com/google/uuid"
+	"github.com/yuin/goldmark"
 )
+
+//go:embed docs/help/*.md
+var helpDocsFS embed.FS
 
 // chatAppData holds data for the main chat app shell
 type chatAppData struct {
@@ -620,4 +628,102 @@ func (a *Admin) handleSettingsSecurity(w http.ResponseWriter, r *http.Request) {
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render settings security", "error", err)
 	}
+}
+
+// helpTopic represents a help documentation topic
+type helpTopic struct {
+	Slug   string
+	Title  string
+	Active bool
+}
+
+// handleSettingsHelp returns the help settings tab content (HTMX)
+func (a *Admin) handleSettingsHelp(w http.ResponseWriter, r *http.Request) {
+	selectedTopic := r.URL.Query().Get("topic")
+	if selectedTopic == "" {
+		selectedTopic = "getting-started"
+	}
+
+	// List all help topics
+	entries, err := helpDocsFS.ReadDir("docs/help")
+	if err != nil {
+		a.logger.Error("failed to read help docs", "error", err)
+		http.Error(w, "Failed to load help", http.StatusInternalServerError)
+		return
+	}
+
+	var topics []helpTopic
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+		slug := strings.TrimSuffix(entry.Name(), ".md")
+		title := formatHelpTitle(slug)
+		topics = append(topics, helpTopic{
+			Slug:   slug,
+			Title:  title,
+			Active: slug == selectedTopic,
+		})
+	}
+
+	// Sort topics in a logical order
+	topicOrder := map[string]int{
+		"getting-started":    1,
+		"agents":             2,
+		"tools":              3,
+		"keyboard-shortcuts": 4,
+	}
+	sort.Slice(topics, func(i, j int) bool {
+		orderI, okI := topicOrder[topics[i].Slug]
+		orderJ, okJ := topicOrder[topics[j].Slug]
+		if !okI {
+			orderI = 100
+		}
+		if !okJ {
+			orderJ = 100
+		}
+		if orderI != orderJ {
+			return orderI < orderJ
+		}
+		return topics[i].Slug < topics[j].Slug
+	})
+
+	// Read and convert the selected topic
+	mdPath := filepath.Join("docs/help", selectedTopic+".md")
+	mdContent, err := helpDocsFS.ReadFile(mdPath)
+	if err != nil {
+		a.logger.Error("failed to read help topic", "topic", selectedTopic, "error", err)
+		mdContent = []byte("# Not Found\n\nThis help topic could not be found.")
+	}
+
+	// Convert markdown to HTML
+	var htmlBuf bytes.Buffer
+	if err := goldmark.Convert(mdContent, &htmlBuf); err != nil {
+		a.logger.Error("failed to convert markdown", "error", err)
+		htmlBuf.WriteString("<p>Failed to render help content.</p>")
+	}
+
+	data := struct {
+		Topics  []helpTopic
+		Content template.HTML
+	}{
+		Topics:  topics,
+		Content: template.HTML(htmlBuf.String()),
+	}
+
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/settings_help.html"))
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render settings help", "error", err)
+	}
+}
+
+// formatHelpTitle converts a slug to a display title
+func formatHelpTitle(slug string) string {
+	words := strings.Split(slug, "-")
+	for i, word := range words {
+		words[i] = strings.Title(word)
+	}
+	return strings.Join(words, " ")
 }
