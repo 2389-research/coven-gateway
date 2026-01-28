@@ -315,3 +315,36 @@ func isDuplicateChannelError(err error) bool {
 		(strings.Contains(errStr, "bindings.frontend") ||
 			strings.Contains(errStr, "frontend, channel_id"))
 }
+
+// UpdateBindingsByWorkspace updates all bindings whose agent_id ends with "_<workspace>"
+// to point to the new agent ID. This is used during agent registration to automatically
+// update bindings when an agent reconnects with a different prefix (e.g., when a device
+// reconnects with a new prefix like "magic_notes" instead of "m_notes").
+// Returns the number of bindings updated.
+func (s *SQLiteStore) UpdateBindingsByWorkspace(ctx context.Context, workspace, newAgentID string) (int64, error) {
+	// Match agent_ids that end with "_<workspace>"
+	// e.g., workspace="notes" matches "m_notes", "magic_notes", etc.
+	pattern := "%_" + workspace
+
+	query := `UPDATE bindings SET agent_id = ? WHERE agent_id LIKE ? AND agent_id != ?`
+
+	result, err := s.db.ExecContext(ctx, query, newAgentID, pattern, newAgentID)
+	if err != nil {
+		return 0, fmt.Errorf("updating bindings by workspace: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("getting rows affected: %w", err)
+	}
+
+	if rowsAffected > 0 {
+		s.logger.Info("updated bindings for workspace",
+			"workspace", workspace,
+			"new_agent_id", newAgentID,
+			"count", rowsAffected,
+		)
+	}
+
+	return rowsAffected, nil
+}

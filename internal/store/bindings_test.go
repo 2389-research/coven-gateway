@@ -453,3 +453,92 @@ func TestBindingWithWorkingDir_ListPreserves(t *testing.T) {
 	require.Len(t, bindings, 1)
 	assert.Equal(t, "/home/user/myproject", bindings[0].WorkingDir)
 }
+
+func TestUpdateBindingsByWorkspace(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	// Create agents with different prefixes but same workspace names
+	createTestAgent(t, store, "m_notes")
+	createTestAgent(t, store, "magic_notes")
+	createTestAgent(t, store, "m_research")
+
+	// Create bindings pointing to old agent IDs
+	bindings := []*Binding{
+		{ID: "b1", Frontend: "matrix", ChannelID: "!notes:s.org", AgentID: "m_notes", CreatedAt: time.Now().UTC().Truncate(time.Second)},
+		{ID: "b2", Frontend: "slack", ChannelID: "C_notes", AgentID: "m_notes", CreatedAt: time.Now().UTC().Truncate(time.Second)},
+		{ID: "b3", Frontend: "matrix", ChannelID: "!research:s.org", AgentID: "m_research", CreatedAt: time.Now().UTC().Truncate(time.Second)},
+	}
+
+	for _, b := range bindings {
+		require.NoError(t, store.CreateBindingV2(ctx, b))
+	}
+
+	// Simulate agent "notes" reconnecting with new prefix "magic_notes"
+	count, err := store.UpdateBindingsByWorkspace(ctx, "notes", "magic_notes")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), count, "should update 2 bindings for workspace 'notes'")
+
+	// Verify the notes bindings were updated
+	b1, err := store.GetBindingByID(ctx, "b1")
+	require.NoError(t, err)
+	assert.Equal(t, "magic_notes", b1.AgentID)
+
+	b2, err := store.GetBindingByID(ctx, "b2")
+	require.NoError(t, err)
+	assert.Equal(t, "magic_notes", b2.AgentID)
+
+	// Verify the research binding was NOT updated
+	b3, err := store.GetBindingByID(ctx, "b3")
+	require.NoError(t, err)
+	assert.Equal(t, "m_research", b3.AgentID, "research binding should not be modified")
+}
+
+func TestUpdateBindingsByWorkspace_NoMatch(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	createTestAgent(t, store, "m_research")
+	createTestAgent(t, store, "magic_notes")
+
+	binding := &Binding{
+		ID:        "b1",
+		Frontend:  "matrix",
+		ChannelID: "!room:s.org",
+		AgentID:   "m_research",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+	}
+	require.NoError(t, store.CreateBindingV2(ctx, binding))
+
+	// Try to update bindings for workspace "notes" - should not match "research"
+	count, err := store.UpdateBindingsByWorkspace(ctx, "notes", "magic_notes")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count, "should update 0 bindings")
+
+	// Verify binding unchanged
+	got, err := store.GetBindingByID(ctx, "b1")
+	require.NoError(t, err)
+	assert.Equal(t, "m_research", got.AgentID)
+}
+
+func TestUpdateBindingsByWorkspace_AlreadyCurrent(t *testing.T) {
+	store := setupTestStore(t)
+	ctx := context.Background()
+
+	createTestAgent(t, store, "magic_notes")
+
+	// Binding already points to the new agent
+	binding := &Binding{
+		ID:        "b1",
+		Frontend:  "matrix",
+		ChannelID: "!room:s.org",
+		AgentID:   "magic_notes",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+	}
+	require.NoError(t, store.CreateBindingV2(ctx, binding))
+
+	// Update should be a no-op (agent_id != newAgentID clause prevents self-update)
+	count, err := store.UpdateBindingsByWorkspace(ctx, "notes", "magic_notes")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count, "should not update binding that already has correct agent")
+}

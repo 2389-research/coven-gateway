@@ -114,6 +114,10 @@ func (s *covenControlServer) AgentStream(stream pb.CovenControl_AgentStreamServe
 		return status.Errorf(codes.Internal, "registering agent: %v", err)
 	}
 
+	// Auto-update bindings that match this agent's workspace name
+	// This handles device prefix changes (e.g., "m_notes" -> "magic_notes")
+	s.maybeUpdateBindingsForWorkspace(stream.Context(), conn.Name, conn.ID)
+
 	// Generate MCP token for this agent's capabilities
 	var mcpToken string
 	if s.gateway.mcpTokens != nil {
@@ -348,4 +352,41 @@ func (s *covenControlServer) maybeGrantLeaderRole(ctx context.Context, principal
 	s.logger.Info("granted leader role to principal",
 		"principal_id", principalID,
 	)
+}
+
+// maybeUpdateBindingsForWorkspace updates bindings that match an agent's workspace
+// name to point to the newly registered agent. This handles device prefix changes
+// (e.g., when "m_notes" reconnects as "magic_notes", bindings update automatically).
+// Errors are logged but don't fail registration.
+func (s *covenControlServer) maybeUpdateBindingsForWorkspace(ctx context.Context, workspace, agentID string) {
+	// Skip if no workspace name
+	if workspace == "" {
+		return
+	}
+
+	// Type assert to SQLiteStore to access UpdateBindingsByWorkspace
+	sqlStore, ok := s.gateway.store.(*store.SQLiteStore)
+	if !ok {
+		s.logger.Error("cannot update bindings: store is not SQLiteStore")
+		return
+	}
+
+	// Update bindings that match this workspace pattern
+	count, err := sqlStore.UpdateBindingsByWorkspace(ctx, workspace, agentID)
+	if err != nil {
+		s.logger.Error("failed to update bindings for workspace",
+			"workspace", workspace,
+			"agent_id", agentID,
+			"error", err,
+		)
+		return
+	}
+
+	if count > 0 {
+		s.logger.Info("auto-updated bindings for reconnected agent",
+			"workspace", workspace,
+			"agent_id", agentID,
+			"bindings_updated", count,
+		)
+	}
 }
