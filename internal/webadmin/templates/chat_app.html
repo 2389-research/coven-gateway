@@ -1615,6 +1615,11 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     }
 
     function appendThinkingBlock(content) {
+        // Finalize any current streaming message first so thinking appears after it
+        if (currentStreamingMessage && streamingContent) {
+            finalizeStreaming();
+        }
+
         const msg = document.createElement('div');
         msg.className = 'message message-agent';
         msg.innerHTML = `
@@ -1628,6 +1633,11 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     }
 
     function appendToolBlock(type, toolName, content) {
+        // Finalize any current streaming message first so tool blocks appear in correct order
+        if (currentStreamingMessage && streamingContent) {
+            finalizeStreaming();
+        }
+
         const msg = document.createElement('div');
         msg.className = 'message message-agent';
         const label = type === 'use' ? (toolName ? 'Tool: ' + toolName : 'Tool') : 'Result';
@@ -1645,6 +1655,11 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     }
 
     function appendError(content) {
+        // Finalize any current streaming message first
+        if (currentStreamingMessage && streamingContent) {
+            finalizeStreaming();
+        }
+
         const msg = document.createElement('div');
         msg.className = 'message message-agent';
         msg.innerHTML = `

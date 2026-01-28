@@ -458,6 +458,10 @@
 
     // Append thinking block (separate from main text stream)
     function appendThinkingBlock(content) {
+        // Finalize any current streaming message first so thinking appears after it
+        if (currentStreamingMessage && streamingContent) {
+            finalizeStreaming();
+        }
         removePlaceholder();
         const msgDiv = document.createElement('div');
         msgDiv.className = 'mb-4';
@@ -488,6 +492,10 @@
 
     // Append tool block (use or result)
     function appendToolBlock(type, toolName, content) {
+        // Finalize any current streaming message first so tool blocks appear in correct order
+        if (currentStreamingMessage && streamingContent) {
+            finalizeStreaming();
+        }
         removePlaceholder();
         const msgDiv = document.createElement('div');
         msgDiv.className = 'mb-4';
