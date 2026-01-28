@@ -1,0 +1,1376 @@
+{{/* ABOUTME: Main chat application shell with sidebar and content area */}}
+{{/* ABOUTME: Chat-centric redesign inspired by ChatGPT/Claude.ai UX */}}
+{{define "content"}}
+<div class="chat-app" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
+    <!-- Header -->
+    <header class="chat-header">
+        <div class="flex items-center gap-4">
+            <!-- Mobile menu toggle -->
+            <button id="sidebar-toggle" class="lg:hidden p-2 text-warm-500 hover:text-forest rounded-lg hover:bg-warm-100" aria-label="Toggle sidebar">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+            <!-- Logo -->
+            <a href="/admin/" class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-forest flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                    </svg>
+                </div>
+                <span class="font-serif text-xl text-ink hidden sm:block">Coven</span>
+            </a>
+        </div>
+
+        <!-- Right side: user + settings -->
+        <div class="flex items-center gap-4">
+            <div class="hidden sm:flex items-center gap-2 text-sm text-warm-600">
+                <div class="w-2 h-2 rounded-full bg-forest pulse-soft"></div>
+                <span class="font-medium">{{.User.DisplayName}}</span>
+            </div>
+            <a href="/admin/link" class="p-2 text-warm-400 hover:text-forest rounded-lg hover:bg-warm-100" title="Device Linking">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                </svg>
+            </a>
+            <form method="POST" action="/admin/logout" class="inline">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <button type="submit" class="p-2 text-warm-400 hover:text-danger rounded-lg hover:bg-warm-100" title="Sign Out">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                    </svg>
+                </button>
+            </form>
+        </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="chat-sidebar">
+        <div class="sidebar-content">
+            <!-- New Chat Button -->
+            <button id="new-chat-btn" class="new-chat-btn">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/>
+                </svg>
+                <span>New Chat</span>
+            </button>
+
+            <!-- Thread List -->
+            <div id="thread-list" class="thread-list" hx-get="/admin/threads/list" hx-trigger="load" hx-swap="innerHTML">
+                <div class="flex items-center justify-center py-8">
+                    <div class="flex items-center gap-2 text-warm-400">
+                        <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span class="text-xs">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Footer: Admin Navigation -->
+        <div class="sidebar-footer">
+            <a href="/admin/agents" class="sidebar-nav-link">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+                <span>Agents</span>
+            </a>
+            <a href="/admin/tools" class="sidebar-nav-link">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+                </svg>
+                <span>Tools</span>
+            </a>
+            <a href="/admin/principals" class="sidebar-nav-link">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                </svg>
+                <span>Principals</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Mobile sidebar overlay -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <!-- Main Content -->
+    <main id="chat-content" class="chat-content">
+        {{if .ActiveThread}}
+        {{template "chat_view" .}}
+        {{else}}
+        {{template "empty_state" .}}
+        {{end}}
+    </main>
+
+    <!-- Agent Picker Modal -->
+    <div id="agent-picker-modal" class="modal-overlay hidden">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="font-serif text-lg text-ink">Select an Agent</h3>
+                <button id="close-agent-picker" class="p-1 text-warm-400 hover:text-ink rounded">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" id="agent-list" hx-get="/admin/agents/picker" hx-trigger="load" hx-swap="innerHTML">
+                <div class="flex items-center justify-center py-8">
+                    <div class="flex items-center gap-2 text-warm-400">
+                        <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span class="text-xs">Loading agents...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Modal (Cmd+K) -->
+    <div id="search-modal" class="modal-overlay hidden">
+        <div class="search-container">
+            <div class="search-input-wrapper">
+                <svg class="w-5 h-5 text-warm-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" id="search-input" placeholder="Search conversations..." class="search-input" autocomplete="off">
+                <kbd class="search-kbd">esc</kbd>
+            </div>
+            <div id="search-results" class="search-results">
+                <p class="text-sm text-warm-400 text-center py-8">Type to search threads...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Chat App Layout */
+.chat-app {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.chat-header {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1.5rem;
+    background: white;
+    border-bottom: 1px solid #E8E2DA;
+    z-index: 20;
+}
+
+.chat-sidebar {
+    display: flex;
+    flex-direction: column;
+    background: white;
+    border-right: 1px solid #E8E2DA;
+    overflow: hidden;
+    z-index: 10;
+}
+
+.chat-content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #FAF8F5;
+}
+
+/* Sidebar Content */
+.sidebar-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 1rem;
+}
+
+.new-chat-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: #2D5A47;
+    color: white;
+    font-weight: 500;
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    transition: background 0.15s ease;
+    margin-bottom: 1rem;
+}
+
+.new-chat-btn:hover {
+    background: #3D7A5F;
+}
+
+.thread-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* Thread Groups */
+.thread-group {
+    margin-bottom: 1rem;
+}
+
+.thread-group-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #9A8A78;
+    padding: 0.5rem 0.75rem;
+}
+
+/* Thread Item */
+.thread-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.thread-item:hover {
+    background: #F5F1EC;
+}
+
+.thread-item.active {
+    background: rgba(45, 90, 71, 0.08);
+}
+
+.thread-item.active .thread-title {
+    color: #2D5A47;
+    font-weight: 500;
+}
+
+.thread-icon {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #F5F1EC;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    color: #5A4A38;
+}
+
+.thread-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.thread-title {
+    font-size: 0.875rem;
+    color: #1C1917;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.thread-meta {
+    font-size: 0.7rem;
+    color: #9A8A78;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-top: 0.125rem;
+}
+
+.thread-agent-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.375rem;
+    background: rgba(45, 90, 71, 0.1);
+    color: #2D5A47;
+    border-radius: 0.25rem;
+    font-size: 0.625rem;
+    font-weight: 500;
+}
+
+/* Sidebar Footer */
+.sidebar-footer {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #E8E2DA;
+    background: #FAF8F5;
+}
+
+.sidebar-nav-link {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem;
+    font-size: 0.65rem;
+    color: #7A6A58;
+    border-radius: 0.375rem;
+    transition: all 0.1s ease;
+}
+
+.sidebar-nav-link:hover {
+    color: #2D5A47;
+    background: rgba(45, 90, 71, 0.08);
+}
+
+/* Mobile Sidebar */
+@media (max-width: 1023px) {
+    .chat-app {
+        grid-template-columns: 1fr;
+    }
+
+    .chat-sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 280px;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        z-index: 40;
+        box-shadow: 4px 0 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .chat-sidebar.open {
+        transform: translateX(0);
+    }
+
+    .sidebar-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.3);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease;
+        z-index: 35;
+    }
+
+    .sidebar-overlay.open {
+        opacity: 1;
+        visibility: visible;
+    }
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 10vh;
+    z-index: 50;
+    opacity: 1;
+    transition: opacity 0.15s ease;
+}
+
+.modal-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.modal-container {
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    width: 90%;
+    max-width: 400px;
+    max-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    animation: modal-in 0.15s ease;
+}
+
+@keyframes modal-in {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #E8E2DA;
+}
+
+.modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+/* Agent Picker Items */
+.agent-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.agent-picker-item:hover {
+    background: #F5F1EC;
+}
+
+.agent-status-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.agent-status-dot.online {
+    background: #2D5A47;
+}
+
+.agent-status-dot.offline {
+    background: #D4C9BC;
+}
+
+/* Search Modal */
+.search-container {
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    width: 90%;
+    max-width: 600px;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    animation: modal-in 0.15s ease;
+}
+
+.search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #E8E2DA;
+}
+
+.search-input {
+    flex: 1;
+    font-size: 1rem;
+    color: #1C1917;
+    background: transparent;
+    border: none;
+    outline: none;
+}
+
+.search-input::placeholder {
+    color: #B8A896;
+}
+
+.search-kbd {
+    padding: 0.125rem 0.5rem;
+    background: #F5F1EC;
+    border: 1px solid #E8E2DA;
+    border-radius: 0.25rem;
+    font-size: 0.65rem;
+    color: #7A6A58;
+    font-family: inherit;
+}
+
+.search-results {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+/* Keyboard hint */
+.keyboard-hints {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 0.75rem;
+    font-size: 0.7rem;
+    color: #9A8A78;
+    border-top: 1px solid #E8E2DA;
+}
+
+.keyboard-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.keyboard-hint kbd {
+    padding: 0.125rem 0.375rem;
+    background: #F5F1EC;
+    border: 1px solid #E8E2DA;
+    border-radius: 0.25rem;
+    font-size: 0.625rem;
+    font-family: inherit;
+}
+</style>
+
+<script>
+(function() {
+    // DOM elements
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const newChatBtn = document.getElementById('new-chat-btn');
+    const agentPickerModal = document.getElementById('agent-picker-modal');
+    const closeAgentPicker = document.getElementById('close-agent-picker');
+    const searchModal = document.getElementById('search-modal');
+    const searchInput = document.getElementById('search-input');
+
+    // Mobile sidebar toggle
+    function toggleSidebar() {
+        sidebar.classList.toggle('open');
+        sidebarOverlay.classList.toggle('open');
+    }
+
+    sidebarToggle?.addEventListener('click', toggleSidebar);
+    sidebarOverlay?.addEventListener('click', toggleSidebar);
+
+    // Agent picker modal
+    function openAgentPicker() {
+        agentPickerModal?.classList.remove('hidden');
+        // Refresh agent list
+        htmx.trigger('#agent-list', 'load');
+    }
+
+    function closeAgentPickerModal() {
+        agentPickerModal?.classList.add('hidden');
+    }
+
+    newChatBtn?.addEventListener('click', openAgentPicker);
+    closeAgentPicker?.addEventListener('click', closeAgentPickerModal);
+
+    // Search modal
+    function openSearch() {
+        searchModal?.classList.remove('hidden');
+        setTimeout(() => searchInput?.focus(), 50);
+    }
+
+    function closeSearch() {
+        searchModal?.classList.add('hidden');
+        if (searchInput) searchInput.value = '';
+    }
+
+    // Click outside modal to close
+    agentPickerModal?.addEventListener('click', (e) => {
+        if (e.target === agentPickerModal) closeAgentPickerModal();
+    });
+
+    searchModal?.addEventListener('click', (e) => {
+        if (e.target === searchModal) closeSearch();
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Cmd/Ctrl + K = Search
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+            e.preventDefault();
+            if (searchModal?.classList.contains('hidden')) {
+                openSearch();
+            } else {
+                closeSearch();
+            }
+        }
+
+        // Cmd/Ctrl + N = New Chat
+        if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+            e.preventDefault();
+            openAgentPicker();
+        }
+
+        // Cmd/Ctrl + Shift + S = Toggle Sidebar (desktop only)
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 's') {
+            e.preventDefault();
+            toggleSidebar();
+        }
+
+        // Escape = Close modals
+        if (e.key === 'Escape') {
+            if (!agentPickerModal?.classList.contains('hidden')) {
+                closeAgentPickerModal();
+            }
+            if (!searchModal?.classList.contains('hidden')) {
+                closeSearch();
+            }
+            // Close sidebar on mobile
+            if (sidebar?.classList.contains('open')) {
+                toggleSidebar();
+            }
+        }
+    });
+
+    // Search input handler with debounce
+    let searchTimeout;
+    searchInput?.addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim();
+
+        if (query.length < 2) {
+            document.getElementById('search-results').innerHTML =
+                '<p class="text-sm text-warm-400 text-center py-8">Type to search threads...</p>';
+            return;
+        }
+
+        searchTimeout = setTimeout(() => {
+            htmx.ajax('GET', '/admin/threads/search?q=' + encodeURIComponent(query), {
+                target: '#search-results',
+                swap: 'innerHTML'
+            });
+        }, 200);
+    });
+
+    // Handle agent selection from picker
+    document.addEventListener('click', function(e) {
+        const agentItem = e.target.closest('.agent-picker-item');
+        if (agentItem && agentItem.dataset.agentId) {
+            const agentId = agentItem.dataset.agentId;
+            closeAgentPickerModal();
+
+            // Create new thread with this agent
+            htmx.ajax('POST', '/admin/threads', {
+                values: { agent_id: agentId },
+                target: '#chat-content',
+                swap: 'innerHTML'
+            }).then(() => {
+                // Refresh thread list
+                htmx.trigger('#thread-list', 'load');
+            });
+        }
+    });
+
+    // Handle thread selection
+    document.addEventListener('click', function(e) {
+        const threadItem = e.target.closest('.thread-item');
+        if (threadItem && threadItem.dataset.threadId) {
+            const threadId = threadItem.dataset.threadId;
+
+            // Remove active class from all threads
+            document.querySelectorAll('.thread-item').forEach(t => t.classList.remove('active'));
+            // Add active class to clicked thread
+            threadItem.classList.add('active');
+
+            // Load thread content
+            htmx.ajax('GET', '/admin/chatview/' + threadId, {
+                target: '#chat-content',
+                swap: 'innerHTML'
+            });
+
+            // Close sidebar on mobile
+            if (window.innerWidth < 1024 && sidebar?.classList.contains('open')) {
+                toggleSidebar();
+            }
+        }
+    });
+
+    // Thread right-click context menu (delete/rename)
+    document.addEventListener('contextmenu', function(e) {
+        const threadItem = e.target.closest('.thread-item');
+        if (threadItem) {
+            e.preventDefault();
+            showThreadContextMenu(e, threadItem);
+        }
+    });
+
+    function showThreadContextMenu(e, threadItem) {
+        // Remove any existing context menu
+        document.querySelector('.context-menu')?.remove();
+
+        const threadId = threadItem.dataset.threadId;
+        const menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.innerHTML = `
+            <button class="context-menu-item" data-action="rename">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+                Rename
+            </button>
+            <button class="context-menu-item text-danger" data-action="delete">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                Delete
+            </button>
+        `;
+        menu.style.cssText = `
+            position: fixed;
+            left: ${e.clientX}px;
+            top: ${e.clientY}px;
+            background: white;
+            border: 1px solid #E8E2DA;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 0.25rem;
+            z-index: 100;
+        `;
+
+        document.body.appendChild(menu);
+
+        // Handle menu item clicks
+        menu.addEventListener('click', function(e) {
+            const action = e.target.closest('.context-menu-item')?.dataset.action;
+            if (action === 'delete') {
+                if (confirm('Delete this conversation?')) {
+                    htmx.ajax('DELETE', '/admin/threads/' + threadId, {}).then(() => {
+                        htmx.trigger('#thread-list', 'load');
+                        // If this was the active thread, show empty state
+                        if (threadItem.classList.contains('active')) {
+                            htmx.ajax('GET', '/admin/chatview/empty', {
+                                target: '#chat-content',
+                                swap: 'innerHTML'
+                            });
+                        }
+                    });
+                }
+            } else if (action === 'rename') {
+                const newName = prompt('Enter new name:');
+                if (newName) {
+                    htmx.ajax('PATCH', '/admin/threads/' + threadId, {
+                        values: { title: newName }
+                    }).then(() => {
+                        htmx.trigger('#thread-list', 'load');
+                    });
+                }
+            }
+            menu.remove();
+        });
+
+        // Close on click outside
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu() {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }, { once: true });
+        }, 0);
+    }
+})();
+</script>
+
+<!-- Context menu styles -->
+<style>
+.context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: #5A4A38;
+    border-radius: 0.375rem;
+    transition: background 0.1s ease;
+    text-align: left;
+}
+
+.context-menu-item:hover {
+    background: #F5F1EC;
+}
+
+.context-menu-item.text-danger {
+    color: #A94442;
+}
+
+.context-menu-item.text-danger:hover {
+    background: rgba(169, 68, 66, 0.08);
+}
+</style>
+{{end}}
+
+{{/* Empty state template for when no thread is selected */}}
+{{define "empty_state"}}
+<div class="flex-1 flex flex-col items-center justify-center p-8 text-center">
+    <div class="w-20 h-20 rounded-2xl bg-forest/10 flex items-center justify-center mb-6">
+        <svg class="w-10 h-10 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+    </div>
+    <h2 class="font-serif text-2xl text-ink mb-2">Welcome to Coven</h2>
+    <p class="text-warm-500 text-sm max-w-sm mb-6">Select a conversation from the sidebar or start a new chat with an agent.</p>
+    <button id="welcome-new-chat" class="inline-flex items-center gap-2 px-5 py-2.5 bg-forest text-white font-medium text-sm rounded-lg hover:bg-forest-light transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/>
+        </svg>
+        Start New Chat
+    </button>
+    <div class="mt-8 flex gap-6 text-xs text-warm-400">
+        <div class="keyboard-hint">
+            <kbd>{{if eq .Platform "darwin"}}⌘{{else}}Ctrl{{end}}+N</kbd>
+            <span>New Chat</span>
+        </div>
+        <div class="keyboard-hint">
+            <kbd>{{if eq .Platform "darwin"}}⌘{{else}}Ctrl{{end}}+K</kbd>
+            <span>Search</span>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('welcome-new-chat')?.addEventListener('click', function() {
+    document.getElementById('new-chat-btn')?.click();
+});
+</script>
+{{end}}
+
+{{/* Chat view template for active conversation */}}
+{{define "chat_view"}}
+<div class="flex-1 flex flex-col overflow-hidden">
+    <!-- Chat Header -->
+    <div class="chat-view-header">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
+                <svg class="w-4 h-4 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+            </div>
+            <div>
+                <h2 class="font-medium text-ink text-sm">{{.AgentName}}</h2>
+                <div class="flex items-center gap-1.5">
+                    <div class="w-1.5 h-1.5 rounded-full {{if .Connected}}bg-forest{{else}}bg-warm-300{{end}}"></div>
+                    <span class="text-xs text-warm-500">{{if .Connected}}Online{{else}}Offline{{end}}</span>
+                </div>
+            </div>
+        </div>
+        <a href="/admin/agents/{{.AgentID}}" class="text-xs text-warm-500 hover:text-forest">View Agent Details</a>
+    </div>
+
+    <!-- Messages -->
+    <div id="chat-messages" class="chat-messages">
+        {{if .Messages}}
+        {{range .Messages}}
+        <div class="message {{if eq .Sender "user"}}message-user{{else}}message-agent{{end}}">
+            <div class="message-header">
+                {{if eq .Type "tool_use"}}
+                <span class="message-sender tool">Tool: {{.ToolName}}</span>
+                {{else if eq .Type "tool_result"}}
+                <span class="message-sender result">Result</span>
+                {{else if eq .Sender "user"}}
+                <span class="message-sender user">You</span>
+                {{else}}
+                <span class="message-sender agent">{{$.AgentName}}</span>
+                {{end}}
+                <span class="message-time">{{.CreatedAt.Format "15:04"}}</span>
+            </div>
+            <div class="message-content {{if eq .Type "tool_use"}}tool{{else if eq .Type "tool_result"}}result{{end}}">{{.Content}}</div>
+        </div>
+        {{end}}
+        {{else}}
+        <div class="flex flex-col items-center justify-center h-full text-warm-400">
+            <p class="text-sm">Start the conversation</p>
+        </div>
+        {{end}}
+    </div>
+
+    <!-- Input Area -->
+    <div class="chat-input-area">
+        {{if .Connected}}
+        <form id="chat-form" class="chat-form">
+            <input type="hidden" name="thread_id" value="{{.ThreadID}}">
+            <textarea id="message-input" name="message" placeholder="Type a message..." class="chat-textarea" rows="1"></textarea>
+            <button type="submit" class="chat-send-btn">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+            </button>
+        </form>
+        {{else}}
+        <div class="flex items-center justify-center gap-2 text-warm-500 py-4">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"/>
+            </svg>
+            <span class="text-sm font-medium">Agent offline. Cannot send messages.</span>
+        </div>
+        {{end}}
+    </div>
+</div>
+
+<style>
+.chat-view-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1.5rem;
+    background: white;
+    border-bottom: 1px solid #E8E2DA;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.message {
+    max-width: 80%;
+}
+
+.message-user {
+    align-self: flex-end;
+}
+
+.message-agent {
+    align-self: flex-start;
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.message-sender {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.message-sender.user {
+    background: rgba(74, 106, 140, 0.1);
+    color: #4A6A8C;
+}
+
+.message-sender.agent {
+    background: #F5F1EC;
+    color: #5A4A38;
+}
+
+.message-sender.tool {
+    background: rgba(184, 134, 11, 0.1);
+    color: #B8860B;
+}
+
+.message-sender.result {
+    background: rgba(45, 90, 71, 0.1);
+    color: #2D5A47;
+}
+
+.message-time {
+    font-size: 0.65rem;
+    color: #B8A896;
+}
+
+.message-content {
+    padding: 0.75rem 1rem;
+    background: white;
+    border: 1px solid #E8E2DA;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.message-user .message-content {
+    background: #2D5A47;
+    color: white;
+    border-color: #2D5A47;
+}
+
+.message-content.tool {
+    background: rgba(184, 134, 11, 0.05);
+    border-color: rgba(184, 134, 11, 0.2);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+}
+
+.message-content.result {
+    background: rgba(45, 90, 71, 0.05);
+    border-color: rgba(45, 90, 71, 0.2);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+}
+
+.chat-input-area {
+    padding: 1rem 1.5rem;
+    background: white;
+    border-top: 1px solid #E8E2DA;
+}
+
+.chat-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+}
+
+.chat-textarea {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    background: #F5F1EC;
+    border: 1px solid #E8E2DA;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    resize: none;
+    min-height: 44px;
+    max-height: 200px;
+    font-family: inherit;
+}
+
+.chat-textarea:focus {
+    outline: none;
+    border-color: #2D5A47;
+    background: white;
+}
+
+.chat-send-btn {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #2D5A47;
+    color: white;
+    border-radius: 0.75rem;
+    transition: background 0.15s ease;
+}
+
+.chat-send-btn:hover {
+    background: #3D7A5F;
+}
+
+.chat-send-btn:disabled {
+    background: #D4C9BC;
+    cursor: not-allowed;
+}
+</style>
+
+<script>
+(function() {
+    const agentId = "{{.AgentID}}";
+    const threadId = "{{.ThreadID}}";
+    const chatMessages = document.getElementById('chat-messages');
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+
+    // Auto-resize textarea
+    if (messageInput) {
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        });
+
+        // Submit on Enter (Shift+Enter for newline)
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm?.requestSubmit();
+            }
+        });
+    }
+
+    // Scroll to bottom
+    if (chatMessages) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Streaming state
+    let currentStreamingMessage = null;
+    let streamingContent = '';
+    let isStreaming = false;
+    let throbberInterval = null;
+    const throbberFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    let throbberIndex = 0;
+
+    // SSE connection
+    let evtSource = null;
+    let reconnectAttempts = 0;
+
+    function connectSSE() {
+        evtSource = new EventSource('/admin/chat/' + agentId + '/stream');
+
+        evtSource.addEventListener('connected', function() {
+            console.log('SSE connected');
+            reconnectAttempts = 0;
+        });
+
+        evtSource.addEventListener('text', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                appendStreamText(data.content || '');
+            } catch {
+                appendStreamText(e.data);
+            }
+        });
+
+        evtSource.addEventListener('thinking', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.content) appendThinkingBlock(data.content);
+            } catch {}
+        });
+
+        evtSource.addEventListener('tool_use', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                appendToolBlock('use', data.tool_name, data.content);
+            } catch {}
+        });
+
+        evtSource.addEventListener('tool_result', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.content) appendToolBlock('result', null, data.content);
+            } catch {}
+        });
+
+        evtSource.addEventListener('done', function() {
+            finalizeStreaming();
+        });
+
+        evtSource.addEventListener('error', function(e) {
+            if (e.data) {
+                try {
+                    const data = JSON.parse(e.data);
+                    appendError(data.content || 'An error occurred');
+                } catch {
+                    appendError(e.data);
+                }
+                finalizeStreaming();
+            } else if (evtSource.readyState === EventSource.CLOSED) {
+                attemptReconnect();
+            }
+        });
+    }
+
+    function attemptReconnect() {
+        if (reconnectAttempts >= 5) return;
+        reconnectAttempts++;
+        setTimeout(connectSSE, 2000 * reconnectAttempts);
+    }
+
+    function startStreaming() {
+        if (isStreaming) return;
+        isStreaming = true;
+        streamingContent = '';
+
+        currentStreamingMessage = document.createElement('div');
+        currentStreamingMessage.className = 'message message-agent streaming';
+        currentStreamingMessage.innerHTML = `
+            <div class="message-header">
+                <span class="message-sender agent">{{.AgentName}}</span>
+                <span class="throbber">${throbberFrames[0]}</span>
+            </div>
+            <div class="message-content"></div>
+        `;
+        chatMessages.appendChild(currentStreamingMessage);
+
+        throbberInterval = setInterval(() => {
+            throbberIndex = (throbberIndex + 1) % throbberFrames.length;
+            const throbber = currentStreamingMessage?.querySelector('.throbber');
+            if (throbber) throbber.textContent = throbberFrames[throbberIndex];
+        }, 80);
+
+        scrollToBottom();
+    }
+
+    function appendStreamText(text) {
+        if (!currentStreamingMessage) startStreaming();
+        streamingContent += text;
+        const contentDiv = currentStreamingMessage.querySelector('.message-content');
+        if (contentDiv) contentDiv.textContent = streamingContent;
+        scrollToBottom();
+    }
+
+    function finalizeStreaming() {
+        if (!currentStreamingMessage) return;
+        clearInterval(throbberInterval);
+        isStreaming = false;
+
+        currentStreamingMessage.querySelector('.throbber')?.remove();
+        currentStreamingMessage.classList.remove('streaming');
+
+        const contentDiv = currentStreamingMessage.querySelector('.message-content');
+        if (contentDiv && streamingContent && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+            contentDiv.innerHTML = DOMPurify.sanitize(marked.parse(streamingContent));
+        }
+
+        currentStreamingMessage = null;
+        streamingContent = '';
+        scrollToBottom();
+    }
+
+    function appendThinkingBlock(content) {
+        const msg = document.createElement('div');
+        msg.className = 'message message-agent';
+        msg.innerHTML = `
+            <div class="message-header">
+                <span class="message-sender" style="background: rgba(128, 90, 213, 0.1); color: #805AD5;">Thinking...</span>
+            </div>
+            <div class="message-content" style="background: rgba(128, 90, 213, 0.05); border-color: rgba(128, 90, 213, 0.2); font-style: italic; color: #805AD5;">${escapeHtml(content)}</div>
+        `;
+        chatMessages.appendChild(msg);
+        scrollToBottom();
+    }
+
+    function appendToolBlock(type, toolName, content) {
+        const msg = document.createElement('div');
+        msg.className = 'message message-agent';
+        const label = type === 'use' ? (toolName ? 'Tool: ' + toolName : 'Tool') : 'Result';
+        const senderClass = type === 'use' ? 'tool' : 'result';
+        const contentClass = type === 'use' ? 'tool' : 'result';
+
+        msg.innerHTML = `
+            <div class="message-header">
+                <span class="message-sender ${senderClass}">${escapeHtml(label)}</span>
+            </div>
+            ${content ? `<div class="message-content ${contentClass}">${escapeHtml(content)}</div>` : ''}
+        `;
+        chatMessages.appendChild(msg);
+        scrollToBottom();
+    }
+
+    function appendError(content) {
+        const msg = document.createElement('div');
+        msg.className = 'message message-agent';
+        msg.innerHTML = `
+            <div class="message-header">
+                <span class="message-sender" style="background: rgba(169, 68, 66, 0.1); color: #A94442;">Error</span>
+            </div>
+            <div class="message-content" style="background: rgba(169, 68, 66, 0.05); border-color: rgba(169, 68, 66, 0.2); color: #A94442;">${escapeHtml(content)}</div>
+        `;
+        chatMessages.appendChild(msg);
+        scrollToBottom();
+    }
+
+    function appendUserMessage(content) {
+        const msg = document.createElement('div');
+        msg.className = 'message message-user';
+        msg.innerHTML = `
+            <div class="message-header">
+                <span class="message-sender user">You</span>
+                <span class="message-time">${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</span>
+            </div>
+            <div class="message-content">${escapeHtml(content)}</div>
+        `;
+        chatMessages.appendChild(msg);
+        scrollToBottom();
+    }
+
+    function scrollToBottom() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Form submission
+    chatForm?.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const message = messageInput.value.trim();
+        if (!message) return;
+
+        appendUserMessage(message);
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        startStreaming();
+
+        try {
+            const formData = new FormData();
+            formData.append('message', message);
+            formData.append('thread_id', threadId);
+
+            const csrfToken = document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
+
+            const response = await fetch('/admin/chat/' + agentId + '/send', {
+                method: 'POST',
+                body: formData,
+                headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+            });
+
+            if (!response.ok) throw new Error('Server error: ' + response.status);
+        } catch (err) {
+            finalizeStreaming();
+            appendError('Failed to send: ' + err.message);
+        }
+    });
+
+    // Start SSE if connected
+    {{if .Connected}}
+    connectSSE();
+    {{end}}
+})();
+</script>
+
+<style>
+.streaming .message-content {
+    border-left: 3px solid #2D5A47;
+    background: linear-gradient(90deg, rgba(45, 90, 71, 0.05) 0%, transparent 100%) !important;
+}
+
+.throbber {
+    font-family: monospace;
+    color: #2D5A47;
+    margin-left: 0.5rem;
+}
+
+/* Markdown styles */
+.message-content pre {
+    background: #1f2937;
+    color: #e5e7eb;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+}
+
+.message-content code {
+    background: rgba(0, 0, 0, 0.05);
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    font-size: 0.85em;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.message-content pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.message-content ul, .message-content ol {
+    padding-left: 1.5rem;
+    margin: 0.5rem 0;
+}
+
+.message-content p {
+    margin: 0.5rem 0;
+}
+
+.message-content p:first-child {
+    margin-top: 0;
+}
+
+.message-content p:last-child {
+    margin-bottom: 0;
+}
+</style>
+{{end}}
