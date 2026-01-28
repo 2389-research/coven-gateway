@@ -1,7 +1,27 @@
 {{/* ABOUTME: Device linking approval page */}}
 {{/* ABOUTME: Shows pending link requests for admin approval */}}
 {{define "content"}}
-<div class="p-6">
+<!-- Navigation Header -->
+<header class="border-b border-warm-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+    <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+        <a href="/admin/" class="flex items-center gap-2 text-warm-600 hover:text-forest transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            <span class="text-sm font-medium">Back to Chat</span>
+        </a>
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
+                <svg class="w-4 h-4 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                </svg>
+            </div>
+            <span class="font-serif text-lg text-ink">Coven</span>
+        </div>
+    </div>
+</header>
+
+<div class="max-w-4xl mx-auto p-6">
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-serif text-ink">Device Linking</h1>
