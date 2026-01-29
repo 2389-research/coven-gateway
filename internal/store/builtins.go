@@ -186,6 +186,41 @@ func (s *SQLiteStore) ListTodos(ctx context.Context, agentID string, status, pri
 	return todos, rows.Err()
 }
 
+// ListAllTodos lists all todos across all agents
+func (s *SQLiteStore) ListAllTodos(ctx context.Context, limit int) ([]*Todo, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, agent_id, description, status, priority, notes, due_date, created_at, updated_at
+		FROM todos ORDER BY created_at DESC LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var todos []*Todo
+	for rows.Next() {
+		var t Todo
+		var notes, dueDate sql.NullString
+		var createdAt, updatedAt string
+		if err := rows.Scan(&t.ID, &t.AgentID, &t.Description, &t.Status, &t.Priority, &notes, &dueDate, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		t.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		t.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+		t.Notes = notes.String
+		if dueDate.Valid {
+			d, _ := time.Parse(time.RFC3339, dueDate.String)
+			t.DueDate = &d
+		}
+		todos = append(todos, &t)
+	}
+	return todos, rows.Err()
+}
+
 // UpdateTodo updates an existing todo
 func (s *SQLiteStore) UpdateTodo(ctx context.Context, todo *Todo) error {
 	todo.UpdatedAt = time.Now()

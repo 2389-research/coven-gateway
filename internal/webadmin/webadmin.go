@@ -102,6 +102,12 @@ type FullStore interface {
 	ListPendingLinkCodes(ctx context.Context) ([]*store.LinkCode, error)
 	ApproveLinkCode(ctx context.Context, id string, approvedBy string, principalID string, token string) error
 	DeleteExpiredLinkCodes(ctx context.Context) error
+
+	// Builtin tool pack data (for admin UI)
+	SearchLogEntries(ctx context.Context, query string, since *time.Time, limit int) ([]*store.LogEntry, error)
+	ListAllTodos(ctx context.Context, limit int) ([]*store.Todo, error)
+	ListBBSThreads(ctx context.Context, limit int) ([]*store.BBSPost, error)
+	GetBBSThread(ctx context.Context, threadID string) (*store.BBSThread, error)
 }
 
 // Admin handles admin UI routes and authentication
@@ -230,6 +236,19 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	// Tools management
 	mux.HandleFunc("GET /admin/tools", a.requireAuth(a.handleToolsPage))
 	mux.HandleFunc("GET /admin/tools/list", a.requireAuth(a.handleToolsList))
+
+	// Activity logs (builtin pack data)
+	mux.HandleFunc("GET /admin/logs", a.requireAuth(a.handleLogsPage))
+	mux.HandleFunc("GET /admin/logs/list", a.requireAuth(a.handleLogsList))
+
+	// Todos (builtin pack data)
+	mux.HandleFunc("GET /admin/todos", a.requireAuth(a.handleTodosPage))
+	mux.HandleFunc("GET /admin/todos/list", a.requireAuth(a.handleTodosList))
+
+	// BBS Board (builtin pack data)
+	mux.HandleFunc("GET /admin/board", a.requireAuth(a.handleBoardPage))
+	mux.HandleFunc("GET /admin/board/list", a.requireAuth(a.handleBoardList))
+	mux.HandleFunc("GET /admin/board/thread/{id}", a.requireAuth(a.handleBoardThread))
 
 	// Principals management
 	mux.HandleFunc("GET /admin/principals", a.requireAuth(a.handlePrincipalsPage))
@@ -1041,6 +1060,122 @@ func (a *Admin) handleStatsPacks(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, "%d", count)
+}
+
+// =============================================================================
+// Activity Logs Handlers (builtin pack data)
+// =============================================================================
+
+// handleLogsPage renders the activity logs page
+func (a *Admin) handleLogsPage(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderLogsPage(w, user, csrfToken)
+}
+
+// handleLogsList returns the logs list (htmx partial)
+func (a *Admin) handleLogsList(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
+			limit = l
+		}
+	}
+
+	entries, err := a.store.SearchLogEntries(r.Context(), query, nil, limit)
+	if err != nil {
+		a.logger.Error("failed to list log entries", "error", err)
+		http.Error(w, "Failed to load logs", http.StatusInternalServerError)
+		return
+	}
+
+	a.renderLogsList(w, entries)
+}
+
+// =============================================================================
+// Todos Handlers (builtin pack data)
+// =============================================================================
+
+// handleTodosPage renders the todos page
+func (a *Admin) handleTodosPage(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderTodosPage(w, user, csrfToken)
+}
+
+// handleTodosList returns the todos list (htmx partial)
+func (a *Admin) handleTodosList(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
+			limit = l
+		}
+	}
+
+	todos, err := a.store.ListAllTodos(r.Context(), limit)
+	if err != nil {
+		a.logger.Error("failed to list todos", "error", err)
+		http.Error(w, "Failed to load todos", http.StatusInternalServerError)
+		return
+	}
+
+	a.renderTodosList(w, todos)
+}
+
+// =============================================================================
+// BBS Board Handlers (builtin pack data)
+// =============================================================================
+
+// handleBoardPage renders the BBS board page
+func (a *Admin) handleBoardPage(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderBoardPage(w, user, csrfToken)
+}
+
+// handleBoardList returns the board threads list (htmx partial)
+func (a *Admin) handleBoardList(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 50
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 200 {
+			limit = l
+		}
+	}
+
+	threads, err := a.store.ListBBSThreads(r.Context(), limit)
+	if err != nil {
+		a.logger.Error("failed to list BBS threads", "error", err)
+		http.Error(w, "Failed to load threads", http.StatusInternalServerError)
+		return
+	}
+
+	a.renderBoardList(w, threads)
+}
+
+// handleBoardThread returns a single thread with replies (htmx partial)
+func (a *Admin) handleBoardThread(w http.ResponseWriter, r *http.Request) {
+	threadID := r.PathValue("id")
+	if threadID == "" {
+		http.Error(w, "Thread ID required", http.StatusBadRequest)
+		return
+	}
+
+	thread, err := a.store.GetBBSThread(r.Context(), threadID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Thread not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to get BBS thread", "error", err, "thread_id", threadID)
+		http.Error(w, "Failed to load thread", http.StatusInternalServerError)
+		return
+	}
+
+	a.renderBoardThread(w, thread)
 }
 
 // =============================================================================

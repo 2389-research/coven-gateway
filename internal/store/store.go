@@ -164,6 +164,7 @@ type BuiltinStore interface {
 	CreateTodo(ctx context.Context, todo *Todo) error
 	GetTodo(ctx context.Context, id string) (*Todo, error)
 	ListTodos(ctx context.Context, agentID string, status, priority string) ([]*Todo, error)
+	ListAllTodos(ctx context.Context, limit int) ([]*Todo, error)
 	UpdateTodo(ctx context.Context, todo *Todo) error
 	DeleteTodo(ctx context.Context, id string) error
 

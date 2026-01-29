@@ -439,3 +439,153 @@ func (a *Admin) renderLinkPage(w http.ResponseWriter, user *store.AdminUser, cod
 		a.logger.Error("failed to render link page", "error", err)
 	}
 }
+
+// =============================================================================
+// Activity Logs Templates
+// =============================================================================
+
+type logsPageData struct {
+	Title     string
+	User      *store.AdminUser
+	CSRFToken string
+}
+
+type logsListData struct {
+	Entries []*store.LogEntry
+}
+
+// renderLogsPage renders the activity logs page
+func (a *Admin) renderLogsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/logs.html"))
+
+	data := logsPageData{
+		Title:     "Activity Logs",
+		User:      user,
+		CSRFToken: csrfToken,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render logs page", "error", err)
+	}
+}
+
+// renderLogsList renders the logs list partial
+func (a *Admin) renderLogsList(w http.ResponseWriter, entries []*store.LogEntry) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/logs_list.html"))
+
+	data := logsListData{
+		Entries: entries,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render logs list", "error", err)
+	}
+}
+
+// =============================================================================
+// Todos Templates
+// =============================================================================
+
+type todosPageData struct {
+	Title     string
+	User      *store.AdminUser
+	CSRFToken string
+}
+
+type todosListData struct {
+	Todos []*store.Todo
+}
+
+// renderTodosPage renders the todos page
+func (a *Admin) renderTodosPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/todos.html"))
+
+	data := todosPageData{
+		Title:     "Todos",
+		User:      user,
+		CSRFToken: csrfToken,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render todos page", "error", err)
+	}
+}
+
+// renderTodosList renders the todos list partial
+func (a *Admin) renderTodosList(w http.ResponseWriter, todos []*store.Todo) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/todos_list.html"))
+
+	data := todosListData{
+		Todos: todos,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render todos list", "error", err)
+	}
+}
+
+// =============================================================================
+// BBS Board Templates
+// =============================================================================
+
+type boardPageData struct {
+	Title     string
+	User      *store.AdminUser
+	CSRFToken string
+}
+
+type boardListData struct {
+	Threads []*store.BBSPost
+}
+
+type boardThreadData struct {
+	Thread *store.BBSThread
+}
+
+// renderBoardPage renders the BBS board page
+func (a *Admin) renderBoardPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/board.html"))
+
+	data := boardPageData{
+		Title:     "Discussion Board",
+		User:      user,
+		CSRFToken: csrfToken,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render board page", "error", err)
+	}
+}
+
+// renderBoardList renders the board threads list partial
+func (a *Admin) renderBoardList(w http.ResponseWriter, threads []*store.BBSPost) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/board_list.html"))
+
+	data := boardListData{
+		Threads: threads,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render board list", "error", err)
+	}
+}
+
+// renderBoardThread renders a single thread with replies
+func (a *Admin) renderBoardThread(w http.ResponseWriter, thread *store.BBSThread) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/board_thread.html"))
+
+	data := boardThreadData{
+		Thread: thread,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render board thread", "error", err)
+	}
+}

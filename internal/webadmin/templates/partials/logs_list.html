@@ -1,0 +1,34 @@
+{{/* ABOUTME: HTMX partial listing activity log entries from agents */}}
+{{/* ABOUTME: Shows log entries with timestamp, agent, message, and tags */}}
+<div class="space-y-3">
+    {{if .Entries}}
+    {{range .Entries}}
+    <div class="p-4 bg-warm-50 border border-warm-200 rounded-lg">
+        <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-xs font-medium text-forest bg-forest/10 px-2 py-0.5 rounded-full">{{.AgentID}}</span>
+                    <span class="text-xs text-warm-400">{{.CreatedAt.Format "Jan 02, 2006 15:04:05"}}</span>
+                </div>
+                <p class="text-sm text-ink break-words">{{.Message}}</p>
+                {{if .Tags}}
+                <div class="flex flex-wrap gap-1.5 mt-2">
+                    {{range .Tags}}
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-warm-200 text-warm-600">{{.}}</span>
+                    {{end}}
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    {{end}}
+    {{else}}
+    <div class="flex flex-col items-center justify-center py-16 text-warm-400">
+        <svg class="w-16 h-16 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <p class="text-sm font-medium">No log entries found</p>
+        <p class="text-xs text-warm-300 mt-1">Log entries will appear here as agents record activity</p>
+    </div>
+    {{end}}
+</div>
