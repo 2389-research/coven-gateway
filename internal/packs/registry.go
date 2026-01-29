@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 
 	pb "github.com/2389/coven-gateway/proto/coven"
@@ -254,6 +255,7 @@ type BuiltinPackInfo struct {
 }
 
 // ListBuiltinPacks returns information about all registered builtin packs.
+// Results are sorted by pack ID for stable ordering.
 func (r *Registry) ListBuiltinPacks() []BuiltinPackInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -264,14 +266,22 @@ func (r *Registry) ListBuiltinPacks() []BuiltinPackInfo {
 		packTools[entry.PackID] = append(packTools[entry.PackID], entry.Tool)
 	}
 
-	// Build result
+	// Build result with stable ordering
 	result := make([]BuiltinPackInfo, 0, len(packTools))
 	for packID, tools := range packTools {
+		// Sort tools by name for stable ordering
+		sort.Slice(tools, func(i, j int) bool {
+			return tools[i].Definition.GetName() < tools[j].Definition.GetName()
+		})
 		result = append(result, BuiltinPackInfo{
 			ID:    packID,
 			Tools: tools,
 		})
 	}
+	// Sort packs by ID for stable ordering
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ID < result[j].ID
+	})
 	return result
 }
 
