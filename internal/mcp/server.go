@@ -468,7 +468,8 @@ func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSO
 	)
 
 	// Route the tool call
-	resp, err := s.router.RouteToolCall(r.Context(), params.Name, inputJSON, requestID)
+	// MCP clients are external tool consumers, not agents, so use empty agentID
+	resp, err := s.router.RouteToolCall(r.Context(), params.Name, inputJSON, requestID, "")
 	if err != nil {
 		s.handleToolError(w, req.ID, params.Name, requestID, err)
 		return

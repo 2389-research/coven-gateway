@@ -5,9 +5,11 @@ package packs
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -65,7 +67,7 @@ func TestRouterRouteToolCall(t *testing.T) {
 
 		// Route a tool call
 		ctx := context.Background()
-		resp, err := router.RouteToolCall(ctx, "my-tool", `{"input": "test"}`, "req-123")
+		resp, err := router.RouteToolCall(ctx, "my-tool", `{"input": "test"}`, "req-123", "test-agent")
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -101,7 +103,7 @@ func TestRouterRouteToolCall(t *testing.T) {
 		}()
 
 		ctx := context.Background()
-		resp, err := router.RouteToolCall(ctx, "failing-tool", `{}`, "req-456")
+		resp, err := router.RouteToolCall(ctx, "failing-tool", `{}`, "req-456", "test-agent")
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -115,7 +117,7 @@ func TestRouterRouteToolCall(t *testing.T) {
 		_, router := setupRouterTest(t)
 
 		ctx := context.Background()
-		resp, err := router.RouteToolCall(ctx, "nonexistent-tool", `{}`, "req-789")
+		resp, err := router.RouteToolCall(ctx, "nonexistent-tool", `{}`, "req-789", "test-agent")
 
 		if !errors.Is(err, ErrToolNotFound) {
 			t.Errorf("expected ErrToolNotFound, got %v", err)
@@ -136,7 +138,7 @@ func TestRouterRouteToolCall(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
-		resp, err := router.RouteToolCall(ctx, "slow-tool", `{}`, "req-cancelled")
+		resp, err := router.RouteToolCall(ctx, "slow-tool", `{}`, "req-cancelled", "test-agent")
 
 		if !errors.Is(err, context.Canceled) {
 			t.Errorf("expected context.Canceled, got %v", err)
@@ -160,7 +162,7 @@ func TestRouterRouteToolCall(t *testing.T) {
 		)
 
 		ctx := context.Background()
-		resp, err := router.RouteToolCall(ctx, "unresponsive-tool", `{}`, "req-timeout")
+		resp, err := router.RouteToolCall(ctx, "unresponsive-tool", `{}`, "req-timeout", "test-agent")
 
 		if !errors.Is(err, context.DeadlineExceeded) {
 			t.Errorf("expected context.DeadlineExceeded, got %v", err)
@@ -194,7 +196,7 @@ func TestRouterRouteToolCall(t *testing.T) {
 
 		start := time.Now()
 		ctx := context.Background()
-		_, err := router.RouteToolCall(ctx, "quick-tool", `{}`, "req-quick")
+		_, err := router.RouteToolCall(ctx, "quick-tool", `{}`, "req-quick", "test-agent")
 		elapsed := time.Since(start)
 
 		if !errors.Is(err, context.DeadlineExceeded) {
@@ -222,7 +224,7 @@ func TestRouterHandleToolResponse(t *testing.T) {
 
 		go func() {
 			ctx := context.Background()
-			resp, err = router.RouteToolCall(ctx, "my-tool", `{}`, "req-abc")
+			resp, err = router.RouteToolCall(ctx, "my-tool", `{}`, "req-abc", "test-agent")
 			close(done)
 		}()
 
@@ -339,7 +341,7 @@ func TestRouterPendingCount(t *testing.T) {
 			go func(id int) {
 				defer wg.Done()
 				ctx := context.Background()
-				router.RouteToolCall(ctx, "my-tool", `{}`, fmt.Sprintf("req-%d", id))
+				router.RouteToolCall(ctx, "my-tool", `{}`, fmt.Sprintf("req-%d", id), "test-agent")
 			}(i)
 		}
 
@@ -409,7 +411,7 @@ func TestRouterDuplicateRequestID(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
 			// This will block until timeout since no one responds
-			router.RouteToolCall(ctx, "my-tool", `{}`, "duplicate-id")
+			router.RouteToolCall(ctx, "my-tool", `{}`, "duplicate-id", "test-agent")
 		}()
 
 		// Poll until the first request is registered (more reliable than sleep)
@@ -423,7 +425,7 @@ func TestRouterDuplicateRequestID(t *testing.T) {
 
 		// Try second request with same ID - should fail immediately
 		ctx := context.Background()
-		_, err := router.RouteToolCall(ctx, "my-tool", `{}`, "duplicate-id")
+		_, err := router.RouteToolCall(ctx, "my-tool", `{}`, "duplicate-id", "test-agent")
 
 		if !errors.Is(err, ErrDuplicateRequestID) {
 			t.Errorf("expected ErrDuplicateRequestID, got %v", err)
@@ -469,7 +471,7 @@ func TestRouterConcurrentAccess(t *testing.T) {
 				defer wg.Done()
 				ctx := context.Background()
 				reqID := fmt.Sprintf("req-%d", id)
-				resp, err := router.RouteToolCall(ctx, "concurrent-tool", `{}`, reqID)
+				resp, err := router.RouteToolCall(ctx, "concurrent-tool", `{}`, reqID, "test-agent")
 				if err != nil {
 					errCh <- err
 					return
@@ -507,7 +509,7 @@ func TestRouterConcurrentAccess(t *testing.T) {
 		done := make(chan error)
 		go func() {
 			ctx := context.Background()
-			_, err := router.RouteToolCall(ctx, "ephemeral-tool", `{}`, "req-ephemeral")
+			_, err := router.RouteToolCall(ctx, "ephemeral-tool", `{}`, "req-ephemeral", "test-agent")
 			done <- err
 		}()
 
@@ -559,7 +561,7 @@ func TestRouterPackDisconnected(t *testing.T) {
 		done := make(chan error, 1)
 		go func() {
 			ctx := context.Background()
-			_, err := router.RouteToolCall(ctx, "disconnect-tool", `{}`, "req-disconnect")
+			_, err := router.RouteToolCall(ctx, "disconnect-tool", `{}`, "req-disconnect", "test-agent")
 			done <- err
 		}()
 
@@ -612,7 +614,7 @@ func TestRouterPackDisconnected(t *testing.T) {
 		pack.Close()
 
 		ctx := context.Background()
-		_, err := router.RouteToolCall(ctx, "closed-tool", `{}`, "req-closed")
+		_, err := router.RouteToolCall(ctx, "closed-tool", `{}`, "req-closed", "test-agent")
 
 		if !errors.Is(err, ErrPackDisconnected) {
 			t.Errorf("expected ErrPackDisconnected, got %v", err)
@@ -644,6 +646,117 @@ func TestNewRouter(t *testing.T) {
 
 		if router.timeout != 60*time.Second {
 			t.Errorf("expected timeout 60s, got %v", router.timeout)
+		}
+	})
+}
+
+func TestRouteBuiltinTool(t *testing.T) {
+	t.Run("dispatches builtin tool in-process", func(t *testing.T) {
+		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+		reg := NewRegistry(logger)
+
+		// Register a builtin pack
+		pack := &BuiltinPack{
+			ID: "builtin:test",
+			Tools: []*BuiltinTool{
+				{
+					Definition: &pb.ToolDefinition{Name: "echo"},
+					Handler: func(ctx context.Context, agentID string, input json.RawMessage) (json.RawMessage, error) {
+						return input, nil // echo back the input
+					},
+				},
+			},
+		}
+		if err := reg.RegisterBuiltinPack(pack); err != nil {
+			t.Fatalf("RegisterBuiltinPack: %v", err)
+		}
+
+		router := NewRouter(RouterConfig{
+			Registry: reg,
+			Logger:   logger,
+		})
+
+		resp, err := router.RouteToolCall(context.Background(), "echo", `{"hello": "world"}`, "req-1", "agent-1")
+		if err != nil {
+			t.Fatalf("RouteToolCall: %v", err)
+		}
+
+		if resp.GetError() != "" {
+			t.Errorf("unexpected error: %s", resp.GetError())
+		}
+		if resp.GetOutputJson() != `{"hello": "world"}` {
+			t.Errorf("unexpected output: %s", resp.GetOutputJson())
+		}
+	})
+
+	t.Run("builtin handler error returns error response", func(t *testing.T) {
+		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+		reg := NewRegistry(logger)
+
+		// Register a builtin that errors
+		pack := &BuiltinPack{
+			ID: "builtin:error-test",
+			Tools: []*BuiltinTool{
+				{
+					Definition: &pb.ToolDefinition{Name: "fail"},
+					Handler: func(ctx context.Context, agentID string, input json.RawMessage) (json.RawMessage, error) {
+						return nil, errors.New("intentional failure")
+					},
+				},
+			},
+		}
+		if err := reg.RegisterBuiltinPack(pack); err != nil {
+			t.Fatalf("RegisterBuiltinPack: %v", err)
+		}
+
+		router := NewRouter(RouterConfig{
+			Registry: reg,
+			Logger:   logger,
+		})
+
+		resp, err := router.RouteToolCall(context.Background(), "fail", `{}`, "req-fail", "agent-1")
+		if err != nil {
+			t.Fatalf("RouteToolCall should not return error for builtin errors: %v", err)
+		}
+
+		if resp.GetError() != "intentional failure" {
+			t.Errorf("expected error 'intentional failure', got '%s'", resp.GetError())
+		}
+	})
+
+	t.Run("builtin receives agentID", func(t *testing.T) {
+		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+		reg := NewRegistry(logger)
+
+		var receivedAgentID string
+		pack := &BuiltinPack{
+			ID: "builtin:agent-test",
+			Tools: []*BuiltinTool{
+				{
+					Definition: &pb.ToolDefinition{Name: "check-agent"},
+					Handler: func(ctx context.Context, agentID string, input json.RawMessage) (json.RawMessage, error) {
+						receivedAgentID = agentID
+						return []byte(`{"ok": true}`), nil
+					},
+				},
+			},
+		}
+		if err := reg.RegisterBuiltinPack(pack); err != nil {
+			t.Fatalf("RegisterBuiltinPack: %v", err)
+		}
+
+		router := NewRouter(RouterConfig{
+			Registry: reg,
+			Logger:   logger,
+		})
+
+		_, err := router.RouteToolCall(context.Background(), "check-agent", `{}`, "req-agent", "test-agent-42")
+		if err != nil {
+			t.Fatalf("RouteToolCall: %v", err)
+		}
+
+		if receivedAgentID != "test-agent-42" {
+			t.Errorf("expected agentID 'test-agent-42', got '%s'", receivedAgentID)
 		}
 	})
 }

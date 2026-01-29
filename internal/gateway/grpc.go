@@ -249,6 +249,7 @@ func (s *covenControlServer) handleExecutePackTool(stream pb.CovenControl_AgentS
 		req.GetToolName(),
 		req.GetInputJson(),
 		req.GetRequestId(),
+		conn.ID,
 	)
 
 	elapsed := time.Since(started)
