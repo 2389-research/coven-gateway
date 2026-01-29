@@ -53,6 +53,65 @@ type ChannelBinding struct {
 	UpdatedAt    time.Time
 }
 
+// LogEntry represents an activity log entry
+type LogEntry struct {
+	ID        string
+	AgentID   string
+	Message   string
+	Tags      []string
+	CreatedAt time.Time
+}
+
+// Todo represents a task
+type Todo struct {
+	ID          string
+	AgentID     string
+	Description string
+	Status      string // pending, in_progress, completed
+	Priority    string // low, medium, high
+	Notes       string
+	DueDate     *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// BBSPost represents a bulletin board post or reply
+type BBSPost struct {
+	ID        string
+	AgentID   string
+	ThreadID  string // empty for top-level threads
+	Subject   string // required for threads, empty for replies
+	Content   string
+	CreatedAt time.Time
+}
+
+// BBSThread is a post with its replies
+type BBSThread struct {
+	Post    *BBSPost
+	Replies []*BBSPost
+}
+
+// AgentMail represents a message between agents
+type AgentMail struct {
+	ID          string
+	FromAgentID string
+	ToAgentID   string
+	Subject     string
+	Content     string
+	ReadAt      *time.Time
+	CreatedAt   time.Time
+}
+
+// AgentNote represents a key-value note for an agent
+type AgentNote struct {
+	ID        string
+	AgentID   string
+	Key       string
+	Value     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 // Store defines the interface for thread and message persistence
 type Store interface {
 	// Threads
@@ -93,4 +152,36 @@ type Store interface {
 
 	// Close releases any resources held by the store
 	Close() error
+}
+
+// BuiltinStore defines methods for built-in tool pack data
+type BuiltinStore interface {
+	// Log entries
+	CreateLogEntry(ctx context.Context, entry *LogEntry) error
+	SearchLogEntries(ctx context.Context, query string, since *time.Time, limit int) ([]*LogEntry, error)
+
+	// Todos
+	CreateTodo(ctx context.Context, todo *Todo) error
+	GetTodo(ctx context.Context, id string) (*Todo, error)
+	ListTodos(ctx context.Context, agentID string, status, priority string) ([]*Todo, error)
+	UpdateTodo(ctx context.Context, todo *Todo) error
+	DeleteTodo(ctx context.Context, id string) error
+
+	// BBS
+	CreateBBSPost(ctx context.Context, post *BBSPost) error
+	GetBBSPost(ctx context.Context, id string) (*BBSPost, error)
+	ListBBSThreads(ctx context.Context, limit int) ([]*BBSPost, error)
+	GetBBSThread(ctx context.Context, threadID string) (*BBSThread, error)
+
+	// Mail
+	SendMail(ctx context.Context, mail *AgentMail) error
+	GetMail(ctx context.Context, id string) (*AgentMail, error)
+	ListInbox(ctx context.Context, agentID string, unreadOnly bool, limit int) ([]*AgentMail, error)
+	MarkMailRead(ctx context.Context, id string) error
+
+	// Notes
+	SetNote(ctx context.Context, note *AgentNote) error
+	GetNote(ctx context.Context, agentID, key string) (*AgentNote, error)
+	ListNotes(ctx context.Context, agentID string) ([]*AgentNote, error)
+	DeleteNote(ctx context.Context, agentID, key string) error
 }
