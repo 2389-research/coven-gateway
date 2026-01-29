@@ -19,7 +19,7 @@
             <tbody>
                 {{range .Principals}}
                 <tr>
-                    <td class="font-medium">{{.Name}}</td>
+                    <td class="font-medium">{{.DisplayName}}</td>
                     <td>
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
                             {{if eq .Type "agent"}}bg-blue-50 text-blue-700{{else if eq .Type "client"}}bg-purple-50 text-purple-700{{else}}bg-warm-100 text-warm-600{{end}}">

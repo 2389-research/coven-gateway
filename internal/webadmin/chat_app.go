@@ -566,6 +566,29 @@ func (a *Admin) handleSettingsTools(w http.ResponseWriter, r *http.Request) {
 
 	var packs []packData
 	if a.registry != nil {
+		// Get builtin packs first
+		builtinPacks := a.registry.ListBuiltinPacks()
+		for _, bp := range builtinPacks {
+			var tools []toolData
+			for _, t := range bp.Tools {
+				if t.Definition == nil {
+					continue
+				}
+				tools = append(tools, toolData{
+					Name:        t.Definition.GetName(),
+					Description: t.Definition.GetDescription(),
+				})
+			}
+			if len(tools) > 0 {
+				packs = append(packs, packData{
+					ID:      bp.ID,
+					Version: "builtin",
+					Tools:   tools,
+				})
+			}
+		}
+
+		// Get external packs
 		packInfos := a.registry.ListPacks()
 		allTools := a.registry.GetAllTools()
 
