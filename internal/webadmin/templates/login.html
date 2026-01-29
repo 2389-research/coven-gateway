@@ -30,7 +30,7 @@
 
             <div id="passkey-error" class="hidden mb-4 p-3 bg-crimson/10 border border-crimson/30 text-crimson text-sm font-mono"></div>
 
-            <form method="POST" action="/admin/login" class="space-y-4">
+            <form method="POST" action="/login" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                 <div>
                     <label for="username" class="block text-xs font-mono text-text-secondary uppercase tracking-wider mb-2">Username</label>
@@ -127,7 +127,7 @@
 
         try {
             // Begin login
-            const beginResp = await fetch('/admin/webauthn/login/begin', {
+            const beginResp = await fetch('/webauthn/login/begin', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
@@ -167,7 +167,7 @@
             };
 
             // Finish login
-            const finishResp = await fetch('/admin/webauthn/login/finish', {
+            const finishResp = await fetch('/webauthn/login/finish', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -182,7 +182,7 @@
             }
 
             const finishData = await finishResp.json();
-            window.location.href = finishData.redirect || '/admin/';
+            window.location.href = finishData.redirect || '/';
 
         } catch (err) {
             console.error('Passkey login error:', err);

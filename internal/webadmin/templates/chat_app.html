@@ -12,7 +12,7 @@
                 </svg>
             </button>
             <!-- Logo -->
-            <a href="/admin/" class="flex items-center gap-3">
+            <a href="/" class="flex items-center gap-3">
                 <div class="w-9 h-9 rounded-lg bg-forest flex items-center justify-center">
                     <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
@@ -47,7 +47,7 @@
             {{end}}
 
             <!-- Thread List -->
-            <div id="thread-list" class="thread-list" hx-get="/admin/threads/list" hx-trigger="load" hx-swap="innerHTML">
+            <div id="thread-list" class="thread-list" hx-get="/threads/list" hx-trigger="load" hx-swap="innerHTML">
                 <div class="flex items-center justify-center py-8">
                     <div class="flex items-center gap-2 text-warm-400">
                         <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -111,7 +111,7 @@
                     </svg>
                 </button>
             </div>
-            <div class="modal-body" id="agent-list" hx-get="/admin/agents/picker" hx-trigger="load" hx-swap="innerHTML">
+            <div class="modal-body" id="agent-list" hx-get="/agents/picker" hx-trigger="load" hx-swap="innerHTML">
                 <div class="flex items-center justify-center py-8">
                     <div class="flex items-center gap-2 text-warm-400">
                         <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -194,7 +194,7 @@
                     <div class="w-2 h-2 rounded-full bg-forest pulse-soft"></div>
                     <span class="font-medium">{{.User.DisplayName}}</span>
                 </div>
-                <form method="POST" action="/admin/logout" class="inline">
+                <form method="POST" action="/logout" class="inline">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                     <button type="submit" class="text-sm text-warm-500 hover:text-danger font-medium">
                         Sign Out
@@ -954,7 +954,7 @@
     function loadSettingsTab(tab) {
         if (settingsContent) {
             settingsContent.innerHTML = '<div class="flex items-center justify-center py-12"><div class="flex items-center gap-2 text-warm-400"><svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span class="text-sm">Loading...</span></div></div>';
-            htmx.ajax('GET', '/admin/settings/' + tab, {
+            htmx.ajax('GET', '/settings/' + tab, {
                 target: '#settings-content',
                 swap: 'innerHTML'
             });
@@ -1042,7 +1042,7 @@
         }
 
         searchTimeout = setTimeout(() => {
-            htmx.ajax('GET', '/admin/threads/search?q=' + encodeURIComponent(query), {
+            htmx.ajax('GET', '/threads/search?q=' + encodeURIComponent(query), {
                 target: '#search-results',
                 swap: 'innerHTML'
             });
@@ -1060,7 +1060,7 @@
             const csrfToken = document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
 
             // Create new thread with this agent
-            htmx.ajax('POST', '/admin/threads', {
+            htmx.ajax('POST', '/threads', {
                 values: { agent_id: agentId },
                 target: '#chat-content',
                 swap: 'innerHTML',
@@ -1084,7 +1084,7 @@
             threadItem.classList.add('active');
 
             // Load thread content
-            htmx.ajax('GET', '/admin/chatview/' + threadId, {
+            htmx.ajax('GET', '/chatview/' + threadId, {
                 target: '#chat-content',
                 swap: 'innerHTML'
             });
@@ -1146,13 +1146,13 @@
             const action = e.target.closest('.context-menu-item')?.dataset.action;
             if (action === 'delete') {
                 if (confirm('Delete this conversation?')) {
-                    htmx.ajax('DELETE', '/admin/threads/' + threadId, {
+                    htmx.ajax('DELETE', '/threads/' + threadId, {
                         headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
                     }).then(() => {
                         htmx.trigger('#thread-list', 'load');
                         // If this was the active thread, show empty state
                         if (threadItem.classList.contains('active')) {
-                            htmx.ajax('GET', '/admin/chatview/empty', {
+                            htmx.ajax('GET', '/chatview/empty', {
                                 target: '#chat-content',
                                 swap: 'innerHTML'
                             });
@@ -1162,7 +1162,7 @@
             } else if (action === 'rename') {
                 const newName = prompt('Enter new name:');
                 if (newName) {
-                    htmx.ajax('PATCH', '/admin/threads/' + threadId, {
+                    htmx.ajax('PATCH', '/threads/' + threadId, {
                         values: { title: newName },
                         headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
                     }).then(() => {
@@ -1273,7 +1273,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     // Poll for agent connections every 3 seconds
     let pollInterval = setInterval(async function() {
         try {
-            const response = await fetch('/admin/agents/count');
+            const response = await fetch('/agents/count');
             if (response.ok) {
                 const count = parseInt(await response.text(), 10);
                 if (count > 0) {
@@ -1316,7 +1316,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
                 </div>
             </div>
         </div>
-        <a href="/admin/agents/{{.AgentID}}" class="text-xs text-warm-500 hover:text-forest">View Agent Details</a>
+        <a href="/admin/agents/{{.AgentID}}" class="text-xs text-warm-500 hover:text-forest">Agent Details</a>
     </div>
 
     <!-- Messages -->
@@ -1800,7 +1800,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     document.body.addEventListener('htmx:beforeSwap', cleanupSSE);
 
     function connectSSE() {
-        evtSource = new EventSource('/admin/chat/' + agentId + '/stream');
+        evtSource = new EventSource('/chat/' + agentId + '/stream');
 
         evtSource.addEventListener('connected', function() {
             console.log('SSE connected');
@@ -2066,7 +2066,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 
             const csrfToken = document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
 
-            const response = await fetch('/admin/chat/' + agentId + '/send', {
+            const response = await fetch('/chat/' + agentId + '/send', {
                 method: 'POST',
                 body: formData,
                 headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}

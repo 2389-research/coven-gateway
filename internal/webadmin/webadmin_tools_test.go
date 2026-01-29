@@ -425,7 +425,7 @@ func TestHandleToolsPage_RedirectsToChatApp(t *testing.T) {
 	}
 
 	location := rec.Header().Get("Location")
-	if location != "/admin/" {
-		t.Fatalf("expected redirect to /admin/, got %q", location)
+	if location != "/" {
+		t.Fatalf("expected redirect to /, got %q", location)
 	}
 }

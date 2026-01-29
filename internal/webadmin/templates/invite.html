@@ -31,7 +31,7 @@
             </div>
             {{end}}
 
-            <form method="POST" action="/admin/invite/{{.Token}}" class="space-y-5">
+            <form method="POST" action="/invite/{{.Token}}" class="space-y-5">
                 <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                 <div>
                     <label for="username" class="block text-sm font-medium text-ink mb-2">Username</label>
@@ -61,7 +61,7 @@
 
         <!-- Footer -->
         <p class="text-center text-warm-400 text-xs mt-6">
-            Already have an account? <a href="/admin/login" class="text-forest hover:underline">Sign in</a>
+            Already have an account? <a href="/login" class="text-forest hover:underline">Sign in</a>
         </p>
     </div>
 </div>

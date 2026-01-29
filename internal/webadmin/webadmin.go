@@ -184,56 +184,72 @@ func (a *Admin) Close() {
 }
 
 // RegisterRoutes registers all admin routes on the given mux
+// Routes are split into two groups:
+// - Root (/) routes: Chat interface (user-facing)
+// - Admin (/admin/) routes: Management pages
 func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
-	// Setup wizard (only accessible when no admin users exist)
-	mux.HandleFunc("GET /admin/setup", a.handleSetupPage)
-	mux.HandleFunc("POST /admin/setup", a.handleSetupSubmit)
+	// =========================================================================
+	// Root routes (/) - Chat interface
+	// =========================================================================
 
-	// Device linking (unauthenticated API for devices, authenticated UI for admins)
-	mux.HandleFunc("POST /admin/api/link/request", a.handleLinkRequest)
-	mux.HandleFunc("GET /admin/api/link/status/{code}", a.handleLinkStatus)
-	mux.HandleFunc("GET /admin/link", a.requireAuth(a.handleLinkPage))
-	mux.HandleFunc("POST /admin/link/{id}/approve", a.requireAuth(a.handleLinkApprove))
+	// Main chat app at root
+	mux.HandleFunc("GET /{$}", a.requireAuth(a.handleChatApp))
+	mux.HandleFunc("POST /logout", a.requireAuth(a.handleLogout))
 
-	// Public routes (no auth required)
-	mux.HandleFunc("GET /admin/login", a.handleLoginPage)
-	mux.HandleFunc("POST /admin/login", a.handleLogin)
-	mux.HandleFunc("GET /admin/invite/{token}", a.handleInvitePage)
-	mux.HandleFunc("POST /admin/invite/{token}", a.handleInviteSignup)
+	// Auth routes (public)
+	mux.HandleFunc("GET /login", a.handleLoginPage)
+	mux.HandleFunc("POST /login", a.handleLogin)
+	mux.HandleFunc("GET /setup", a.handleSetupPage)
+	mux.HandleFunc("POST /setup", a.handleSetupSubmit)
+	mux.HandleFunc("GET /invite/{token}", a.handleInvitePage)
+	mux.HandleFunc("POST /invite/{token}", a.handleInviteSignup)
 
-	// Protected routes (auth required)
-	// Main chat app (chat-centric redesign)
-	mux.HandleFunc("GET /admin/", a.requireAuth(a.handleChatApp))
-	mux.HandleFunc("GET /admin", a.requireAuth(a.handleChatApp))
-	mux.HandleFunc("POST /admin/logout", a.requireAuth(a.handleLogout))
+	// Device linking API (unauthenticated for devices)
+	mux.HandleFunc("POST /api/link/request", a.handleLinkRequest)
+	mux.HandleFunc("GET /api/link/status/{code}", a.handleLinkStatus)
 
-	// Dashboard (legacy, for direct access)
-	mux.HandleFunc("GET /admin/dashboard", a.requireAuth(a.handleDashboard))
-
-	// Chat app partials (HTMX)
-	mux.HandleFunc("GET /admin/threads/list", a.requireAuth(a.handleThreadsList))
-	mux.HandleFunc("GET /admin/threads/search", a.requireAuth(a.handleThreadSearch))
-	mux.HandleFunc("POST /admin/threads", a.requireAuth(a.handleCreateThread))
-	mux.HandleFunc("DELETE /admin/threads/{id}", a.requireAuth(a.handleDeleteThread))
-	mux.HandleFunc("PATCH /admin/threads/{id}", a.requireAuth(a.handleRenameThread))
-	mux.HandleFunc("GET /admin/chatview/empty", a.requireAuth(a.handleEmptyState))
-	mux.HandleFunc("GET /admin/chatview/{id}", a.requireAuth(a.handleThreadView))
-	mux.HandleFunc("GET /admin/agents/picker", a.requireAuth(a.handleAgentPicker))
-	mux.HandleFunc("GET /admin/agents/count", a.requireAuth(a.handleAgentCount))
+	// Chat HTMX partials and SSE
+	mux.HandleFunc("GET /threads/list", a.requireAuth(a.handleThreadsList))
+	mux.HandleFunc("GET /threads/search", a.requireAuth(a.handleThreadSearch))
+	mux.HandleFunc("POST /threads", a.requireAuth(a.handleCreateThread))
+	mux.HandleFunc("DELETE /threads/{id}", a.requireAuth(a.handleDeleteThread))
+	mux.HandleFunc("PATCH /threads/{id}", a.requireAuth(a.handleRenameThread))
+	mux.HandleFunc("GET /chatview/empty", a.requireAuth(a.handleEmptyState))
+	mux.HandleFunc("GET /chatview/{id}", a.requireAuth(a.handleThreadView))
+	mux.HandleFunc("GET /agents/picker", a.requireAuth(a.handleAgentPicker))
+	mux.HandleFunc("GET /agents/count", a.requireAuth(a.handleAgentCount))
+	mux.HandleFunc("GET /chat/{id}/send", a.requireAuth(a.handleChatSend))
+	mux.HandleFunc("POST /chat/{id}/send", a.requireAuth(a.handleChatSend))
+	mux.HandleFunc("GET /chat/{id}/stream", a.requireAuth(a.handleChatStream))
 
 	// Settings modal tabs (htmx partials)
-	mux.HandleFunc("GET /admin/settings/agents", a.requireAuth(a.handleSettingsAgents))
-	mux.HandleFunc("GET /admin/settings/tools", a.requireAuth(a.handleSettingsTools))
-	mux.HandleFunc("GET /admin/settings/security", a.requireAuth(a.handleSettingsSecurity))
-	mux.HandleFunc("GET /admin/settings/help", a.requireAuth(a.handleSettingsHelp))
+	mux.HandleFunc("GET /settings/agents", a.requireAuth(a.handleSettingsAgents))
+	mux.HandleFunc("GET /settings/tools", a.requireAuth(a.handleSettingsTools))
+	mux.HandleFunc("GET /settings/security", a.requireAuth(a.handleSettingsSecurity))
+	mux.HandleFunc("GET /settings/help", a.requireAuth(a.handleSettingsHelp))
 
-	// Stats (htmx partials)
-	mux.HandleFunc("GET /admin/stats/agents", a.requireAuth(a.handleStatsAgents))
-	mux.HandleFunc("GET /admin/stats/packs", a.requireAuth(a.handleStatsPacks))
-	mux.HandleFunc("GET /admin/stats/tokens", a.requireAuth(a.handleStatsTokens))
+	// Stats (htmx partials for chat app)
+	mux.HandleFunc("GET /stats/agents", a.requireAuth(a.handleStatsAgents))
+	mux.HandleFunc("GET /stats/packs", a.requireAuth(a.handleStatsPacks))
+	mux.HandleFunc("GET /stats/tokens", a.requireAuth(a.handleStatsTokens))
 
-	// Token usage page
-	mux.HandleFunc("GET /admin/usage", a.requireAuth(a.handleUsagePage))
+	// WebAuthn/Passkey routes
+	mux.HandleFunc("POST /webauthn/register/begin", a.requireAuth(a.handleWebAuthnRegisterBegin))
+	mux.HandleFunc("POST /webauthn/register/finish", a.requireAuth(a.handleWebAuthnRegisterFinish))
+	mux.HandleFunc("POST /webauthn/login/begin", a.handleWebAuthnLoginBegin)
+	mux.HandleFunc("POST /webauthn/login/finish", a.handleWebAuthnLoginFinish)
+
+	// =========================================================================
+	// Admin routes (/admin/) - Management pages
+	// =========================================================================
+
+	// Admin dashboard
+	mux.HandleFunc("GET /admin/{$}", a.requireAuth(a.handleDashboard))
+	mux.HandleFunc("GET /admin/dashboard", a.requireAuth(a.handleDashboard))
+
+	// Device linking UI (authenticated)
+	mux.HandleFunc("GET /admin/link", a.requireAuth(a.handleLinkPage))
+	mux.HandleFunc("POST /admin/link/{id}/approve", a.requireAuth(a.handleLinkApprove))
 
 	// Agent management
 	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsList))
@@ -265,26 +281,21 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/principals/{id}/revoke", a.requireAuth(a.handlePrincipalRevoke))
 	mux.HandleFunc("DELETE /admin/principals/{id}", a.requireAuth(a.handlePrincipalDelete))
 
-	// Threads and history (legacy pages, still accessible)
+	// Threads browsing (admin view)
 	mux.HandleFunc("GET /admin/threads", a.requireAuth(a.handleThreadsPage))
 	mux.HandleFunc("GET /admin/threads/{id}", a.requireAuth(a.handleThreadDetail))
 	mux.HandleFunc("GET /admin/threads/{id}/messages", a.requireAuth(a.handleThreadMessages))
 
-	// Chat with agents (SSE streaming)
+	// Legacy chat page (redirect to root)
 	mux.HandleFunc("GET /admin/chat/{id}", a.requireAuth(a.handleChatPage))
-	mux.HandleFunc("POST /admin/chat/{id}/send", a.requireAuth(a.handleChatSend))
-	mux.HandleFunc("GET /admin/chat/{id}/stream", a.requireAuth(a.handleChatStream))
+
+	// Token usage page
+	mux.HandleFunc("GET /admin/usage", a.requireAuth(a.handleUsagePage))
 
 	// Invite management
 	mux.HandleFunc("POST /admin/invites/create", a.requireAuth(a.handleCreateInvite))
 
-	// WebAuthn/Passkey routes
-	mux.HandleFunc("POST /admin/webauthn/register/begin", a.requireAuth(a.handleWebAuthnRegisterBegin))
-	mux.HandleFunc("POST /admin/webauthn/register/finish", a.requireAuth(a.handleWebAuthnRegisterFinish))
-	mux.HandleFunc("POST /admin/webauthn/login/begin", a.handleWebAuthnLoginBegin)
-	mux.HandleFunc("POST /admin/webauthn/login/finish", a.handleWebAuthnLoginFinish)
-
-	a.logger.Info("admin routes registered")
+	a.logger.Info("routes registered", "root_chat", "/", "admin", "/admin/")
 }
 
 // requireAuth wraps a handler to require authentication
@@ -292,7 +303,7 @@ func (a *Admin) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, err := a.getUserFromSession(r)
 		if err != nil {
-			http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 
@@ -350,11 +361,11 @@ func (a *Admin) ensureCSRFToken(w http.ResponseWriter, r *http.Request) (*http.R
 		token = "" // Will fail validation, but won't crash
 	}
 
-	// Set cookie
+	// Set cookie (path "/" so it works for both root and /admin routes)
 	http.SetCookie(w, &http.Cookie{
 		Name:     CSRFCookieName,
 		Value:    token,
-		Path:     "/admin",
+		Path:     "/",
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
 		SameSite: http.SameSiteStrictMode,
@@ -398,10 +409,11 @@ func (a *Admin) createSession(w http.ResponseWriter, r *http.Request, userID str
 		return err
 	}
 
+	// Set cookie (path "/" so it works for both root and /admin routes)
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    sessionID,
-		Path:     "/admin",
+		Path:     "/",
 		Expires:  session.ExpiresAt,
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
@@ -416,13 +428,13 @@ func (a *Admin) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	// If no admin users exist, redirect to setup wizard
 	count, err := a.store.CountAdminUsers(r.Context())
 	if err == nil && count == 0 {
-		http.Redirect(w, r, "/admin/setup", http.StatusSeeOther)
+		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 		return
 	}
 
-	// If already logged in, redirect to dashboard
+	// If already logged in, redirect to chat
 	if _, err := a.getUserFromSession(r); err == nil {
-		http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
@@ -499,7 +511,7 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.logger.Info("admin login successful", "username", username)
-	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // handleLogout logs out the current user
@@ -521,7 +533,7 @@ func (a *Admin) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    "",
-		Path:     "/admin",
+		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
 	})
@@ -530,12 +542,12 @@ func (a *Admin) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     CSRFCookieName,
 		Value:    "",
-		Path:     "/admin",
+		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
 	})
 
-	http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 // handleSetupPage renders the initial setup wizard
@@ -547,7 +559,7 @@ func (a *Admin) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if count > 0 {
-		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
@@ -561,7 +573,7 @@ func (a *Admin) handleSetupSubmit(w http.ResponseWriter, r *http.Request) {
 	// Verify no admin users exist (race condition protection)
 	count, err := a.store.CountAdminUsers(r.Context())
 	if err != nil || count > 0 {
-		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
@@ -830,18 +842,19 @@ func (a *Admin) handleInviteSignup(w http.ResponseWriter, r *http.Request) {
 	if err := a.createSession(w, r, userID); err != nil {
 		a.logger.Error("failed to create session", "error", err)
 		// Redirect to login instead
-		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
 	a.logger.Info("admin user created via invite", "username", username, "invite", token)
-	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // handleDashboard renders the main admin dashboard
 func (a *Admin) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	// Dashboard is deprecated - redirect to the chat app which is now the primary interface
-	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderDashboard(w, user, csrfToken)
 }
 
 // handleStatsAgents returns connected agent count (htmx partial)
@@ -855,12 +868,12 @@ func (a *Admin) handleStatsAgents(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAgentsList returns the agents list (htmx partial)
-// For non-HTMX requests, redirects to dashboard where agents are displayed
+// For non-HTMX requests, redirects to chat app where agents are displayed
 func (a *Admin) handleAgentsList(w http.ResponseWriter, r *http.Request) {
 	// Check if this is an HTMX request
 	if r.Header.Get("HX-Request") != "true" {
-		// Regular navigation - redirect to dashboard
-		http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+		// Regular navigation - redirect to chat app
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 	a.renderAgentsList(w)
@@ -1002,7 +1015,7 @@ func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inviteURL := a.config.BaseURL + "/admin/invite/" + token
+	inviteURL := a.config.BaseURL + "/invite/" + token
 	a.logger.Info("created admin invite", "created_by", user.Username, "token", token)
 
 	// Return the invite URL using template for proper escaping
@@ -1015,7 +1028,7 @@ func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 
 // handleToolsPage is deprecated - redirect to chat app
 func (a *Admin) handleToolsPage(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // handleToolsList returns the tools list grouped by pack (htmx partial)
@@ -1217,7 +1230,7 @@ func (a *Admin) handleBoardThread(w http.ResponseWriter, r *http.Request) {
 
 // handlePrincipalsPage is deprecated - redirect to chat app
 func (a *Admin) handlePrincipalsPage(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // handlePrincipalsList returns the principals list (htmx partial)
