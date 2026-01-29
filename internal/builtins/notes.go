@@ -74,6 +74,10 @@ func (n *notesHandlers) Set(ctx context.Context, agentID string, input json.RawM
 		return nil, fmt.Errorf("invalid input: %w", err)
 	}
 
+	if in.Key == "" {
+		return nil, fmt.Errorf("key is required")
+	}
+
 	note := &store.AgentNote{
 		AgentID: agentID,
 		Key:     in.Key,
@@ -94,6 +98,10 @@ func (n *notesHandlers) Get(ctx context.Context, agentID string, input json.RawM
 	var in noteGetInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
+	}
+
+	if in.Key == "" {
+		return nil, fmt.Errorf("key is required")
 	}
 
 	note, err := n.store.GetNote(ctx, agentID, in.Key)
@@ -126,6 +134,10 @@ func (n *notesHandlers) Delete(ctx context.Context, agentID string, input json.R
 	var in noteDeleteInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
+	}
+
+	if in.Key == "" {
+		return nil, fmt.Errorf("key is required")
 	}
 
 	if err := n.store.DeleteNote(ctx, agentID, in.Key); err != nil {

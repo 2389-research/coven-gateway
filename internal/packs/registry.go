@@ -334,14 +334,19 @@ func (r *Registry) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Count before clearing
+	packCount := len(r.packs)
+	builtinCount := len(r.builtins)
+
 	// Close all pack channels
 	for _, pack := range r.packs {
 		pack.Close()
 	}
 
-	// Clear the maps
+	// Clear all maps
 	r.packs = make(map[string]*Pack)
 	r.tools = make(map[string]*Tool)
+	r.builtins = make(map[string]*builtinEntry)
 
-	r.logger.Info("registry closed", "packs_closed", len(r.packs))
+	r.logger.Info("registry closed", "packs_closed", packCount, "builtins_cleared", builtinCount)
 }

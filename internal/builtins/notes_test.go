@@ -315,3 +315,32 @@ func TestNoteDeleteInvalidInput(t *testing.T) {
 		t.Error("expected error for invalid JSON")
 	}
 }
+
+func TestNoteEmptyKeyValidation(t *testing.T) {
+	s := newTestStore(t)
+	pack := NotesPack(s)
+
+	t.Run("note_set rejects empty key", func(t *testing.T) {
+		handler := findHandler(pack, "note_set")
+		_, err := handler(context.Background(), "agent-1", json.RawMessage(`{"key": "", "value": "test"}`))
+		if err == nil {
+			t.Error("expected error for empty key")
+		}
+	})
+
+	t.Run("note_get rejects empty key", func(t *testing.T) {
+		handler := findHandler(pack, "note_get")
+		_, err := handler(context.Background(), "agent-1", json.RawMessage(`{"key": ""}`))
+		if err == nil {
+			t.Error("expected error for empty key")
+		}
+	})
+
+	t.Run("note_delete rejects empty key", func(t *testing.T) {
+		handler := findHandler(pack, "note_delete")
+		_, err := handler(context.Background(), "agent-1", json.RawMessage(`{"key": ""}`))
+		if err == nil {
+			t.Error("expected error for empty key")
+		}
+	})
+}

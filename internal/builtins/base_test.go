@@ -157,6 +157,69 @@ func TestBBS(t *testing.T) {
 	}
 }
 
+func TestBBSInputValidation(t *testing.T) {
+	s := newTestStore(t)
+	pack := BasePack(s)
+
+	t.Run("bbs_create_thread rejects empty subject", func(t *testing.T) {
+		handler := findHandler(pack, "bbs_create_thread")
+		_, err := handler(context.Background(), "agent-1", json.RawMessage(`{"subject": "", "content": "test"}`))
+		if err == nil {
+			t.Error("expected error for empty subject")
+		}
+	})
+
+	t.Run("bbs_create_thread rejects empty content", func(t *testing.T) {
+		handler := findHandler(pack, "bbs_create_thread")
+		_, err := handler(context.Background(), "agent-1", json.RawMessage(`{"subject": "test", "content": ""}`))
+		if err == nil {
+			t.Error("expected error for empty content")
+		}
+	})
+
+	t.Run("bbs_reply rejects empty thread_id", func(t *testing.T) {
+		handler := findHandler(pack, "bbs_reply")
+		_, err := handler(context.Background(), "agent-1", json.RawMessage(`{"thread_id": "", "content": "test"}`))
+		if err == nil {
+			t.Error("expected error for empty thread_id")
+		}
+	})
+
+	t.Run("bbs_reply rejects empty content", func(t *testing.T) {
+		// First create a thread to reply to
+		createHandler := findHandler(pack, "bbs_create_thread")
+		result, _ := createHandler(context.Background(), "agent-1", json.RawMessage(`{"subject": "test", "content": "test"}`))
+		var resp map[string]string
+		json.Unmarshal(result, &resp)
+		threadID := resp["thread_id"]
+
+		handler := findHandler(pack, "bbs_reply")
+		_, err := handler(context.Background(), "agent-1", json.RawMessage(`{"thread_id": "`+threadID+`", "content": ""}`))
+		if err == nil {
+			t.Error("expected error for empty content")
+		}
+	})
+
+	t.Run("bbs_reply rejects non-existent thread", func(t *testing.T) {
+		handler := findHandler(pack, "bbs_reply")
+		_, err := handler(context.Background(), "agent-1", json.RawMessage(`{"thread_id": "non-existent-thread", "content": "test"}`))
+		if err == nil {
+			t.Error("expected error for non-existent thread")
+		}
+	})
+}
+
+func TestLogEntryInputValidation(t *testing.T) {
+	s := newTestStore(t)
+	pack := BasePack(s)
+
+	handler := findHandler(pack, "log_entry")
+	_, err := handler(context.Background(), "agent-1", json.RawMessage(`{"message": ""}`))
+	if err == nil {
+		t.Error("expected error for empty message")
+	}
+}
+
 func findHandler(pack *packs.BuiltinPack, name string) packs.ToolHandler {
 	for _, tool := range pack.Tools {
 		if tool.Definition.GetName() == name {

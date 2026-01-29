@@ -215,8 +215,13 @@ func (r *Router) HandleToolResponse(resp *pb.ExecuteToolResponse) {
 	}
 }
 
-// HasTool checks if a tool with the given name exists in the registry.
+// HasTool checks if a tool with the given name exists in the registry (external or builtin).
 func (r *Router) HasTool(toolName string) bool {
+	// Check builtins first
+	if r.registry.IsBuiltin(toolName) {
+		return true
+	}
+	// Check external pack tools
 	tool, _ := r.registry.GetToolByName(toolName)
 	return tool != nil
 }
@@ -224,6 +229,11 @@ func (r *Router) HasTool(toolName string) bool {
 // GetToolDefinition returns the tool definition for a given tool name.
 // Returns nil if the tool is not found.
 func (r *Router) GetToolDefinition(toolName string) *pb.ToolDefinition {
+	// Check builtins first
+	if builtin := r.registry.GetBuiltinTool(toolName); builtin != nil {
+		return builtin.Definition
+	}
+	// Check external pack tools
 	tool, _ := r.registry.GetToolByName(toolName)
 	if tool == nil {
 		return nil

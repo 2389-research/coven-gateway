@@ -760,3 +760,90 @@ func TestRouteBuiltinTool(t *testing.T) {
 		}
 	})
 }
+
+func TestRouterHasToolWithBuiltins(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	reg := NewRegistry(logger)
+
+	// Register a builtin
+	pack := &BuiltinPack{
+		ID: "builtin:test",
+		Tools: []*BuiltinTool{
+			{
+				Definition: &pb.ToolDefinition{Name: "builtin-tool"},
+				Handler: func(ctx context.Context, agentID string, input json.RawMessage) (json.RawMessage, error) {
+					return []byte(`{}`), nil
+				},
+			},
+		},
+	}
+	if err := reg.RegisterBuiltinPack(pack); err != nil {
+		t.Fatalf("RegisterBuiltinPack: %v", err)
+	}
+
+	router := NewRouter(RouterConfig{
+		Registry: reg,
+		Logger:   logger,
+	})
+
+	t.Run("HasTool returns true for builtin tool", func(t *testing.T) {
+		if !router.HasTool("builtin-tool") {
+			t.Error("expected HasTool to return true for builtin tool")
+		}
+	})
+
+	t.Run("HasTool returns false for non-existent tool", func(t *testing.T) {
+		if router.HasTool("non-existent") {
+			t.Error("expected HasTool to return false for non-existent tool")
+		}
+	})
+}
+
+func TestRouterGetToolDefinitionWithBuiltins(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	reg := NewRegistry(logger)
+
+	// Register a builtin with a description
+	pack := &BuiltinPack{
+		ID: "builtin:test",
+		Tools: []*BuiltinTool{
+			{
+				Definition: &pb.ToolDefinition{
+					Name:        "builtin-tool",
+					Description: "A builtin test tool",
+				},
+				Handler: func(ctx context.Context, agentID string, input json.RawMessage) (json.RawMessage, error) {
+					return []byte(`{}`), nil
+				},
+			},
+		},
+	}
+	if err := reg.RegisterBuiltinPack(pack); err != nil {
+		t.Fatalf("RegisterBuiltinPack: %v", err)
+	}
+
+	router := NewRouter(RouterConfig{
+		Registry: reg,
+		Logger:   logger,
+	})
+
+	t.Run("GetToolDefinition returns definition for builtin tool", func(t *testing.T) {
+		def := router.GetToolDefinition("builtin-tool")
+		if def == nil {
+			t.Fatal("expected tool definition for builtin tool")
+		}
+		if def.GetName() != "builtin-tool" {
+			t.Errorf("expected name 'builtin-tool', got '%s'", def.GetName())
+		}
+		if def.GetDescription() != "A builtin test tool" {
+			t.Errorf("expected description 'A builtin test tool', got '%s'", def.GetDescription())
+		}
+	})
+
+	t.Run("GetToolDefinition returns nil for non-existent tool", func(t *testing.T) {
+		def := router.GetToolDefinition("non-existent")
+		if def != nil {
+			t.Error("expected nil definition for non-existent tool")
+		}
+	})
+}

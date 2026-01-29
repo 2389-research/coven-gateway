@@ -134,6 +134,10 @@ func (b *baseHandlers) LogEntry(ctx context.Context, agentID string, input json.
 		return nil, fmt.Errorf("invalid input: %w", err)
 	}
 
+	if in.Message == "" {
+		return nil, fmt.Errorf("message is required")
+	}
+
 	entry := &store.LogEntry{
 		AgentID: agentID,
 		Message: in.Message,
@@ -318,6 +322,13 @@ func (b *baseHandlers) BBSCreateThread(ctx context.Context, agentID string, inpu
 		return nil, fmt.Errorf("invalid input: %w", err)
 	}
 
+	if in.Subject == "" {
+		return nil, fmt.Errorf("subject is required")
+	}
+	if in.Content == "" {
+		return nil, fmt.Errorf("content is required")
+	}
+
 	post := &store.BBSPost{
 		AgentID: agentID,
 		Subject: in.Subject,
@@ -339,6 +350,23 @@ func (b *baseHandlers) BBSReply(ctx context.Context, agentID string, input json.
 	var in bbsReplyInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
+	}
+
+	if in.ThreadID == "" {
+		return nil, fmt.Errorf("thread_id is required")
+	}
+	if in.Content == "" {
+		return nil, fmt.Errorf("content is required")
+	}
+
+	// Verify thread exists
+	thread, err := b.store.GetBBSThread(ctx, in.ThreadID)
+	if err != nil {
+		return nil, fmt.Errorf("thread not found")
+	}
+	if thread.Post.ThreadID != "" {
+		// This is a reply, not a thread - can't reply to a reply
+		return nil, fmt.Errorf("cannot reply to a reply, use original thread_id")
 	}
 
 	post := &store.BBSPost{
