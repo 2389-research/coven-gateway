@@ -276,6 +276,71 @@ func (s *SQLiteStore) createSchema() error {
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id);
+
+		-- Built-in tool pack tables
+
+		-- Log entries (activity logging)
+		CREATE TABLE IF NOT EXISTS log_entries (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			message TEXT NOT NULL,
+			tags TEXT,
+			created_at TEXT NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_log_entries_agent ON log_entries(agent_id);
+		CREATE INDEX IF NOT EXISTS idx_log_entries_created ON log_entries(created_at);
+
+		-- Todos (task management)
+		CREATE TABLE IF NOT EXISTS todos (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			description TEXT NOT NULL,
+			status TEXT DEFAULT 'pending',
+			priority TEXT DEFAULT 'medium',
+			notes TEXT,
+			due_date TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_todos_agent ON todos(agent_id);
+		CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
+
+		-- BBS posts (bulletin board)
+		CREATE TABLE IF NOT EXISTS bbs_posts (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			thread_id TEXT,
+			subject TEXT,
+			content TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_bbs_posts_thread ON bbs_posts(thread_id);
+		CREATE INDEX IF NOT EXISTS idx_bbs_posts_created ON bbs_posts(created_at);
+
+		-- Agent mail (inter-agent messaging)
+		CREATE TABLE IF NOT EXISTS agent_mail (
+			id TEXT PRIMARY KEY,
+			from_agent_id TEXT NOT NULL,
+			to_agent_id TEXT NOT NULL,
+			subject TEXT NOT NULL,
+			content TEXT NOT NULL,
+			read_at TEXT,
+			created_at TEXT NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_agent_mail_to ON agent_mail(to_agent_id);
+		CREATE INDEX IF NOT EXISTS idx_agent_mail_unread ON agent_mail(to_agent_id, read_at);
+
+		-- Agent notes (key-value storage)
+		CREATE TABLE IF NOT EXISTS agent_notes (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			key TEXT NOT NULL,
+			value TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			UNIQUE(agent_id, key)
+		);
+		CREATE INDEX IF NOT EXISTS idx_agent_notes_agent ON agent_notes(agent_id);
 	`
 
 	_, err := s.db.Exec(schema)
