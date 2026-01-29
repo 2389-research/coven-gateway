@@ -1014,7 +1014,32 @@ func (a *Admin) handleToolsPage(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleToolsList(w http.ResponseWriter, r *http.Request) {
 	var items []packItem
 	if a.registry != nil {
-		// Get all registered packs
+		// Get builtin packs first
+		builtinPacks := a.registry.ListBuiltinPacks()
+		for _, bp := range builtinPacks {
+			var tools []toolItem
+			for _, t := range bp.Tools {
+				if t.Definition == nil {
+					continue
+				}
+				tools = append(tools, toolItem{
+					Name:                 t.Definition.GetName(),
+					Description:          t.Definition.GetDescription(),
+					TimeoutSeconds:       t.Definition.GetTimeoutSeconds(),
+					RequiredCapabilities: t.Definition.GetRequiredCapabilities(),
+				})
+			}
+			sort.Slice(tools, func(i, j int) bool {
+				return tools[i].Name < tools[j].Name
+			})
+			items = append(items, packItem{
+				ID:      bp.ID,
+				Version: "builtin",
+				Tools:   tools,
+			})
+		}
+
+		// Get all external registered packs
 		packInfos := a.registry.ListPacks()
 
 		// Get all tools and group by pack
@@ -1056,7 +1081,7 @@ func (a *Admin) handleToolsList(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleStatsPacks(w http.ResponseWriter, r *http.Request) {
 	count := 0
 	if a.registry != nil {
-		count = len(a.registry.ListPacks())
+		count = len(a.registry.ListPacks()) + len(a.registry.ListBuiltinPacks())
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, "%d", count)

@@ -247,6 +247,34 @@ func (r *Registry) IsBuiltin(name string) bool {
 	return ok
 }
 
+// BuiltinPackInfo contains information about a registered builtin pack for display.
+type BuiltinPackInfo struct {
+	ID    string
+	Tools []*BuiltinTool
+}
+
+// ListBuiltinPacks returns information about all registered builtin packs.
+func (r *Registry) ListBuiltinPacks() []BuiltinPackInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// Group tools by pack ID
+	packTools := make(map[string][]*BuiltinTool)
+	for _, entry := range r.builtins {
+		packTools[entry.PackID] = append(packTools[entry.PackID], entry.Tool)
+	}
+
+	// Build result
+	result := make([]BuiltinPackInfo, 0, len(packTools))
+	for packID, tools := range packTools {
+		result = append(result, BuiltinPackInfo{
+			ID:    packID,
+			Tools: tools,
+		})
+	}
+	return result
+}
+
 // GetAllTools returns all registered tools.
 func (r *Registry) GetAllTools() []*Tool {
 	r.mu.RLock()
