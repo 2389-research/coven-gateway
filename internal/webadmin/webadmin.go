@@ -108,6 +108,10 @@ type FullStore interface {
 	ListAllTodos(ctx context.Context, limit int) ([]*store.Todo, error)
 	ListBBSThreads(ctx context.Context, limit int) ([]*store.BBSPost, error)
 	GetBBSThread(ctx context.Context, threadID string) (*store.BBSThread, error)
+
+	// Token usage tracking
+	GetUsageStats(ctx context.Context, filter store.UsageFilter) (*store.UsageStats, error)
+	GetThreadUsage(ctx context.Context, threadID string) ([]*store.TokenUsage, error)
 }
 
 // Admin handles admin UI routes and authentication
@@ -226,6 +230,10 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	// Stats (htmx partials)
 	mux.HandleFunc("GET /admin/stats/agents", a.requireAuth(a.handleStatsAgents))
 	mux.HandleFunc("GET /admin/stats/packs", a.requireAuth(a.handleStatsPacks))
+	mux.HandleFunc("GET /admin/stats/tokens", a.requireAuth(a.handleStatsTokens))
+
+	// Token usage page
+	mux.HandleFunc("GET /admin/usage", a.requireAuth(a.handleUsagePage))
 
 	// Agent management
 	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsList))
@@ -1870,6 +1878,39 @@ func (a *Admin) handleLinkStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// =============================================================================
+// Token Usage Handlers
+// =============================================================================
+
+// handleUsagePage renders the token usage analytics page
+func (a *Admin) handleUsagePage(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderUsagePage(w, user, csrfToken)
+}
+
+// handleStatsTokens returns token usage stats (htmx partial)
+func (a *Admin) handleStatsTokens(w http.ResponseWriter, r *http.Request) {
+	// Get stats with optional filters
+	filter := store.UsageFilter{}
+
+	// Parse time range if specified
+	if sinceStr := r.URL.Query().Get("since"); sinceStr != "" {
+		if since, err := time.Parse(time.RFC3339, sinceStr); err == nil {
+			filter.Since = &since
+		}
+	}
+
+	stats, err := a.store.GetUsageStats(r.Context(), filter)
+	if err != nil {
+		a.logger.Error("failed to get usage stats", "error", err)
+		http.Error(w, "Failed to load stats", http.StatusInternalServerError)
+		return
+	}
+
+	a.renderUsageStats(w, stats)
 }
 
 // generateSecureToken generates a cryptographically secure random token

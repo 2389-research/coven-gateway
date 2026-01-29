@@ -186,3 +186,51 @@ type BuiltinStore interface {
 	ListNotes(ctx context.Context, agentID string) ([]*AgentNote, error)
 	DeleteNote(ctx context.Context, agentID, key string) error
 }
+
+// TokenUsage represents token consumption from an LLM response
+type TokenUsage struct {
+	ID               string
+	ThreadID         string
+	MessageID        string // Links to final message when Done event received
+	RequestID        string
+	AgentID          string
+	InputTokens      int32
+	OutputTokens     int32
+	CacheReadTokens  int32
+	CacheWriteTokens int32
+	ThinkingTokens   int32
+	CreatedAt        time.Time
+}
+
+// UsageStats represents aggregated token usage statistics
+type UsageStats struct {
+	TotalInput      int64
+	TotalOutput     int64
+	TotalCacheRead  int64
+	TotalCacheWrite int64
+	TotalThinking   int64
+	TotalTokens     int64
+	RequestCount    int64
+}
+
+// UsageFilter contains optional filters for usage queries
+type UsageFilter struct {
+	AgentID *string
+	Since   *time.Time
+	Until   *time.Time
+}
+
+// UsageStore defines methods for token usage persistence and retrieval
+type UsageStore interface {
+	// SaveUsage stores a token usage record
+	SaveUsage(ctx context.Context, usage *TokenUsage) error
+
+	// LinkUsageToMessage updates a usage record with the final message ID
+	LinkUsageToMessage(ctx context.Context, requestID, messageID string) error
+
+	// GetThreadUsage retrieves all usage records for a thread
+	GetThreadUsage(ctx context.Context, threadID string) ([]*TokenUsage, error)
+
+	// GetUsageStats returns aggregated usage statistics with optional filters
+	GetUsageStats(ctx context.Context, filter UsageFilter) (*UsageStats, error)
+}

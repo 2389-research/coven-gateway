@@ -22,6 +22,10 @@ type ConversationStore interface {
 	GetThreadByFrontendID(ctx context.Context, frontendName, externalID string) (*store.Thread, error)
 	SaveMessage(ctx context.Context, msg *store.Message) error
 	GetThreadMessages(ctx context.Context, threadID string, limit int) ([]*store.Message, error)
+
+	// Token usage tracking
+	SaveUsage(ctx context.Context, usage *store.TokenUsage) error
+	LinkUsageToMessage(ctx context.Context, requestID, messageID string) error
 }
 
 // MessageSender defines what the service needs from the agent layer
@@ -245,6 +249,10 @@ func (s *Service) persistResponses(ctx context.Context, threadID, agentID string
 		var receivedStreamingText bool // Track if we got streaming text events
 		sender := "agent:" + agentID
 
+		// Generate a request ID for usage tracking (correlates usage events to this request)
+		requestID := uuid.New().String()
+		var savedUsage bool // Track if we've saved usage for this request
+
 		for resp := range in {
 			// Persist based on event type
 			switch resp.Event {
@@ -280,6 +288,24 @@ func (s *Service) persistResponses(ctx context.Context, threadID, agentID string
 					})
 				}
 
+			case agent.EventUsage:
+				// Save token usage to store
+				if resp.Usage != nil && !savedUsage {
+					s.saveUsage(&store.TokenUsage{
+						ID:               uuid.New().String(),
+						ThreadID:         threadID,
+						RequestID:        requestID,
+						AgentID:          agentID,
+						InputTokens:      resp.Usage.InputTokens,
+						OutputTokens:     resp.Usage.OutputTokens,
+						CacheReadTokens:  resp.Usage.CacheReadTokens,
+						CacheWriteTokens: resp.Usage.CacheWriteTokens,
+						ThinkingTokens:   resp.Usage.ThinkingTokens,
+						CreatedAt:        time.Now(),
+					})
+					savedUsage = true
+				}
+
 			case agent.EventDone:
 				// Save agent message: use accumulated text if we got streaming events,
 				// otherwise use the Done event's text (for non-streaming agents)
@@ -288,14 +314,19 @@ func (s *Service) persistResponses(ctx context.Context, threadID, agentID string
 					content = resp.Text
 				}
 				if content != "" {
+					messageID := uuid.New().String()
 					s.saveMessage(&store.Message{
-						ID:        uuid.New().String(),
+						ID:        messageID,
 						ThreadID:  threadID,
 						Sender:    sender,
 						Content:   content,
 						Type:      store.MessageTypeMessage,
 						CreatedAt: time.Now(),
 					})
+					// Link usage record to this message
+					if savedUsage {
+						s.linkUsageToMessage(requestID, messageID)
+					}
 				}
 			}
 
@@ -341,5 +372,38 @@ func (s *Service) saveMessage(msg *store.Message) {
 			"thread_id", msg.ThreadID,
 			"type", msg.Type,
 			"message_id", msg.ID)
+	}
+}
+
+// saveUsage saves a token usage record with a separate timeout context
+func (s *Service) saveUsage(usage *store.TokenUsage) {
+	saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := s.store.SaveUsage(saveCtx, usage); err != nil {
+		s.logger.Error("failed to save usage",
+			"error", err,
+			"thread_id", usage.ThreadID,
+			"request_id", usage.RequestID,
+			"usage_id", usage.ID)
+	} else {
+		s.logger.Debug("usage saved",
+			"thread_id", usage.ThreadID,
+			"request_id", usage.RequestID,
+			"input_tokens", usage.InputTokens,
+			"output_tokens", usage.OutputTokens)
+	}
+}
+
+// linkUsageToMessage links a usage record to its final message
+func (s *Service) linkUsageToMessage(requestID, messageID string) {
+	saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := s.store.LinkUsageToMessage(saveCtx, requestID, messageID); err != nil {
+		s.logger.Error("failed to link usage to message",
+			"error", err,
+			"request_id", requestID,
+			"message_id", messageID)
 	}
 }

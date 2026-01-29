@@ -283,7 +283,9 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		mux.Handle("/api/agents", authMiddleware(http.HandlerFunc(gw.handleListAgents)))
 		mux.Handle("/api/agents/", authMiddleware(http.HandlerFunc(gw.handleAgentHistory)))
 		mux.Handle("/api/send", authMiddleware(http.HandlerFunc(gw.handleSendMessage)))
-		mux.Handle("/api/threads/", authMiddleware(http.HandlerFunc(gw.handleThreadMessages)))
+		mux.Handle("/api/threads/", authMiddleware(http.HandlerFunc(gw.handleThreadRoutes)))
+		mux.Handle("/api/stats/usage", authMiddleware(http.HandlerFunc(gw.handleUsageStats)))
+		mux.Handle("/api/tools/approve", authMiddleware(http.HandlerFunc(gw.handleToolApproval)))
 
 		// Admin endpoints - requires admin role for mutations
 		// GET is allowed for any authenticated user, POST/DELETE require admin
@@ -302,7 +304,9 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		mux.HandleFunc("/api/agents/", gw.handleAgentHistory)
 		mux.HandleFunc("/api/send", gw.handleSendMessage)
 		mux.HandleFunc("/api/bindings", gw.handleBindings)
-		mux.HandleFunc("/api/threads/", gw.handleThreadMessages)
+		mux.HandleFunc("/api/threads/", gw.handleThreadRoutes)
+		mux.HandleFunc("/api/stats/usage", gw.handleUsageStats)
+		mux.HandleFunc("/api/tools/approve", gw.handleToolApproval)
 		logger.Warn("HTTP auth disabled - no jwt_secret configured")
 	}
 

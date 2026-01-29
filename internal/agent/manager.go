@@ -249,6 +249,15 @@ func (m *Manager) convertResponse(pbResp *pb.MessageResponse) *Response {
 		resp.Event = EventCancelled
 		resp.Error = event.Cancelled.GetReason()
 		resp.Done = true
+
+	case *pb.MessageResponse_ToolApprovalRequest:
+		resp.Event = EventToolApprovalRequest
+		resp.ToolApprovalRequest = &ToolApprovalRequestEvent{
+			ID:        event.ToolApprovalRequest.GetId(),
+			Name:      event.ToolApprovalRequest.GetName(),
+			InputJSON: event.ToolApprovalRequest.GetInputJson(),
+			RequestID: pbResp.GetRequestId(),
+		}
 	}
 
 	return resp
@@ -343,6 +352,38 @@ func (m *Manager) GetByPrincipalAndWorkDir(principalID, workingDir string) *Conn
 	return nil
 }
 
+// SendToolApproval sends a tool approval response to an agent.
+// toolID must match the ToolApprovalRequest.id from the agent.
+func (m *Manager) SendToolApproval(agentID, toolID string, approved, approveAll bool) error {
+	agent, ok := m.GetAgent(agentID)
+	if !ok {
+		return ErrAgentNotFound
+	}
+
+	msg := &pb.ServerMessage{
+		Payload: &pb.ServerMessage_ToolApproval{
+			ToolApproval: &pb.ToolApprovalResponse{
+				Id:         toolID,
+				Approved:   approved,
+				ApproveAll: approveAll,
+			},
+		},
+	}
+
+	if err := agent.Send(msg); err != nil {
+		return err
+	}
+
+	m.logger.Info("tool approval sent",
+		"agent_id", agentID,
+		"tool_id", toolID,
+		"approved", approved,
+		"approve_all", approveAll,
+	)
+
+	return nil
+}
+
 // SendRequest represents a request to send a message to an agent.
 type SendRequest struct {
 	ThreadID    string
@@ -361,16 +402,17 @@ type Attachment struct {
 
 // Response represents a response event from an agent.
 type Response struct {
-	Event      ResponseEvent
-	Text       string
-	ToolUse    *ToolUseEvent
-	ToolResult *ToolResultEvent
-	File       *FileEvent
-	Error      string
-	Done       bool
-	SessionID  string          // For EventSessionInit
-	Usage      *UsageEvent     // For EventUsage
-	ToolState  *ToolStateEvent // For EventToolState
+	Event               ResponseEvent
+	Text                string
+	ToolUse             *ToolUseEvent
+	ToolResult          *ToolResultEvent
+	File                *FileEvent
+	Error               string
+	Done                bool
+	SessionID           string                    // For EventSessionInit
+	Usage               *UsageEvent               // For EventUsage
+	ToolState           *ToolStateEvent           // For EventToolState
+	ToolApprovalRequest *ToolApprovalRequestEvent // For EventToolApprovalRequest
 }
 
 // ResponseEvent indicates the type of response event.
@@ -386,9 +428,10 @@ const (
 	EventError
 	EventSessionInit
 	EventSessionOrphaned
-	EventUsage     // Token usage update
-	EventToolState // Tool lifecycle state change
-	EventCancelled // Request was cancelled
+	EventUsage               // Token usage update
+	EventToolState           // Tool lifecycle state change
+	EventCancelled           // Request was cancelled
+	EventToolApprovalRequest // Tool needs approval before execution
 )
 
 // ToolUseEvent represents a tool invocation by the agent.
@@ -426,6 +469,14 @@ type ToolStateEvent struct {
 	ID     string
 	State  string // "pending", "awaiting_approval", "running", "completed", "failed", "denied", "timeout", "cancelled"
 	Detail string
+}
+
+// ToolApprovalRequestEvent represents a tool awaiting approval before execution.
+type ToolApprovalRequestEvent struct {
+	ID        string // Tool invocation ID
+	Name      string // Tool name
+	InputJSON string // Tool input for display
+	RequestID string // Request ID for correlation
 }
 
 // AgentInfo contains public information about a connected agent.

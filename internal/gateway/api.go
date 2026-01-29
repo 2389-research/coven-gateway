@@ -419,6 +419,19 @@ func (g *Gateway) responseToSSEEvent(resp *agent.Response) SSEEvent {
 			Event: "cancelled",
 			Data:  map[string]string{"reason": resp.Error},
 		}
+	case agent.EventToolApprovalRequest:
+		if resp.ToolApprovalRequest == nil {
+			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed tool_approval event"}}
+		}
+		return SSEEvent{
+			Event: "tool_approval",
+			Data: map[string]string{
+				"id":         resp.ToolApprovalRequest.ID,
+				"name":       resp.ToolApprovalRequest.Name,
+				"input_json": resp.ToolApprovalRequest.InputJSON,
+				"request_id": resp.ToolApprovalRequest.RequestID,
+			},
+		}
 	default:
 		return SSEEvent{
 			Event: "unknown",
@@ -762,6 +775,20 @@ func (g *Gateway) handleDeleteBinding(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleThreadRoutes routes /api/threads/{id}/... requests to the appropriate handler.
+func (g *Gateway) handleThreadRoutes(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	if strings.HasSuffix(path, "/messages") {
+		g.handleThreadMessages(w, r)
+		return
+	}
+	if strings.HasSuffix(path, "/usage") {
+		g.handleThreadUsage(w, r)
+		return
+	}
+	g.sendJSONError(w, http.StatusNotFound, "unknown endpoint")
+}
+
 // handleThreadMessages handles GET /api/threads/{id}/messages requests.
 // Returns the message history for a thread, optionally limited by ?limit=N.
 func (g *Gateway) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
@@ -1048,4 +1075,234 @@ func (g *Gateway) handleSendToAgent(w http.ResponseWriter, r *http.Request) {
 
 	// Stream responses (persistence is handled by ConversationService)
 	g.streamResponses(r.Context(), w, flusher, convResp.Stream)
+}
+
+// UsageStatsResponse is the JSON response for GET /api/stats/usage.
+type UsageStatsResponse struct {
+	TotalInput      int64 `json:"total_input"`
+	TotalOutput     int64 `json:"total_output"`
+	TotalCacheRead  int64 `json:"total_cache_read"`
+	TotalCacheWrite int64 `json:"total_cache_write"`
+	TotalThinking   int64 `json:"total_thinking"`
+	TotalTokens     int64 `json:"total_tokens"`
+	RequestCount    int64 `json:"request_count"`
+}
+
+// ThreadUsageResponse is the JSON response for GET /api/threads/{id}/usage.
+type ThreadUsageResponse struct {
+	ThreadID string          `json:"thread_id"`
+	Usage    []UsageResponse `json:"usage"`
+}
+
+// UsageResponse represents a single usage record.
+type UsageResponse struct {
+	ID               string `json:"id"`
+	MessageID        string `json:"message_id,omitempty"`
+	RequestID        string `json:"request_id"`
+	AgentID          string `json:"agent_id"`
+	InputTokens      int32  `json:"input_tokens"`
+	OutputTokens     int32  `json:"output_tokens"`
+	CacheReadTokens  int32  `json:"cache_read_tokens"`
+	CacheWriteTokens int32  `json:"cache_write_tokens"`
+	ThinkingTokens   int32  `json:"thinking_tokens"`
+	CreatedAt        string `json:"created_at"`
+}
+
+// handleUsageStats handles GET /api/stats/usage requests.
+// Returns aggregate token usage statistics with optional filters.
+// Query parameters:
+//   - agent_id: filter by agent
+//   - since: start time (RFC3339)
+//   - until: end time (RFC3339)
+func (g *Gateway) handleUsageStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Type assert to get UsageStore methods
+	usageStore, ok := g.store.(store.UsageStore)
+	if !ok {
+		g.logger.Error("store does not implement UsageStore")
+		g.sendJSONError(w, http.StatusInternalServerError, "usage tracking not available")
+		return
+	}
+
+	// Parse filter parameters
+	filter := store.UsageFilter{}
+
+	if agentID := r.URL.Query().Get("agent_id"); agentID != "" {
+		filter.AgentID = &agentID
+	}
+
+	if sinceStr := r.URL.Query().Get("since"); sinceStr != "" {
+		since, err := time.Parse(time.RFC3339, sinceStr)
+		if err != nil {
+			g.sendJSONError(w, http.StatusBadRequest, "invalid 'since' format (use RFC3339)")
+			return
+		}
+		filter.Since = &since
+	}
+
+	if untilStr := r.URL.Query().Get("until"); untilStr != "" {
+		until, err := time.Parse(time.RFC3339, untilStr)
+		if err != nil {
+			g.sendJSONError(w, http.StatusBadRequest, "invalid 'until' format (use RFC3339)")
+			return
+		}
+		filter.Until = &until
+	}
+
+	stats, err := usageStore.GetUsageStats(r.Context(), filter)
+	if err != nil {
+		g.logger.Error("failed to get usage stats", "error", err)
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	response := UsageStatsResponse{
+		TotalInput:      stats.TotalInput,
+		TotalOutput:     stats.TotalOutput,
+		TotalCacheRead:  stats.TotalCacheRead,
+		TotalCacheWrite: stats.TotalCacheWrite,
+		TotalThinking:   stats.TotalThinking,
+		TotalTokens:     stats.TotalTokens,
+		RequestCount:    stats.RequestCount,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleThreadUsage handles GET /api/threads/{id}/usage requests.
+// Returns token usage records for a specific thread.
+func (g *Gateway) handleThreadUsage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract thread ID from path: /api/threads/{id}/usage
+	path := r.URL.Path
+	prefix := "/api/threads/"
+	suffix := "/usage"
+
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	threadID := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
+	if threadID == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "thread_id is required")
+		return
+	}
+
+	// Validate thread ID is a valid UUID
+	if _, err := uuid.Parse(threadID); err != nil {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid thread_id format")
+		return
+	}
+
+	// Type assert to get UsageStore methods
+	usageStore, ok := g.store.(store.UsageStore)
+	if !ok {
+		g.logger.Error("store does not implement UsageStore")
+		g.sendJSONError(w, http.StatusInternalServerError, "usage tracking not available")
+		return
+	}
+
+	// Verify thread exists
+	_, err := g.store.GetThread(r.Context(), threadID)
+	if errors.Is(err, store.ErrNotFound) {
+		g.sendJSONError(w, http.StatusNotFound, "thread not found")
+		return
+	}
+	if err != nil {
+		g.logger.Error("failed to get thread", "error", err)
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	// Get usage records
+	usages, err := usageStore.GetThreadUsage(r.Context(), threadID)
+	if err != nil {
+		g.logger.Error("failed to get thread usage", "error", err)
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	// Build response
+	response := ThreadUsageResponse{
+		ThreadID: threadID,
+		Usage:    make([]UsageResponse, len(usages)),
+	}
+
+	for i, u := range usages {
+		response.Usage[i] = UsageResponse{
+			ID:               u.ID,
+			MessageID:        u.MessageID,
+			RequestID:        u.RequestID,
+			AgentID:          u.AgentID,
+			InputTokens:      u.InputTokens,
+			OutputTokens:     u.OutputTokens,
+			CacheReadTokens:  u.CacheReadTokens,
+			CacheWriteTokens: u.CacheWriteTokens,
+			ThinkingTokens:   u.ThinkingTokens,
+			CreatedAt:        u.CreatedAt.Format(time.RFC3339),
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// ToolApprovalRequestBody is the JSON request for POST /api/tools/approve.
+type ToolApprovalRequestBody struct {
+	AgentID    string `json:"agent_id"`
+	ToolID     string `json:"tool_id"`
+	Approved   bool   `json:"approved"`
+	ApproveAll bool   `json:"approve_all,omitempty"`
+}
+
+// handleToolApproval handles POST /api/tools/approve requests.
+// Sends a tool approval response to the agent.
+func (g *Gateway) handleToolApproval(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ToolApprovalRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.AgentID == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "agent_id is required")
+		return
+	}
+
+	if req.ToolID == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "tool_id is required")
+		return
+	}
+
+	err := g.agentManager.SendToolApproval(req.AgentID, req.ToolID, req.Approved, req.ApproveAll)
+	if errors.Is(err, agent.ErrAgentNotFound) {
+		g.sendJSONError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	if err != nil {
+		g.logger.Error("failed to send tool approval", "error", err)
+		g.sendJSONError(w, http.StatusInternalServerError, "failed to send approval")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":  true,
+		"approved": req.Approved,
+	})
 }

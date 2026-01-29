@@ -589,3 +589,59 @@ func (a *Admin) renderBoardThread(w http.ResponseWriter, thread *store.BBSThread
 		a.logger.Error("failed to render board thread", "error", err)
 	}
 }
+
+// =============================================================================
+// Token Usage Templates
+// =============================================================================
+
+type usagePageData struct {
+	Title     string
+	User      *store.AdminUser
+	CSRFToken string
+}
+
+type usageStatsData struct {
+	TotalInput      int64
+	TotalOutput     int64
+	TotalCacheRead  int64
+	TotalCacheWrite int64
+	TotalThinking   int64
+	TotalTokens     int64
+	RequestCount    int64
+}
+
+// renderUsagePage renders the token usage analytics page
+func (a *Admin) renderUsagePage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/usage.html"))
+
+	data := usagePageData{
+		Title:     "Token Usage",
+		User:      user,
+		CSRFToken: csrfToken,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render usage page", "error", err)
+	}
+}
+
+// renderUsageStats renders the usage stats partial (for dashboard and usage page)
+func (a *Admin) renderUsageStats(w http.ResponseWriter, stats *store.UsageStats) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/stats_tokens.html"))
+
+	data := usageStatsData{
+		TotalInput:      stats.TotalInput,
+		TotalOutput:     stats.TotalOutput,
+		TotalCacheRead:  stats.TotalCacheRead,
+		TotalCacheWrite: stats.TotalCacheWrite,
+		TotalThinking:   stats.TotalThinking,
+		TotalTokens:     stats.TotalTokens,
+		RequestCount:    stats.RequestCount,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render usage stats", "error", err)
+	}
+}

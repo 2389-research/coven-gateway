@@ -341,6 +341,26 @@ func (s *SQLiteStore) createSchema() error {
 			UNIQUE(agent_id, key)
 		);
 		CREATE INDEX IF NOT EXISTS idx_agent_notes_agent ON agent_notes(agent_id);
+
+		-- Token usage tracking
+		CREATE TABLE IF NOT EXISTS message_usage (
+			id TEXT PRIMARY KEY,
+			thread_id TEXT NOT NULL,
+			message_id TEXT,
+			request_id TEXT NOT NULL,
+			agent_id TEXT NOT NULL,
+			input_tokens INTEGER NOT NULL DEFAULT 0,
+			output_tokens INTEGER NOT NULL DEFAULT 0,
+			cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+			cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+			thinking_tokens INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL,
+			FOREIGN KEY (thread_id) REFERENCES threads(id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_message_usage_thread ON message_usage(thread_id);
+		CREATE INDEX IF NOT EXISTS idx_message_usage_agent ON message_usage(agent_id);
+		CREATE INDEX IF NOT EXISTS idx_message_usage_created ON message_usage(created_at);
+		CREATE INDEX IF NOT EXISTS idx_message_usage_request ON message_usage(request_id);
 	`
 
 	_, err := s.db.Exec(schema)

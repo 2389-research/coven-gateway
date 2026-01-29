@@ -13,7 +13,7 @@ import (
 
 // chatMessage represents a message in the chat stream
 type chatMessage struct {
-	Type      string    `json:"type"` // "user", "text", "thinking", "tool_use", "tool_result", "usage", "tool_state", "cancelled", "error", "done"
+	Type      string    `json:"type"` // "user", "text", "thinking", "tool_use", "tool_result", "usage", "tool_state", "tool_approval", "cancelled", "error", "done"
 	Content   string    `json:"content,omitempty"`
 	ToolName  string    `json:"tool_name,omitempty"`
 	ToolID    string    `json:"tool_id,omitempty"`
@@ -32,6 +32,10 @@ type chatMessage struct {
 
 	// Cancelled fields (for type="cancelled")
 	Reason string `json:"reason,omitempty"`
+
+	// ToolApproval fields (for type="tool_approval")
+	InputJSON string `json:"input_json,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
 }
 
 // chatSession represents an active chat between a user and an agent
@@ -348,6 +352,15 @@ func convertAgentResponse(resp *agent.Response) *chatMessage {
 	case agent.EventCancelled:
 		msg.Type = "cancelled"
 		msg.Reason = resp.Text
+
+	case agent.EventToolApprovalRequest:
+		msg.Type = "tool_approval"
+		if resp.ToolApprovalRequest != nil {
+			msg.ToolID = resp.ToolApprovalRequest.ID
+			msg.ToolName = resp.ToolApprovalRequest.Name
+			msg.InputJSON = resp.ToolApprovalRequest.InputJSON
+			msg.RequestID = resp.ToolApprovalRequest.RequestID
+		}
 
 	default:
 		msg.Type = "text"

@@ -20,6 +20,8 @@ type MockStore struct {
 	bindingsV2  map[string]*Binding        // keyed by "frontend:channelID" (V2)
 	agentState  map[string][]byte          // keyed by agentID
 	events      map[string]*LedgerEvent    // keyed by event ID
+	usage       map[string]*TokenUsage     // keyed by usage ID
+	usageByReq  map[string]string          // keyed by request_id -> usage ID
 }
 
 // NewMockStore creates a new MockStore.
@@ -32,6 +34,8 @@ func NewMockStore() *MockStore {
 		bindingsV2:  make(map[string]*Binding),
 		agentState:  make(map[string][]byte),
 		events:      make(map[string]*LedgerEvent),
+		usage:       make(map[string]*TokenUsage),
+		usageByReq:  make(map[string]string),
 	}
 }
 
@@ -536,5 +540,91 @@ func (m *MockStore) Close() error {
 	return nil
 }
 
+// SaveUsage stores a token usage record.
+func (m *MockStore) SaveUsage(ctx context.Context, usage *TokenUsage) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Make a copy to avoid external modification
+	u := *usage
+	m.usage[u.ID] = &u
+	m.usageByReq[u.RequestID] = u.ID
+
+	return nil
+}
+
+// LinkUsageToMessage updates a usage record with the final message ID.
+func (m *MockStore) LinkUsageToMessage(ctx context.Context, requestID, messageID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	usageID, ok := m.usageByReq[requestID]
+	if !ok {
+		return nil // No-op if usage doesn't exist
+	}
+
+	if usage, exists := m.usage[usageID]; exists {
+		usage.MessageID = messageID
+	}
+
+	return nil
+}
+
+// GetThreadUsage retrieves all usage records for a thread.
+func (m *MockStore) GetThreadUsage(ctx context.Context, threadID string) ([]*TokenUsage, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*TokenUsage
+	for _, u := range m.usage {
+		if u.ThreadID == threadID {
+			usageCopy := *u
+			result = append(result, &usageCopy)
+		}
+	}
+
+	// Sort by created_at ascending
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.Before(result[j].CreatedAt)
+	})
+
+	return result, nil
+}
+
+// GetUsageStats returns aggregated usage statistics with optional filters.
+func (m *MockStore) GetUsageStats(ctx context.Context, filter UsageFilter) (*UsageStats, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	stats := &UsageStats{}
+
+	for _, u := range m.usage {
+		// Apply filters
+		if filter.AgentID != nil && u.AgentID != *filter.AgentID {
+			continue
+		}
+		if filter.Since != nil && u.CreatedAt.Before(*filter.Since) {
+			continue
+		}
+		if filter.Until != nil && !u.CreatedAt.Before(*filter.Until) {
+			continue
+		}
+
+		stats.TotalInput += int64(u.InputTokens)
+		stats.TotalOutput += int64(u.OutputTokens)
+		stats.TotalCacheRead += int64(u.CacheReadTokens)
+		stats.TotalCacheWrite += int64(u.CacheWriteTokens)
+		stats.TotalThinking += int64(u.ThinkingTokens)
+		stats.RequestCount++
+	}
+
+	stats.TotalTokens = stats.TotalInput + stats.TotalOutput + stats.TotalThinking
+
+	return stats, nil
+}
+
 // Verify MockStore implements Store interface at compile time.
 var _ Store = (*MockStore)(nil)
+
+// Verify MockStore implements UsageStore interface at compile time.
+var _ UsageStore = (*MockStore)(nil)

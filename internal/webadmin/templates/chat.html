@@ -54,23 +54,33 @@
             {{if .Messages}}
             {{range .Messages}}
             <div class="mb-4">
+                {{if eq .Type "tool_use"}}
+                <div class="tool-collapsible" data-collapsed="true">
+                    <div class="flex items-center gap-2 cursor-pointer select-none tool-header" onclick="toggleToolCollapse(this)">
+                        <span class="text-warm-400 transition-transform duration-200 -rotate-90 tool-chevron">&#9662;</span>
+                        <span class="text-xs font-semibold text-warning bg-warning/10 px-2 py-1 rounded">⚙ {{.ToolName}}</span>
+                        <span class="text-xs text-warm-400 ml-auto">{{.CreatedAt.Format "15:04:05"}}</span>
+                    </div>
+                    <div class="whitespace-pre-wrap text-xs font-mono text-warning/80 bg-warning/5 border border-warning/20 p-3 rounded-lg overflow-x-auto max-h-32 overflow-y-auto mt-2 hidden tool-content">{{.Content}}</div>
+                </div>
+                {{else if eq .Type "tool_result"}}
+                <div class="tool-collapsible" data-collapsed="true">
+                    <div class="flex items-center gap-2 cursor-pointer select-none tool-header" onclick="toggleToolCollapse(this)">
+                        <span class="text-warm-400 transition-transform duration-200 -rotate-90 tool-chevron">&#9662;</span>
+                        <span class="text-xs font-semibold text-forest bg-forest/10 px-2 py-1 rounded">✓ Result</span>
+                        <span class="text-xs text-warm-400 ml-auto">{{.CreatedAt.Format "15:04:05"}}</span>
+                    </div>
+                    <div class="whitespace-pre-wrap text-xs font-mono text-warm-600 bg-warm-50 border border-warm-200 p-3 rounded-lg overflow-x-auto max-h-48 overflow-y-auto mt-2 hidden tool-content">{{.Content}}</div>
+                </div>
+                {{else}}
                 <div class="flex justify-between items-start mb-2">
-                    {{if eq .Type "tool_use"}}
-                    <span class="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded">Tool: {{.ToolName}}</span>
-                    {{else if eq .Type "tool_result"}}
-                    <span class="text-xs font-semibold text-forest bg-forest/10 px-2 py-1 rounded">Result</span>
-                    {{else if eq .Sender "user"}}
+                    {{if eq .Sender "user"}}
                     <span class="text-xs font-semibold text-info bg-info/10 px-2 py-1 rounded">You</span>
                     {{else}}
                     <span class="text-xs font-semibold text-warm-600 bg-warm-100 px-2 py-1 rounded">Agent</span>
                     {{end}}
                     <span class="text-xs text-warm-400">{{.CreatedAt.Format "15:04:05"}}</span>
                 </div>
-                {{if eq .Type "tool_use"}}
-                <div class="whitespace-pre-wrap text-sm font-mono text-purple-800 bg-purple-50 border border-purple-100 p-3 rounded-lg max-h-48 overflow-y-auto">{{.Content}}</div>
-                {{else if eq .Type "tool_result"}}
-                <div class="whitespace-pre-wrap text-sm font-mono text-warm-600 bg-warm-50 border border-warm-200 p-3 rounded-lg overflow-x-auto max-h-48 overflow-y-auto">{{.Content}}</div>
-                {{else}}
                 <div class="whitespace-pre-wrap text-sm text-ink leading-relaxed">{{.Content}}</div>
                 {{end}}
             </div>
@@ -181,6 +191,22 @@
 </style>
 
 <script>
+// Toggle tool collapse (outside IIFE for onclick access)
+function toggleToolCollapse(header) {
+    const container = header.closest('.tool-collapsible');
+    const isCollapsed = container.getAttribute('data-collapsed') === 'true';
+    container.setAttribute('data-collapsed', isCollapsed ? 'false' : 'true');
+    const chevron = header.querySelector('.tool-chevron');
+    const content = container.querySelector('.tool-content');
+    if (chevron) {
+        chevron.classList.toggle('-rotate-90', !isCollapsed);
+        chevron.classList.toggle('rotate-0', isCollapsed);
+    }
+    if (content) {
+        content.classList.toggle('hidden', !isCollapsed);
+    }
+}
+
 (function() {
     const agentId = "{{.AgentID}}";
     const chatMessages = document.getElementById('chat-messages');
@@ -324,6 +350,16 @@
             }
         });
 
+        // Tool approval requests
+        evtSource.addEventListener('tool_approval', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                appendToolApprovalRequest(data);
+            } catch {
+                // Ignore parse errors
+            }
+        });
+
         // Cancelled events
         evtSource.addEventListener('cancelled', function(e) {
             try {
@@ -449,6 +485,9 @@
             const rawHtml = marked.parse(streamingContent);
             // DOMPurify.sanitize ensures no XSS - this is the safe way to render HTML
             contentDiv.innerHTML = DOMPurify.sanitize(rawHtml);
+            // Remove whitespace-pre-wrap after markdown rendering - markdown handles paragraphs with <p> tags
+            contentDiv.classList.remove('whitespace-pre-wrap');
+            contentDiv.classList.add('prose', 'prose-sm', 'max-w-none');
         }
 
         currentStreamingMessage = null;
@@ -490,7 +529,7 @@
         scrollToBottom();
     }
 
-    // Append tool block (use or result)
+    // Append tool block (use or result) - collapsed by default
     function appendToolBlock(type, toolName, content) {
         // Finalize any current streaming message first so tool blocks appear in correct order
         if (currentStreamingMessage && streamingContent) {
@@ -500,8 +539,16 @@
         const msgDiv = document.createElement('div');
         msgDiv.className = 'mb-4';
 
+        // Create collapsible header
         const headerDiv = document.createElement('div');
-        headerDiv.className = 'flex justify-between items-start mb-2';
+        headerDiv.className = 'flex items-center gap-2 cursor-pointer select-none';
+        headerDiv.setAttribute('data-collapsed', 'true');
+
+        // Chevron icon (rotates when expanded)
+        const chevron = document.createElement('span');
+        chevron.className = 'text-warm-400 transition-transform duration-200 -rotate-90';
+        chevron.innerHTML = '&#9662;'; // Down triangle
+        headerDiv.appendChild(chevron);
 
         const senderSpan = document.createElement('span');
         if (type === 'use') {
@@ -511,29 +558,38 @@
             senderSpan.className = 'text-xs font-semibold px-2 py-1 rounded text-forest bg-forest/10';
             senderSpan.textContent = '✓ Result';
         }
+        headerDiv.appendChild(senderSpan);
 
         const timeSpan = document.createElement('span');
-        timeSpan.className = 'text-xs text-warm-400';
+        timeSpan.className = 'text-xs text-warm-400 ml-auto';
         timeSpan.textContent = new Date().toLocaleTimeString();
-
-        headerDiv.appendChild(senderSpan);
         headerDiv.appendChild(timeSpan);
 
         msgDiv.appendChild(headerDiv);
 
-        // Only show content if it's not too long or is a result
+        // Content div (hidden by default)
+        let contentDiv = null;
         if (content) {
-            const contentDiv = document.createElement('div');
-            const isLong = content.length > 500;
-
+            contentDiv = document.createElement('div');
             if (type === 'result') {
-                contentDiv.className = 'whitespace-pre-wrap text-xs font-mono text-warm-600 bg-warm-50 border border-warm-200 p-3 rounded-lg overflow-x-auto max-h-48 overflow-y-auto';
+                contentDiv.className = 'whitespace-pre-wrap text-xs font-mono text-warm-600 bg-warm-50 border border-warm-200 p-3 rounded-lg overflow-x-auto max-h-48 overflow-y-auto mt-2 hidden';
             } else {
-                contentDiv.className = 'whitespace-pre-wrap text-xs font-mono text-warning/80 bg-warning/5 border border-warning/20 p-3 rounded-lg overflow-x-auto' + (isLong ? ' max-h-32 overflow-y-auto' : '');
+                contentDiv.className = 'whitespace-pre-wrap text-xs font-mono text-warning/80 bg-warning/5 border border-warning/20 p-3 rounded-lg overflow-x-auto max-h-32 overflow-y-auto mt-2 hidden';
             }
             contentDiv.textContent = content;
             msgDiv.appendChild(contentDiv);
         }
+
+        // Toggle collapse on click
+        headerDiv.addEventListener('click', function() {
+            const isCollapsed = this.getAttribute('data-collapsed') === 'true';
+            this.setAttribute('data-collapsed', isCollapsed ? 'false' : 'true');
+            chevron.classList.toggle('-rotate-90', !isCollapsed);
+            chevron.classList.toggle('rotate-0', isCollapsed);
+            if (contentDiv) {
+                contentDiv.classList.toggle('hidden', !isCollapsed);
+            }
+        });
 
         chatMessages.appendChild(msgDiv);
         scrollToBottom();
@@ -551,6 +607,118 @@
             'cancelled': '🛑'
         };
         return emojis[state] || '⚙️';
+    }
+
+    // Append a tool approval request with approve/deny buttons
+    function appendToolApprovalRequest(data) {
+        removePlaceholder();
+
+        const toolId = data.id;
+        const toolName = data.name || 'Unknown Tool';
+        const inputJson = data.input_json || '{}';
+
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'mb-4';
+        msgDiv.id = 'approval-' + toolId;
+
+        // Parse and format the input JSON for display
+        let formattedInput = inputJson;
+        try {
+            const parsed = JSON.parse(inputJson);
+            formattedInput = JSON.stringify(parsed, null, 2);
+        } catch {
+            // Use as-is if not valid JSON
+        }
+
+        msgDiv.innerHTML =
+            '<div class="bg-warning/10 border border-warning/30 rounded-lg p-4">' +
+                '<div class="flex items-center justify-between mb-3">' +
+                    '<div class="flex items-center gap-2">' +
+                        '<span class="text-warning text-xl">🔐</span>' +
+                        '<span class="font-semibold text-ink">Tool Approval Required</span>' +
+                    '</div>' +
+                    '<span class="text-xs text-warm-400">' + new Date().toLocaleTimeString() + '</span>' +
+                '</div>' +
+                '<div class="mb-3">' +
+                    '<div class="text-sm font-medium text-ink mb-1">' + toolName + '</div>' +
+                    '<pre class="text-xs bg-warm-50 p-2 rounded border border-warm-200 overflow-x-auto max-h-32">' +
+                        escapeHtml(formattedInput) +
+                    '</pre>' +
+                '</div>' +
+                '<div class="flex gap-2">' +
+                    '<button onclick="approveOrDenyTool(\'' + toolId + '\', true)" ' +
+                        'class="px-4 py-2 bg-forest text-white text-sm font-medium rounded-lg hover:bg-forest-light transition-colors">' +
+                        '✓ Approve' +
+                    '</button>' +
+                    '<button onclick="approveOrDenyTool(\'' + toolId + '\', false)" ' +
+                        'class="px-4 py-2 bg-warm-200 text-warm-700 text-sm font-medium rounded-lg hover:bg-warm-300 transition-colors">' +
+                        '✗ Deny' +
+                    '</button>' +
+                    '<button onclick="approveOrDenyTool(\'' + toolId + '\', true, true)" ' +
+                        'class="px-4 py-2 bg-warm-100 text-warm-600 text-sm font-medium rounded-lg hover:bg-warm-200 transition-colors">' +
+                        '✓✓ Approve All' +
+                    '</button>' +
+                '</div>' +
+            '</div>';
+
+        chatMessages.appendChild(msgDiv);
+        scrollToBottom();
+    }
+
+    // Escape HTML for safe display
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Handle tool approval or denial
+    async function approveOrDenyTool(toolId, approved, approveAll = false) {
+        const approvalDiv = document.getElementById('approval-' + toolId);
+        if (!approvalDiv) return;
+
+        // Disable buttons to prevent double-submission
+        const buttons = approvalDiv.querySelectorAll('button');
+        buttons.forEach(btn => btn.disabled = true);
+
+        try {
+            const csrfToken = document.querySelector('[name="csrf_token"]')?.value ||
+                             document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
+
+            const response = await fetch('/api/tools/approve', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
+                },
+                body: JSON.stringify({
+                    agent_id: agentId,
+                    tool_id: toolId,
+                    approved: approved,
+                    approve_all: approveAll
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Server returned ' + response.status);
+            }
+
+            // Update the UI to show the decision was sent
+            approvalDiv.innerHTML =
+                '<div class="bg-' + (approved ? 'forest' : 'warm-300') + '/10 border border-' +
+                    (approved ? 'forest' : 'warm-300') + '/30 rounded-lg p-3">' +
+                    '<span class="text-sm">' +
+                        (approved ? '✓ Tool approved' : '✗ Tool denied') +
+                        (approveAll ? ' (and all remaining)' : '') +
+                    '</span>' +
+                '</div>';
+
+        } catch (err) {
+            console.error('Failed to send approval:', err);
+            // Re-enable buttons on error
+            buttons.forEach(btn => btn.disabled = false);
+            appendMessage('error', 'Failed to send approval: ' + err.message);
+        }
     }
 
     function removePlaceholder() {

@@ -1643,3 +1643,327 @@ func newTestGatewayWithMockManagerAndStore(t *testing.T) *Gateway {
 
 	return gw
 }
+
+// =============================================================================
+// Token Usage Stats Endpoint Tests
+// =============================================================================
+
+func TestHandleUsageStats_Empty(t *testing.T) {
+	gw := newTestGateway(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stats/usage", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleUsageStats(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var stats UsageStatsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&stats); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should have zero counts when no usage data
+	assert.Equal(t, int64(0), stats.TotalInput)
+	assert.Equal(t, int64(0), stats.TotalOutput)
+	assert.Equal(t, int64(0), stats.RequestCount)
+}
+
+func TestHandleUsageStats_WithData(t *testing.T) {
+	gw := newTestGateway(t)
+	ctx := context.Background()
+
+	// Create a thread for usage records
+	sqlStore := gw.store.(*store.SQLiteStore)
+	thread := &store.Thread{
+		ID:           "thread-usage-api",
+		FrontendName: "test",
+		ExternalID:   "ext-usage-api",
+		AgentID:      "agent-001",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := sqlStore.CreateThread(ctx, thread); err != nil {
+		t.Fatalf("failed to create thread: %v", err)
+	}
+
+	// Add usage records
+	for i := 0; i < 3; i++ {
+		usage := &store.TokenUsage{
+			ID:           fmt.Sprintf("usage-api-%d", i),
+			ThreadID:     "thread-usage-api",
+			RequestID:    fmt.Sprintf("req-api-%d", i),
+			AgentID:      "agent-001",
+			InputTokens:  100,
+			OutputTokens: 50,
+			CreatedAt:    time.Now(),
+		}
+		if err := sqlStore.SaveUsage(ctx, usage); err != nil {
+			t.Fatalf("failed to save usage: %v", err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stats/usage", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleUsageStats(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var stats UsageStatsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&stats); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	assert.Equal(t, int64(300), stats.TotalInput)
+	assert.Equal(t, int64(150), stats.TotalOutput)
+	assert.Equal(t, int64(3), stats.RequestCount)
+}
+
+func TestHandleUsageStats_FilterByAgent(t *testing.T) {
+	gw := newTestGateway(t)
+	ctx := context.Background()
+
+	// Create a thread
+	sqlStore := gw.store.(*store.SQLiteStore)
+	thread := &store.Thread{
+		ID:           "thread-filter-api",
+		FrontendName: "test",
+		ExternalID:   "ext-filter-api",
+		AgentID:      "agent-001",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := sqlStore.CreateThread(ctx, thread); err != nil {
+		t.Fatalf("failed to create thread: %v", err)
+	}
+
+	// Add usage for agent-001
+	if err := sqlStore.SaveUsage(ctx, &store.TokenUsage{
+		ID:           "usage-agent1",
+		ThreadID:     "thread-filter-api",
+		RequestID:    "req-agent1",
+		AgentID:      "agent-001",
+		InputTokens:  100,
+		OutputTokens: 50,
+		CreatedAt:    time.Now(),
+	}); err != nil {
+		t.Fatalf("failed to save usage: %v", err)
+	}
+
+	// Add usage for agent-002
+	if err := sqlStore.SaveUsage(ctx, &store.TokenUsage{
+		ID:           "usage-agent2",
+		ThreadID:     "thread-filter-api",
+		RequestID:    "req-agent2",
+		AgentID:      "agent-002",
+		InputTokens:  200,
+		OutputTokens: 100,
+		CreatedAt:    time.Now(),
+	}); err != nil {
+		t.Fatalf("failed to save usage: %v", err)
+	}
+
+	// Filter by agent-001
+	req := httptest.NewRequest(http.MethodGet, "/api/stats/usage?agent_id=agent-001", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleUsageStats(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var stats UsageStatsResponse
+	if err := json.NewDecoder(rec.Body).Decode(&stats); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	assert.Equal(t, int64(100), stats.TotalInput)
+	assert.Equal(t, int64(50), stats.TotalOutput)
+	assert.Equal(t, int64(1), stats.RequestCount)
+}
+
+func TestHandleUsageStats_MethodNotAllowed(t *testing.T) {
+	gw := newTestGateway(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/stats/usage", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleUsageStats(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
+func TestHandleThreadUsage_NotFound(t *testing.T) {
+	gw := newTestGateway(t)
+
+	// Valid UUID but non-existent thread
+	req := httptest.NewRequest(http.MethodGet, "/api/threads/00000000-0000-0000-0000-000000000001/usage", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleThreadUsage(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d. Body: %s", http.StatusNotFound, rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleThreadUsage_InvalidUUID(t *testing.T) {
+	gw := newTestGateway(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/threads/not-a-uuid/usage", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleThreadUsage(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleThreadUsage_Empty(t *testing.T) {
+	gw := newTestGateway(t)
+	ctx := context.Background()
+
+	// Create a thread with no usage
+	sqlStore := gw.store.(*store.SQLiteStore)
+	thread := &store.Thread{
+		ID:           "00000000-0000-0000-0000-000000000002",
+		FrontendName: "test",
+		ExternalID:   "ext-empty",
+		AgentID:      "agent-001",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := sqlStore.CreateThread(ctx, thread); err != nil {
+		t.Fatalf("failed to create thread: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/threads/00000000-0000-0000-0000-000000000002/usage", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleThreadUsage(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp ThreadUsageResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	assert.Equal(t, "00000000-0000-0000-0000-000000000002", resp.ThreadID)
+	assert.Empty(t, resp.Usage)
+}
+
+func TestHandleThreadUsage_WithData(t *testing.T) {
+	gw := newTestGateway(t)
+	ctx := context.Background()
+
+	threadID := "00000000-0000-0000-0000-000000000003"
+	sqlStore := gw.store.(*store.SQLiteStore)
+
+	// Create thread
+	thread := &store.Thread{
+		ID:           threadID,
+		FrontendName: "test",
+		ExternalID:   "ext-with-usage",
+		AgentID:      "agent-001",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := sqlStore.CreateThread(ctx, thread); err != nil {
+		t.Fatalf("failed to create thread: %v", err)
+	}
+
+	// Add usage record
+	usage := &store.TokenUsage{
+		ID:           "usage-thread-001",
+		ThreadID:     threadID,
+		RequestID:    "req-thread-001",
+		AgentID:      "agent-001",
+		InputTokens:  250,
+		OutputTokens: 125,
+		CreatedAt:    time.Now(),
+	}
+	if err := sqlStore.SaveUsage(ctx, usage); err != nil {
+		t.Fatalf("failed to save usage: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/threads/"+threadID+"/usage", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleThreadUsage(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var resp ThreadUsageResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	assert.Equal(t, threadID, resp.ThreadID)
+	assert.Len(t, resp.Usage, 1)
+	assert.Equal(t, int32(250), resp.Usage[0].InputTokens)
+	assert.Equal(t, int32(125), resp.Usage[0].OutputTokens)
+	assert.Equal(t, "agent-001", resp.Usage[0].AgentID)
+}
+
+func TestHandleThreadRoutes_DispatchToUsage(t *testing.T) {
+	gw := newTestGateway(t)
+
+	// Should route /usage to handleThreadUsage
+	req := httptest.NewRequest(http.MethodGet, "/api/threads/00000000-0000-0000-0000-000000000001/usage", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleThreadRoutes(rec, req)
+
+	// Should return 404 (thread not found) rather than 400 (invalid path)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
+func TestHandleThreadRoutes_DispatchToMessages(t *testing.T) {
+	gw := newTestGateway(t)
+
+	// Should route /messages to handleThreadMessages
+	req := httptest.NewRequest(http.MethodGet, "/api/threads/00000000-0000-0000-0000-000000000001/messages", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleThreadRoutes(rec, req)
+
+	// Should return 404 (thread not found)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
+func TestHandleThreadRoutes_UnknownEndpoint(t *testing.T) {
+	gw := newTestGateway(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/threads/00000000-0000-0000-0000-000000000001/unknown", nil)
+	rec := httptest.NewRecorder()
+
+	gw.handleThreadRoutes(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+
+	var errResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	assert.Equal(t, "unknown endpoint", errResp["error"])
+}

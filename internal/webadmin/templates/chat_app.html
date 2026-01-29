@@ -1323,21 +1323,50 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     <div id="chat-messages" class="chat-messages">
         {{if .Messages}}
         {{range .Messages}}
+        {{if eq .Type "tool_use"}}
+        <div class="message message-agent message-tool-block">
+            <div class="tool-block-wrapper">
+                <div class="tool-block-header collapsed" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.classList.toggle('collapsed');">
+                    <svg class="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <svg class="tool-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <span class="tool-label">{{.ToolName}}</span>
+                </div>
+                <div class="tool-block-body collapsed">{{.Content}}</div>
+            </div>
+        </div>
+        {{else if eq .Type "tool_result"}}
+        <div class="message message-agent message-tool-block">
+            <div class="result-block-wrapper">
+                <div class="result-block-header collapsed" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.classList.toggle('collapsed');">
+                    <svg class="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <svg class="result-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span class="result-label">Result</span>
+                </div>
+                <div class="result-block-body collapsed">{{.Content}}</div>
+            </div>
+        </div>
+        {{else}}
         <div class="message {{if eq .Sender "user"}}message-user{{else}}message-agent{{end}}">
             <div class="message-header">
-                {{if eq .Type "tool_use"}}
-                <span class="message-sender tool">Tool: {{.ToolName}}</span>
-                {{else if eq .Type "tool_result"}}
-                <span class="message-sender result">Result</span>
-                {{else if eq .Sender "user"}}
+                {{if eq .Sender "user"}}
                 <span class="message-sender user">You</span>
                 {{else}}
                 <span class="message-sender agent">{{$.AgentName}}</span>
                 {{end}}
                 <span class="message-time">{{.CreatedAt.Format "15:04"}}</span>
             </div>
-            <div class="message-content {{if eq .Type "tool_use"}}tool{{else if eq .Type "tool_result"}}result{{end}}">{{.Content}}</div>
+            <div class="message-content">{{.Content}}</div>
         </div>
+        {{end}}
         {{end}}
         {{else}}
         <div class="flex flex-col items-center justify-center h-full text-warm-400">
@@ -1878,6 +1907,9 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         const contentDiv = currentStreamingMessage.querySelector('.message-content');
         if (contentDiv && streamingContent && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
             contentDiv.innerHTML = DOMPurify.sanitize(marked.parse(streamingContent));
+            // Switch from whitespace-pre-wrap to prose styling after markdown rendering
+            contentDiv.classList.remove('whitespace-pre-wrap');
+            contentDiv.classList.add('prose', 'prose-sm', 'max-w-none');
         }
 
         currentStreamingMessage = null;
@@ -1937,11 +1969,11 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         msg.className = 'message message-agent message-tool-block';
 
         if (type === 'use') {
-            // Collapsible tool use block
+            // Collapsible tool use block (collapsed by default)
             const blockId = 'tool-' + Date.now();
             msg.innerHTML = `
                 <div class="tool-block-wrapper">
-                    <div class="tool-block-header" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.classList.toggle('collapsed');">
+                    <div class="tool-block-header collapsed" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.classList.toggle('collapsed');">
                         <svg class="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
@@ -1951,14 +1983,14 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
                         </svg>
                         <span class="tool-label">${escapeHtml(toolName || 'Tool')}</span>
                     </div>
-                    ${content ? `<div class="tool-block-body">${escapeHtml(content)}</div>` : ''}
+                    ${content ? `<div class="tool-block-body collapsed">${escapeHtml(content)}</div>` : ''}
                 </div>
             `;
         } else {
-            // Collapsible result block
+            // Collapsible result block (collapsed by default)
             msg.innerHTML = `
                 <div class="result-block-wrapper">
-                    <div class="result-block-header" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.classList.toggle('collapsed');">
+                    <div class="result-block-header collapsed" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.classList.toggle('collapsed');">
                         <svg class="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
@@ -1967,7 +1999,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
                         </svg>
                         <span class="result-label">Result</span>
                     </div>
-                    ${content ? `<div class="result-block-body">${escapeHtml(content)}</div>` : ''}
+                    ${content ? `<div class="result-block-body collapsed">${escapeHtml(content)}</div>` : ''}
                 </div>
             `;
         }

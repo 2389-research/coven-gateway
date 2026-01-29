@@ -104,8 +104,15 @@ type mcpSession struct {
 	id              string
 	protocolVersion string
 	capabilities    []string
+	agentID         string // agent ID for builtin tool calls
 	ownerToken      string // auth token hash used to verify session ownership on DELETE
 	createdAt       time.Time
+}
+
+// authInfo holds authentication information extracted from a request.
+type authInfo struct {
+	agentID      string
+	capabilities []string
 }
 
 // sessionStore manages active MCP sessions (in-memory).
@@ -118,11 +125,12 @@ func newSessionStore() *sessionStore {
 	return &sessionStore{sessions: make(map[string]*mcpSession)}
 }
 
-func (s *sessionStore) create(protocolVersion string, caps []string, ownerToken string) *mcpSession {
+func (s *sessionStore) create(protocolVersion string, auth authInfo, ownerToken string) *mcpSession {
 	sess := &mcpSession{
 		id:              uuid.New().String(),
 		protocolVersion: protocolVersion,
-		capabilities:    caps,
+		capabilities:    auth.capabilities,
+		agentID:         auth.agentID,
 		ownerToken:      ownerToken,
 		createdAt:       time.Now(),
 	}
@@ -300,10 +308,10 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate session on non-initialize requests
-	var caps []string
+	var auth authInfo
 	if isInitialize {
-		// Extract capabilities from auth for the new session
-		authCaps, authErr := s.extractCapabilities(r)
+		// Extract auth info for the new session
+		extractedAuth, authErr := s.extractAuth(r)
 		if authErr != nil {
 			if errors.Is(authErr, errInvalidToken) {
 				s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "invalid or expired token", nil)
@@ -313,9 +321,9 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 				s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "authentication required", nil)
 				return
 			}
-			authCaps = s.defaultCaps
+			extractedAuth = authInfo{capabilities: s.defaultCaps}
 		}
-		caps = authCaps
+		auth = extractedAuth
 	} else {
 		// Non-initialize requests require a valid session
 		if sessionID == "" {
@@ -328,7 +336,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Not Found", http.StatusNotFound)
 			return
 		}
-		caps = sess.capabilities
+		auth = authInfo{agentID: sess.agentID, capabilities: sess.capabilities}
 	}
 
 	s.logger.Debug("MCP request",
@@ -351,24 +359,24 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 	// Route to appropriate handler
 	switch req.Method {
 	case "initialize":
-		s.handleInitialize(w, r, req, caps)
+		s.handleInitialize(w, r, req, auth)
 	case "tools/list":
-		s.handleToolsList(w, r, req, caps)
+		s.handleToolsList(w, r, req, auth)
 	case "tools/call":
-		s.handleToolsCall(w, r, req, caps)
+		s.handleToolsCall(w, r, req, auth)
 	default:
 		s.sendJSONRPCError(w, req.ID, JSONRPCMethodNotFound, "method not found", nil)
 	}
 }
 
 // handleInitialize handles the MCP initialize handshake and creates a session.
-func (s *Server) handleInitialize(w http.ResponseWriter, r *http.Request, req JSONRPCRequest, caps []string) {
+func (s *Server) handleInitialize(w http.ResponseWriter, r *http.Request, req JSONRPCRequest, auth authInfo) {
 	// Derive an owner token from the request auth for session ownership verification.
 	// Uses the raw path token or Authorization header as the identity binding.
 	ownerToken := s.extractOwnerToken(r)
 
 	// Create a new session for this client
-	sess := s.sessions.create(latestProtocolVersion, caps, ownerToken)
+	sess := s.sessions.create(latestProtocolVersion, auth, ownerToken)
 
 	s.logger.Info("MCP session created",
 		"session_id", sess.id,
@@ -392,16 +400,16 @@ func (s *Server) handleInitialize(w http.ResponseWriter, r *http.Request, req JS
 }
 
 // handleToolsList handles tools/list requests.
-func (s *Server) handleToolsList(w http.ResponseWriter, _ *http.Request, req JSONRPCRequest, caps []string) {
+func (s *Server) handleToolsList(w http.ResponseWriter, _ *http.Request, req JSONRPCRequest, auth authInfo) {
 	var tools []*pb.ToolDefinition
-	if len(caps) == 0 {
+	if len(auth.capabilities) == 0 {
 		allTools := s.registry.GetAllTools()
 		tools = make([]*pb.ToolDefinition, len(allTools))
 		for i, t := range allTools {
 			tools[i] = t.Definition
 		}
 	} else {
-		tools = s.registry.GetToolsForCapabilities(caps)
+		tools = s.registry.GetToolsForCapabilities(auth.capabilities)
 	}
 
 	result := MCPListToolsResult{
@@ -418,14 +426,14 @@ func (s *Server) handleToolsList(w http.ResponseWriter, _ *http.Request, req JSO
 
 	s.logger.Debug("tools/list",
 		"count", len(tools),
-		"capabilities", caps,
+		"capabilities", auth.capabilities,
 	)
 
 	s.sendJSONRPCResult(w, req.ID, result)
 }
 
 // handleToolsCall handles tools/call requests.
-func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSONRPCRequest, caps []string) {
+func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSONRPCRequest, auth authInfo) {
 	// Parse params
 	var params MCPCallToolParams
 	if len(req.Params) > 0 {
@@ -448,7 +456,7 @@ func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSO
 	}
 
 	// Verify caller has required capabilities
-	if !s.hasRequiredCapabilities(caps, toolDef.GetRequiredCapabilities()) {
+	if !s.hasRequiredCapabilities(auth.capabilities, toolDef.GetRequiredCapabilities()) {
 		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidRequest, "insufficient capabilities for this tool", nil)
 		return
 	}
@@ -465,11 +473,11 @@ func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSO
 	s.logger.Debug("tools/call",
 		"tool_name", params.Name,
 		"request_id", requestID,
+		"agent_id", auth.agentID,
 	)
 
-	// Route the tool call
-	// MCP clients are external tool consumers, not agents, so use empty agentID
-	resp, err := s.router.RouteToolCall(r.Context(), params.Name, inputJSON, requestID, "")
+	// Route the tool call with the agent ID from the auth token
+	resp, err := s.router.RouteToolCall(r.Context(), params.Name, inputJSON, requestID, auth.agentID)
 	if err != nil {
 		s.handleToolError(w, req.ID, params.Name, requestID, err)
 		return
@@ -502,58 +510,59 @@ func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSO
 // invalid tokens rather than falling through to unauthenticated access.
 var errInvalidToken = errors.New("invalid or expired token")
 
-// extractCapabilities extracts capabilities from the request.
-func (s *Server) extractCapabilities(r *http.Request) ([]string, error) {
+// extractAuth extracts authentication info (agent ID and capabilities) from the request.
+func (s *Server) extractAuth(r *http.Request) (authInfo, error) {
 	// First try token from URL path (e.g., /mcp/<token>)
 	if pathToken := strings.TrimPrefix(r.URL.Path, "/mcp/"); pathToken != "" && pathToken != r.URL.Path {
 		// Normalize: trim trailing slashes and reject extra path segments
 		pathToken = strings.TrimRight(pathToken, "/")
 		if strings.Contains(pathToken, "/") {
-			return nil, errInvalidToken
+			return authInfo{}, errInvalidToken
 		}
 		if s.tokenStore != nil {
-			if caps := s.tokenStore.GetCapabilities(pathToken); caps != nil {
-				return caps, nil
+			if info := s.tokenStore.GetTokenInfo(pathToken); info != nil {
+				return authInfo{agentID: info.AgentID, capabilities: info.Capabilities}, nil
 			}
 		}
-		return nil, errInvalidToken
+		return authInfo{}, errInvalidToken
 	}
 
 	// Fall back to token query parameter
 	if token := r.URL.Query().Get("token"); token != "" {
 		if s.tokenStore != nil {
-			if caps := s.tokenStore.GetCapabilities(token); caps != nil {
-				return caps, nil
+			if info := s.tokenStore.GetTokenInfo(token); info != nil {
+				return authInfo{agentID: info.AgentID, capabilities: info.Capabilities}, nil
 			}
 		}
-		return nil, errInvalidToken
+		return authInfo{}, errInvalidToken
 	}
 
 	// Fall back to Authorization header (for JWT-based auth)
 	if s.verifier == nil {
-		return nil, errors.New("no authentication provided")
+		return authInfo{}, errors.New("no authentication provided")
 	}
 
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		return nil, errors.New("missing authorization")
+		return authInfo{}, errors.New("missing authorization")
 	}
 
 	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return nil, errors.New("invalid authorization header format")
+		return authInfo{}, errors.New("invalid authorization header format")
 	}
 
 	token := strings.TrimPrefix(authHeader, "Bearer ")
 	if token == "" {
-		return nil, errors.New("empty token")
+		return authInfo{}, errors.New("empty token")
 	}
 
 	principalID, err := s.verifier.Verify(token)
 	if err != nil {
-		return nil, err
+		return authInfo{}, err
 	}
 
-	return []string{principalID}, nil
+	// JWT auth doesn't have an agent ID, use principal ID as fallback
+	return authInfo{agentID: principalID, capabilities: []string{principalID}}, nil
 }
 
 // extractOwnerToken derives a stable identity string from the request's auth

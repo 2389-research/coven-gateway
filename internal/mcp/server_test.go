@@ -246,7 +246,7 @@ func TestHandleToolsList(t *testing.T) {
 		router := setupTestRouter(t, registry)
 
 		tokenStore := NewTokenStore()
-		token := tokenStore.CreateToken([]string{"admin"})
+		token := tokenStore.CreateToken("test-agent", []string{"admin"})
 
 		server, err := NewServer(Config{
 			Registry:    registry,
@@ -303,7 +303,7 @@ func TestHandleToolsList(t *testing.T) {
 		router := setupTestRouter(t, registry)
 
 		tokenStore := NewTokenStore()
-		token := tokenStore.CreateToken([]string{"admin"})
+		token := tokenStore.CreateToken("test-agent", []string{"admin"})
 
 		server, err := NewServer(Config{
 			Registry:    registry,
@@ -505,23 +505,39 @@ func TestTokenStore(t *testing.T) {
 		store := NewTokenStore()
 		caps := []string{"read", "write"}
 
-		token := store.CreateToken(caps)
+		token := store.CreateToken("test-agent", caps)
 		if token == "" {
 			t.Error("expected non-empty token")
 		}
 
-		retrieved := store.GetCapabilities(token)
-		if len(retrieved) != 2 {
-			t.Errorf("expected 2 capabilities, got %d", len(retrieved))
+		info := store.GetTokenInfo(token)
+		if info == nil {
+			t.Fatal("expected token info")
+		}
+		if info.AgentID != "test-agent" {
+			t.Errorf("expected agent ID 'test-agent', got %q", info.AgentID)
+		}
+		if len(info.Capabilities) != 2 {
+			t.Errorf("expected 2 capabilities, got %d", len(info.Capabilities))
+		}
+		if info.Capabilities[0] != "read" || info.Capabilities[1] != "write" {
+			t.Errorf("unexpected capabilities: %v", info.Capabilities)
 		}
 
-		if retrieved[0] != "read" || retrieved[1] != "write" {
-			t.Errorf("unexpected capabilities: %v", retrieved)
+		// GetCapabilities should still work for compatibility
+		retrieved := store.GetCapabilities(token)
+		if len(retrieved) != 2 {
+			t.Errorf("expected 2 capabilities from GetCapabilities, got %d", len(retrieved))
 		}
 	})
 
 	t.Run("invalid token returns nil", func(t *testing.T) {
 		store := NewTokenStore()
+
+		info := store.GetTokenInfo("invalid-token")
+		if info != nil {
+			t.Error("expected nil for invalid token")
+		}
 
 		caps := store.GetCapabilities("invalid-token")
 		if caps != nil {
@@ -531,17 +547,17 @@ func TestTokenStore(t *testing.T) {
 
 	t.Run("invalidate token", func(t *testing.T) {
 		store := NewTokenStore()
-		token := store.CreateToken([]string{"test"})
+		token := store.CreateToken("test-agent", []string{"test"})
 
 		// Token should exist
-		if store.GetCapabilities(token) == nil {
+		if store.GetTokenInfo(token) == nil {
 			t.Error("token should exist before invalidation")
 		}
 
 		store.InvalidateToken(token)
 
 		// Token should not exist
-		if store.GetCapabilities(token) != nil {
+		if store.GetTokenInfo(token) != nil {
 			t.Error("token should not exist after invalidation")
 		}
 	})

@@ -121,7 +121,7 @@ func (s *covenControlServer) AgentStream(stream pb.CovenControl_AgentStreamServe
 	// Generate MCP token for this agent's capabilities
 	var mcpToken string
 	if s.gateway.mcpTokens != nil {
-		mcpToken = s.gateway.mcpTokens.CreateToken(reg.GetCapabilities())
+		mcpToken = s.gateway.mcpTokens.CreateToken(conn.ID, reg.GetCapabilities())
 		s.logger.Debug("created MCP token for agent",
 			"agent_id", reg.GetAgentId(),
 			"capabilities", reg.GetCapabilities(),
