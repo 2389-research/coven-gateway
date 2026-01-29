@@ -254,6 +254,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	}
 
 	clientService := client.NewClientServiceWithRouter(sqliteStore, sqliteStore, dedupeCache, agentMgr, agentMgr)
+	clientService.SetToolApprover(agentMgr)
 	pb.RegisterClientServiceServer(grpcServer, clientService)
 
 	// Register PackService for tool pack support

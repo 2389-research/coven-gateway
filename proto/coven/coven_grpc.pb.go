@@ -510,6 +510,7 @@ const (
 	ClientService_ListAgents_FullMethodName     = "/coven.ClientService/ListAgents"
 	ClientService_RegisterAgent_FullMethodName  = "/coven.ClientService/RegisterAgent"
 	ClientService_RegisterClient_FullMethodName = "/coven.ClientService/RegisterClient"
+	ClientService_ApproveTool_FullMethodName    = "/coven.ClientService/ApproveTool"
 )
 
 // ClientServiceClient is the client API for ClientService service.
@@ -530,6 +531,8 @@ type ClientServiceClient interface {
 	RegisterAgent(ctx context.Context, in *RegisterAgentRequest, opts ...grpc.CallOption) (*RegisterAgentResponse, error)
 	// Register a client (members can self-register clients like TUI)
 	RegisterClient(ctx context.Context, in *RegisterClientRequest, opts ...grpc.CallOption) (*RegisterClientResponse, error)
+	// Respond to a tool approval request
+	ApproveTool(ctx context.Context, in *ApproveToolRequest, opts ...grpc.CallOption) (*ApproveToolResponse, error)
 }
 
 type clientServiceClient struct {
@@ -619,6 +622,16 @@ func (c *clientServiceClient) RegisterClient(ctx context.Context, in *RegisterCl
 	return out, nil
 }
 
+func (c *clientServiceClient) ApproveTool(ctx context.Context, in *ApproveToolRequest, opts ...grpc.CallOption) (*ApproveToolResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApproveToolResponse)
+	err := c.cc.Invoke(ctx, ClientService_ApproveTool_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientServiceServer is the server API for ClientService service.
 // All implementations must embed UnimplementedClientServiceServer
 // for forward compatibility.
@@ -637,6 +650,8 @@ type ClientServiceServer interface {
 	RegisterAgent(context.Context, *RegisterAgentRequest) (*RegisterAgentResponse, error)
 	// Register a client (members can self-register clients like TUI)
 	RegisterClient(context.Context, *RegisterClientRequest) (*RegisterClientResponse, error)
+	// Respond to a tool approval request
+	ApproveTool(context.Context, *ApproveToolRequest) (*ApproveToolResponse, error)
 	mustEmbedUnimplementedClientServiceServer()
 }
 
@@ -667,6 +682,9 @@ func (UnimplementedClientServiceServer) RegisterAgent(context.Context, *Register
 }
 func (UnimplementedClientServiceServer) RegisterClient(context.Context, *RegisterClientRequest) (*RegisterClientResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterClient not implemented")
+}
+func (UnimplementedClientServiceServer) ApproveTool(context.Context, *ApproveToolRequest) (*ApproveToolResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApproveTool not implemented")
 }
 func (UnimplementedClientServiceServer) mustEmbedUnimplementedClientServiceServer() {}
 func (UnimplementedClientServiceServer) testEmbeddedByValue()                       {}
@@ -808,6 +826,24 @@ func _ClientService_RegisterClient_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientService_ApproveTool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApproveToolRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientServiceServer).ApproveTool(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientService_ApproveTool_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientServiceServer).ApproveTool(ctx, req.(*ApproveToolRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientService_ServiceDesc is the grpc.ServiceDesc for ClientService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -838,6 +874,10 @@ var ClientService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RegisterClient",
 			Handler:    _ClientService_RegisterClient_Handler,
+		},
+		{
+			MethodName: "ApproveTool",
+			Handler:    _ClientService_ApproveTool_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

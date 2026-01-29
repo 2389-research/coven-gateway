@@ -33,6 +33,7 @@ type ClientService struct {
 	dedupe     DedupeCache
 	agents     AgentLister
 	router     MessageRouter
+	approver   ToolApprover
 }
 
 // NewClientService creates a new ClientService with the given stores
