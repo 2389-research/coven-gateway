@@ -22,8 +22,13 @@
             </a>
         </div>
 
-        <!-- Right side: settings -->
+        <!-- Right side: Admin link + settings -->
         <div class="flex items-center gap-2">
+            <a href="/admin/" class="p-2 text-warm-400 hover:text-forest rounded-lg hover:bg-warm-100" title="Admin">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+                </svg>
+            </a>
             <button id="settings-btn" class="p-2 text-warm-400 hover:text-forest rounded-lg hover:bg-warm-100" title="Settings">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
@@ -209,7 +214,7 @@
 /* Chat App Layout */
 .chat-app {
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 256px 1fr;
     grid-template-rows: auto 1fr;
     height: 100vh;
     overflow: hidden;
@@ -479,7 +484,7 @@
         left: 0;
         top: 0;
         bottom: 0;
-        width: 280px;
+        width: 256px;
         transform: translateX(-100%);
         transition: transform 0.2s ease;
         z-index: 40;
