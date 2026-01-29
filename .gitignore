@@ -1,6 +1,5 @@
 # Build artifacts
 bin/
-/coven-matrix
 /coven-gateway
 /coven-tui
 

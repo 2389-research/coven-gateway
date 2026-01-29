@@ -22,7 +22,6 @@ Individual binaries:
 go build -o bin/coven-gateway ./cmd/coven-gateway
 go build -o bin/coven-tui ./cmd/coven-tui
 go build -o bin/coven-admin ./cmd/coven-admin
-go build -tags goolm -o bin/coven-matrix ./cmd/coven-matrix  # requires goolm tag
 ```
 
 ## Testing
@@ -82,7 +81,6 @@ cp config.example.yaml config.yaml      # Copy config template
 - `coven-gateway` - Main server (gRPC + HTTP)
 - `coven-tui` - Interactive terminal client for testing
 - `coven-admin` - CLI for monitoring gateway status
-- `coven-matrix` - Standalone Matrix bridge (separate config: config.toml)
 
 ## gRPC Protocol
 

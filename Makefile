@@ -1,19 +1,16 @@
 # ABOUTME: Build and development commands for coven-gateway
 # ABOUTME: Handles proto generation, building, and testing
 
-.PHONY: all build build-gateway build-matrix build-admin build-tui proto update-proto clean test lint fmt run
+.PHONY: all build build-gateway build-admin build-tui proto update-proto clean test lint fmt run
 
 # Default target
 all: proto build
 
 # Build all binaries
-build: build-gateway build-matrix build-admin build-tui
+build: build-gateway build-admin build-tui
 
 build-gateway:
 	go build -o bin/coven-gateway ./cmd/coven-gateway
-
-build-matrix:
-	go build -tags goolm -o bin/coven-matrix ./cmd/coven-matrix
 
 build-admin:
 	go build -o bin/coven-admin ./cmd/coven-admin

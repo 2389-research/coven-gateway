@@ -59,24 +59,6 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}} -linkmode=external -extldflags=-static
 
-  # coven-matrix bridge (pure Go with goolm, no CGO needed)
-  - id: coven-matrix
-    main: ./cmd/coven-matrix
-    binary: coven-matrix
-    goos:
-      - darwin
-      - linux
-    goarch:
-      - amd64
-      - arm64
-    env:
-      - CGO_ENABLED=0
-    flags:
-      - -trimpath
-      - -tags=goolm
-    ldflags:
-      - -s -w
-
 archives:
   - id: gateway
     builds:
@@ -88,14 +70,6 @@ archives:
       - LICENSE*
       - README*
       - config.example.yaml
-
-  - id: matrix
-    builds:
-      - coven-matrix
-    name_template: "coven-matrix_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files:
-      - LICENSE*
-      - cmd/coven-matrix/config.example.toml
 
 brews:
   - repository:

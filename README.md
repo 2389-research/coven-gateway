@@ -47,7 +47,6 @@ make
 go build -o bin/coven-gateway ./cmd/coven-gateway
 go build -o bin/coven-tui ./cmd/coven-tui
 go build -o bin/coven-admin ./cmd/coven-admin
-go build -o bin/coven-matrix ./cmd/coven-matrix
 ```
 
 ### Configure
@@ -85,7 +84,7 @@ cargo run -p coven-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 - **Health Endpoints**: Liveness and readiness checks
 - **Graceful Shutdown**: Clean termination with configurable timeout
 - **Tailscale Integration**: Run as a node on your tailnet via [tsnet](https://tailscale.com/kb/1244/tsnet)
-- **Matrix Bridge**: Standalone bridge (coven-matrix) connecting Matrix rooms to agents with E2EE support
+- **Matrix Bridge**: See [coven-matrix](https://github.com/2389-research/coven-matrix) (Rust) for Matrix integration
 
 ### Planned
 
@@ -145,20 +144,7 @@ The admin CLI displays:
 
 ### Matrix Bridge
 
-Standalone bridge connecting Matrix rooms to coven agents:
-
-```bash
-# Run the Matrix bridge
-./bin/coven-matrix
-
-# Uses separate config file: config.toml (see cmd/coven-matrix/config.example.toml)
-```
-
-Features:
-- End-to-end encryption (E2EE) support
-- Password-based login
-- Self-healing crypto store
-- Room-specific agent bindings via gateway API
+For Matrix integration, see [coven-matrix](https://github.com/2389-research/coven-matrix) - a standalone Rust bridge connecting Matrix rooms to coven agents with E2EE support.
 
 ### HTTP API
 
@@ -351,7 +337,6 @@ make proto
 | `make build-gateway` | Build coven-gateway only |
 | `make build-tui` | Build coven-tui only |
 | `make build-admin` | Build coven-admin only |
-| `make build-matrix` | Build coven-matrix only |
 | `make proto` | Generate protobuf code |
 | `make proto-deps` | Install protoc plugins (one-time) |
 | `make test` | Run all tests |

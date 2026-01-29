@@ -1,4 +1,4 @@
-# ABOUTME: Docker Compose configuration for coven-gateway and coven-matrix
+# ABOUTME: Docker Compose configuration for coven-gateway
 # ABOUTME: Uses Tailscale (tsnet) for networking
 
 services:
@@ -17,20 +17,3 @@ services:
       - ./data:/app/data
       - ./tailscale:/app/tailscale
     restart: unless-stopped
-
-  # coven-matrix: Matrix bridge (disabled for now)
-  # coven-matrix:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.matrix
-  #   container_name: coven-matrix
-  #   depends_on:
-  #     - coven-gateway
-  #   environment:
-  #     - MATRIX_USERNAME=${MATRIX_USERNAME:-}
-  #     - MATRIX_PASSWORD=${MATRIX_PASSWORD:-}
-  #     - MATRIX_RECOVERY_KEY=${MATRIX_RECOVERY_KEY:-}
-  #   volumes:
-  #     - ./config.matrix.toml:/app/config.toml:ro
-  #     - matrix-crypto:/app/data
-  #   restart: unless-stopped
