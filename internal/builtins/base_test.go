@@ -80,6 +80,47 @@ func TestTodoCRUD(t *testing.T) {
 	}
 }
 
+func TestTodoOwnershipVerification(t *testing.T) {
+	s := newTestStore(t)
+	pack := BasePack(s)
+
+	// Agent 1 creates a todo
+	addHandler := findHandler(pack, "todo_add")
+	result, err := addHandler(context.Background(), "agent-1", json.RawMessage(`{"description": "agent-1's todo"}`))
+	if err != nil {
+		t.Fatalf("todo_add: %v", err)
+	}
+	var addResp map[string]string
+	json.Unmarshal(result, &addResp)
+	todoID := addResp["id"]
+
+	// Agent 2 should not be able to update agent-1's todo
+	updateHandler := findHandler(pack, "todo_update")
+	_, err = updateHandler(context.Background(), "agent-2", json.RawMessage(`{"id": "`+todoID+`", "status": "completed"}`))
+	if err == nil {
+		t.Error("expected error when agent-2 tries to update agent-1's todo")
+	}
+
+	// Agent 2 should not be able to delete agent-1's todo
+	deleteHandler := findHandler(pack, "todo_delete")
+	_, err = deleteHandler(context.Background(), "agent-2", json.RawMessage(`{"id": "`+todoID+`"}`))
+	if err == nil {
+		t.Error("expected error when agent-2 tries to delete agent-1's todo")
+	}
+
+	// Agent 1 should still be able to update their own todo
+	_, err = updateHandler(context.Background(), "agent-1", json.RawMessage(`{"id": "`+todoID+`", "status": "completed"}`))
+	if err != nil {
+		t.Fatalf("agent-1 should be able to update own todo: %v", err)
+	}
+
+	// Agent 1 should still be able to delete their own todo
+	_, err = deleteHandler(context.Background(), "agent-1", json.RawMessage(`{"id": "`+todoID+`"}`))
+	if err != nil {
+		t.Fatalf("agent-1 should be able to delete own todo: %v", err)
+	}
+}
+
 func TestBBS(t *testing.T) {
 	s := newTestStore(t)
 	pack := BasePack(s)

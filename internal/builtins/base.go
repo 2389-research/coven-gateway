@@ -249,6 +249,11 @@ func (b *baseHandlers) TodoUpdate(ctx context.Context, agentID string, input jso
 		return nil, err
 	}
 
+	// Verify ownership - agents can only update their own todos
+	if todo.AgentID != agentID {
+		return nil, fmt.Errorf("todo not found")
+	}
+
 	// Only update fields that were provided
 	if in.Status != "" {
 		todo.Status = in.Status
@@ -282,6 +287,15 @@ func (b *baseHandlers) TodoDelete(ctx context.Context, agentID string, input jso
 	var in todoDeleteInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
+	}
+
+	// Fetch and verify ownership before deleting
+	todo, err := b.store.GetTodo(ctx, in.ID)
+	if err != nil {
+		return nil, err
+	}
+	if todo.AgentID != agentID {
+		return nil, fmt.Errorf("todo not found")
 	}
 
 	if err := b.store.DeleteTodo(ctx, in.ID); err != nil {
