@@ -74,18 +74,20 @@ func (p *Pack) Close() {
 
 // Registry maintains the registry of connected packs and their tools.
 type Registry struct {
-	mu     sync.RWMutex
-	packs  map[string]*Pack
-	tools  map[string]*Tool // global tool name -> tool (for collision detection)
-	logger *slog.Logger
+	mu       sync.RWMutex
+	packs    map[string]*Pack
+	tools    map[string]*Tool         // global tool name -> tool (for collision detection)
+	builtins map[string]*builtinEntry // builtin tool name -> builtin entry
+	logger   *slog.Logger
 }
 
 // NewRegistry creates a new Registry instance.
 func NewRegistry(logger *slog.Logger) *Registry {
 	return &Registry{
-		packs:  make(map[string]*Pack),
-		tools:  make(map[string]*Tool),
-		logger: logger,
+		packs:    make(map[string]*Pack),
+		tools:    make(map[string]*Tool),
+		builtins: make(map[string]*builtinEntry),
+		logger:   logger,
 	}
 }
 
@@ -106,6 +108,10 @@ func (r *Registry) RegisterPack(packID string, manifest *pb.PackManifest) error 
 		if existingTool, exists := r.tools[toolDef.GetName()]; exists {
 			return fmt.Errorf("%w: tool '%s' already registered by pack '%s'",
 				ErrToolCollision, toolDef.GetName(), existingTool.PackID)
+		}
+		if _, exists := r.builtins[toolDef.GetName()]; exists {
+			return fmt.Errorf("%w: tool '%s' already registered as builtin",
+				ErrToolCollision, toolDef.GetName())
 		}
 	}
 
@@ -189,6 +195,58 @@ func (r *Registry) GetToolByName(name string) (*Tool, *Pack) {
 	return tool, pack
 }
 
+// RegisterBuiltinPack registers a pack of built-in tools that execute in-process.
+// Returns error if any tool name collides with existing tools.
+func (r *Registry) RegisterBuiltinPack(pack *BuiltinPack) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Check for collisions
+	for _, tool := range pack.Tools {
+		name := tool.Definition.GetName()
+		if _, exists := r.tools[name]; exists {
+			return fmt.Errorf("%w: tool '%s' already registered by external pack", ErrToolCollision, name)
+		}
+		if _, exists := r.builtins[name]; exists {
+			return fmt.Errorf("%w: tool '%s' already registered as builtin", ErrToolCollision, name)
+		}
+	}
+
+	// Register all tools
+	for _, tool := range pack.Tools {
+		r.builtins[tool.Definition.GetName()] = &builtinEntry{
+			Tool:   tool,
+			PackID: pack.ID,
+		}
+	}
+
+	r.logger.Info("=== BUILTIN PACK REGISTERED ===",
+		"pack_id", pack.ID,
+		"tool_count", len(pack.Tools),
+	)
+
+	return nil
+}
+
+// GetBuiltinTool returns a builtin tool by name, or nil if not found.
+func (r *Registry) GetBuiltinTool(name string) *BuiltinTool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if entry, ok := r.builtins[name]; ok {
+		return entry.Tool
+	}
+	return nil
+}
+
+// IsBuiltin returns true if the tool name is a builtin tool.
+func (r *Registry) IsBuiltin(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, ok := r.builtins[name]
+	return ok
+}
+
 // GetAllTools returns all registered tools.
 func (r *Registry) GetAllTools() []*Tool {
 	r.mu.RLock()
@@ -203,6 +261,7 @@ func (r *Registry) GetAllTools() []*Tool {
 
 // GetToolsForCapabilities returns tools where the agent has ALL required capabilities.
 // If a tool has no required capabilities, it is always included.
+// Includes both external pack tools and builtin tools.
 func (r *Registry) GetToolsForCapabilities(caps []string) []*pb.ToolDefinition {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -214,9 +273,18 @@ func (r *Registry) GetToolsForCapabilities(caps []string) []*pb.ToolDefinition {
 	}
 
 	var result []*pb.ToolDefinition
+
+	// External pack tools
 	for _, tool := range r.tools {
 		if r.hasAllCapabilities(tool.Definition.GetRequiredCapabilities(), capSet) {
 			result = append(result, tool.Definition)
+		}
+	}
+
+	// Builtin tools
+	for _, entry := range r.builtins {
+		if r.hasAllCapabilities(entry.Tool.Definition.GetRequiredCapabilities(), capSet) {
+			result = append(result, entry.Tool.Definition)
 		}
 	}
 
