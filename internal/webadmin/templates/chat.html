@@ -1,123 +1,205 @@
 {{/* ABOUTME: Real-time chat interface for agent interaction */}}
-{{/* ABOUTME: Professional executive dashboard design */}}
+{{/* ABOUTME: Uses sidebar layout matching other admin pages */}}
 {{define "content"}}
 <div class="min-h-screen flex flex-col" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
     <!-- Header -->
     <header class="bg-white border-b border-warm-200 flex-shrink-0 shadow-soft">
-        <div class="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
-            <div class="flex items-center gap-4">
-                <a href="/admin/" class="flex items-center gap-2 text-warm-500 hover:text-forest text-sm font-medium">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                    </svg>
-                    Back
-                </a>
-                <div class="h-5 w-px bg-warm-200"></div>
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-lg bg-forest/10 flex items-center justify-center">
-                        <svg class="w-5 h-5 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        <div class="max-w-screen-2xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-6">
+                <a href="/admin/" class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-forest flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
                         </svg>
                     </div>
                     <div>
-                        <h1 class="font-serif text-xl text-ink">{{.AgentName}}</h1>
-                        <div class="flex items-center gap-2">
-                            <div class="relative">
-                                <div class="w-2 h-2 rounded-full {{if .Connected}}bg-forest{{else}}bg-warm-300{{end}}"></div>
-                                {{if .Connected}}<div class="absolute inset-0 w-2 h-2 rounded-full bg-forest pulse-soft"></div>{{end}}
-                            </div>
-                            <span class="text-xs text-warm-500 font-medium">{{if .Connected}}Online{{else}}Offline{{end}}</span>
-                        </div>
+                        <h1 class="font-serif text-2xl text-ink">Coven</h1>
+                        <p class="text-xs text-warm-500 tracking-wide">Control Plane</p>
                     </div>
-                </div>
-            </div>
-            <div class="flex items-center gap-4">
-                <a href="/admin/agents/{{.AgentID}}" class="text-sm text-warm-500 hover:text-forest font-medium">
-                    View Details
                 </a>
-                <div class="flex items-center gap-2">
+            </div>
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-3">
                     <div class="w-2 h-2 rounded-full bg-forest pulse-soft"></div>
                     <span class="text-sm text-warm-700 font-medium">{{.User.DisplayName}}</span>
                 </div>
                 <form method="POST" action="/admin/logout" class="inline">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                    <button type="submit" class="text-sm text-warm-500 hover:text-danger font-medium">Sign Out</button>
+                    <button type="submit" class="text-sm text-warm-500 hover:text-danger font-medium">
+                        Sign Out
+                    </button>
                 </form>
             </div>
         </div>
     </header>
 
-    <!-- Chat area -->
-    <main class="flex-1 max-w-4xl mx-auto w-full p-6 flex flex-col">
-        <!-- Messages -->
-        <div id="chat-messages" class="flex-1 bg-white rounded-xl border border-warm-200 shadow-card mb-4 p-6 overflow-y-auto min-h-[400px] max-h-[600px]">
-            {{if .Messages}}
-            {{range .Messages}}
-            <div class="mb-4">
-                {{if eq .Type "tool_use"}}
-                <div class="tool-collapsible" data-collapsed="true">
-                    <div class="flex items-center gap-2 cursor-pointer select-none tool-header" onclick="toggleToolCollapse(this)">
-                        <span class="text-warm-400 transition-transform duration-200 -rotate-90 tool-chevron">&#9662;</span>
-                        <span class="text-xs font-semibold text-warning bg-warning/10 px-2 py-1 rounded">⚙ {{.ToolName}}</span>
-                        <span class="text-xs text-warm-400 ml-auto">{{.CreatedAt.Format "15:04:05"}}</span>
-                    </div>
-                    <div class="whitespace-pre-wrap text-xs font-mono text-warning/80 bg-warning/5 border border-warning/20 p-3 rounded-lg overflow-x-auto max-h-32 overflow-y-auto mt-2 hidden tool-content">{{.Content}}</div>
+    <!-- Main Layout -->
+    <div class="flex-1 flex">
+        <!-- Sidebar -->
+        <nav class="w-64 bg-white border-r border-warm-200 flex-shrink-0 hidden lg:flex flex-col shadow-soft">
+            <div class="p-6 flex-1">
+                <div class="mb-8">
+                    <p class="text-xs font-semibold text-warm-500 uppercase tracking-wider mb-4">Navigation</p>
+                    <ul class="space-y-1">
+                        <li>
+                            <a href="/admin/" class="flex items-center gap-3 px-4 py-3 text-warm-600 hover:text-forest hover:bg-warm-50 font-medium rounded-lg">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+                                </svg>
+                                Dashboard
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/admin/logs" class="flex items-center gap-3 px-4 py-3 text-warm-600 hover:text-forest hover:bg-warm-50 font-medium rounded-lg">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                Activity Logs
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/admin/todos" class="flex items-center gap-3 px-4 py-3 text-warm-600 hover:text-forest hover:bg-warm-50 font-medium rounded-lg">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                                </svg>
+                                Todos
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/admin/board" class="flex items-center gap-3 px-4 py-3 text-warm-600 hover:text-forest hover:bg-warm-50 font-medium rounded-lg">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"/>
+                                </svg>
+                                Discussion Board
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/admin/tools" class="flex items-center gap-3 px-4 py-3 text-warm-600 hover:text-forest hover:bg-warm-50 font-medium rounded-lg">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/>
+                                </svg>
+                                Tools
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/admin/threads" class="flex items-center gap-3 px-4 py-3 bg-forest/5 border-l-3 border-forest text-forest font-medium rounded-r-lg">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                                </svg>
+                                Threads
+                            </a>
+                        </li>
+                    </ul>
                 </div>
-                {{else if eq .Type "tool_result"}}
-                <div class="tool-collapsible" data-collapsed="true">
-                    <div class="flex items-center gap-2 cursor-pointer select-none tool-header" onclick="toggleToolCollapse(this)">
-                        <span class="text-warm-400 transition-transform duration-200 -rotate-90 tool-chevron">&#9662;</span>
-                        <span class="text-xs font-semibold text-forest bg-forest/10 px-2 py-1 rounded">✓ Result</span>
-                        <span class="text-xs text-warm-400 ml-auto">{{.CreatedAt.Format "15:04:05"}}</span>
-                    </div>
-                    <div class="whitespace-pre-wrap text-xs font-mono text-warm-600 bg-warm-50 border border-warm-200 p-3 rounded-lg overflow-x-auto max-h-48 overflow-y-auto mt-2 hidden tool-content">{{.Content}}</div>
-                </div>
-                {{else}}
-                <div class="flex justify-between items-start mb-2">
-                    {{if eq .Sender "user"}}
-                    <span class="text-xs font-semibold text-info bg-info/10 px-2 py-1 rounded">You</span>
-                    {{else}}
-                    <span class="text-xs font-semibold text-warm-600 bg-warm-100 px-2 py-1 rounded">Agent</span>
-                    {{end}}
-                    <span class="text-xs text-warm-400">{{.CreatedAt.Format "15:04:05"}}</span>
-                </div>
-                <div class="whitespace-pre-wrap text-sm text-ink leading-relaxed">{{.Content}}</div>
-                {{end}}
-            </div>
-            {{end}}
-            {{else}}
-            <div id="chat-placeholder" class="flex flex-col items-center justify-center py-16 text-warm-400">
-                <svg class="w-16 h-16 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                </svg>
-                <p class="text-sm font-medium">Start a conversation with {{.AgentName}}</p>
-                <p class="text-xs text-warm-300 mt-1">Your messages will appear here</p>
-            </div>
-            {{end}}
-        </div>
 
-        <!-- Input area -->
-        <div class="bg-white rounded-xl border border-warm-200 shadow-card p-4">
-            {{if .Connected}}
-            <form id="chat-form" class="flex gap-3">
-                <input type="text" id="message-input" name="message" placeholder="Type your message..."
-                    class="flex-1 px-4 py-3 bg-warm-50 border border-warm-200 rounded-lg text-ink text-sm placeholder-warm-400 focus:border-forest focus:bg-white"
-                    autocomplete="off">
-                <button type="submit"
-                    class="px-6 py-3 bg-forest text-white font-medium text-sm rounded-lg hover:bg-forest-light transition-colors shadow-soft">
-                    Send
-                </button>
-            </form>
-            {{else}}
-            <div class="flex items-center justify-center gap-2 text-warm-500 py-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"/>
-                </svg>
-                <span class="text-sm font-medium">Agent is not connected. Cannot send messages.</span>
+                <!-- Current Agent Info -->
+                <div class="mb-8">
+                    <p class="text-xs font-semibold text-warm-500 uppercase tracking-wider mb-4">Current Chat</p>
+                    <div class="bg-warm-50 rounded-lg p-4">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                </svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-ink truncate">{{.AgentName}}</p>
+                                <div class="flex items-center gap-1.5">
+                                    <div class="relative">
+                                        <div class="w-2 h-2 rounded-full {{if .Connected}}bg-forest{{else}}bg-warm-300{{end}}"></div>
+                                        {{if .Connected}}<div class="absolute inset-0 w-2 h-2 rounded-full bg-forest pulse-soft"></div>{{end}}
+                                    </div>
+                                    <span class="text-xs text-warm-500">{{if .Connected}}Online{{else}}Offline{{end}}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <a href="/admin/agents/{{.AgentID}}" class="text-xs text-forest hover:text-forest-light font-medium">
+                            View Details →
+                        </a>
+                    </div>
+                </div>
             </div>
-            {{end}}
-        </div>
-    </main>
+
+            <!-- Sidebar Footer -->
+            <div class="p-6 border-t border-warm-200">
+                <p class="text-xs text-warm-400">coven-gateway v0.1</p>
+            </div>
+        </nav>
+
+        <!-- Content -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <div class="flex-1 flex flex-col max-w-4xl mx-auto w-full p-6">
+                <!-- Messages -->
+                <div id="chat-messages" class="flex-1 bg-white rounded-xl border border-warm-200 shadow-card mb-4 p-6 overflow-y-auto min-h-[400px]">
+                    {{if .Messages}}
+                    {{range .Messages}}
+                    <div class="mb-4">
+                        {{if eq .Type "tool_use"}}
+                        <div class="tool-collapsible" data-collapsed="true">
+                            <div class="flex items-center gap-2 cursor-pointer select-none tool-header" onclick="toggleToolCollapse(this)">
+                                <span class="text-warm-400 transition-transform duration-200 -rotate-90 tool-chevron">&#9662;</span>
+                                <span class="text-xs font-semibold text-warning bg-warning/10 px-2 py-1 rounded">⚙ {{.ToolName}}</span>
+                                <span class="text-xs text-warm-400 ml-auto">{{.CreatedAt.Format "15:04:05"}}</span>
+                            </div>
+                            <div class="whitespace-pre-wrap text-xs font-mono text-warning/80 bg-warning/5 border border-warning/20 p-3 rounded-lg overflow-x-auto max-h-32 overflow-y-auto mt-2 hidden tool-content">{{.Content}}</div>
+                        </div>
+                        {{else if eq .Type "tool_result"}}
+                        <div class="tool-collapsible" data-collapsed="true">
+                            <div class="flex items-center gap-2 cursor-pointer select-none tool-header" onclick="toggleToolCollapse(this)">
+                                <span class="text-warm-400 transition-transform duration-200 -rotate-90 tool-chevron">&#9662;</span>
+                                <span class="text-xs font-semibold text-forest bg-forest/10 px-2 py-1 rounded">✓ Result</span>
+                                <span class="text-xs text-warm-400 ml-auto">{{.CreatedAt.Format "15:04:05"}}</span>
+                            </div>
+                            <div class="whitespace-pre-wrap text-xs font-mono text-warm-600 bg-warm-50 border border-warm-200 p-3 rounded-lg overflow-x-auto max-h-48 overflow-y-auto mt-2 hidden tool-content">{{.Content}}</div>
+                        </div>
+                        {{else}}
+                        <div class="flex justify-between items-start mb-2">
+                            {{if eq .Sender "user"}}
+                            <span class="text-xs font-semibold text-info bg-info/10 px-2 py-1 rounded">You</span>
+                            {{else}}
+                            <span class="text-xs font-semibold text-warm-600 bg-warm-100 px-2 py-1 rounded">Agent</span>
+                            {{end}}
+                            <span class="text-xs text-warm-400">{{.CreatedAt.Format "15:04:05"}}</span>
+                        </div>
+                        <div class="whitespace-pre-wrap text-sm text-ink leading-relaxed">{{.Content}}</div>
+                        {{end}}
+                    </div>
+                    {{end}}
+                    {{else}}
+                    <div id="chat-placeholder" class="flex flex-col items-center justify-center py-16 text-warm-400">
+                        <svg class="w-16 h-16 mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                        </svg>
+                        <p class="text-sm font-medium">Start a conversation with {{.AgentName}}</p>
+                        <p class="text-xs text-warm-300 mt-1">Your messages will appear here</p>
+                    </div>
+                    {{end}}
+                </div>
+
+                <!-- Input area -->
+                <div class="bg-white rounded-xl border border-warm-200 shadow-card p-4">
+                    {{if .Connected}}
+                    <form id="chat-form" class="flex gap-3">
+                        <input type="text" id="message-input" name="message" placeholder="Type your message..."
+                            class="flex-1 px-4 py-3 bg-warm-50 border border-warm-200 rounded-lg text-ink text-sm placeholder-warm-400 focus:border-forest focus:bg-white"
+                            autocomplete="off">
+                        <button type="submit"
+                            class="px-6 py-3 bg-forest text-white font-medium text-sm rounded-lg hover:bg-forest-light transition-colors shadow-soft">
+                            Send
+                        </button>
+                    </form>
+                    {{else}}
+                    <div class="flex items-center justify-center gap-2 text-warm-500 py-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"/>
+                        </svg>
+                        <span class="text-sm font-medium">Agent is not connected. Cannot send messages.</span>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+        </main>
+    </div>
 </div>
 
 <style>
@@ -844,6 +926,9 @@ function toggleToolCollapse(header) {
         chatMessages.appendChild(msgDiv);
         scrollToBottom();
     }
+
+    // Make approveOrDenyTool available globally for onclick handlers
+    window.approveOrDenyTool = approveOrDenyTool;
 })();
 </script>
 {{end}}
