@@ -22,6 +22,7 @@ import (
 	"github.com/2389/coven-gateway/internal/admin"
 	"github.com/2389/coven-gateway/internal/agent"
 	"github.com/2389/coven-gateway/internal/auth"
+	"github.com/2389/coven-gateway/internal/builtins"
 	"github.com/2389/coven-gateway/internal/client"
 	"github.com/2389/coven-gateway/internal/config"
 	"github.com/2389/coven-gateway/internal/conversation"
@@ -175,6 +176,22 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		Registry: packRegistry,
 		Logger:   logger.With("component", "pack-router"),
 	})
+
+	// Register built-in packs
+	// SQLiteStore implements both store.Store and store.BuiltinStore interfaces
+	builtinStore := s.(*store.SQLiteStore)
+	if err := packRegistry.RegisterBuiltinPack(builtins.BasePack(builtinStore)); err != nil {
+		return nil, fmt.Errorf("registering base pack: %w", err)
+	}
+	if err := packRegistry.RegisterBuiltinPack(builtins.AdminPack(agentMgr, s)); err != nil {
+		return nil, fmt.Errorf("registering admin pack: %w", err)
+	}
+	if err := packRegistry.RegisterBuiltinPack(builtins.MailPack(builtinStore)); err != nil {
+		return nil, fmt.Errorf("registering mail pack: %w", err)
+	}
+	if err := packRegistry.RegisterBuiltinPack(builtins.NotesPack(builtinStore)); err != nil {
+		return nil, fmt.Errorf("registering notes pack: %w", err)
+	}
 
 	// Create MCP token store for agent capability-scoped access
 	mcpTokens := mcp.NewTokenStore()
