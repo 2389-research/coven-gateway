@@ -292,6 +292,14 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	// Token usage page
 	mux.HandleFunc("GET /admin/usage", a.requireAuth(a.handleUsagePage))
 
+	// Secrets management
+	mux.HandleFunc("GET /admin/secrets", a.requireAuth(a.handleSecretsPage))
+	mux.HandleFunc("GET /admin/secrets/list", a.requireAuth(a.handleSecretsList))
+	mux.HandleFunc("GET /admin/secrets/{id}/value", a.requireAuth(a.handleSecretsGetValue))
+	mux.HandleFunc("POST /admin/secrets", a.requireAuth(a.handleSecretsCreate))
+	mux.HandleFunc("PUT /admin/secrets/{id}", a.requireAuth(a.handleSecretsUpdate))
+	mux.HandleFunc("DELETE /admin/secrets/{id}", a.requireAuth(a.handleSecretsDelete))
+
 	// Invite management
 	mux.HandleFunc("POST /admin/invites/create", a.requireAuth(a.handleCreateInvite))
 
@@ -1924,6 +1932,291 @@ func (a *Admin) handleStatsTokens(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.renderUsageStats(w, stats)
+}
+
+// =============================================================================
+// Secrets Handlers
+// =============================================================================
+
+// handleSecretsPage renders the secrets management page
+func (a *Admin) handleSecretsPage(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+
+	// Get list of connected agents for the dropdown
+	var agents []agentItem
+	if a.manager != nil {
+		for _, info := range a.manager.ListAgents() {
+			agents = append(agents, agentItem{
+				ID:   info.ID,
+				Name: info.Name,
+			})
+		}
+	}
+
+	a.renderSecretsPage(w, user, agents, csrfToken)
+}
+
+// handleSecretsList returns the secrets list (htmx partial)
+func (a *Admin) handleSecretsList(w http.ResponseWriter, r *http.Request) {
+	// Type assert to SQLiteStore to access secrets methods
+	sqlStore, ok := a.store.(*store.SQLiteStore)
+	if !ok {
+		a.logger.Error("store is not SQLiteStore")
+		http.Error(w, "Server configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	secrets, err := sqlStore.ListAllSecrets(r.Context())
+	if err != nil {
+		a.logger.Error("failed to list secrets", "error", err)
+		http.Error(w, "Failed to load secrets", http.StatusInternalServerError)
+		return
+	}
+
+	// Apply scope filter if provided
+	scopeFilter := r.URL.Query().Get("scope")
+
+	// Convert to display items
+	var items []secretItem
+	for _, s := range secrets {
+		// Apply scope filter
+		isGlobal := s.AgentID == nil
+		if scopeFilter == "global" && !isGlobal {
+			continue
+		}
+		if scopeFilter == "agent" && isGlobal {
+			continue
+		}
+
+		item := secretItem{
+			ID:        s.ID,
+			Key:       s.Key,
+			Value:     s.Value,
+			UpdatedAt: s.UpdatedAt,
+		}
+		if s.AgentID != nil {
+			item.AgentID = *s.AgentID
+			item.Scope = *s.AgentID
+			item.AgentName = *s.AgentID // Use ID as display name for now
+		} else {
+			item.Scope = "Global"
+		}
+		items = append(items, item)
+	}
+
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderSecretsList(w, items, csrfToken)
+}
+
+// handleSecretsGetValue returns a secret's value as JSON (for reveal functionality)
+func (a *Admin) handleSecretsGetValue(w http.ResponseWriter, r *http.Request) {
+	secretID := r.PathValue("id")
+	if secretID == "" {
+		http.Error(w, "Secret ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Type assert to SQLiteStore
+	sqlStore, ok := a.store.(*store.SQLiteStore)
+	if !ok {
+		http.Error(w, "Server configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	secret, err := sqlStore.GetSecret(r.Context(), secretID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Secret not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to get secret", "error", err)
+		http.Error(w, "Failed to load secret", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"value":"` + strings.ReplaceAll(strings.ReplaceAll(secret.Value, `\`, `\\`), `"`, `\"`) + `"}`))
+}
+
+// handleSecretsCreate creates a new secret
+func (a *Admin) handleSecretsCreate(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	key := strings.TrimSpace(r.FormValue("key"))
+	value := r.FormValue("value")
+	agentID := r.FormValue("agent_id")
+
+	if key == "" || value == "" {
+		http.Error(w, "Key and value are required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate key is a valid environment variable name
+	if !isValidEnvKey(key) {
+		http.Error(w, "Key must be a valid environment variable name (letters, digits, underscores, starting with letter or underscore)", http.StatusBadRequest)
+		return
+	}
+
+	// Limit value length to prevent abuse
+	if len(value) > 65536 {
+		http.Error(w, "Value exceeds maximum length (64KB)", http.StatusBadRequest)
+		return
+	}
+
+	// Type assert to SQLiteStore
+	sqlStore, ok := a.store.(*store.SQLiteStore)
+	if !ok {
+		http.Error(w, "Server configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	user := getUserFromContext(r)
+	secret := &store.Secret{
+		Key:   key,
+		Value: value,
+	}
+	if agentID != "" {
+		secret.AgentID = &agentID
+	}
+	if user != nil {
+		secret.CreatedBy = &user.ID
+	}
+
+	if err := sqlStore.CreateSecret(r.Context(), secret); err != nil {
+		a.logger.Error("failed to create secret", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	a.logger.Info("secret created", "key", key, "agent_id", agentID)
+
+	// Return updated list via htmx
+	a.handleSecretsList(w, r)
+}
+
+// handleSecretsUpdate updates a secret's value
+func (a *Admin) handleSecretsUpdate(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	secretID := r.PathValue("id")
+	if secretID == "" {
+		http.Error(w, "Secret ID required", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	value := r.FormValue("value")
+	if value == "" {
+		http.Error(w, "Value is required", http.StatusBadRequest)
+		return
+	}
+
+	// Type assert to SQLiteStore
+	sqlStore, ok := a.store.(*store.SQLiteStore)
+	if !ok {
+		http.Error(w, "Server configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	// Get existing secret
+	secret, err := sqlStore.GetSecret(r.Context(), secretID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Secret not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to get secret", "error", err)
+		http.Error(w, "Failed to load secret", http.StatusInternalServerError)
+		return
+	}
+
+	// Update value
+	secret.Value = value
+	if err := sqlStore.UpdateSecret(r.Context(), secret); err != nil {
+		a.logger.Error("failed to update secret", "error", err)
+		http.Error(w, "Failed to update secret", http.StatusInternalServerError)
+		return
+	}
+
+	a.logger.Info("secret updated", "id", secretID, "key", secret.Key)
+
+	// Return updated list via htmx
+	a.handleSecretsList(w, r)
+}
+
+// handleSecretsDelete deletes a secret
+func (a *Admin) handleSecretsDelete(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	secretID := r.PathValue("id")
+	if secretID == "" {
+		http.Error(w, "Secret ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Type assert to SQLiteStore
+	sqlStore, ok := a.store.(*store.SQLiteStore)
+	if !ok {
+		http.Error(w, "Server configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	if err := sqlStore.DeleteSecret(r.Context(), secretID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Secret not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to delete secret", "error", err)
+		http.Error(w, "Failed to delete secret", http.StatusInternalServerError)
+		return
+	}
+
+	a.logger.Info("secret deleted", "id", secretID)
+
+	// Return empty response - htmx will remove the row
+	w.WriteHeader(http.StatusOK)
+}
+
+// isValidEnvKey validates that a string is a valid environment variable name.
+// Environment variable names must start with a letter or underscore, and contain
+// only letters, digits, and underscores.
+func isValidEnvKey(key string) bool {
+	if len(key) == 0 || len(key) > 256 {
+		return false
+	}
+	for i, c := range key {
+		if i == 0 {
+			// First char must be letter or underscore
+			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
+				return false
+			}
+		} else {
+			// Subsequent chars can also include digits
+			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // generateSecureToken generates a cryptographically secure random token

@@ -429,3 +429,57 @@ func TestHandleToolsPage_RedirectsToChatApp(t *testing.T) {
 		t.Fatalf("expected redirect to /, got %q", location)
 	}
 }
+
+// Tests for isValidEnvKey
+
+func TestIsValidEnvKey_ValidKeys(t *testing.T) {
+	validKeys := []string{
+		"API_KEY",
+		"ANTHROPIC_API_KEY",
+		"_PRIVATE",
+		"a",
+		"A",
+		"_",
+		"MY_VAR_123",
+		"lowercase",
+		"MixedCase",
+	}
+	for _, key := range validKeys {
+		if !isValidEnvKey(key) {
+			t.Errorf("expected %q to be valid", key)
+		}
+	}
+}
+
+func TestIsValidEnvKey_InvalidKeys(t *testing.T) {
+	invalidKeys := []string{
+		"",                    // empty
+		"123_STARTS_WITH_NUM", // starts with number
+		"has-dash",            // contains dash
+		"has.dot",             // contains dot
+		"has space",           // contains space
+		"has\ttab",            // contains tab
+		"has\nnewline",        // contains newline
+		"path/to/something",   // contains slash
+		"$VAR",                // starts with $
+	}
+	for _, key := range invalidKeys {
+		if isValidEnvKey(key) {
+			t.Errorf("expected %q to be invalid", key)
+		}
+	}
+}
+
+func TestIsValidEnvKey_MaxLength(t *testing.T) {
+	// 256 chars should be valid
+	longValid := strings.Repeat("A", 256)
+	if !isValidEnvKey(longValid) {
+		t.Error("expected 256-char key to be valid")
+	}
+
+	// 257 chars should be invalid
+	tooLong := strings.Repeat("A", 257)
+	if isValidEnvKey(tooLong) {
+		t.Error("expected 257-char key to be invalid")
+	}
+}

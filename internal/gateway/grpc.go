@@ -148,6 +148,19 @@ func (s *covenControlServer) AgentStream(stream pb.CovenControl_AgentStreamServe
 		)
 	}
 
+	// Resolve effective secrets for this agent (global defaults + agent-specific overrides)
+	var secretsMap map[string]string
+	if sqlStore, ok := s.gateway.store.(*store.SQLiteStore); ok {
+		var err error
+		secretsMap, err = sqlStore.GetEffectiveSecrets(stream.Context(), reg.GetAgentId())
+		if err != nil {
+			s.logger.Warn("failed to load secrets for agent", "agent_id", reg.GetAgentId(), "error", err)
+			secretsMap = make(map[string]string)
+		}
+	} else {
+		secretsMap = make(map[string]string)
+	}
+
 	// Send welcome message with instance ID, principal ID, available tools, MCP token and endpoint
 	welcome := &pb.ServerMessage{
 		Payload: &pb.ServerMessage_Welcome{
@@ -159,6 +172,7 @@ func (s *covenControlServer) AgentStream(stream pb.CovenControl_AgentStreamServe
 				AvailableTools: availableTools,
 				McpToken:       mcpToken,
 				McpEndpoint:    s.gateway.mcpEndpoint,
+				Secrets:        secretsMap,
 			},
 		},
 	}

@@ -2025,12 +2025,13 @@ func (x *ToolApprovalResponse) GetApproveAll() bool {
 type Welcome struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ServerId       string                 `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
-	AgentId        string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`                      // Confirmed agent ID (instance name)
-	InstanceId     string                 `protobuf:"bytes,3,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`             // Short code for binding commands
-	PrincipalId    string                 `protobuf:"bytes,4,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`          // Principal UUID for reference
-	AvailableTools []*ToolDefinition      `protobuf:"bytes,5,rep,name=available_tools,json=availableTools,proto3" json:"available_tools,omitempty"` // Pack tools available to this agent
-	McpToken       string                 `protobuf:"bytes,6,opt,name=mcp_token,json=mcpToken,proto3" json:"mcp_token,omitempty"`                   // Token for MCP endpoint authentication (capability-scoped)
-	McpEndpoint    string                 `protobuf:"bytes,7,opt,name=mcp_endpoint,json=mcpEndpoint,proto3" json:"mcp_endpoint,omitempty"`          // Base MCP endpoint URL (e.g., "http://gateway:8080/mcp")
+	AgentId        string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`                                                            // Confirmed agent ID (instance name)
+	InstanceId     string                 `protobuf:"bytes,3,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`                                                   // Short code for binding commands
+	PrincipalId    string                 `protobuf:"bytes,4,opt,name=principal_id,json=principalId,proto3" json:"principal_id,omitempty"`                                                // Principal UUID for reference
+	AvailableTools []*ToolDefinition      `protobuf:"bytes,5,rep,name=available_tools,json=availableTools,proto3" json:"available_tools,omitempty"`                                       // Pack tools available to this agent
+	McpToken       string                 `protobuf:"bytes,6,opt,name=mcp_token,json=mcpToken,proto3" json:"mcp_token,omitempty"`                                                         // Token for MCP endpoint authentication (capability-scoped)
+	McpEndpoint    string                 `protobuf:"bytes,7,opt,name=mcp_endpoint,json=mcpEndpoint,proto3" json:"mcp_endpoint,omitempty"`                                                // Base MCP endpoint URL (e.g., "http://gateway:8080/mcp")
+	Secrets        map[string]string      `protobuf:"bytes,8,rep,name=secrets,proto3" json:"secrets,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Resolved env vars for this agent (global + overrides)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2112,6 +2113,13 @@ func (x *Welcome) GetMcpEndpoint() string {
 		return x.McpEndpoint
 	}
 	return ""
+}
+
+func (x *Welcome) GetSecrets() map[string]string {
+	if x != nil {
+		return x.Secrets
+	}
+	return nil
 }
 
 // Server tells agent to process a message
@@ -5181,7 +5189,7 @@ const file_coven_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bapproved\x18\x02 \x01(\bR\bapproved\x12\x1f\n" +
 	"\vapprove_all\x18\x03 \x01(\bR\n" +
-	"approveAll\"\x85\x02\n" +
+	"approveAll\"\xf8\x02\n" +
 	"\aWelcome\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\tR\bserverId\x12\x19\n" +
 	"\bagent_id\x18\x02 \x01(\tR\aagentId\x12\x1f\n" +
@@ -5190,7 +5198,11 @@ const file_coven_proto_rawDesc = "" +
 	"\fprincipal_id\x18\x04 \x01(\tR\vprincipalId\x12>\n" +
 	"\x0favailable_tools\x18\x05 \x03(\v2\x15.coven.ToolDefinitionR\x0eavailableTools\x12\x1b\n" +
 	"\tmcp_token\x18\x06 \x01(\tR\bmcpToken\x12!\n" +
-	"\fmcp_endpoint\x18\a \x01(\tR\vmcpEndpoint\"\xb4\x01\n" +
+	"\fmcp_endpoint\x18\a \x01(\tR\vmcpEndpoint\x125\n" +
+	"\asecrets\x18\b \x03(\v2\x1b.coven.Welcome.SecretsEntryR\asecrets\x1a:\n" +
+	"\fSecretsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb4\x01\n" +
 	"\vSendMessage\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1b\n" +
@@ -5487,7 +5499,7 @@ func file_coven_proto_rawDescGZIP() []byte {
 }
 
 var file_coven_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_coven_proto_msgTypes = make([]protoimpl.MessageInfo, 71)
+var file_coven_proto_msgTypes = make([]protoimpl.MessageInfo, 72)
 var file_coven_proto_goTypes = []any{
 	(ToolState)(0),                    // 0: coven.ToolState
 	(InjectionPriority)(0),            // 1: coven.InjectionPriority
@@ -5562,7 +5574,8 @@ var file_coven_proto_goTypes = []any{
 	(*ExecuteToolResponse)(nil),       // 70: coven.ExecuteToolResponse
 	(*PackWelcome)(nil),               // 71: coven.PackWelcome
 	(*AvailableTools)(nil),            // 72: coven.AvailableTools
-	(*emptypb.Empty)(nil),             // 73: google.protobuf.Empty
+	nil,                               // 73: coven.Welcome.SecretsEntry
+	(*emptypb.Empty)(nil),             // 74: google.protobuf.Empty
 }
 var file_coven_proto_depIdxs = []int32{
 	5,  // 0: coven.AgentMessage.register:type_name -> coven.RegisterAgent
@@ -5593,68 +5606,69 @@ var file_coven_proto_depIdxs = []int32{
 	14, // 25: coven.ServerMessage.cancel_request:type_name -> coven.CancelRequest
 	22, // 26: coven.ServerMessage.pack_tool_result:type_name -> coven.PackToolResult
 	67, // 27: coven.Welcome.available_tools:type_name -> coven.ToolDefinition
-	28, // 28: coven.SendMessage.attachments:type_name -> coven.FileAttachment
-	30, // 29: coven.ListBindingsResponse.bindings:type_name -> coven.Binding
-	39, // 30: coven.ListPrincipalsResponse.principals:type_name -> coven.Principal
-	50, // 31: coven.ClientStreamEvent.text:type_name -> coven.TextChunk
-	51, // 32: coven.ClientStreamEvent.thinking:type_name -> coven.ThinkingChunk
-	16, // 33: coven.ClientStreamEvent.tool_use:type_name -> coven.ToolUse
-	17, // 34: coven.ClientStreamEvent.tool_result:type_name -> coven.ToolResult
-	10, // 35: coven.ClientStreamEvent.tool_state:type_name -> coven.ToolStateUpdate
-	9,  // 36: coven.ClientStreamEvent.usage:type_name -> coven.TokenUsage
-	52, // 37: coven.ClientStreamEvent.done:type_name -> coven.StreamDone
-	53, // 38: coven.ClientStreamEvent.error:type_name -> coven.StreamError
-	64, // 39: coven.ClientStreamEvent.event:type_name -> coven.Event
-	49, // 40: coven.ClientStreamEvent.tool_approval:type_name -> coven.ClientToolApprovalRequest
-	4,  // 41: coven.AgentInfo.metadata:type_name -> coven.AgentMetadata
-	54, // 42: coven.ListAgentsResponse.agents:type_name -> coven.AgentInfo
-	28, // 43: coven.ClientSendMessageRequest.attachments:type_name -> coven.FileAttachment
-	64, // 44: coven.GetEventsResponse.events:type_name -> coven.Event
-	67, // 45: coven.PackManifest.tools:type_name -> coven.ToolDefinition
-	67, // 46: coven.AvailableTools.tools:type_name -> coven.ToolDefinition
-	2,  // 47: coven.CovenControl.AgentStream:input_type -> coven.AgentMessage
-	31, // 48: coven.AdminService.ListBindings:input_type -> coven.ListBindingsRequest
-	33, // 49: coven.AdminService.CreateBinding:input_type -> coven.CreateBindingRequest
-	34, // 50: coven.AdminService.UpdateBinding:input_type -> coven.UpdateBindingRequest
-	35, // 51: coven.AdminService.DeleteBinding:input_type -> coven.DeleteBindingRequest
-	37, // 52: coven.AdminService.CreateToken:input_type -> coven.CreateTokenRequest
-	40, // 53: coven.AdminService.ListPrincipals:input_type -> coven.ListPrincipalsRequest
-	42, // 54: coven.AdminService.CreatePrincipal:input_type -> coven.CreatePrincipalRequest
-	43, // 55: coven.AdminService.DeletePrincipal:input_type -> coven.DeletePrincipalRequest
-	65, // 56: coven.ClientService.GetEvents:input_type -> coven.GetEventsRequest
-	73, // 57: coven.ClientService.GetMe:input_type -> google.protobuf.Empty
-	61, // 58: coven.ClientService.SendMessage:input_type -> coven.ClientSendMessageRequest
-	47, // 59: coven.ClientService.StreamEvents:input_type -> coven.StreamEventsRequest
-	55, // 60: coven.ClientService.ListAgents:input_type -> coven.ListAgentsRequest
-	57, // 61: coven.ClientService.RegisterAgent:input_type -> coven.RegisterAgentRequest
-	59, // 62: coven.ClientService.RegisterClient:input_type -> coven.RegisterClientRequest
-	45, // 63: coven.ClientService.ApproveTool:input_type -> coven.ApproveToolRequest
-	68, // 64: coven.PackService.Register:input_type -> coven.PackManifest
-	70, // 65: coven.PackService.ToolResult:input_type -> coven.ExecuteToolResponse
-	23, // 66: coven.CovenControl.AgentStream:output_type -> coven.ServerMessage
-	32, // 67: coven.AdminService.ListBindings:output_type -> coven.ListBindingsResponse
-	30, // 68: coven.AdminService.CreateBinding:output_type -> coven.Binding
-	30, // 69: coven.AdminService.UpdateBinding:output_type -> coven.Binding
-	36, // 70: coven.AdminService.DeleteBinding:output_type -> coven.DeleteBindingResponse
-	38, // 71: coven.AdminService.CreateToken:output_type -> coven.CreateTokenResponse
-	41, // 72: coven.AdminService.ListPrincipals:output_type -> coven.ListPrincipalsResponse
-	39, // 73: coven.AdminService.CreatePrincipal:output_type -> coven.Principal
-	44, // 74: coven.AdminService.DeletePrincipal:output_type -> coven.DeletePrincipalResponse
-	66, // 75: coven.ClientService.GetEvents:output_type -> coven.GetEventsResponse
-	63, // 76: coven.ClientService.GetMe:output_type -> coven.MeResponse
-	62, // 77: coven.ClientService.SendMessage:output_type -> coven.ClientSendMessageResponse
-	48, // 78: coven.ClientService.StreamEvents:output_type -> coven.ClientStreamEvent
-	56, // 79: coven.ClientService.ListAgents:output_type -> coven.ListAgentsResponse
-	58, // 80: coven.ClientService.RegisterAgent:output_type -> coven.RegisterAgentResponse
-	60, // 81: coven.ClientService.RegisterClient:output_type -> coven.RegisterClientResponse
-	46, // 82: coven.ClientService.ApproveTool:output_type -> coven.ApproveToolResponse
-	69, // 83: coven.PackService.Register:output_type -> coven.ExecuteToolRequest
-	73, // 84: coven.PackService.ToolResult:output_type -> google.protobuf.Empty
-	66, // [66:85] is the sub-list for method output_type
-	47, // [47:66] is the sub-list for method input_type
-	47, // [47:47] is the sub-list for extension type_name
-	47, // [47:47] is the sub-list for extension extendee
-	0,  // [0:47] is the sub-list for field type_name
+	73, // 28: coven.Welcome.secrets:type_name -> coven.Welcome.SecretsEntry
+	28, // 29: coven.SendMessage.attachments:type_name -> coven.FileAttachment
+	30, // 30: coven.ListBindingsResponse.bindings:type_name -> coven.Binding
+	39, // 31: coven.ListPrincipalsResponse.principals:type_name -> coven.Principal
+	50, // 32: coven.ClientStreamEvent.text:type_name -> coven.TextChunk
+	51, // 33: coven.ClientStreamEvent.thinking:type_name -> coven.ThinkingChunk
+	16, // 34: coven.ClientStreamEvent.tool_use:type_name -> coven.ToolUse
+	17, // 35: coven.ClientStreamEvent.tool_result:type_name -> coven.ToolResult
+	10, // 36: coven.ClientStreamEvent.tool_state:type_name -> coven.ToolStateUpdate
+	9,  // 37: coven.ClientStreamEvent.usage:type_name -> coven.TokenUsage
+	52, // 38: coven.ClientStreamEvent.done:type_name -> coven.StreamDone
+	53, // 39: coven.ClientStreamEvent.error:type_name -> coven.StreamError
+	64, // 40: coven.ClientStreamEvent.event:type_name -> coven.Event
+	49, // 41: coven.ClientStreamEvent.tool_approval:type_name -> coven.ClientToolApprovalRequest
+	4,  // 42: coven.AgentInfo.metadata:type_name -> coven.AgentMetadata
+	54, // 43: coven.ListAgentsResponse.agents:type_name -> coven.AgentInfo
+	28, // 44: coven.ClientSendMessageRequest.attachments:type_name -> coven.FileAttachment
+	64, // 45: coven.GetEventsResponse.events:type_name -> coven.Event
+	67, // 46: coven.PackManifest.tools:type_name -> coven.ToolDefinition
+	67, // 47: coven.AvailableTools.tools:type_name -> coven.ToolDefinition
+	2,  // 48: coven.CovenControl.AgentStream:input_type -> coven.AgentMessage
+	31, // 49: coven.AdminService.ListBindings:input_type -> coven.ListBindingsRequest
+	33, // 50: coven.AdminService.CreateBinding:input_type -> coven.CreateBindingRequest
+	34, // 51: coven.AdminService.UpdateBinding:input_type -> coven.UpdateBindingRequest
+	35, // 52: coven.AdminService.DeleteBinding:input_type -> coven.DeleteBindingRequest
+	37, // 53: coven.AdminService.CreateToken:input_type -> coven.CreateTokenRequest
+	40, // 54: coven.AdminService.ListPrincipals:input_type -> coven.ListPrincipalsRequest
+	42, // 55: coven.AdminService.CreatePrincipal:input_type -> coven.CreatePrincipalRequest
+	43, // 56: coven.AdminService.DeletePrincipal:input_type -> coven.DeletePrincipalRequest
+	65, // 57: coven.ClientService.GetEvents:input_type -> coven.GetEventsRequest
+	74, // 58: coven.ClientService.GetMe:input_type -> google.protobuf.Empty
+	61, // 59: coven.ClientService.SendMessage:input_type -> coven.ClientSendMessageRequest
+	47, // 60: coven.ClientService.StreamEvents:input_type -> coven.StreamEventsRequest
+	55, // 61: coven.ClientService.ListAgents:input_type -> coven.ListAgentsRequest
+	57, // 62: coven.ClientService.RegisterAgent:input_type -> coven.RegisterAgentRequest
+	59, // 63: coven.ClientService.RegisterClient:input_type -> coven.RegisterClientRequest
+	45, // 64: coven.ClientService.ApproveTool:input_type -> coven.ApproveToolRequest
+	68, // 65: coven.PackService.Register:input_type -> coven.PackManifest
+	70, // 66: coven.PackService.ToolResult:input_type -> coven.ExecuteToolResponse
+	23, // 67: coven.CovenControl.AgentStream:output_type -> coven.ServerMessage
+	32, // 68: coven.AdminService.ListBindings:output_type -> coven.ListBindingsResponse
+	30, // 69: coven.AdminService.CreateBinding:output_type -> coven.Binding
+	30, // 70: coven.AdminService.UpdateBinding:output_type -> coven.Binding
+	36, // 71: coven.AdminService.DeleteBinding:output_type -> coven.DeleteBindingResponse
+	38, // 72: coven.AdminService.CreateToken:output_type -> coven.CreateTokenResponse
+	41, // 73: coven.AdminService.ListPrincipals:output_type -> coven.ListPrincipalsResponse
+	39, // 74: coven.AdminService.CreatePrincipal:output_type -> coven.Principal
+	44, // 75: coven.AdminService.DeletePrincipal:output_type -> coven.DeletePrincipalResponse
+	66, // 76: coven.ClientService.GetEvents:output_type -> coven.GetEventsResponse
+	63, // 77: coven.ClientService.GetMe:output_type -> coven.MeResponse
+	62, // 78: coven.ClientService.SendMessage:output_type -> coven.ClientSendMessageResponse
+	48, // 79: coven.ClientService.StreamEvents:output_type -> coven.ClientStreamEvent
+	56, // 80: coven.ClientService.ListAgents:output_type -> coven.ListAgentsResponse
+	58, // 81: coven.ClientService.RegisterAgent:output_type -> coven.RegisterAgentResponse
+	60, // 82: coven.ClientService.RegisterClient:output_type -> coven.RegisterClientResponse
+	46, // 83: coven.ClientService.ApproveTool:output_type -> coven.ApproveToolResponse
+	69, // 84: coven.PackService.Register:output_type -> coven.ExecuteToolRequest
+	74, // 85: coven.PackService.ToolResult:output_type -> google.protobuf.Empty
+	67, // [67:86] is the sub-list for method output_type
+	48, // [48:67] is the sub-list for method input_type
+	48, // [48:48] is the sub-list for extension type_name
+	48, // [48:48] is the sub-list for extension extendee
+	0,  // [0:48] is the sub-list for field type_name
 }
 
 func init() { file_coven_proto_init() }
@@ -5738,7 +5752,7 @@ func file_coven_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_coven_proto_rawDesc), len(file_coven_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   71,
+			NumMessages:   72,
 			NumExtensions: 0,
 			NumServices:   4,
 		},

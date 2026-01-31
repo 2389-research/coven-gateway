@@ -6,6 +6,7 @@ package webadmin
 import (
 	"html/template"
 	"net/http"
+	"time"
 
 	"github.com/2389/coven-gateway/internal/store"
 )
@@ -643,5 +644,64 @@ func (a *Admin) renderUsageStats(w http.ResponseWriter, stats *store.UsageStats)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render usage stats", "error", err)
+	}
+}
+
+// =============================================================================
+// Secrets Templates
+// =============================================================================
+
+// secretItem represents a secret for display
+type secretItem struct {
+	ID        string
+	Key       string
+	Value     string
+	AgentID   string    // empty = global
+	AgentName string    // display name (empty for global)
+	Scope     string    // "Global" or agent name
+	UpdatedAt time.Time // last updated timestamp
+}
+
+type secretsPageData struct {
+	Title     string
+	User      *store.AdminUser
+	Agents    []agentItem // for dropdown
+	CSRFToken string
+}
+
+type secretsListData struct {
+	Secrets   []secretItem
+	CSRFToken string
+}
+
+// renderSecretsPage renders the secrets management page
+func (a *Admin) renderSecretsPage(w http.ResponseWriter, user *store.AdminUser, agents []agentItem, csrfToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/secrets.html"))
+
+	data := secretsPageData{
+		Title:     "Secrets",
+		User:      user,
+		Agents:    agents,
+		CSRFToken: csrfToken,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render secrets page", "error", err)
+	}
+}
+
+// renderSecretsList renders the secrets list partial
+func (a *Admin) renderSecretsList(w http.ResponseWriter, secrets []secretItem, csrfToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/secrets_list.html"))
+
+	data := secretsListData{
+		Secrets:   secrets,
+		CSRFToken: csrfToken,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render secrets list", "error", err)
 	}
 }

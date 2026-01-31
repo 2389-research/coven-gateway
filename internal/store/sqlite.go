@@ -361,6 +361,24 @@ func (s *SQLiteStore) createSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_message_usage_agent ON message_usage(agent_id);
 		CREATE INDEX IF NOT EXISTS idx_message_usage_created ON message_usage(created_at);
 		CREATE INDEX IF NOT EXISTS idx_message_usage_request ON message_usage(request_id);
+
+		-- Secrets (environment variables for agents)
+		-- agent_id NULL = global default, non-NULL = agent-specific override
+		CREATE TABLE IF NOT EXISTS secrets (
+			id TEXT PRIMARY KEY,
+			key TEXT NOT NULL,
+			value TEXT NOT NULL,
+			agent_id TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			created_by TEXT
+		);
+		-- Unique constraint: one global per key, one override per agent+key
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_secrets_unique_global
+			ON secrets(key) WHERE agent_id IS NULL;
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_secrets_unique_agent
+			ON secrets(key, agent_id) WHERE agent_id IS NOT NULL;
+		CREATE INDEX IF NOT EXISTS idx_secrets_agent ON secrets(agent_id);
 	`
 
 	_, err := s.db.Exec(schema)
