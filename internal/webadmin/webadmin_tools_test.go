@@ -409,9 +409,8 @@ func TestHandleToolsList_MultiplePacks(t *testing.T) {
 }
 
 // --- handleToolsPage tests ---
-// Note: handleToolsPage now redirects to /admin/ (chat app) since tools are in settings modal
 
-func TestHandleToolsPage_RedirectsToChatApp(t *testing.T) {
+func TestHandleToolsPage_RendersToolsPage(t *testing.T) {
 	admin := newTestAdmin(nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/tools", nil)
@@ -420,13 +419,13 @@ func TestHandleToolsPage_RedirectsToChatApp(t *testing.T) {
 
 	admin.handleToolsPage(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("expected status 303 (redirect), got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
 
-	location := rec.Header().Get("Location")
-	if location != "/" {
-		t.Fatalf("expected redirect to /, got %q", location)
+	body := rec.Body.String()
+	if !strings.Contains(body, "Tools") {
+		t.Fatalf("expected page to contain 'Tools', got %q", body)
 	}
 }
 

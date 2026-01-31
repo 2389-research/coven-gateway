@@ -252,7 +252,8 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/link/{id}/approve", a.requireAuth(a.handleLinkApprove))
 
 	// Agent management
-	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsList))
+	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsPage))
+	mux.HandleFunc("GET /admin/agents/list", a.requireAuth(a.handleAgentsList))
 	mux.HandleFunc("GET /admin/agents/{id}", a.requireAuth(a.handleAgentDetail))
 	mux.HandleFunc("POST /admin/agents/{id}/approve", a.requireAuth(a.handleAgentApprove))
 	mux.HandleFunc("POST /admin/agents/{id}/revoke", a.requireAuth(a.handleAgentRevoke))
@@ -875,15 +876,15 @@ func (a *Admin) handleStatsAgents(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%d", count)
 }
 
+// handleAgentsPage renders the agents management page
+func (a *Admin) handleAgentsPage(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderAgentsPage(w, user, csrfToken)
+}
+
 // handleAgentsList returns the agents list (htmx partial)
-// For non-HTMX requests, redirects to chat app where agents are displayed
 func (a *Admin) handleAgentsList(w http.ResponseWriter, r *http.Request) {
-	// Check if this is an HTMX request
-	if r.Header.Get("HX-Request") != "true" {
-		// Regular navigation - redirect to chat app
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
 	a.renderAgentsList(w)
 }
 
@@ -1034,9 +1035,11 @@ func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 // Tools Handlers
 // =============================================================================
 
-// handleToolsPage is deprecated - redirect to chat app
+// handleToolsPage renders the tools management page
 func (a *Admin) handleToolsPage(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderToolsPage(w, user, csrfToken)
 }
 
 // handleToolsList returns the tools list grouped by pack (htmx partial)
@@ -1236,9 +1239,11 @@ func (a *Admin) handleBoardThread(w http.ResponseWriter, r *http.Request) {
 // Principals Handlers
 // =============================================================================
 
-// handlePrincipalsPage is deprecated - redirect to chat app
+// handlePrincipalsPage renders the principals management page
 func (a *Admin) handlePrincipalsPage(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	user := getUserFromContext(r)
+	_, csrfToken := a.ensureCSRFToken(w, r)
+	a.renderPrincipalsPage(w, user, csrfToken)
 }
 
 // handlePrincipalsList returns the principals list (htmx partial)

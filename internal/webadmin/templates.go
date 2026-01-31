@@ -108,6 +108,12 @@ type toolsListData struct {
 	Packs []packItem
 }
 
+type agentsPageData struct {
+	Title     string
+	User      *store.AdminUser
+	CSRFToken string
+}
+
 type agentDetailItem struct {
 	ID           string
 	Name         string
@@ -369,6 +375,22 @@ func (a *Admin) renderToolsList(w http.ResponseWriter, packItems []packItem) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render tools list", "error", err)
+	}
+}
+
+// renderAgentsPage renders the agents management page
+func (a *Admin) renderAgentsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/agents.html"))
+
+	data := agentsPageData{
+		Title:     "Agents",
+		User:      user,
+		CSRFToken: csrfToken,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		a.logger.Error("failed to render agents page", "error", err)
 	}
 }
 
