@@ -72,6 +72,7 @@ type TokenGenerator interface {
 // PrincipalStore provides methods for principal and role management
 type PrincipalStore interface {
 	CreatePrincipal(ctx context.Context, p *store.Principal) error
+	GetPrincipalByPubkey(ctx context.Context, fp string) (*store.Principal, error)
 	AddRole(ctx context.Context, subjectType store.RoleSubjectType, subjectID string, role store.RoleName) error
 }
 
@@ -1747,26 +1748,35 @@ func (a *Admin) handleLinkApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create principal for the device
-	principalID := uuid.New().String()
-	principal := &store.Principal{
-		ID:          principalID,
-		Type:        store.PrincipalTypeAgent,
-		PubkeyFP:    linkCode.Fingerprint,
-		DisplayName: linkCode.DeviceName,
-		Status:      store.PrincipalStatusApproved,
-		CreatedAt:   time.Now(),
-	}
+	// Check if a principal with this fingerprint already exists
+	var principalID string
+	existingPrincipal, err := a.principalStore.GetPrincipalByPubkey(r.Context(), linkCode.Fingerprint)
+	if err == nil && existingPrincipal != nil {
+		// Use existing principal
+		principalID = existingPrincipal.ID
+		a.logger.Info("using existing principal for link", "principal_id", principalID, "fingerprint", linkCode.Fingerprint)
+	} else {
+		// Create new principal for the device
+		principalID = uuid.New().String()
+		principal := &store.Principal{
+			ID:          principalID,
+			Type:        store.PrincipalTypeAgent,
+			PubkeyFP:    linkCode.Fingerprint,
+			DisplayName: linkCode.DeviceName,
+			Status:      store.PrincipalStatusApproved,
+			CreatedAt:   time.Now(),
+		}
 
-	if err := a.principalStore.CreatePrincipal(r.Context(), principal); err != nil {
-		a.logger.Error("failed to create principal", "error", err)
-		http.Error(w, "Failed to create principal", http.StatusInternalServerError)
-		return
-	}
+		if err := a.principalStore.CreatePrincipal(r.Context(), principal); err != nil {
+			a.logger.Error("failed to create principal", "error", err)
+			http.Error(w, "Failed to create principal", http.StatusInternalServerError)
+			return
+		}
 
-	// Add member role
-	if err := a.principalStore.AddRole(r.Context(), store.RoleSubjectPrincipal, principalID, store.RoleMember); err != nil {
-		a.logger.Error("failed to add role", "error", err)
+		// Add member role for new principal
+		if err := a.principalStore.AddRole(r.Context(), store.RoleSubjectPrincipal, principalID, store.RoleMember); err != nil {
+			a.logger.Error("failed to add role", "error", err)
+		}
 	}
 
 	// Generate token (30 days)
