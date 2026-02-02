@@ -74,26 +74,27 @@ func TestService_SendMessage_RecordsUserMessageFirst(t *testing.T) {
 	// Give persistence goroutine time to complete
 	time.Sleep(100 * time.Millisecond)
 
-	// Verify user message was saved
-	messages, err := testStore.GetThreadMessages(ctx, resp.ThreadID, 10)
+	// Verify user message was saved (now in ledger_events)
+	events, err := testStore.GetEventsByThreadID(ctx, resp.ThreadID, 10)
 	require.NoError(t, err)
 
 	// Should have at least the user message
-	require.GreaterOrEqual(t, len(messages), 1)
+	require.GreaterOrEqual(t, len(events), 1)
 
-	// Find the user message (don't assume order)
-	var userMsg *store.Message
-	for _, msg := range messages {
-		if msg.Sender == "user" {
-			userMsg = msg
+	// Find the user event (don't assume order)
+	var userEvt *store.LedgerEvent
+	for _, evt := range events {
+		if evt.Author == "user" {
+			userEvt = evt
 			break
 		}
 	}
 
-	require.NotNil(t, userMsg, "user message not found")
-	assert.Equal(t, "user", userMsg.Sender)
-	assert.Equal(t, "Hi there", userMsg.Content)
-	assert.Equal(t, store.MessageTypeMessage, userMsg.Type)
+	require.NotNil(t, userEvt, "user event not found")
+	assert.Equal(t, "user", userEvt.Author)
+	require.NotNil(t, userEvt.Text)
+	assert.Equal(t, "Hi there", *userEvt.Text)
+	assert.Equal(t, store.EventTypeMessage, userEvt.Type)
 }
 
 func TestService_SendMessage_CreatesThread(t *testing.T) {
@@ -168,17 +169,17 @@ func TestService_SendMessage_ReusesExistingThread(t *testing.T) {
 	// Should use same thread
 	assert.Equal(t, resp1.ThreadID, resp2.ThreadID)
 
-	// Should have 2 user messages in thread
-	messages, err := testStore.GetThreadMessages(ctx, resp1.ThreadID, 10)
+	// Should have 2 user events in thread (now in ledger_events)
+	events, err := testStore.GetEventsByThreadID(ctx, resp1.ThreadID, 10)
 	require.NoError(t, err)
 
-	userMsgCount := 0
-	for _, msg := range messages {
-		if msg.Sender == "user" {
-			userMsgCount++
+	userEvtCount := 0
+	for _, evt := range events {
+		if evt.Author == "user" {
+			userEvtCount++
 		}
 	}
-	assert.Equal(t, 2, userMsgCount)
+	assert.Equal(t, 2, userEvtCount)
 }
 
 func TestService_SendMessage_UsesProvidedThreadID(t *testing.T) {
@@ -250,28 +251,30 @@ func TestService_SendMessage_PersistsToolUse(t *testing.T) {
 	// Give persistence goroutine time to complete
 	time.Sleep(100 * time.Millisecond)
 
-	// Verify tool events were saved
-	messages, err := testStore.GetThreadMessages(ctx, resp.ThreadID, 10)
+	// Verify tool events were saved (now in ledger_events)
+	events, err := testStore.GetEventsByThreadID(ctx, resp.ThreadID, 10)
 	require.NoError(t, err)
 
-	var toolUseMsg, toolResultMsg *store.Message
-	for _, msg := range messages {
-		switch msg.Type {
-		case store.MessageTypeToolUse:
-			toolUseMsg = msg
-		case store.MessageTypeToolResult:
-			toolResultMsg = msg
+	var toolUseEvt, toolResultEvt *store.LedgerEvent
+	for _, evt := range events {
+		switch evt.Type {
+		case store.EventTypeToolCall:
+			toolUseEvt = evt
+		case store.EventTypeToolResult:
+			toolResultEvt = evt
 		}
 	}
 
-	require.NotNil(t, toolUseMsg, "tool_use message not found")
-	assert.Equal(t, "read_file", toolUseMsg.ToolName)
-	assert.Equal(t, "tool-123", toolUseMsg.ToolID)
-	assert.Contains(t, toolUseMsg.Content, "/tmp/test.txt")
+	require.NotNil(t, toolUseEvt, "tool_call event not found")
+	require.NotNil(t, toolUseEvt.Text)
+	assert.Contains(t, *toolUseEvt.Text, "read_file")
+	assert.Contains(t, *toolUseEvt.Text, "tool-123")
+	assert.Contains(t, *toolUseEvt.Text, "/tmp/test.txt")
 
-	require.NotNil(t, toolResultMsg, "tool_result message not found")
-	assert.Equal(t, "tool-123", toolResultMsg.ToolID)
-	assert.Equal(t, "file contents here", toolResultMsg.Content)
+	require.NotNil(t, toolResultEvt, "tool_result event not found")
+	require.NotNil(t, toolResultEvt.Text)
+	assert.Contains(t, *toolResultEvt.Text, "tool-123")
+	assert.Contains(t, *toolResultEvt.Text, "file contents here")
 }
 
 func TestService_SendMessage_AccumulatesStreamingText(t *testing.T) {
@@ -301,20 +304,21 @@ func TestService_SendMessage_AccumulatesStreamingText(t *testing.T) {
 	// Give persistence goroutine time to complete
 	time.Sleep(100 * time.Millisecond)
 
-	// Verify accumulated text was saved
-	messages, err := testStore.GetThreadMessages(ctx, resp.ThreadID, 10)
+	// Verify accumulated text was saved (now in ledger_events)
+	events, err := testStore.GetEventsByThreadID(ctx, resp.ThreadID, 10)
 	require.NoError(t, err)
 
-	var agentMsg *store.Message
-	for _, msg := range messages {
-		if msg.Sender == "agent:test-agent" && msg.Type == store.MessageTypeMessage {
-			agentMsg = msg
+	var agentEvt *store.LedgerEvent
+	for _, evt := range events {
+		if evt.Author == "agent:test-agent" && evt.Type == store.EventTypeMessage {
+			agentEvt = evt
 			break
 		}
 	}
 
-	require.NotNil(t, agentMsg, "agent message not found")
-	assert.Equal(t, "Hello world!", agentMsg.Content)
+	require.NotNil(t, agentEvt, "agent event not found")
+	require.NotNil(t, agentEvt.Text)
+	assert.Equal(t, "Hello world!", *agentEvt.Text)
 }
 
 func TestService_SendMessage_RequiresAgentID(t *testing.T) {
@@ -437,14 +441,15 @@ func TestService_SendMessage_SenderError(t *testing.T) {
 	assert.Contains(t, err.Error(), "agent send failed")
 
 	// User message should still be saved even though agent failed
-	// (this is the "record first" principle)
+	// (this is the "record first" principle) - now in ledger_events
 	threads, err := testStore.ListThreads(ctx, 10)
 	require.NoError(t, err)
 	require.Len(t, threads, 1)
 
-	messages, err := testStore.GetThreadMessages(ctx, threads[0].ID, 10)
+	events, err := testStore.GetEventsByThreadID(ctx, threads[0].ID, 10)
 	require.NoError(t, err)
-	require.Len(t, messages, 1)
-	assert.Equal(t, "user", messages[0].Sender)
-	assert.Equal(t, "Hello", messages[0].Content)
+	require.Len(t, events, 1)
+	assert.Equal(t, "user", events[0].Author)
+	require.NotNil(t, events[0].Text)
+	assert.Equal(t, "Hello", *events[0].Text)
 }

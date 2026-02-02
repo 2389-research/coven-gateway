@@ -86,6 +86,9 @@ type FullStore interface {
 	GetThread(ctx context.Context, id string) (*store.Thread, error)
 	GetThreadMessages(ctx context.Context, threadID string, limit int) ([]*store.Message, error)
 
+	// Ledger events (unified message storage)
+	GetEventsByThreadID(ctx context.Context, threadID string, limit int) ([]*store.LedgerEvent, error)
+
 	// Messages
 	SaveMessage(ctx context.Context, msg *store.Message) error
 

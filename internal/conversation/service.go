@@ -20,8 +20,10 @@ type ConversationStore interface {
 	CreateThread(ctx context.Context, thread *store.Thread) error
 	GetThread(ctx context.Context, id string) (*store.Thread, error)
 	GetThreadByFrontendID(ctx context.Context, frontendName, externalID string) (*store.Thread, error)
-	SaveMessage(ctx context.Context, msg *store.Message) error
-	GetThreadMessages(ctx context.Context, threadID string, limit int) ([]*store.Message, error)
+
+	// Ledger events (unified message storage)
+	SaveEvent(ctx context.Context, event *store.LedgerEvent) error
+	GetEventsByThreadID(ctx context.Context, threadID string, limit int) ([]*store.LedgerEvent, error)
 
 	// Token usage tracking
 	SaveUsage(ctx context.Context, usage *store.TokenUsage) error
@@ -92,22 +94,26 @@ func (s *Service) SendMessage(ctx context.Context, req *SendRequest) (*SendRespo
 		return nil, fmt.Errorf("thread resolution failed: %w", err)
 	}
 
-	// 2. Record user message FIRST (source of truth)
-	userMsg := &store.Message{
-		ID:        uuid.New().String(),
-		ThreadID:  thread.ID,
-		Sender:    req.Sender,
-		Content:   req.Content,
-		Type:      store.MessageTypeMessage,
-		CreatedAt: time.Now(),
+	// 2. Record user message FIRST (source of truth in ledger_events)
+	now := time.Now()
+	messageID := uuid.New().String()
+	userEvent := &store.LedgerEvent{
+		ID:              messageID,
+		ConversationKey: "thread:" + thread.ID,
+		ThreadID:        &thread.ID,
+		Direction:       store.EventDirectionInbound,
+		Author:          req.Sender,
+		Timestamp:       now,
+		Type:            store.EventTypeMessage,
+		Text:            &req.Content,
 	}
-	if err := s.store.SaveMessage(ctx, userMsg); err != nil {
+	if err := s.store.SaveEvent(ctx, userEvent); err != nil {
 		return nil, fmt.Errorf("failed to record message: %w", err)
 	}
 
 	s.logger.Debug("user message recorded",
 		"thread_id", thread.ID,
-		"message_id", userMsg.ID,
+		"message_id", messageID,
 		"sender", req.Sender)
 
 	// 3. Send to agent
@@ -130,14 +136,18 @@ func (s *Service) SendMessage(ctx context.Context, req *SendRequest) (*SendRespo
 
 	return &SendResponse{
 		ThreadID:  thread.ID,
-		MessageID: userMsg.ID,
+		MessageID: messageID,
 		Stream:    persistedChan,
 	}, nil
 }
 
-// GetHistory returns messages for a thread
+// GetHistory returns messages for a thread (converted from events)
 func (s *Service) GetHistory(ctx context.Context, threadID string, limit int) ([]*store.Message, error) {
-	return s.store.GetThreadMessages(ctx, threadID, limit)
+	events, err := s.store.GetEventsByThreadID(ctx, threadID, limit)
+	if err != nil {
+		return nil, err
+	}
+	return store.EventsToMessages(events), nil
 }
 
 // GetThread returns thread metadata
@@ -263,28 +273,41 @@ func (s *Service) persistResponses(ctx context.Context, threadID, agentID string
 
 			case agent.EventToolUse:
 				if resp.ToolUse != nil {
-					s.saveMessage(&store.Message{
-						ID:        uuid.New().String(),
-						ThreadID:  threadID,
-						Sender:    sender,
-						Content:   resp.ToolUse.InputJSON,
-						Type:      store.MessageTypeToolUse,
-						ToolName:  resp.ToolUse.Name,
-						ToolID:    resp.ToolUse.ID,
-						CreatedAt: time.Now(),
+					now := time.Now()
+					msgID := uuid.New().String()
+					// Store tool metadata as JSON in text field
+					toolText := fmt.Sprintf(`{"name":%q,"id":%q,"input":%s}`, resp.ToolUse.Name, resp.ToolUse.ID, resp.ToolUse.InputJSON)
+					s.saveEvent(&store.LedgerEvent{
+						ID:              msgID,
+						ConversationKey: "thread:" + threadID,
+						ThreadID:        &threadID,
+						Direction:       store.EventDirectionOutbound,
+						Author:          sender,
+						Timestamp:       now,
+						Type:            store.EventTypeToolCall,
+						Text:            &toolText,
 					})
 				}
 
 			case agent.EventToolResult:
 				if resp.ToolResult != nil {
-					s.saveMessage(&store.Message{
-						ID:        uuid.New().String(),
-						ThreadID:  threadID,
-						Sender:    sender,
-						Content:   resp.ToolResult.Output,
-						Type:      store.MessageTypeToolResult,
-						ToolID:    resp.ToolResult.ID,
-						CreatedAt: time.Now(),
+					now := time.Now()
+					msgID := uuid.New().String()
+					// Store tool result with id and output as JSON
+					isErrorStr := "false"
+					if resp.ToolResult.IsError {
+						isErrorStr = "true"
+					}
+					toolResultText := fmt.Sprintf(`{"id":%q,"output":%q,"is_error":%s}`, resp.ToolResult.ID, resp.ToolResult.Output, isErrorStr)
+					s.saveEvent(&store.LedgerEvent{
+						ID:              msgID,
+						ConversationKey: "thread:" + threadID,
+						ThreadID:        &threadID,
+						Direction:       store.EventDirectionOutbound,
+						Author:          sender,
+						Timestamp:       now,
+						Type:            store.EventTypeToolResult,
+						Text:            &toolResultText,
 					})
 				}
 
@@ -314,14 +337,17 @@ func (s *Service) persistResponses(ctx context.Context, threadID, agentID string
 					content = resp.Text
 				}
 				if content != "" {
+					now := time.Now()
 					messageID := uuid.New().String()
-					s.saveMessage(&store.Message{
-						ID:        messageID,
-						ThreadID:  threadID,
-						Sender:    sender,
-						Content:   content,
-						Type:      store.MessageTypeMessage,
-						CreatedAt: time.Now(),
+					s.saveEvent(&store.LedgerEvent{
+						ID:              messageID,
+						ConversationKey: "thread:" + threadID,
+						ThreadID:        &threadID,
+						Direction:       store.EventDirectionOutbound,
+						Author:          sender,
+						Timestamp:       now,
+						Type:            store.EventTypeMessage,
+						Text:            &content,
 					})
 					// Link usage record to this message
 					if savedUsage {
@@ -355,26 +381,6 @@ func (s *Service) persistResponses(ctx context.Context, threadID, agentID string
 	return out
 }
 
-// saveMessage saves a message with a separate timeout context
-// This ensures persistence continues even if the request context is cancelled
-func (s *Service) saveMessage(msg *store.Message) {
-	saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := s.store.SaveMessage(saveCtx, msg); err != nil {
-		s.logger.Error("failed to save message",
-			"error", err,
-			"thread_id", msg.ThreadID,
-			"type", msg.Type,
-			"message_id", msg.ID)
-	} else {
-		s.logger.Debug("message saved",
-			"thread_id", msg.ThreadID,
-			"type", msg.Type,
-			"message_id", msg.ID)
-	}
-}
-
 // saveUsage saves a token usage record with a separate timeout context
 func (s *Service) saveUsage(usage *store.TokenUsage) {
 	saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -405,5 +411,25 @@ func (s *Service) linkUsageToMessage(requestID, messageID string) {
 			"error", err,
 			"request_id", requestID,
 			"message_id", messageID)
+	}
+}
+
+// saveEvent saves a ledger event with a separate timeout context.
+// This ensures persistence continues even if the request context is cancelled.
+func (s *Service) saveEvent(event *store.LedgerEvent) {
+	saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := s.store.SaveEvent(saveCtx, event); err != nil {
+		s.logger.Error("failed to save event",
+			"error", err,
+			"event_id", event.ID,
+			"thread_id", event.ThreadID,
+			"type", event.Type)
+	} else {
+		s.logger.Debug("event saved",
+			"event_id", event.ID,
+			"thread_id", event.ThreadID,
+			"type", event.Type)
 	}
 }

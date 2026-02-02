@@ -110,18 +110,19 @@ func (a *adminHandlers) AgentHistory(ctx context.Context, callerAgentID string, 
 		return nil, fmt.Errorf("listing threads: %w", err)
 	}
 
-	// Collect messages from threads belonging to this agent
+	// Collect messages from threads belonging to this agent (read from ledger_events)
 	var allMessages []*store.Message
 	for _, thread := range threads {
 		if thread.AgentID != in.AgentID {
 			continue
 		}
 
-		messages, err := a.store.GetThreadMessages(ctx, thread.ID, limit)
+		events, err := a.store.GetEventsByThreadID(ctx, thread.ID, limit)
 		if err != nil {
 			continue // Skip threads we can't read
 		}
-		allMessages = append(allMessages, messages...)
+		// Convert events to messages using shared helper
+		allMessages = append(allMessages, store.EventsToMessages(events)...)
 
 		// Stop if we have enough messages
 		if len(allMessages) >= limit {

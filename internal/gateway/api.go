@@ -791,6 +791,7 @@ func (g *Gateway) handleThreadRoutes(w http.ResponseWriter, r *http.Request) {
 
 // handleThreadMessages handles GET /api/threads/{id}/messages requests.
 // Returns the message history for a thread, optionally limited by ?limit=N.
+// Uses ledger_events as the source of truth for unified message storage.
 func (g *Gateway) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -845,40 +846,45 @@ func (g *Gateway) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get messages
-	messages, err := g.store.GetThreadMessages(r.Context(), threadID, limit)
+	// Get messages from unified ledger_events storage
+	events, err := g.store.GetEventsByThreadID(r.Context(), threadID, limit)
 	if err != nil {
-		g.logger.Error("failed to get messages", "error", err)
+		g.logger.Error("failed to get events", "error", err)
 		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	// Build response
+	// Build response - convert events to message format for backward compatibility
 	response := ThreadMessagesResponse{
 		ThreadID: threadID,
-		Messages: make([]MessageResponse, len(messages)),
+		Messages: make([]MessageResponse, len(events)),
 	}
 
-	for i, msg := range messages {
-		// Default to "message" type if not set (for backwards compatibility)
-		msgType := msg.Type
-		if msgType == "" {
-			msgType = store.MessageTypeMessage
-		}
-		response.Messages[i] = MessageResponse{
-			ID:        msg.ID,
-			ThreadID:  msg.ThreadID,
-			Sender:    msg.Sender,
-			Content:   msg.Content,
-			Type:      msgType,
-			ToolName:  msg.ToolName,
-			ToolID:    msg.ToolID,
-			CreatedAt: msg.CreatedAt.Format(time.RFC3339),
-		}
+	for i, evt := range events {
+		response.Messages[i] = g.eventToMessageResponse(threadID, evt)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// eventToMessageResponse converts a ledger event to MessageResponse for API backward compatibility.
+// Uses the shared store.EventToMessage helper for core conversion logic, then formats for API.
+func (g *Gateway) eventToMessageResponse(threadID string, evt *store.LedgerEvent) MessageResponse {
+	// Use shared conversion helper for the core logic
+	storeMsg := store.EventToMessage(evt)
+
+	// Build API response from store.Message
+	return MessageResponse{
+		ID:        storeMsg.ID,
+		ThreadID:  threadID,
+		Sender:    storeMsg.Sender,
+		Content:   storeMsg.Content,
+		Type:      storeMsg.Type,
+		ToolName:  storeMsg.ToolName,
+		ToolID:    storeMsg.ToolID,
+		CreatedAt: storeMsg.CreatedAt.Format(time.RFC3339),
+	}
 }
 
 // handleAgentRoutes routes /api/agents/{id}/* requests to the appropriate handler.

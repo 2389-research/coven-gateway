@@ -178,6 +178,7 @@ func (s *SQLiteStore) createSchema() error {
 		CREATE TABLE IF NOT EXISTS ledger_events (
 			event_id           TEXT PRIMARY KEY,
 			conversation_key   TEXT NOT NULL,
+			thread_id          TEXT,
 			direction          TEXT NOT NULL,
 			author             TEXT NOT NULL,
 			timestamp          TEXT NOT NULL,
@@ -195,6 +196,7 @@ func (s *SQLiteStore) createSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_ledger_conversation ON ledger_events(conversation_key, timestamp);
 		CREATE INDEX IF NOT EXISTS idx_ledger_actor ON ledger_events(actor_principal_id);
 		CREATE INDEX IF NOT EXISTS idx_ledger_timestamp ON ledger_events(timestamp);
+		CREATE INDEX IF NOT EXISTS idx_ledger_thread ON ledger_events(thread_id) WHERE thread_id IS NOT NULL;
 
 		CREATE TABLE IF NOT EXISTS bindings (
 			binding_id  TEXT PRIMARY KEY,
@@ -436,6 +438,90 @@ func (s *SQLiteStore) runMigrations() error {
 		}
 		s.logger.Info("applied migration", "column", "working_dir", "table", "bindings")
 	}
+
+	// Migration: Add thread_id column to ledger_events table for unified message storage
+	err = s.db.QueryRow(`SELECT 1 FROM pragma_table_info('ledger_events') WHERE name = 'thread_id'`).Scan(&exists)
+	if err != nil {
+		// Column doesn't exist, add it
+		if _, err := s.db.Exec(`ALTER TABLE ledger_events ADD COLUMN thread_id TEXT`); err != nil {
+			return fmt.Errorf("adding thread_id column to ledger_events: %w", err)
+		}
+		s.logger.Info("applied migration", "column", "thread_id", "table", "ledger_events")
+
+		// Add partial index for efficient thread lookups
+		if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_ledger_thread ON ledger_events(thread_id) WHERE thread_id IS NOT NULL`); err != nil {
+			return fmt.Errorf("creating idx_ledger_thread index: %w", err)
+		}
+		s.logger.Info("applied migration", "index", "idx_ledger_thread", "table", "ledger_events")
+	}
+
+	// Migration: Copy existing messages to ledger_events for unified storage
+	// This is a one-time migration that copies messages not yet in ledger_events
+	if err := s.migrateMessagesToEvents(); err != nil {
+		return fmt.Errorf("migrating messages to events: %w", err)
+	}
+
+	return nil
+}
+
+// migrateMessagesToEvents copies existing messages from the messages table to ledger_events.
+// This is idempotent - it only copies messages that don't already exist in ledger_events.
+func (s *SQLiteStore) migrateMessagesToEvents() error {
+	// Check how many messages need migration
+	var messageCount, eventCount int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&messageCount)
+	if err != nil {
+		return fmt.Errorf("counting messages: %w", err)
+	}
+
+	// If no messages, skip migration
+	if messageCount == 0 {
+		return nil
+	}
+
+	// Count messages not yet in ledger_events
+	err = s.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM messages m
+		WHERE NOT EXISTS (SELECT 1 FROM ledger_events WHERE event_id = m.id)
+	`).Scan(&eventCount)
+	if err != nil {
+		return fmt.Errorf("counting pending migrations: %w", err)
+	}
+
+	if eventCount == 0 {
+		return nil
+	}
+
+	s.logger.Info("migrating messages to ledger_events", "pending", eventCount, "total_messages", messageCount)
+
+	// Migrate messages to events
+	// Direction: agent:* senders -> outbound_from_agent, others -> inbound_to_agent
+	// Type mapping: tool_use -> tool_call, tool_result -> tool_result, message -> message
+	result, err := s.db.Exec(`
+		INSERT INTO ledger_events (event_id, conversation_key, thread_id, direction, author, timestamp, type, text)
+		SELECT
+			m.id,
+			'thread:' || m.thread_id,
+			m.thread_id,
+			CASE WHEN m.sender LIKE 'agent:%' THEN 'outbound_from_agent' ELSE 'inbound_to_agent' END,
+			m.sender,
+			m.created_at,
+			CASE m.type
+				WHEN 'tool_use' THEN 'tool_call'
+				WHEN 'tool_result' THEN 'tool_result'
+				ELSE 'message'
+			END,
+			m.content
+		FROM messages m
+		WHERE NOT EXISTS (SELECT 1 FROM ledger_events WHERE event_id = m.id)
+	`)
+	if err != nil {
+		return fmt.Errorf("inserting events: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	s.logger.Info("migrated messages to ledger_events", "count", rowsAffected)
 
 	return nil
 }

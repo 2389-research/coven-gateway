@@ -315,12 +315,15 @@ func (a *Admin) handleThreadView(w http.ResponseWriter, r *http.Request) {
 		agentName = thread.AgentID
 	}
 
-	// Get messages
-	messages, err := a.store.GetThreadMessages(r.Context(), threadID, 100)
+	// Get messages from unified ledger_events storage
+	events, err := a.store.GetEventsByThreadID(r.Context(), threadID, 100)
 	if err != nil {
-		a.logger.Error("failed to get messages", "error", err, "thread_id", threadID)
-		messages = nil
+		a.logger.Error("failed to get events", "error", err, "thread_id", threadID)
+		events = nil
 	}
+
+	// Convert events to messages for template compatibility
+	messages := store.EventsToMessages(events)
 
 	a.renderChatView(w, threadID, thread.AgentID, agentName, connected, messages)
 }

@@ -149,6 +149,7 @@ type Store interface {
 	ListEventsByActor(ctx context.Context, principalID string, limit int) ([]*LedgerEvent, error)
 	ListEventsByActorDesc(ctx context.Context, principalID string, limit int) ([]*LedgerEvent, error)
 	GetEvents(ctx context.Context, params GetEventsParams) (*GetEventsResult, error)
+	GetEventsByThreadID(ctx context.Context, threadID string, limit int) ([]*LedgerEvent, error)
 
 	// Close releases any resources held by the store
 	Close() error

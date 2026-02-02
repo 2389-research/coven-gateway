@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/2389/coven-gateway/internal/agent"
 	"github.com/2389/coven-gateway/internal/store"
@@ -109,16 +110,21 @@ func TestAdminAgentHistory_WithMessages(t *testing.T) {
 		t.Fatalf("create thread: %v", err)
 	}
 
-	// Add a message to the thread
-	msg := &store.Message{
-		ID:       "msg-1",
-		ThreadID: "thread-1",
-		Sender:   "user",
-		Content:  "Hello agent",
-		Type:     "message",
+	// Add an event to the thread (using unified ledger_events storage)
+	threadID := "thread-1"
+	content := "Hello agent"
+	evt := &store.LedgerEvent{
+		ID:              "msg-1",
+		ConversationKey: "thread:" + threadID,
+		ThreadID:        &threadID,
+		Direction:       store.EventDirectionInbound,
+		Author:          "user",
+		Timestamp:       time.Now(),
+		Type:            store.EventTypeMessage,
+		Text:            &content,
 	}
-	if err := s.SaveMessage(ctx, msg); err != nil {
-		t.Fatalf("save message: %v", err)
+	if err := s.SaveEvent(ctx, evt); err != nil {
+		t.Fatalf("save event: %v", err)
 	}
 
 	// Query history for the agent

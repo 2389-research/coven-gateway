@@ -385,7 +385,7 @@ func (m *MockStore) GetEvent(ctx context.Context, id string) (*LedgerEvent, erro
 	return &result, nil
 }
 
-// ListEventsByConversation retrieves events for a conversation key.
+// ListEventsByConversation retrieves events for a conversation key, ordered by timestamp ASC.
 func (m *MockStore) ListEventsByConversation(ctx context.Context, conversationKey string, limit int) ([]*LedgerEvent, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -397,6 +397,11 @@ func (m *MockStore) ListEventsByConversation(ctx context.Context, conversationKe
 			result = append(result, &eventCopy)
 		}
 	}
+
+	// Sort by timestamp ASC to match SQLiteStore behavior
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Timestamp.Before(result[j].Timestamp)
+	})
 
 	if limit > 0 && len(result) > limit {
 		result = result[:limit]
@@ -444,6 +449,42 @@ func (m *MockStore) ListEventsByActorDesc(ctx context.Context, principalID strin
 	})
 
 	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+
+	return result, nil
+}
+
+// GetEventsByThreadID retrieves events for a thread, ordered by timestamp ASC.
+func (m *MockStore) GetEventsByThreadID(ctx context.Context, threadID string, limit int) ([]*LedgerEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	conversationKey := "thread:" + threadID
+	var result []*LedgerEvent
+	for _, e := range m.events {
+		// Match by thread_id column or conversation_key format
+		threadIDMatch := e.ThreadID != nil && *e.ThreadID == threadID
+		convKeyMatch := e.ConversationKey == conversationKey
+		if threadIDMatch || convKeyMatch {
+			eventCopy := *e
+			result = append(result, &eventCopy)
+		}
+	}
+
+	// Sort by timestamp ASC
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Timestamp.Before(result[j].Timestamp)
+	})
+
+	if len(result) > limit {
 		result = result[:limit]
 	}
 

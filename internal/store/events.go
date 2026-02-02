@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -55,7 +56,8 @@ type GetEventsResult struct {
 // All inbound and outbound messages are stored here for audit and history.
 type LedgerEvent struct {
 	ID              string
-	ConversationKey string         // e.g., "matrix:!room:server.com", "tui:client:pane"
+	ConversationKey string         // e.g., "matrix:!room:server.com", "tui:client:pane", "thread:{thread_id}"
+	ThreadID        *string        // optional: links event to a thread for efficient queries
 	Direction       EventDirection // inbound_to_agent or outbound_from_agent
 	Author          string         // user/client/agent identifier
 	Timestamp       time.Time
@@ -73,14 +75,15 @@ type LedgerEvent struct {
 func (s *SQLiteStore) SaveEvent(ctx context.Context, event *LedgerEvent) error {
 	query := `
 		INSERT INTO ledger_events (
-			event_id, conversation_key, direction, author, timestamp, type, text,
+			event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
 			raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := s.db.ExecContext(ctx, query,
 		event.ID,
 		event.ConversationKey,
+		event.ThreadID,
 		string(event.Direction),
 		event.Author,
 		event.Timestamp.Format(time.RFC3339),
@@ -98,6 +101,7 @@ func (s *SQLiteStore) SaveEvent(ctx context.Context, event *LedgerEvent) error {
 	s.logger.Debug("saved ledger event",
 		"event_id", event.ID,
 		"conversation_key", event.ConversationKey,
+		"thread_id", event.ThreadID,
 		"type", event.Type,
 	)
 	return nil
@@ -106,7 +110,7 @@ func (s *SQLiteStore) SaveEvent(ctx context.Context, event *LedgerEvent) error {
 // GetEvent retrieves a single event by ID
 func (s *SQLiteStore) GetEvent(ctx context.Context, id string) (*LedgerEvent, error) {
 	query := `
-		SELECT event_id, conversation_key, direction, author, timestamp, type, text,
+		SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
 		       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
 		FROM ledger_events
 		WHERE event_id = ?
@@ -119,6 +123,7 @@ func (s *SQLiteStore) GetEvent(ctx context.Context, id string) (*LedgerEvent, er
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&event.ID,
 		&event.ConversationKey,
+		&event.ThreadID,
 		&direction,
 		&event.Author,
 		&timestampStr,
@@ -157,7 +162,7 @@ func (s *SQLiteStore) ListEventsByConversation(ctx context.Context, conversation
 	}
 
 	query := `
-		SELECT event_id, conversation_key, direction, author, timestamp, type, text,
+		SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
 		       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
 		FROM ledger_events
 		WHERE conversation_key = ?
@@ -178,7 +183,7 @@ func (s *SQLiteStore) ListEventsByActor(ctx context.Context, principalID string,
 	}
 
 	query := `
-		SELECT event_id, conversation_key, direction, author, timestamp, type, text,
+		SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
 		       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
 		FROM ledger_events
 		WHERE actor_principal_id = ?
@@ -199,7 +204,7 @@ func (s *SQLiteStore) ListEventsByActorDesc(ctx context.Context, principalID str
 	}
 
 	query := `
-		SELECT event_id, conversation_key, direction, author, timestamp, type, text,
+		SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
 		       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
 		FROM ledger_events
 		WHERE actor_principal_id = ?
@@ -227,6 +232,7 @@ func (s *SQLiteStore) queryEvents(ctx context.Context, query string, args ...any
 		if err := rows.Scan(
 			&event.ID,
 			&event.ConversationKey,
+			&event.ThreadID,
 			&direction,
 			&event.Author,
 			&timestampStr,
@@ -315,7 +321,7 @@ func (s *SQLiteStore) GetEvents(ctx context.Context, p GetEventsParams) (*GetEve
 	// Build the query dynamically based on which parameters are set
 	var args []any
 	query := `
-		SELECT event_id, conversation_key, direction, author, timestamp, type, text,
+		SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
 		       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
 		FROM ledger_events
 		WHERE conversation_key = ?
@@ -362,6 +368,7 @@ func (s *SQLiteStore) GetEvents(ctx context.Context, p GetEventsParams) (*GetEve
 		if err := rows.Scan(
 			&event.ID,
 			&event.ConversationKey,
+			&event.ThreadID,
 			&direction,
 			&event.Author,
 			&timestampStr,
@@ -408,4 +415,92 @@ func (s *SQLiteStore) GetEvents(ctx context.Context, p GetEventsParams) (*GetEve
 	}
 
 	return result, nil
+}
+
+// GetEventsByThreadID retrieves events for a thread, ordered by timestamp ASC.
+// This supports the unified message storage by querying both thread_id column
+// and conversation_key format "thread:{thread_id}" for backwards compatibility.
+func (s *SQLiteStore) GetEventsByThreadID(ctx context.Context, threadID string, limit int) ([]*LedgerEvent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	query := `
+		SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
+		       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
+		FROM ledger_events
+		WHERE thread_id = ? OR conversation_key = ?
+		ORDER BY timestamp ASC
+		LIMIT ?
+	`
+
+	conversationKey := "thread:" + threadID
+	return s.queryEvents(ctx, query, threadID, conversationKey, limit)
+}
+
+// EventToMessage converts a LedgerEvent to the legacy Message format.
+// This provides a single conversion point for all code that needs to
+// display events as messages.
+func EventToMessage(evt *LedgerEvent) *Message {
+	msg := &Message{
+		ID:        evt.ID,
+		Sender:    evt.Author,
+		CreatedAt: evt.Timestamp,
+	}
+
+	if evt.ThreadID != nil {
+		msg.ThreadID = *evt.ThreadID
+	}
+
+	if evt.Text != nil {
+		msg.Content = *evt.Text
+	}
+
+	// Map event type to message type and parse tool metadata from JSON
+	switch evt.Type {
+	case EventTypeToolCall:
+		msg.Type = MessageTypeToolUse
+		// Parse tool metadata from JSON text if available
+		if evt.Text != nil {
+			var toolData struct {
+				Name  string `json:"name"`
+				ID    string `json:"id"`
+				Input string `json:"input"`
+			}
+			if err := json.Unmarshal([]byte(*evt.Text), &toolData); err == nil {
+				msg.ToolName = toolData.Name
+				msg.ToolID = toolData.ID
+				msg.Content = toolData.Input
+			}
+		}
+	case EventTypeToolResult:
+		msg.Type = MessageTypeToolResult
+		// Parse tool result from JSON text if available
+		if evt.Text != nil {
+			var resultData struct {
+				ID     string `json:"id"`
+				Output string `json:"output"`
+			}
+			if err := json.Unmarshal([]byte(*evt.Text), &resultData); err == nil {
+				msg.ToolID = resultData.ID
+				msg.Content = resultData.Output
+			}
+		}
+	default:
+		msg.Type = MessageTypeMessage
+	}
+
+	return msg
+}
+
+// EventsToMessages converts a slice of LedgerEvents to Messages.
+func EventsToMessages(events []*LedgerEvent) []*Message {
+	messages := make([]*Message, len(events))
+	for i, evt := range events {
+		messages[i] = EventToMessage(evt)
+	}
+	return messages
 }
