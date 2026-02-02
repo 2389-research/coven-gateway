@@ -24,7 +24,7 @@
             <a href="/admin/agents/{{.ID}}" class="px-4 py-2 text-sm font-medium bg-warm-100 text-warm-600 border border-warm-200 rounded-lg hover:bg-warm-200 hover:text-warm-700 transition-colors">
                 Details
             </a>
-            <a href="/admin/chat/{{.ID}}" class="px-4 py-2 text-sm font-medium bg-forest text-white rounded-lg hover:bg-forest-light transition-colors shadow-soft">
+            <a href="/?agent={{.ID}}" class="px-4 py-2 text-sm font-medium bg-forest text-white rounded-lg hover:bg-forest-light transition-colors shadow-soft">
                 Chat
             </a>
             {{if .Connected}}

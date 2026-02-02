@@ -288,8 +288,11 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/threads/{id}", a.requireAuth(a.handleThreadDetail))
 	mux.HandleFunc("GET /admin/threads/{id}/messages", a.requireAuth(a.handleThreadMessages))
 
-	// Legacy chat page (redirect to root)
-	mux.HandleFunc("GET /admin/chat/{id}", a.requireAuth(a.handleChatPage))
+	// Legacy chat page - redirect to root chat with agent param
+	mux.HandleFunc("GET /admin/chat/{id}", a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		agentID := r.PathValue("id")
+		http.Redirect(w, r, "/?agent="+agentID, http.StatusFound)
+	}))
 
 	// Token usage page
 	mux.HandleFunc("GET /admin/usage", a.requireAuth(a.handleUsagePage))
@@ -1439,46 +1442,6 @@ func (a *Admin) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
 // =============================================================================
 // Chat Handlers
 // =============================================================================
-
-// handleChatPage renders the chat interface for an agent
-func (a *Admin) handleChatPage(w http.ResponseWriter, r *http.Request) {
-	agentID := r.PathValue("id")
-	if agentID == "" {
-		http.Error(w, "Agent ID required", http.StatusBadRequest)
-		return
-	}
-
-	// Verify agent exists and is connected
-	var agentName string
-	var connected bool
-	if a.manager != nil {
-		for _, info := range a.manager.ListAgents() {
-			if info.ID == agentID {
-				agentName = info.Name
-				connected = true
-				break
-			}
-		}
-	}
-
-	if agentName == "" {
-		agentName = agentID // Fallback to ID if not found
-	}
-
-	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
-
-	// Load chat history for this agent/user combination
-	threadID := "admin-chat-" + agentID + "-" + user.ID
-	messages, err := a.store.GetThreadMessages(r.Context(), threadID, 100)
-	if err != nil {
-		// Not a fatal error - chat can work without history
-		a.logger.Debug("no chat history found", "thread_id", threadID, "error", err)
-		messages = nil
-	}
-
-	a.renderChatPage(w, user, agentID, agentName, connected, messages, csrfToken)
-}
 
 // handleChatSend sends a message to an agent
 func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {

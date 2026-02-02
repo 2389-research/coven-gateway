@@ -895,6 +895,38 @@
     const closeSettings = document.getElementById('close-settings');
     const settingsContent = document.getElementById('settings-content');
 
+    // Handle ?agent= query parameter (from admin "Chat" buttons)
+    function handleAgentQueryParam() {
+        const params = new URLSearchParams(window.location.search);
+        const agentId = params.get('agent');
+        if (!agentId) return;
+
+        // Clear the URL param to avoid re-triggering on refresh
+        const url = new URL(window.location);
+        url.searchParams.delete('agent');
+        window.history.replaceState({}, '', url);
+
+        // Extract CSRF token for the POST request
+        const csrfToken = document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
+
+        // Create new thread with this agent
+        htmx.ajax('POST', '/threads', {
+            values: { agent_id: agentId },
+            target: '#chat-content',
+            swap: 'innerHTML',
+            headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+        }).then(() => {
+            // Refresh thread list
+            htmx.trigger('#thread-list', 'load');
+        });
+    }
+
+    // Run after page loads and HTMX is ready
+    document.addEventListener('htmx:load', function onFirstLoad() {
+        document.removeEventListener('htmx:load', onFirstLoad);
+        handleAgentQueryParam();
+    });
+
     // Mobile sidebar toggle
     function toggleSidebar() {
         sidebar.classList.toggle('open');

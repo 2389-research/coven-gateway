@@ -75,16 +75,6 @@ type messagesListData struct {
 	Messages []*store.Message
 }
 
-type chatPageData struct {
-	Title     string
-	User      *store.AdminUser
-	AgentID   string
-	AgentName string
-	Connected bool
-	Messages  []*store.Message // Chat history
-	CSRFToken string
-}
-
 type toolItem struct {
 	Name                 string
 	Description          string
@@ -325,26 +315,6 @@ func (a *Admin) renderMessagesList(w http.ResponseWriter, messages []*store.Mess
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render messages list", "error", err)
-	}
-}
-
-// renderChatPage renders the chat interface for an agent
-func (a *Admin) renderChatPage(w http.ResponseWriter, user *store.AdminUser, agentID, agentName string, connected bool, messages []*store.Message, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/chat.html"))
-
-	data := chatPageData{
-		Title:     "Chat with " + agentName,
-		User:      user,
-		AgentID:   agentID,
-		AgentName: agentName,
-		Connected: connected,
-		Messages:  messages,
-		CSRFToken: csrfToken,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render chat page", "error", err)
 	}
 }
 
