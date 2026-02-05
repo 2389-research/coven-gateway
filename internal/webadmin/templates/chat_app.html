@@ -1943,7 +1943,9 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 
         const contentDiv = currentStreamingMessage.querySelector('.message-content');
         if (contentDiv && streamingContent && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
-            contentDiv.innerHTML = DOMPurify.sanitize(marked.parse(streamingContent));
+            // Trim content and parse markdown - trim removes trailing newlines that cause extra spacing
+            const trimmed = streamingContent.trim();
+            contentDiv.innerHTML = DOMPurify.sanitize(marked.parse(trimmed));
             // Switch from whitespace-pre-wrap to prose styling after markdown rendering
             contentDiv.classList.remove('whitespace-pre-wrap');
             contentDiv.classList.add('prose', 'prose-sm', 'max-w-none');
@@ -2131,21 +2133,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     position: relative;
 }
 
-.streaming .message-content::after {
-    content: '';
-    display: inline-block;
-    width: 2px;
-    height: 1.1em;
-    background: #2D5A47;
-    margin-left: 2px;
-    vertical-align: text-bottom;
-    animation: cursor-blink 0.8s step-end infinite;
-}
-
-@keyframes cursor-blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-}
+/* Removed blinking cursor - was confusing during streaming */
 
 .throbber {
     display: inline-flex;
