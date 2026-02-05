@@ -34,6 +34,7 @@ type ClientService struct {
 	agents     AgentLister
 	router     MessageRouter
 	approver   ToolApprover
+	answerer   QuestionAnswerer
 }
 
 // NewClientService creates a new ClientService with the given stores

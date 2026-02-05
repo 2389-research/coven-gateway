@@ -13,7 +13,7 @@ import (
 
 // chatMessage represents a message in the chat stream
 type chatMessage struct {
-	Type      string    `json:"type"` // "user", "text", "thinking", "tool_use", "tool_result", "usage", "tool_state", "tool_approval", "cancelled", "error", "done"
+	Type      string    `json:"type"` // "user", "text", "thinking", "tool_use", "tool_result", "usage", "tool_state", "tool_approval", "user_question", "cancelled", "error", "done"
 	Content   string    `json:"content,omitempty"`
 	ToolName  string    `json:"tool_name,omitempty"`
 	ToolID    string    `json:"tool_id,omitempty"`
@@ -36,6 +36,20 @@ type chatMessage struct {
 	// ToolApproval fields (for type="tool_approval")
 	InputJSON string `json:"input_json,omitempty"`
 	RequestID string `json:"request_id,omitempty"`
+
+	// UserQuestion fields (for type="user_question")
+	QuestionID     string           `json:"question_id,omitempty"`
+	Question       string           `json:"question,omitempty"`
+	Options        []questionOption `json:"options,omitempty"`
+	MultiSelect    bool             `json:"multi_select,omitempty"`
+	Header         string           `json:"header,omitempty"`
+	TimeoutSeconds int32            `json:"timeout_seconds,omitempty"`
+}
+
+// questionOption represents a choice in a user question
+type questionOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
 }
 
 // chatSession represents an active chat between a user and an agent
@@ -368,6 +382,23 @@ func convertAgentResponse(resp *agent.Response) *chatMessage {
 	}
 
 	return msg
+}
+
+// sendToAgent sends a message to all sessions for a given agent
+func (h *chatHub) sendToAgent(agentID string, msg *chatMessage) int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	sent := 0
+	for key, session := range h.sessions {
+		// Key format is "agentID|userID"
+		if len(key) > len(agentID) && key[:len(agentID)+1] == agentID+"|" {
+			if session.send(msg) {
+				sent++
+			}
+		}
+	}
+	return sent
 }
 
 // Close closes all sessions and stops the cleanup goroutine

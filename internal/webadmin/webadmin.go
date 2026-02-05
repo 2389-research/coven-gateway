@@ -26,6 +26,7 @@ import (
 	"github.com/2389/coven-gateway/internal/conversation"
 	"github.com/2389/coven-gateway/internal/packs"
 	"github.com/2389/coven-gateway/internal/store"
+	pb "github.com/2389/coven-gateway/proto/coven"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -185,6 +186,47 @@ func (a *Admin) Close() {
 	if a.chatHub != nil {
 		a.chatHub.Close()
 	}
+}
+
+// SendUserQuestion pushes a user question to all connected web clients for an agent.
+// Implements builtins.ClientStreamer interface.
+func (a *Admin) SendUserQuestion(agentID string, req *pb.UserQuestionRequest) error {
+	if a.chatHub == nil {
+		return fmt.Errorf("chat hub not initialized")
+	}
+
+	// Convert proto options to chat message options
+	options := make([]questionOption, len(req.GetOptions()))
+	for i, opt := range req.GetOptions() {
+		options[i] = questionOption{
+			Label: opt.GetLabel(),
+		}
+		if opt.Description != nil {
+			options[i].Description = *opt.Description
+		}
+	}
+
+	msg := &chatMessage{
+		Type:           "user_question",
+		Timestamp:      time.Now(),
+		QuestionID:     req.GetQuestionId(),
+		Question:       req.GetQuestion(),
+		Options:        options,
+		MultiSelect:    req.GetMultiSelect(),
+		TimeoutSeconds: req.GetTimeoutSeconds(),
+	}
+	if req.Header != nil {
+		msg.Header = *req.Header
+	}
+
+	sent := a.chatHub.sendToAgent(agentID, msg)
+	if sent == 0 {
+		// No active sessions for this agent
+		return fmt.Errorf("no connected clients for agent %s", agentID)
+	}
+
+	a.logger.Debug("user question sent to clients", "agent_id", agentID, "question_id", req.GetQuestionId(), "clients", sent)
+	return nil
 }
 
 // RegisterRoutes registers all admin routes on the given mux

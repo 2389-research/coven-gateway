@@ -19,6 +19,7 @@ import (
 	"github.com/2389/coven-gateway/internal/agent"
 	"github.com/2389/coven-gateway/internal/conversation"
 	"github.com/2389/coven-gateway/internal/store"
+	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
 // SendMessageRequest is the JSON request body for POST /api/send.
@@ -1310,5 +1311,71 @@ func (g *Gateway) handleToolApproval(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":  true,
 		"approved": req.Approved,
+	})
+}
+
+// AnswerQuestionRequestBody is the JSON request for POST /api/questions/answer.
+type AnswerQuestionRequestBody struct {
+	AgentID    string   `json:"agent_id"`
+	QuestionID string   `json:"question_id"`
+	Selected   []string `json:"selected"`
+	CustomText string   `json:"custom_text,omitempty"`
+}
+
+// handleAnswerQuestion handles POST /api/questions/answer requests.
+// Sends a user's answer to a pending ask_user question.
+func (g *Gateway) handleAnswerQuestion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req AnswerQuestionRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.AgentID == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "agent_id is required")
+		return
+	}
+
+	if req.QuestionID == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "question_id is required")
+		return
+	}
+
+	if len(req.Selected) == 0 && req.CustomText == "" {
+		g.sendJSONError(w, http.StatusBadRequest, "at least one selection or custom_text is required")
+		return
+	}
+
+	if g.questionRouter == nil {
+		g.sendJSONError(w, http.StatusServiceUnavailable, "question router not configured")
+		return
+	}
+
+	// Build the proto answer
+	answer := &pb.AnswerQuestionRequest{
+		AgentId:    req.AgentID,
+		QuestionId: req.QuestionID,
+		Selected:   req.Selected,
+	}
+	if req.CustomText != "" {
+		answer.CustomText = &req.CustomText
+	}
+
+	err := g.questionRouter.DeliverAnswer(req.AgentID, req.QuestionID, answer)
+	if err != nil {
+		g.logger.Error("failed to deliver question answer", "error", err)
+		// Return generic error to avoid leaking internal agent IDs
+		g.sendJSONError(w, http.StatusNotFound, "question not found or already answered")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
 	})
 }

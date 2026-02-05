@@ -65,6 +65,9 @@ type Gateway struct {
 	// mcpEndpoint is the base URL for MCP endpoint (e.g., "http://localhost:8080/mcp")
 	mcpEndpoint string
 
+	// questionRouter handles ask_user tool question routing
+	questionRouter *builtins.InMemoryQuestionRouter
+
 	// mockSender is used for testing to inject a mock message sender
 	mockSender messageSender
 }
@@ -193,6 +196,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		return nil, fmt.Errorf("registering notes pack: %w", err)
 	}
 
+	// Note: UIPack is registered after webAdmin is created since it needs webAdmin as ClientStreamer
+
 	// Create MCP token store for agent capability-scoped access
 	mcpTokens := mcp.NewTokenStore()
 
@@ -287,6 +292,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		mux.Handle("/api/threads/", authMiddleware(http.HandlerFunc(gw.handleThreadRoutes)))
 		mux.Handle("/api/stats/usage", authMiddleware(http.HandlerFunc(gw.handleUsageStats)))
 		mux.Handle("/api/tools/approve", authMiddleware(http.HandlerFunc(gw.handleToolApproval)))
+		mux.Handle("/api/questions/answer", authMiddleware(http.HandlerFunc(gw.handleAnswerQuestion)))
 
 		// Admin endpoints - requires admin role for mutations
 		// GET is allowed for any authenticated user, POST/DELETE require admin
@@ -308,6 +314,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		mux.HandleFunc("/api/threads/", gw.handleThreadRoutes)
 		mux.HandleFunc("/api/stats/usage", gw.handleUsageStats)
 		mux.HandleFunc("/api/tools/approve", gw.handleToolApproval)
+		mux.HandleFunc("/api/questions/answer", gw.handleAnswerQuestion)
 		logger.Warn("HTTP auth disabled - no jwt_secret configured")
 	}
 
@@ -348,6 +355,14 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	gw.webAdmin = webadmin.NewWithConfig(webAdminCfg)
 	gw.webAdmin.RegisterRoutes(mux)
 	logger.Info("admin web UI enabled at /admin/", "base_url", webAdminBaseURL)
+
+	// Create question router for ask_user tool (uses webAdmin as ClientStreamer)
+	gw.questionRouter = builtins.NewInMemoryQuestionRouter(gw.webAdmin)
+	if err := packRegistry.RegisterBuiltinPack(builtins.UIPack(gw.questionRouter)); err != nil {
+		return nil, fmt.Errorf("registering UI pack: %w", err)
+	}
+	// Wire up question answerer to ClientService
+	clientService.SetQuestionAnswerer(gw.questionRouter)
 
 	// Register MCP server routes for tool pack access
 	// MCP endpoints allow external agents (like Claude Code) to list and execute pack tools

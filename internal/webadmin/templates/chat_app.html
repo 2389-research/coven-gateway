@@ -1636,11 +1636,21 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 }
 
 .tool-block-header .tool-label {
-    flex: 1;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.75rem;
     font-weight: 500;
     color: #D4A017;
+}
+
+.tool-block-header .tool-summary {
+    flex: 1;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    color: #9CA3AF;
+    margin-left: 0.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .tool-block-body {
@@ -1785,6 +1795,165 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     cursor: not-allowed;
     transform: none;
 }
+
+/* User Question styles */
+.message-question {
+    max-width: 100%;
+    align-self: stretch;
+}
+
+.question-header-badge {
+    background: rgba(45, 90, 71, 0.1);
+    color: #2D5A47;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    margin-left: 0.5rem;
+}
+
+.question-timeout {
+    color: #9CA3AF;
+    font-size: 0.7rem;
+    margin-left: auto;
+}
+
+.message-question .question-content {
+    padding: 1rem;
+    background: rgba(45, 90, 71, 0.04);
+    border: 1px solid rgba(45, 90, 71, 0.15);
+    border-radius: 0.5rem;
+}
+
+.message-question .question-text {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: #3D3228;
+    margin-bottom: 1rem;
+}
+
+.question-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.question-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: white;
+    border: 1px solid #E8E2DA;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+}
+
+.question-option:hover:not(:disabled) {
+    border-color: #2D5A47;
+    background: rgba(45, 90, 71, 0.04);
+}
+
+.question-option:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.question-option.selected {
+    border-color: #2D5A47;
+    background: rgba(45, 90, 71, 0.08);
+}
+
+.question-option.selected-final {
+    border-color: #2D5A47;
+    background: rgba(45, 90, 71, 0.12);
+}
+
+.option-checkbox {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #D4C9BC;
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+    transition: all 0.15s ease;
+}
+
+.question-option.selected .option-checkbox,
+.question-option.selected-final .option-checkbox {
+    background: #2D5A47;
+    border-color: #2D5A47;
+    position: relative;
+}
+
+.question-option.selected .option-checkbox::after,
+.question-option.selected-final .option-checkbox::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 5px;
+    height: 9px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.option-label {
+    flex: 1;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #3D3228;
+}
+
+.option-description {
+    display: block;
+    font-size: 0.75rem;
+    color: #6B5D4D;
+    margin-top: 0.25rem;
+    font-weight: normal;
+}
+
+.question-submit-btn {
+    margin-top: 1rem;
+    padding: 0.625rem 1.25rem;
+    background: #2D5A47;
+    color: white;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.question-submit-btn:hover:not(:disabled) {
+    background: #3D7A5F;
+}
+
+.question-submit-btn:disabled {
+    background: #D4C9BC;
+    cursor: not-allowed;
+}
+
+.question-submitting .question-option,
+.question-submitting .question-submit-btn {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.question-answered .question-content {
+    background: rgba(45, 90, 71, 0.02);
+    border-color: rgba(45, 90, 71, 0.1);
+}
+
+.question-answered .question-option:not(.selected-final) {
+    opacity: 0.5;
+}
+
+.question-error .question-content {
+    border-color: #A94442;
+}
 </style>
 
 <script>
@@ -1874,6 +2043,16 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
                 const data = JSON.parse(e.data);
                 if (data.content) appendToolBlock('result', null, data.content);
             } catch {}
+        });
+
+        evtSource.addEventListener('user_question', function(e) {
+            console.log('[chat] user_question event:', e.data);
+            try {
+                const data = JSON.parse(e.data);
+                appendUserQuestion(data);
+            } catch (err) {
+                console.error('[chat] failed to parse user_question:', err);
+            }
         });
 
         evtSource.addEventListener('done', function() {
@@ -1999,6 +2178,63 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         }
     }
 
+    function getToolSummary(toolName, content) {
+        // Extract a short, human-readable summary from the tool input JSON
+        if (!content) return '';
+        try {
+            const input = JSON.parse(content);
+            const name = (toolName || '').toLowerCase();
+
+            // File operations - show filename
+            if (name === 'read' || name === 'write' || name === 'edit' || name === 'notebookedit') {
+                const path = input.file_path || input.notebook_path || '';
+                const filename = path.split('/').pop() || path;
+                if (name === 'read') return filename ? `Reading ${filename}` : '';
+                if (name === 'write') return filename ? `Writing ${filename}` : '';
+                if (name === 'edit') return filename ? `Editing ${filename}` : '';
+                if (name === 'notebookedit') return filename ? `Editing ${filename}` : '';
+            }
+
+            // Bash - show truncated command
+            if (name === 'bash') {
+                const cmd = input.command || '';
+                const short = cmd.length > 50 ? cmd.substring(0, 47) + '...' : cmd;
+                return short ? `$ ${short}` : '';
+            }
+
+            // Search operations
+            if (name === 'glob') {
+                return input.pattern ? `Finding: ${input.pattern}` : '';
+            }
+            if (name === 'grep') {
+                return input.pattern ? `Searching: ${input.pattern}` : '';
+            }
+
+            // Web operations
+            if (name === 'webfetch') {
+                const url = input.url || '';
+                try {
+                    const host = new URL(url).hostname;
+                    return `Fetching: ${host}`;
+                } catch {
+                    return url ? `Fetching URL` : '';
+                }
+            }
+            if (name === 'websearch') {
+                return input.query ? `Searching: ${input.query}` : '';
+            }
+
+            // Task tool
+            if (name === 'task') {
+                return input.description || input.prompt?.substring(0, 40) || '';
+            }
+
+            return '';
+        } catch {
+            return '';
+        }
+    }
+
     function appendToolBlock(type, toolName, content) {
         console.log('[chat] appendToolBlock:', type, toolName, 'currentThinkingBlock:', currentThinkingBlock);
         // Clear any pending messages first
@@ -2010,6 +2246,8 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         if (type === 'use') {
             // Collapsible tool use block (collapsed by default)
             const blockId = 'tool-' + Date.now();
+            const summary = getToolSummary(toolName, content);
+            const summaryHtml = summary ? `<span class="tool-summary">${escapeHtml(summary)}</span>` : '';
             msg.innerHTML = `
                 <div class="tool-block-wrapper">
                     <div class="tool-block-header collapsed" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.classList.toggle('collapsed');">
@@ -2021,6 +2259,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
                             <circle cx="12" cy="12" r="3"/>
                         </svg>
                         <span class="tool-label">${escapeHtml(toolName || 'Tool')}</span>
+                        ${summaryHtml}
                     </div>
                     ${content ? `<div class="tool-block-body collapsed">${escapeHtml(content)}</div>` : ''}
                 </div>
@@ -2077,6 +2316,142 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         scrollToBottom();
     }
 
+    function appendUserQuestion(data) {
+        // Clear any pending messages first
+        clearPendingMessages();
+
+        const msg = document.createElement('div');
+        msg.className = 'message message-agent message-question';
+        msg.setAttribute('data-question-id', data.question_id);
+        msg.setAttribute('data-multi-select', data.multi_select ? 'true' : 'false');
+
+        const headerText = data.header ? `<span class="question-header-badge">${escapeHtml(data.header)}</span>` : '';
+        const timeoutText = data.timeout_seconds ? `<span class="question-timeout">⏱ ${data.timeout_seconds}s timeout</span>` : '';
+
+        let optionsHtml = '';
+        if (data.options && data.options.length > 0) {
+            optionsHtml = data.options.map((opt, idx) => `
+                <button class="question-option" data-option-index="${idx}" data-option-label="${escapeHtmlAttr(opt.label)}">
+                    ${data.multi_select ? `<span class="option-checkbox"></span>` : ''}
+                    <span class="option-label">${escapeHtml(opt.label)}</span>
+                    ${opt.description ? `<span class="option-description">${escapeHtml(opt.description)}</span>` : ''}
+                </button>
+            `).join('');
+        }
+
+        msg.innerHTML = `
+            <div class="message-header">
+                <span class="message-sender agent">{{.AgentName}}</span>
+                ${headerText}
+                ${timeoutText}
+            </div>
+            <div class="message-content question-content">
+                <p class="question-text">${escapeHtml(data.question)}</p>
+                <div class="question-options">${optionsHtml}</div>
+                ${data.multi_select ? `<button class="question-submit-btn" disabled>Submit Selection</button>` : ''}
+            </div>
+        `;
+
+        // Add click handlers for options
+        const optionBtns = msg.querySelectorAll('.question-option');
+        const submitBtn = msg.querySelector('.question-submit-btn');
+        const selectedOptions = new Set();
+
+        optionBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const label = this.getAttribute('data-option-label');
+
+                if (data.multi_select) {
+                    // Toggle selection
+                    this.classList.toggle('selected');
+                    if (selectedOptions.has(label)) {
+                        selectedOptions.delete(label);
+                    } else {
+                        selectedOptions.add(label);
+                    }
+                    // Enable/disable submit button
+                    if (submitBtn) {
+                        submitBtn.disabled = selectedOptions.size === 0;
+                    }
+                } else {
+                    // Single select - submit immediately
+                    submitQuestionAnswer(data.question_id, [label], msg);
+                }
+            });
+        });
+
+        // Multi-select submit handler
+        if (submitBtn) {
+            submitBtn.addEventListener('click', function() {
+                if (selectedOptions.size > 0) {
+                    submitQuestionAnswer(data.question_id, Array.from(selectedOptions), msg);
+                }
+            });
+        }
+
+        chatMessages.appendChild(msg);
+        scrollToBottom();
+    }
+
+    async function submitQuestionAnswer(questionId, selected, msgElement) {
+        // Disable all options
+        const optionBtns = msgElement.querySelectorAll('.question-option');
+        const submitBtn = msgElement.querySelector('.question-submit-btn');
+        optionBtns.forEach(btn => btn.disabled = true);
+        if (submitBtn) submitBtn.disabled = true;
+
+        // Show submitting state
+        msgElement.classList.add('question-submitting');
+
+        try {
+            const csrfToken = getCSRFToken();
+
+            const response = await fetch('/api/questions/answer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
+                },
+                body: JSON.stringify({
+                    agent_id: agentId,
+                    question_id: questionId,
+                    selected: selected
+                })
+            });
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || 'Server error: ' + response.status);
+            }
+
+            // Mark as answered
+            msgElement.classList.remove('question-submitting');
+            msgElement.classList.add('question-answered');
+
+            // Update UI to show selection
+            optionBtns.forEach(btn => {
+                const label = btn.getAttribute('data-option-label');
+                if (selected.includes(label)) {
+                    btn.classList.add('selected-final');
+                }
+            });
+
+            // Hide submit button
+            if (submitBtn) submitBtn.style.display = 'none';
+
+        } catch (err) {
+            console.error('[chat] failed to submit answer:', err);
+            msgElement.classList.remove('question-submitting');
+            msgElement.classList.add('question-error');
+
+            // Re-enable options
+            optionBtns.forEach(btn => btn.disabled = false);
+            if (submitBtn) submitBtn.disabled = false;
+
+            appendError('Failed to submit answer: ' + err.message);
+        }
+    }
+
     function scrollToBottom() {
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
@@ -2085,6 +2460,22 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function escapeHtmlAttr(text) {
+        // Escape for use in HTML attributes (also escapes quotes)
+        return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function getCSRFToken() {
+        const el = document.querySelector('[hx-headers]');
+        if (!el) return null;
+        try {
+            const headers = JSON.parse(el.getAttribute('hx-headers'));
+            return headers['X-CSRF-Token'];
+        } catch {
+            return null;
+        }
     }
 
     // Form submission

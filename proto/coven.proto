@@ -376,6 +376,23 @@ service ClientService {
 
   // Respond to a tool approval request
   rpc ApproveTool(ApproveToolRequest) returns (ApproveToolResponse);
+
+  // Respond to a user question (from ask_user tool)
+  rpc AnswerQuestion(AnswerQuestionRequest) returns (AnswerQuestionResponse);
+}
+
+// Request to answer a user question
+message AnswerQuestionRequest {
+  string agent_id = 1;              // Which agent asked the question
+  string question_id = 2;           // Correlates with UserQuestionRequest.question_id
+  repeated string selected = 3;     // Selected option label(s)
+  optional string custom_text = 4;  // If user typed a custom "Other" response
+}
+
+// Response to answering a question
+message AnswerQuestionResponse {
+  bool success = 1;
+  optional string error = 2;
 }
 
 // Request to approve or deny a tool execution
@@ -423,7 +440,27 @@ message ClientStreamEvent {
 
     // Tool approval request (needs human decision)
     ClientToolApprovalRequest tool_approval = 12;
+
+    // User question request (agent asking user a question via ask_user tool)
+    UserQuestionRequest user_question = 13;
   }
+}
+
+// User question request sent to clients (from ask_user builtin tool)
+message UserQuestionRequest {
+  string agent_id = 1;              // Which agent is asking
+  string question_id = 2;           // Unique ID for correlation
+  string question = 3;              // The question text
+  repeated QuestionOption options = 4;  // Multiple choice options
+  bool multi_select = 5;            // Can select multiple answers
+  optional string header = 6;       // Short label/category for the question
+  int32 timeout_seconds = 7;        // How long client has to respond
+}
+
+// A single option in a user question
+message QuestionOption {
+  string label = 1;                 // Display text (also used as the value)
+  optional string description = 2;  // Optional explanation
 }
 
 // Tool approval request sent to clients (wraps ToolApprovalRequest with agent context)
