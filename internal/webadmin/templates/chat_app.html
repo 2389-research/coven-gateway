@@ -2085,10 +2085,13 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         setTimeout(connectSSE, 2000 * reconnectAttempts);
     }
 
-    function startStreaming() {
+    function startStreaming(initialText) {
         if (isStreaming) return;
         isStreaming = true;
-        streamingContent = '';
+        streamingContent = initialText || '';
+
+        // Remove typing indicator now that we have content
+        removeThinkingBlock();
 
         currentStreamingMessage = document.createElement('div');
         currentStreamingMessage.className = 'message message-agent streaming';
@@ -2097,7 +2100,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
                 <span class="message-sender agent">{{.AgentName}}</span>
                 <span class="throbber"></span>
             </div>
-            <div class="message-content"></div>
+            <div class="message-content">${escapeHtml(streamingContent)}</div>
         `;
         chatMessages.appendChild(currentStreamingMessage);
 
@@ -2105,10 +2108,12 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     }
 
     function appendStreamText(text) {
-        // Remove thinking block when actual text starts coming in
-        removeThinkingBlock();
-
-        if (!currentStreamingMessage) startStreaming();
+        if (!currentStreamingMessage) {
+            // First text chunk - create message with content
+            startStreaming(text);
+            return;
+        }
+        // Subsequent chunks - append to existing
         streamingContent += text;
         const contentDiv = currentStreamingMessage.querySelector('.message-content');
         if (contentDiv) contentDiv.textContent = streamingContent;
