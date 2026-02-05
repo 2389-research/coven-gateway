@@ -15,8 +15,8 @@ import (
 )
 
 // AdminPack creates the admin pack with agent management tools.
-func AdminPack(mgr *agent.Manager, s store.Store) *packs.BuiltinPack {
-	a := &adminHandlers{manager: mgr, store: s}
+func AdminPack(mgr *agent.Manager, s store.Store, us store.UsageStore) *packs.BuiltinPack {
+	a := &adminHandlers{manager: mgr, store: s, usageStore: us}
 	return &packs.BuiltinPack{
 		ID: "builtin:admin",
 		Tools: []*packs.BuiltinTool{
@@ -52,8 +52,9 @@ func AdminPack(mgr *agent.Manager, s store.Store) *packs.BuiltinPack {
 }
 
 type adminHandlers struct {
-	manager *agent.Manager
-	store   store.Store
+	manager    *agent.Manager
+	store      store.Store
+	usageStore store.UsageStore
 }
 
 // ListAgents returns information about all connected agents.

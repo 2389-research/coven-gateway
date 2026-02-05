@@ -186,7 +186,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	if err := packRegistry.RegisterBuiltinPack(builtins.BasePack(builtinStore)); err != nil {
 		return nil, fmt.Errorf("registering base pack: %w", err)
 	}
-	if err := packRegistry.RegisterBuiltinPack(builtins.AdminPack(agentMgr, s)); err != nil {
+	if err := packRegistry.RegisterBuiltinPack(builtins.AdminPack(agentMgr, s, builtinStore)); err != nil {
 		return nil, fmt.Errorf("registering admin pack: %w", err)
 	}
 	if err := packRegistry.RegisterBuiltinPack(builtins.MailPack(builtinStore)); err != nil {

@@ -17,7 +17,7 @@ import (
 func TestAdminListAgents(t *testing.T) {
 	mgr := agent.NewManager(slog.Default())
 	s := newTestStore(t)
-	pack := AdminPack(mgr, s)
+	pack := AdminPack(mgr, s, s)
 
 	handler := findHandler(pack, "admin_list_agents")
 	if handler == nil {
@@ -49,7 +49,7 @@ func TestAdminListAgents(t *testing.T) {
 func TestAdminAgentHistory_RequiresAgentID(t *testing.T) {
 	mgr := agent.NewManager(slog.Default())
 	s := newTestStore(t)
-	pack := AdminPack(mgr, s)
+	pack := AdminPack(mgr, s, s)
 
 	handler := findHandler(pack, "admin_agent_history")
 	if handler == nil {
@@ -65,7 +65,7 @@ func TestAdminAgentHistory_RequiresAgentID(t *testing.T) {
 func TestAdminAgentHistory_UnknownAgent(t *testing.T) {
 	mgr := agent.NewManager(slog.Default())
 	s := newTestStore(t)
-	pack := AdminPack(mgr, s)
+	pack := AdminPack(mgr, s, s)
 
 	handler := findHandler(pack, "admin_agent_history")
 	if handler == nil {
@@ -90,7 +90,7 @@ func TestAdminAgentHistory_UnknownAgent(t *testing.T) {
 func TestAdminAgentHistory_WithMessages(t *testing.T) {
 	mgr := agent.NewManager(slog.Default())
 	s := newTestStore(t)
-	pack := AdminPack(mgr, s)
+	pack := AdminPack(mgr, s, s)
 
 	handler := findHandler(pack, "admin_agent_history")
 	if handler == nil {
@@ -153,7 +153,7 @@ func TestAdminAgentHistory_WithMessages(t *testing.T) {
 func TestAdminSendMessage(t *testing.T) {
 	mgr := agent.NewManager(slog.Default())
 	s := newTestStore(t)
-	pack := AdminPack(mgr, s)
+	pack := AdminPack(mgr, s, s)
 
 	handler := findHandler(pack, "admin_send_message")
 	if handler == nil {
@@ -185,7 +185,7 @@ func TestAdminSendMessage(t *testing.T) {
 func TestAdminPackToolDefinitions(t *testing.T) {
 	mgr := agent.NewManager(slog.Default())
 	s := newTestStore(t)
-	pack := AdminPack(mgr, s)
+	pack := AdminPack(mgr, s, s)
 
 	t.Run("pack has correct ID", func(t *testing.T) {
 		if pack.ID != "builtin:admin" {
