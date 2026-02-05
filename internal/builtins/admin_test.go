@@ -111,11 +111,13 @@ func TestAdminAgentHistory_WithMessages(t *testing.T) {
 	}
 
 	// Add an event to the thread (using unified ledger_events storage)
+	// ConversationKey is the agent_id for cross-client history sync
 	threadID := "thread-1"
+	agentID := "test-agent"
 	content := "Hello agent"
 	evt := &store.LedgerEvent{
 		ID:              "msg-1",
-		ConversationKey: "thread:" + threadID,
+		ConversationKey: agentID,
 		ThreadID:        &threadID,
 		Direction:       store.EventDirectionInbound,
 		Author:          "user",

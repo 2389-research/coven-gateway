@@ -56,7 +56,7 @@ type GetEventsResult struct {
 // All inbound and outbound messages are stored here for audit and history.
 type LedgerEvent struct {
 	ID              string
-	ConversationKey string         // e.g., "matrix:!room:server.com", "tui:client:pane", "thread:{thread_id}"
+	ConversationKey string         // e.g., "matrix:!room:server.com", "{agent_id}" for thread-based conversations
 	ThreadID        *string        // optional: links event to a thread for efficient queries
 	Direction       EventDirection // inbound_to_agent or outbound_from_agent
 	Author          string         // user/client/agent identifier
@@ -418,8 +418,7 @@ func (s *SQLiteStore) GetEvents(ctx context.Context, p GetEventsParams) (*GetEve
 }
 
 // GetEventsByThreadID retrieves events for a thread, ordered by timestamp ASC.
-// This supports the unified message storage by querying both thread_id column
-// and conversation_key format "thread:{thread_id}" for backwards compatibility.
+// Queries by thread_id column which is populated for all thread-based events.
 func (s *SQLiteStore) GetEventsByThreadID(ctx context.Context, threadID string, limit int) ([]*LedgerEvent, error) {
 	if limit <= 0 {
 		limit = 100
@@ -432,13 +431,12 @@ func (s *SQLiteStore) GetEventsByThreadID(ctx context.Context, threadID string, 
 		SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
 		       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
 		FROM ledger_events
-		WHERE thread_id = ? OR conversation_key = ?
+		WHERE thread_id = ?
 		ORDER BY timestamp ASC
 		LIMIT ?
 	`
 
-	conversationKey := "thread:" + threadID
-	return s.queryEvents(ctx, query, threadID, conversationKey, limit)
+	return s.queryEvents(ctx, query, threadID, limit)
 }
 
 // EventToMessage converts a LedgerEvent to the legacy Message format.

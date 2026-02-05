@@ -467,13 +467,10 @@ func (m *MockStore) GetEventsByThreadID(ctx context.Context, threadID string, li
 		limit = 500
 	}
 
-	conversationKey := "thread:" + threadID
 	var result []*LedgerEvent
 	for _, e := range m.events {
-		// Match by thread_id column or conversation_key format
-		threadIDMatch := e.ThreadID != nil && *e.ThreadID == threadID
-		convKeyMatch := e.ConversationKey == conversationKey
-		if threadIDMatch || convKeyMatch {
+		// Match by thread_id column
+		if e.ThreadID != nil && *e.ThreadID == threadID {
 			eventCopy := *e
 			result = append(result, &eventCopy)
 		}

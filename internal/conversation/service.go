@@ -99,7 +99,7 @@ func (s *Service) SendMessage(ctx context.Context, req *SendRequest) (*SendRespo
 	messageID := uuid.New().String()
 	userEvent := &store.LedgerEvent{
 		ID:              messageID,
-		ConversationKey: "thread:" + thread.ID,
+		ConversationKey: req.AgentID,
 		ThreadID:        &thread.ID,
 		Direction:       store.EventDirectionInbound,
 		Author:          req.Sender,
@@ -248,7 +248,8 @@ func (s *Service) ensureThread(ctx context.Context, req *SendRequest) (*store.Th
 	return thread, nil
 }
 
-// persistResponses wraps the agent response channel to save messages as they stream
+// persistResponses wraps the agent response channel to save messages as they stream.
+// Events are keyed by agentID for cross-client history sync (TUI, web, mobile all query by agent).
 func (s *Service) persistResponses(ctx context.Context, threadID, agentID string, in <-chan *agent.Response) <-chan *agent.Response {
 	out := make(chan *agent.Response, 16) // Same buffer size as Manager
 
@@ -279,7 +280,7 @@ func (s *Service) persistResponses(ctx context.Context, threadID, agentID string
 					toolText := fmt.Sprintf(`{"name":%q,"id":%q,"input":%s}`, resp.ToolUse.Name, resp.ToolUse.ID, resp.ToolUse.InputJSON)
 					s.saveEvent(&store.LedgerEvent{
 						ID:              msgID,
-						ConversationKey: "thread:" + threadID,
+						ConversationKey: agentID,
 						ThreadID:        &threadID,
 						Direction:       store.EventDirectionOutbound,
 						Author:          sender,
@@ -301,7 +302,7 @@ func (s *Service) persistResponses(ctx context.Context, threadID, agentID string
 					toolResultText := fmt.Sprintf(`{"id":%q,"output":%q,"is_error":%s}`, resp.ToolResult.ID, resp.ToolResult.Output, isErrorStr)
 					s.saveEvent(&store.LedgerEvent{
 						ID:              msgID,
-						ConversationKey: "thread:" + threadID,
+						ConversationKey: agentID,
 						ThreadID:        &threadID,
 						Direction:       store.EventDirectionOutbound,
 						Author:          sender,
@@ -341,7 +342,7 @@ func (s *Service) persistResponses(ctx context.Context, threadID, agentID string
 					messageID := uuid.New().String()
 					s.saveEvent(&store.LedgerEvent{
 						ID:              messageID,
-						ConversationKey: "thread:" + threadID,
+						ConversationKey: agentID,
 						ThreadID:        &threadID,
 						Direction:       store.EventDirectionOutbound,
 						Author:          sender,

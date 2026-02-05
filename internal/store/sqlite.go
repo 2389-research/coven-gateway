@@ -461,6 +461,12 @@ func (s *SQLiteStore) runMigrations() error {
 		return fmt.Errorf("migrating messages to events: %w", err)
 	}
 
+	// Migration: Normalize conversation_key from "thread:{id}" to agent_id
+	// This enables cross-client history sync (TUI, web, mobile all query by agent_id)
+	if err := s.migrateConversationKeysToAgentID(); err != nil {
+		return fmt.Errorf("migrating conversation keys to agent_id: %w", err)
+	}
+
 	return nil
 }
 
@@ -522,6 +528,50 @@ func (s *SQLiteStore) migrateMessagesToEvents() error {
 
 	rowsAffected, _ := result.RowsAffected()
 	s.logger.Info("migrated messages to ledger_events", "count", rowsAffected)
+
+	return nil
+}
+
+// migrateConversationKeysToAgentID updates existing ledger_events that use
+// "thread:{thread_id}" format to use agent_id directly. This enables cross-client
+// history sync since TUI, web, and mobile all query by agent_id.
+func (s *SQLiteStore) migrateConversationKeysToAgentID() error {
+	// Count events that need migration (have thread: prefix and a linked thread)
+	var needsMigration int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM ledger_events e
+		JOIN threads t ON e.thread_id = t.id
+		WHERE e.conversation_key LIKE 'thread:%'
+	`).Scan(&needsMigration)
+	if err != nil {
+		return fmt.Errorf("counting events needing migration: %w", err)
+	}
+
+	if needsMigration == 0 {
+		return nil
+	}
+
+	s.logger.Info("migrating conversation keys to agent_id", "count", needsMigration)
+
+	// Update conversation_key to the agent_id from the linked thread
+	result, err := s.db.Exec(`
+		UPDATE ledger_events
+		SET conversation_key = (
+			SELECT t.agent_id
+			FROM threads t
+			WHERE t.id = ledger_events.thread_id
+		)
+		WHERE conversation_key LIKE 'thread:%'
+		AND thread_id IS NOT NULL
+		AND EXISTS (SELECT 1 FROM threads t WHERE t.id = ledger_events.thread_id)
+	`)
+	if err != nil {
+		return fmt.Errorf("updating conversation keys: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	s.logger.Info("migrated conversation keys to agent_id", "count", rowsAffected)
 
 	return nil
 }
