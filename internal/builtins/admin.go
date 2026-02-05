@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/2389/coven-gateway/internal/agent"
 	"github.com/2389/coven-gateway/internal/packs"
@@ -31,12 +32,12 @@ func AdminPack(mgr *agent.Manager, s store.Store, us store.UsageStore) *packs.Bu
 			},
 			{
 				Definition: &pb.ToolDefinition{
-					Name:                 "admin_agent_history",
-					Description:          "Read an agent's message history",
-					InputSchemaJson:      `{"type":"object","properties":{"agent_id":{"type":"string"},"limit":{"type":"integer"}},"required":["agent_id"]}`,
+					Name:                 "admin_agent_messages",
+					Description:          "Read all messages for an agent in chronological order with token usage stats. Supports cursor-based pagination.",
+					InputSchemaJson:      `{"type":"object","properties":{"agent_id":{"type":"string","description":"The agent to inspect"},"limit":{"type":"integer","description":"Events per page (default 50, max 500)"},"cursor":{"type":"string","description":"Pagination cursor from previous response"}},"required":["agent_id"]}`,
 					RequiredCapabilities: []string{"admin"},
 				},
-				Handler: a.AgentHistory,
+				Handler: a.AgentMessages,
 			},
 			{
 				Definition: &pb.ToolDefinition{
@@ -81,14 +82,15 @@ func (a *adminHandlers) ListAgents(ctx context.Context, agentID string, input js
 	})
 }
 
-type agentHistoryInput struct {
+type agentMessagesInput struct {
 	AgentID string `json:"agent_id"`
 	Limit   int    `json:"limit"`
+	Cursor  string `json:"cursor"`
 }
 
-// AgentHistory retrieves message history for a specific agent.
-func (a *adminHandlers) AgentHistory(ctx context.Context, callerAgentID string, input json.RawMessage) (json.RawMessage, error) {
-	var in agentHistoryInput
+// AgentMessages retrieves all events for an agent in chronological order with usage stats.
+func (a *adminHandlers) AgentMessages(ctx context.Context, callerAgentID string, input json.RawMessage) (json.RawMessage, error) {
+	var in agentMessagesInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
 	}
@@ -105,38 +107,65 @@ func (a *adminHandlers) AgentHistory(ctx context.Context, callerAgentID string, 
 		limit = 500
 	}
 
-	// Get all threads and filter by agent_id
-	threads, err := a.store.ListThreads(ctx, 100)
-	if err != nil {
-		return nil, fmt.Errorf("listing threads: %w", err)
-	}
-
-	// Collect messages from threads belonging to this agent (read from ledger_events)
-	var allMessages []*store.Message
-	for _, thread := range threads {
-		if thread.AgentID != in.AgentID {
-			continue
-		}
-
-		events, err := a.store.GetEventsByThreadID(ctx, thread.ID, limit)
-		if err != nil {
-			continue // Skip threads we can't read
-		}
-		// Convert events to messages using shared helper
-		allMessages = append(allMessages, store.EventsToMessages(events)...)
-
-		// Stop if we have enough messages
-		if len(allMessages) >= limit {
-			allMessages = allMessages[:limit]
-			break
-		}
-	}
-
-	return json.Marshal(map[string]any{
-		"agent_id": in.AgentID,
-		"messages": allMessages,
-		"count":    len(allMessages),
+	// Get paginated events keyed by agent's conversation key
+	result, err := a.store.GetEvents(ctx, store.GetEventsParams{
+		ConversationKey: in.AgentID,
+		Limit:           limit,
+		Cursor:          in.Cursor,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("querying events: %w", err)
+	}
+
+	// Convert events to a JSON-friendly format with timing
+	events := make([]map[string]any, len(result.Events))
+	for i, evt := range result.Events {
+		e := map[string]any{
+			"id":        evt.ID,
+			"direction": string(evt.Direction),
+			"author":    evt.Author,
+			"type":      string(evt.Type),
+			"timestamp": evt.Timestamp.Format(time.RFC3339),
+		}
+		if evt.ThreadID != nil {
+			e["thread_id"] = *evt.ThreadID
+		}
+		if evt.Text != nil {
+			e["text"] = *evt.Text
+		}
+		events[i] = e
+	}
+
+	// Get aggregated usage stats for the agent
+	agentID := in.AgentID
+	stats, err := a.usageStore.GetUsageStats(ctx, store.UsageFilter{
+		AgentID: &agentID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("querying usage stats: %w", err)
+	}
+
+	resp := map[string]any{
+		"agent_id": in.AgentID,
+		"events":   events,
+		"count":    len(events),
+		"has_more": result.HasMore,
+		"usage": map[string]any{
+			"total_input":       stats.TotalInput,
+			"total_output":      stats.TotalOutput,
+			"total_cache_read":  stats.TotalCacheRead,
+			"total_cache_write": stats.TotalCacheWrite,
+			"total_thinking":    stats.TotalThinking,
+			"total_tokens":      stats.TotalTokens,
+			"request_count":     stats.RequestCount,
+		},
+	}
+
+	if result.NextCursor != "" {
+		resp["next_cursor"] = result.NextCursor
+	}
+
+	return json.Marshal(resp)
 }
 
 type sendMessageInput struct {
