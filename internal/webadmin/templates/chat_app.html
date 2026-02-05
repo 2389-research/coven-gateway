@@ -2034,7 +2034,12 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
             console.log('[chat] tool_use event:', e.data);
             try {
                 const data = JSON.parse(e.data);
-                appendToolBlock('use', data.tool_name, data.content);
+                // Check if this is Claude's AskUserQuestion tool
+                if (data.tool_name === 'AskUserQuestion' && data.content) {
+                    handleClaudeAskUserQuestion(data.tool_id, data.content);
+                } else {
+                    appendToolBlock('use', data.tool_name, data.content);
+                }
             } catch {}
         });
 
@@ -2316,6 +2321,34 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         scrollToBottom();
     }
 
+    // Handle Claude's native AskUserQuestion tool
+    function handleClaudeAskUserQuestion(toolId, contentJson) {
+        try {
+            const input = JSON.parse(contentJson);
+            // Claude's AskUserQuestion has a 'questions' array
+            if (input.questions && input.questions.length > 0) {
+                input.questions.forEach((q, idx) => {
+                    // Convert to our question format
+                    const questionData = {
+                        question_id: toolId + '-' + idx,
+                        tool_id: toolId,
+                        question: q.question,
+                        options: q.options || [],
+                        multi_select: q.multiSelect || false,
+                        header: q.header || '',
+                        timeout_seconds: 0, // Claude questions don't have timeout
+                        is_claude_question: true
+                    };
+                    appendUserQuestion(questionData);
+                });
+            }
+        } catch (err) {
+            console.error('[chat] failed to parse AskUserQuestion:', err);
+            // Fall back to showing as regular tool block
+            appendToolBlock('use', 'AskUserQuestion', contentJson);
+        }
+    }
+
     function appendUserQuestion(data) {
         // Clear any pending messages first
         clearPendingMessages();
@@ -2375,7 +2408,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
                     }
                 } else {
                     // Single select - submit immediately
-                    submitQuestionAnswer(data.question_id, [label], msg);
+                    submitQuestionAnswer(data.question_id, [label], msg, data.is_claude_question);
                 }
             });
         });
@@ -2384,7 +2417,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         if (submitBtn) {
             submitBtn.addEventListener('click', function() {
                 if (selectedOptions.size > 0) {
-                    submitQuestionAnswer(data.question_id, Array.from(selectedOptions), msg);
+                    submitQuestionAnswer(data.question_id, Array.from(selectedOptions), msg, data.is_claude_question);
                 }
             });
         }
@@ -2393,7 +2426,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         scrollToBottom();
     }
 
-    async function submitQuestionAnswer(questionId, selected, msgElement) {
+    async function submitQuestionAnswer(questionId, selected, msgElement, isClaudeQuestion) {
         // Disable all options
         const optionBtns = msgElement.querySelectorAll('.question-option');
         const submitBtn = msgElement.querySelector('.question-submit-btn');
@@ -2406,18 +2439,40 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         try {
             const csrfToken = getCSRFToken();
 
-            const response = await fetch('/api/questions/answer', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
-                },
-                body: JSON.stringify({
-                    agent_id: agentId,
-                    question_id: questionId,
-                    selected: selected
-                })
-            });
+            let response;
+            if (isClaudeQuestion) {
+                // For Claude's AskUserQuestion, send the answer as a chat message
+                const answerText = selected.length === 1
+                    ? `My answer: ${selected[0]}`
+                    : `My answers: ${selected.join(', ')}`;
+
+                const formData = new FormData();
+                formData.append('message', answerText);
+                formData.append('thread_id', threadId);
+
+                response = await fetch('/chat/' + agentId + '/send', {
+                    method: 'POST',
+                    body: formData,
+                    headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+                });
+
+                // Also show the answer in the UI
+                appendUserMessage(answerText);
+            } else {
+                // For our builtin ask_user tool, use the answer API
+                response = await fetch('/api/questions/answer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {})
+                    },
+                    body: JSON.stringify({
+                        agent_id: agentId,
+                        question_id: questionId,
+                        selected: selected
+                    })
+                });
+            }
 
             if (!response.ok) {
                 const text = await response.text();
