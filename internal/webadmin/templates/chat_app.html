@@ -2140,22 +2140,27 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         scrollToBottom();
     }
 
-    function appendThinkingBlock(content) {
-        console.log('[chat] appendThinkingBlock, currentThinkingBlock:', currentThinkingBlock);
-        // Clear any pending messages first (streaming or previous thinking)
-        clearPendingMessages();
+    function showTypingIndicator() {
+        // Don't show another if one already exists
+        if (currentThinkingBlock) return;
 
         const msg = document.createElement('div');
         msg.className = 'message message-agent thinking-block';
         msg.innerHTML = `
-            <div class="message-header">
-                <span class="message-sender thinking">Thinking...</span>
+            <div class="typing-indicator">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
             </div>
-            <div class="message-content thinking">${escapeHtml(content)}</div>
         `;
         chatMessages.appendChild(msg);
         currentThinkingBlock = msg;
         scrollToBottom();
+    }
+
+    // Legacy function name for compatibility
+    function appendThinkingBlock(content) {
+        showTypingIndicator();
     }
 
     function removeThinkingBlock() {
@@ -2542,7 +2547,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
         appendUserMessage(message);
         messageInput.value = '';
         messageInput.style.height = 'auto';
-        startStreaming();
+        showTypingIndicator(); // Show typing indicator while waiting for response
 
         try {
             const formData = new FormData();
@@ -2600,6 +2605,40 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
 @keyframes throbber-pulse {
     0%, 100% { opacity: 0.4; transform: scale(0.8); }
     50% { opacity: 1; transform: scale(1); }
+}
+
+/* Typing indicator - three bouncing dots */
+.typing-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0.75rem 1rem;
+    background: white;
+    border: 1px solid #E8E2DA;
+    border-radius: 0.75rem 0.75rem 0.75rem 0.25rem;
+}
+
+.typing-indicator .dot {
+    width: 8px;
+    height: 8px;
+    background: #805AD5;
+    border-radius: 50%;
+    animation: typing-bounce 1.4s ease-in-out infinite;
+}
+
+.typing-indicator .dot:nth-child(1) { animation-delay: 0s; }
+.typing-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing-bounce {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.4;
+    }
+    30% {
+        transform: translateY(-6px);
+        opacity: 1;
+    }
 }
 
 /* Markdown styles */
