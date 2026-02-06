@@ -55,7 +55,7 @@ func TestService_SendMessage_RecordsUserMessageFirst(t *testing.T) {
 			{Event: agent.EventDone, Text: "Hello", Done: true},
 		},
 	}
-	svc := New(testStore, sender, nil)
+	svc := New(testStore, sender, nil, nil)
 
 	// Send message
 	ctx := context.Background()
@@ -104,7 +104,7 @@ func TestService_SendMessage_CreatesThread(t *testing.T) {
 			{Event: agent.EventDone, Done: true},
 		},
 	}
-	svc := New(testStore, sender, nil)
+	svc := New(testStore, sender, nil, nil)
 
 	ctx := context.Background()
 	resp, err := svc.SendMessage(ctx, &SendRequest{
@@ -135,7 +135,7 @@ func TestService_SendMessage_ReusesExistingThread(t *testing.T) {
 			{Event: agent.EventDone, Done: true},
 		},
 	}
-	svc := New(testStore, sender, nil)
+	svc := New(testStore, sender, nil, nil)
 
 	ctx := context.Background()
 
@@ -189,7 +189,7 @@ func TestService_SendMessage_UsesProvidedThreadID(t *testing.T) {
 			{Event: agent.EventDone, Done: true},
 		},
 	}
-	svc := New(testStore, sender, nil)
+	svc := New(testStore, sender, nil, nil)
 
 	ctx := context.Background()
 	customThreadID := "custom-thread-id-123"
@@ -234,7 +234,7 @@ func TestService_SendMessage_PersistsToolUse(t *testing.T) {
 			{Event: agent.EventDone, Done: true},
 		},
 	}
-	svc := New(testStore, sender, nil)
+	svc := New(testStore, sender, nil, nil)
 
 	ctx := context.Background()
 	resp, err := svc.SendMessage(ctx, &SendRequest{
@@ -287,7 +287,7 @@ func TestService_SendMessage_AccumulatesStreamingText(t *testing.T) {
 			{Event: agent.EventDone, Done: true},
 		},
 	}
-	svc := New(testStore, sender, nil)
+	svc := New(testStore, sender, nil, nil)
 
 	ctx := context.Background()
 	resp, err := svc.SendMessage(ctx, &SendRequest{
@@ -324,7 +324,7 @@ func TestService_SendMessage_AccumulatesStreamingText(t *testing.T) {
 func TestService_SendMessage_RequiresAgentID(t *testing.T) {
 	testStore := createTestStore(t)
 	sender := &mockSender{}
-	svc := New(testStore, sender, nil)
+	svc := New(testStore, sender, nil, nil)
 
 	ctx := context.Background()
 	_, err := svc.SendMessage(ctx, &SendRequest{
@@ -344,7 +344,7 @@ func TestService_SendMessage_ForwardsToSender(t *testing.T) {
 			{Event: agent.EventDone, Done: true},
 		},
 	}
-	svc := New(testStore, sender, nil)
+	svc := New(testStore, sender, nil, nil)
 
 	ctx := context.Background()
 	_, err := svc.SendMessage(ctx, &SendRequest{
@@ -373,7 +373,7 @@ func TestService_GetHistory(t *testing.T) {
 			{Event: agent.EventDone, Done: true},
 		},
 	}
-	svc := New(testStore, sender, nil)
+	svc := New(testStore, sender, nil, nil)
 
 	ctx := context.Background()
 	resp, err := svc.SendMessage(ctx, &SendRequest{
@@ -401,7 +401,7 @@ func TestService_GetThread(t *testing.T) {
 			{Event: agent.EventDone, Done: true},
 		},
 	}
-	svc := New(testStore, sender, nil)
+	svc := New(testStore, sender, nil, nil)
 
 	ctx := context.Background()
 	resp, err := svc.SendMessage(ctx, &SendRequest{
@@ -428,7 +428,7 @@ func TestService_SendMessage_SenderError(t *testing.T) {
 	sender := &mockSender{
 		err: agent.ErrAgentNotFound,
 	}
-	svc := New(testStore, sender, nil)
+	svc := New(testStore, sender, nil, nil)
 
 	ctx := context.Background()
 	_, err := svc.SendMessage(ctx, &SendRequest{

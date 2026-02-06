@@ -68,6 +68,9 @@ type Gateway struct {
 	// questionRouter handles ask_user tool question routing
 	questionRouter *builtins.InMemoryQuestionRouter
 
+	// eventBroadcaster handles cross-client event push
+	eventBroadcaster *conversation.EventBroadcaster
+
 	// mockSender is used for testing to inject a mock message sender
 	mockSender messageSender
 }
@@ -166,11 +169,15 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		logger.Warn("auth disabled - no jwt_secret configured")
 	}
 
+	// Create event broadcaster for cross-client push notifications
+	eventBroadcaster := conversation.NewEventBroadcaster(logger.With("component", "broadcaster"))
+
 	// Create conversation service (central message persistence layer)
 	convService := conversation.New(
 		s.(*store.SQLiteStore),
 		agentMgr,
 		logger.With("component", "conversation"),
+		eventBroadcaster,
 	)
 
 	// Create pack registry and router for tool pack support
@@ -228,18 +235,19 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 
 	// Create gateway
 	gw := &Gateway{
-		config:       cfg,
-		agentManager: agentMgr,
-		store:        s,
-		conversation: convService,
-		grpcServer:   grpcServer,
-		logger:       logger.With("component", "gateway"),
-		serverID:     generateServerID(),
-		dedupe:       dedupeCache,
-		packRegistry: packRegistry,
-		packRouter:   packRouter,
-		mcpTokens:    mcpTokens,
-		mcpEndpoint:  mcpEndpoint,
+		config:           cfg,
+		agentManager:     agentMgr,
+		store:            s,
+		conversation:     convService,
+		grpcServer:       grpcServer,
+		logger:           logger.With("component", "gateway"),
+		serverID:         generateServerID(),
+		dedupe:           dedupeCache,
+		packRegistry:     packRegistry,
+		packRouter:       packRouter,
+		mcpTokens:        mcpTokens,
+		mcpEndpoint:      mcpEndpoint,
+		eventBroadcaster: eventBroadcaster,
 	}
 
 	// Register CovenControl service (agent streaming - no auth required for now)
@@ -260,6 +268,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 
 	clientService := client.NewClientServiceWithRouter(sqliteStore, sqliteStore, dedupeCache, agentMgr, agentMgr)
 	clientService.SetToolApprover(agentMgr)
+	clientService.SetBroadcaster(eventBroadcaster)
 	pb.RegisterClientServiceServer(grpcServer, clientService)
 
 	// Register PackService for tool pack support
@@ -345,6 +354,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		Store:        sqliteStore,
 		Manager:      gw.agentManager,
 		Conversation: convService,
+		Broadcaster:  eventBroadcaster,
 		Registry:     packRegistry,
 		Config: webadmin.Config{
 			BaseURL: webAdminBaseURL,
@@ -642,6 +652,11 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	// Close dedupe cache (stops background cleanup goroutine)
 	if g.dedupe != nil {
 		g.dedupe.Close()
+	}
+
+	// Close event broadcaster (closes all subscriber channels)
+	if g.eventBroadcaster != nil {
+		g.eventBroadcaster.Close()
 	}
 
 	// Close web admin (cleans up chat hub and sessions)

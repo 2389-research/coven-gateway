@@ -38,20 +38,24 @@ type MessageSender interface {
 // Service is the central conversation layer that ensures all messages
 // are persisted before being sent to agents and as responses stream back.
 type Service struct {
-	store  ConversationStore
-	sender MessageSender
-	logger *slog.Logger
+	store       ConversationStore
+	sender      MessageSender
+	broadcaster *EventBroadcaster
+	logger      *slog.Logger
 }
 
-// New creates a new ConversationService
-func New(store ConversationStore, sender MessageSender, logger *slog.Logger) *Service {
+// New creates a new ConversationService.
+// The broadcaster parameter is optional — pass nil to disable cross-client
+// event broadcasting (events will still be persisted normally).
+func New(store ConversationStore, sender MessageSender, logger *slog.Logger, broadcaster *EventBroadcaster) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &Service{
-		store:  store,
-		sender: sender,
-		logger: logger.With("component", "conversation"),
+		store:       store,
+		sender:      sender,
+		broadcaster: broadcaster,
+		logger:      logger.With("component", "conversation"),
 	}
 }
 
@@ -111,6 +115,11 @@ func (s *Service) SendMessage(ctx context.Context, req *SendRequest) (*SendRespo
 		return nil, fmt.Errorf("failed to record message: %w", err)
 	}
 
+	// Broadcast user message to other clients watching this conversation
+	if s.broadcaster != nil {
+		s.broadcaster.Publish(req.AgentID, userEvent, "")
+	}
+
 	s.logger.Debug("user message recorded",
 		"thread_id", thread.ID,
 		"message_id", messageID,
@@ -139,6 +148,15 @@ func (s *Service) SendMessage(ctx context.Context, req *SendRequest) (*SendRespo
 		MessageID: messageID,
 		Stream:    persistedChan,
 	}, nil
+}
+
+// Subscribe registers a subscriber for broadcast events on a conversation key.
+// Returns nil channel if the broadcaster is not configured.
+func (s *Service) Subscribe(ctx context.Context, conversationKey string) (<-chan *store.LedgerEvent, string) {
+	if s.broadcaster == nil {
+		return nil, ""
+	}
+	return s.broadcaster.Subscribe(ctx, conversationKey)
 }
 
 // GetHistory returns messages for a thread (converted from events)
@@ -428,6 +446,11 @@ func (s *Service) saveEvent(event *store.LedgerEvent) {
 			"thread_id", event.ThreadID,
 			"type", event.Type)
 	} else {
+		// Broadcast persisted event to subscribers
+		if s.broadcaster != nil {
+			s.broadcaster.Publish(event.ConversationKey, event, "")
+		}
+
 		s.logger.Debug("event saved",
 			"event_id", event.ID,
 			"thread_id", event.ThreadID,

@@ -38,25 +38,70 @@ func (s *ClientService) StreamEvents(req *pb.StreamEventsRequest, stream pb.Clie
 
 	// Track cursor for pagination (opaque string from the store)
 	var cursor string
+	var err error
 
 	// If resuming from a specific event, we need to find its timestamp to build a cursor
 	if req.SinceEventId != nil && *req.SinceEventId != "" {
-		// Find the event to get its timestamp for cursor construction
-		foundCursor, err := s.findCursorForEvent(ctx, req.ConversationKey, *req.SinceEventId)
+		cursor, err = s.findCursorForEvent(ctx, req.ConversationKey, *req.SinceEventId)
 		if err != nil {
 			return err
 		}
-		cursor = foundCursor
 	}
 
 	// Send initial events (either from cursor position or recent history)
-	newCursor, err := s.sendInitialEvents(ctx, stream, req.ConversationKey, cursor)
+	_, err = s.sendInitialEvents(ctx, stream, req.ConversationKey, cursor)
 	if err != nil {
 		return err
 	}
-	cursor = newCursor
 
-	// Poll for new events
+	// If broadcaster is available, use push-based streaming (sub-millisecond latency)
+	// Otherwise fall back to polling (backward compat)
+	if s.broadcaster != nil {
+		return s.streamViaBroadcaster(ctx, stream, req.ConversationKey)
+	}
+	return s.streamViaPolling(ctx, stream, req.ConversationKey, cursor)
+}
+
+// streamViaBroadcaster subscribes to the event broadcaster and forwards events
+// to the gRPC stream. Uses push-based delivery instead of polling.
+func (s *ClientService) streamViaBroadcaster(ctx context.Context, stream pb.ClientService_StreamEventsServer, convKey string) error {
+	ch, _ := s.broadcaster.Subscribe(ctx, convKey)
+
+	idleTimer := time.NewTimer(streamIdleTimeout)
+	defer idleTimer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-idleTimer.C:
+			return nil
+		case event, ok := <-ch:
+			if !ok {
+				// Broadcaster closed the channel (shutdown)
+				return nil
+			}
+
+			streamEvent := eventToClientStreamEvent(event)
+			if err := stream.Send(streamEvent); err != nil {
+				return err
+			}
+
+			// Reset idle timer on activity
+			if !idleTimer.Stop() {
+				select {
+				case <-idleTimer.C:
+				default:
+				}
+			}
+			idleTimer.Reset(streamIdleTimeout)
+		}
+	}
+}
+
+// streamViaPolling polls the database for new events. Used as fallback when
+// the broadcaster is not available.
+func (s *ClientService) streamViaPolling(ctx context.Context, stream pb.ClientService_StreamEventsServer, convKey, cursor string) error {
 	ticker := time.NewTicker(streamPollInterval)
 	defer ticker.Stop()
 
@@ -66,19 +111,16 @@ func (s *ClientService) StreamEvents(req *pb.StreamEventsRequest, stream pb.Clie
 	for {
 		select {
 		case <-ctx.Done():
-			// Client disconnected
 			return nil
 		case <-idleTimer.C:
-			// Stream has been idle too long - close gracefully
 			return nil
 		case <-ticker.C:
-			newCursor, hasNew, err := s.pollAndSendNewEvents(ctx, stream, req.ConversationKey, cursor)
+			newCursor, hasNew, err := s.pollAndSendNewEvents(ctx, stream, convKey, cursor)
 			if err != nil {
 				return err
 			}
 			if hasNew {
 				cursor = newCursor
-				// Reset idle timer on activity
 				if !idleTimer.Stop() {
 					select {
 					case <-idleTimer.C:

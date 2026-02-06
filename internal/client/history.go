@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/2389/coven-gateway/internal/conversation"
 	"github.com/2389/coven-gateway/internal/store"
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
@@ -28,13 +29,14 @@ type PrincipalStore interface {
 // ClientService implements the ClientService gRPC service
 type ClientService struct {
 	pb.UnimplementedClientServiceServer
-	store      EventStore
-	principals PrincipalStore
-	dedupe     DedupeCache
-	agents     AgentLister
-	router     MessageRouter
-	approver   ToolApprover
-	answerer   QuestionAnswerer
+	store       EventStore
+	principals  PrincipalStore
+	dedupe      DedupeCache
+	agents      AgentLister
+	router      MessageRouter
+	approver    ToolApprover
+	answerer    QuestionAnswerer
+	broadcaster *conversation.EventBroadcaster
 }
 
 // NewClientService creates a new ClientService with the given stores
@@ -43,6 +45,12 @@ func NewClientService(eventStore EventStore, principalStore PrincipalStore) *Cli
 		store:      eventStore,
 		principals: principalStore,
 	}
+}
+
+// SetBroadcaster configures the event broadcaster for push-based streaming.
+// When set, StreamEvents uses the broadcaster instead of polling.
+func (s *ClientService) SetBroadcaster(b *conversation.EventBroadcaster) {
+	s.broadcaster = b
 }
 
 // GetEvents retrieves events for a conversation with optional filtering and pagination

@@ -5,10 +5,12 @@ package webadmin
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 
 	"github.com/2389/coven-gateway/internal/agent"
+	"github.com/2389/coven-gateway/internal/store"
 )
 
 // chatMessage represents a message in the chat stream
@@ -54,15 +56,17 @@ type questionOption struct {
 
 // chatSession represents an active chat between a user and an agent
 type chatSession struct {
-	mu        sync.RWMutex
-	agentID   string
-	userID    string
-	messages  chan *chatMessage
-	closed    bool
-	cancel    context.CancelFunc
-	ctx       context.Context
-	createdAt time.Time
-	lastUsed  time.Time
+	mu             sync.RWMutex
+	agentID        string
+	userID         string
+	messages       chan *chatMessage
+	closed         bool
+	cancel         context.CancelFunc
+	ctx            context.Context
+	createdAt      time.Time
+	lastUsed       time.Time
+	broadcastSubID string // subscription ID for the event broadcaster (set by handleChatStream)
+	activeRequest  bool   // true while pipeAgentResponses is running (suppresses broadcast dedup)
 }
 
 // send safely sends a message to the session channel
@@ -399,6 +403,73 @@ func (h *chatHub) sendToAgent(agentID string, msg *chatMessage) int {
 		}
 	}
 	return sent
+}
+
+// ledgerEventToChatMessage converts a persisted LedgerEvent into a chatMessage
+// for the web SSE stream. This enables cross-client awareness: when client B
+// sends a message, client A sees it via the broadcaster.
+func ledgerEventToChatMessage(event *store.LedgerEvent) *chatMessage {
+	msg := &chatMessage{
+		Timestamp: event.Timestamp,
+	}
+
+	switch event.Type {
+	case store.EventTypeMessage:
+		if event.Direction == store.EventDirectionInbound {
+			msg.Type = "user"
+			if event.Text != nil {
+				msg.Content = *event.Text
+			}
+		} else {
+			msg.Type = "text"
+			if event.Text != nil {
+				msg.Content = *event.Text
+			}
+		}
+	case store.EventTypeToolCall:
+		msg.Type = "tool_use"
+		if event.Text != nil {
+			// Parse tool metadata from JSON
+			var toolData struct {
+				Name  string `json:"name"`
+				ID    string `json:"id"`
+				Input string `json:"input"`
+			}
+			if err := json.Unmarshal([]byte(*event.Text), &toolData); err == nil {
+				msg.ToolName = toolData.Name
+				msg.ToolID = toolData.ID
+				msg.Content = toolData.Input
+			} else {
+				msg.Content = *event.Text
+			}
+		}
+	case store.EventTypeToolResult:
+		msg.Type = "tool_result"
+		if event.Text != nil {
+			var resultData struct {
+				ID     string `json:"id"`
+				Output string `json:"output"`
+			}
+			if err := json.Unmarshal([]byte(*event.Text), &resultData); err == nil {
+				msg.ToolID = resultData.ID
+				msg.Content = resultData.Output
+			} else {
+				msg.Content = *event.Text
+			}
+		}
+	case store.EventTypeError:
+		msg.Type = "error"
+		if event.Text != nil {
+			msg.Content = *event.Text
+		}
+	default:
+		msg.Type = "text"
+		if event.Text != nil {
+			msg.Content = *event.Text
+		}
+	}
+
+	return msg
 }
 
 // Close closes all sessions and stops the cleanup goroutine
