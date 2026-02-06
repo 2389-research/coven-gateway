@@ -1480,13 +1480,13 @@ func TestHandleAgentHistory_NegativeLimit(t *testing.T) {
 func TestHandleAgentHistory_LimitClamped(t *testing.T) {
 	gw := newTestGatewayWithMockManagerAndStore(t)
 
-	// Request with limit > 100 should work (clamped internally)
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/test-agent/history?limit=500", nil)
+	// Request with limit > 500 should work (clamped internally)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/test-agent/history?limit=1000", nil)
 	rec := httptest.NewRecorder()
 
 	gw.handleAgentHistory(rec, req)
 
-	// Should succeed (not error) - limit is clamped silently to 100
+	// Should succeed (not error) - limit is clamped silently to 500
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d. Body: %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
@@ -1505,39 +1505,46 @@ func TestHandleAgentHistory_EmptyResult(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 
-	var events []AgentHistoryEvent
-	if err := json.NewDecoder(rec.Body).Decode(&events); err != nil {
+	var resp AgentHistoryResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	if len(events) != 0 {
-		t.Errorf("expected 0 events, got %d", len(events))
+	if resp.AgentID != "test-agent" {
+		t.Errorf("expected agent_id 'test-agent', got %s", resp.AgentID)
+	}
+	if len(resp.Events) != 0 {
+		t.Errorf("expected 0 events, got %d", len(resp.Events))
+	}
+	if resp.Count != 0 {
+		t.Errorf("expected count 0, got %d", resp.Count)
+	}
+	if resp.HasMore {
+		t.Error("expected has_more to be false")
 	}
 }
 
 func TestHandleAgentHistory_WithEvents(t *testing.T) {
 	gw := newTestGatewayWithMockManagerAndStore(t)
 
-	// Add some events for the test agent
+	// Add some events for the test agent using ConversationKey = agent ID
 	sqlStore, ok := gw.store.(*store.SQLiteStore)
 	if !ok {
 		t.Fatalf("store is not *SQLiteStore")
 	}
 
-	principalID := "test-agent" // Matches the mock agent's principal ID
 	ctx := context.Background()
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	for i := 0; i < 3; i++ {
 		event := &store.LedgerEvent{
-			ID:               fmt.Sprintf("event-%d", i),
-			ConversationKey:  "matrix:!room:server.com",
-			Direction:        store.EventDirectionOutbound,
-			Author:           "test-agent",
-			Timestamp:        baseTime.Add(time.Duration(i) * time.Second),
-			Type:             store.EventTypeMessage,
-			Text:             ptrString(fmt.Sprintf("Message %d", i)),
-			ActorPrincipalID: &principalID,
+			ID:              fmt.Sprintf("event-%d", i),
+			ConversationKey: "test-agent", // ConversationKey matches agent ID
+			Direction:       store.EventDirectionOutbound,
+			Author:          "test-agent",
+			Timestamp:       baseTime.Add(time.Duration(i) * time.Second),
+			Type:            store.EventTypeMessage,
+			Text:            ptrString(fmt.Sprintf("Message %d", i)),
 		}
 		if err := sqlStore.SaveEvent(ctx, event); err != nil {
 			t.Fatalf("failed to save event: %v", err)
@@ -1557,32 +1564,38 @@ func TestHandleAgentHistory_WithEvents(t *testing.T) {
 		t.Errorf("expected Content-Type application/json, got %s", rec.Header().Get("Content-Type"))
 	}
 
-	var events []AgentHistoryEvent
-	if err := json.NewDecoder(rec.Body).Decode(&events); err != nil {
+	var resp AgentHistoryResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	if len(events) != 3 {
-		t.Fatalf("expected 3 events, got %d", len(events))
+	if resp.AgentID != "test-agent" {
+		t.Errorf("expected agent_id 'test-agent', got %s", resp.AgentID)
+	}
+	if len(resp.Events) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(resp.Events))
+	}
+	if resp.Count != 3 {
+		t.Errorf("expected count 3, got %d", resp.Count)
 	}
 
-	// Verify newest first (DESC order)
-	if events[0].ID != "event-2" {
-		t.Errorf("expected first event to be 'event-2' (newest), got %s", events[0].ID)
+	// Verify chronological order (oldest first)
+	if resp.Events[0].ID != "event-0" {
+		t.Errorf("expected first event to be 'event-0' (oldest), got %s", resp.Events[0].ID)
 	}
-	if events[2].ID != "event-0" {
-		t.Errorf("expected last event to be 'event-0' (oldest), got %s", events[2].ID)
+	if resp.Events[2].ID != "event-2" {
+		t.Errorf("expected last event to be 'event-2' (newest), got %s", resp.Events[2].ID)
 	}
 
 	// Verify event fields
-	if events[0].ConversationKey != "matrix:!room:server.com" {
-		t.Errorf("unexpected conversation_key: %s", events[0].ConversationKey)
+	if resp.Events[0].Direction != "outbound_from_agent" {
+		t.Errorf("unexpected direction: %s", resp.Events[0].Direction)
 	}
-	if events[0].Direction != "outbound_from_agent" {
-		t.Errorf("unexpected direction: %s", events[0].Direction)
+	if resp.Events[0].Type != "message" {
+		t.Errorf("unexpected type: %s", resp.Events[0].Type)
 	}
-	if events[0].Type != "message" {
-		t.Errorf("unexpected type: %s", events[0].Type)
+	if resp.Events[0].Text != "Message 0" {
+		t.Errorf("unexpected text: %s", resp.Events[0].Text)
 	}
 }
 

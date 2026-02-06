@@ -88,15 +88,36 @@ type SendToAgentRequest struct {
 	Message string `json:"message"`
 }
 
-// AgentHistoryEvent is the JSON response for GET /api/agents/{id}/history.
+// AgentHistoryEvent is the JSON response for events in GET /api/agents/{id}/history.
 type AgentHistoryEvent struct {
-	ID              string `json:"id"`
-	Timestamp       string `json:"timestamp"`
-	Author          string `json:"author"`
-	Type            string `json:"type"`
-	Content         string `json:"content,omitempty"`
-	ConversationKey string `json:"conversation_key"`
-	Direction       string `json:"direction"`
+	ID        string `json:"id"`
+	Direction string `json:"direction"`
+	Author    string `json:"author"`
+	Type      string `json:"type"`
+	Timestamp string `json:"timestamp"`
+	ThreadID  string `json:"thread_id,omitempty"`
+	Text      string `json:"text,omitempty"`
+}
+
+// AgentHistoryUsage contains aggregated usage stats for an agent.
+type AgentHistoryUsage struct {
+	TotalInput      int64 `json:"total_input"`
+	TotalOutput     int64 `json:"total_output"`
+	TotalCacheRead  int64 `json:"total_cache_read"`
+	TotalCacheWrite int64 `json:"total_cache_write"`
+	TotalThinking   int64 `json:"total_thinking"`
+	TotalTokens     int64 `json:"total_tokens"`
+	RequestCount    int64 `json:"request_count"`
+}
+
+// AgentHistoryResponse is the JSON response for GET /api/agents/{id}/history.
+type AgentHistoryResponse struct {
+	AgentID    string              `json:"agent_id"`
+	Events     []AgentHistoryEvent `json:"events"`
+	Count      int                 `json:"count"`
+	HasMore    bool                `json:"has_more"`
+	NextCursor string              `json:"next_cursor,omitempty"`
+	Usage      AgentHistoryUsage   `json:"usage"`
 }
 
 // MessageResponse is the JSON response for message history.
@@ -920,7 +941,8 @@ func (g *Gateway) handleAgentHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAgentHistoryImpl handles GET /api/agents/{id}/history requests.
-// Returns recent conversation events for a specific agent, ordered by timestamp DESC.
+// Returns conversation events for a specific agent with pagination and usage stats.
+// Query params: limit (default 50, max 500), cursor (for pagination)
 func (g *Gateway) handleAgentHistoryImpl(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -943,15 +965,15 @@ func (g *Gateway) handleAgentHistoryImpl(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Look up agent by ID to get their principal_id
-	agent, ok := g.agentManager.GetAgent(agentID)
+	// Verify agent exists
+	_, ok := g.agentManager.GetAgent(agentID)
 	if !ok {
 		g.sendJSONError(w, http.StatusNotFound, "agent not found")
 		return
 	}
 
-	// Parse optional limit parameter (default 20, max 100)
-	limit := 20
+	// Parse optional limit parameter (default 50, max 500)
+	limit := 50
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		parsed, err := strconv.Atoi(limitStr)
 		if err != nil || parsed < 1 {
@@ -959,35 +981,76 @@ func (g *Gateway) handleAgentHistoryImpl(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		limit = parsed
-		if limit > 100 {
-			limit = 100
+		if limit > 500 {
+			limit = 500
 		}
 	}
 
-	// Query events by actor principal_id, ordered newest first
-	events, err := g.store.ListEventsByActorDesc(r.Context(), agent.PrincipalID, limit)
+	// Parse optional cursor parameter for pagination
+	cursor := r.URL.Query().Get("cursor")
+
+	// Query events by conversation key (agent ID), ordered chronologically
+	result, err := g.store.GetEvents(r.Context(), store.GetEventsParams{
+		ConversationKey: agentID,
+		Limit:           limit,
+		Cursor:          cursor,
+	})
 	if err != nil {
-		g.logger.Error("failed to list events by actor", "error", err)
+		g.logger.Error("failed to get events", "error", err)
 		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	// Build response
-	response := make([]AgentHistoryEvent, len(events))
-	for i, evt := range events {
-		var content string
+	// Build events response
+	events := make([]AgentHistoryEvent, len(result.Events))
+	for i, evt := range result.Events {
+		events[i] = AgentHistoryEvent{
+			ID:        evt.ID,
+			Direction: string(evt.Direction),
+			Author:    evt.Author,
+			Type:      string(evt.Type),
+			Timestamp: evt.Timestamp.Format(time.RFC3339),
+		}
+		if evt.ThreadID != nil {
+			events[i].ThreadID = *evt.ThreadID
+		}
 		if evt.Text != nil {
-			content = *evt.Text
+			events[i].Text = *evt.Text
 		}
-		response[i] = AgentHistoryEvent{
-			ID:              evt.ID,
-			Timestamp:       evt.Timestamp.Format(time.RFC3339),
-			Author:          evt.Author,
-			Type:            string(evt.Type),
-			Content:         content,
-			ConversationKey: evt.ConversationKey,
-			Direction:       string(evt.Direction),
+	}
+
+	// Get aggregated usage stats
+	var usage AgentHistoryUsage
+	usageStore, ok := g.store.(store.UsageStore)
+	if ok {
+		stats, err := usageStore.GetUsageStats(r.Context(), store.UsageFilter{
+			AgentID: &agentID,
+		})
+		if err != nil {
+			g.logger.Warn("failed to get usage stats", "error", err)
+			// Continue without usage stats rather than failing the request
+		} else {
+			usage = AgentHistoryUsage{
+				TotalInput:      stats.TotalInput,
+				TotalOutput:     stats.TotalOutput,
+				TotalCacheRead:  stats.TotalCacheRead,
+				TotalCacheWrite: stats.TotalCacheWrite,
+				TotalThinking:   stats.TotalThinking,
+				TotalTokens:     stats.TotalTokens,
+				RequestCount:    stats.RequestCount,
+			}
 		}
+	}
+
+	response := AgentHistoryResponse{
+		AgentID: agentID,
+		Events:  events,
+		Count:   len(events),
+		HasMore: result.HasMore,
+		Usage:   usage,
+	}
+	if result.NextCursor != "" {
+		response.NextCursor = result.NextCursor
 	}
 
 	w.Header().Set("Content-Type", "application/json")
