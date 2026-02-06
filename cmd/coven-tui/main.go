@@ -171,6 +171,19 @@ func run(ctx context.Context, server, sender, threadID string) error {
 			continue
 		}
 
+		// Check for /history command
+		if input == "/history" {
+			if selectedAgentID == "" {
+				fmt.Println("No agent selected. Use /use <agent_id> first.")
+			} else {
+				if err := fetchHistory(ctx, server, selectedAgentID); err != nil {
+					fmt.Printf("[error] %v\n", err)
+				}
+			}
+			fmt.Println()
+			continue
+		}
+
 		// Check for /help command
 		if input == "/help" {
 			printHelp()
@@ -192,6 +205,7 @@ func printHelp() {
 	fmt.Println("  /agents        List connected agents")
 	fmt.Println("  /use <id>      Set default agent for messages")
 	fmt.Println("  /use           Clear agent selection, use router")
+	fmt.Println("  /history       Show conversation history (requires /use)")
 	fmt.Println("  /help          Show this help")
 	fmt.Println("  /quit          Exit the TUI")
 }
@@ -234,6 +248,95 @@ func listAgents(ctx context.Context, server string) error {
 		caps := strings.Join(a.Capabilities, ", ")
 		fmt.Printf("  %s: %s [%s]\n", a.ID, a.Name, caps)
 	}
+	return nil
+}
+
+// historyEvent represents an event in the agent history response.
+type historyEvent struct {
+	ID        string `json:"id"`
+	Direction string `json:"direction"`
+	Author    string `json:"author"`
+	Type      string `json:"type"`
+	Timestamp string `json:"timestamp"`
+	Text      string `json:"text,omitempty"`
+}
+
+// historyResponse represents the response from GET /api/agents/{id}/history.
+type historyResponse struct {
+	AgentID string         `json:"agent_id"`
+	Events  []historyEvent `json:"events"`
+	Count   int            `json:"count"`
+	HasMore bool           `json:"has_more"`
+}
+
+// fetchHistory fetches and displays conversation history for an agent.
+func fetchHistory(ctx context.Context, server, agentID string) error {
+	url := fmt.Sprintf("%s/api/agents/%s/history?limit=20", server, agentID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	if token := getToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("fetching history: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned status %d", resp.StatusCode)
+	}
+
+	var history historyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&history); err != nil {
+		return fmt.Errorf("parsing response: %w", err)
+	}
+
+	if len(history.Events) == 0 {
+		fmt.Println("No conversation history")
+		return nil
+	}
+
+	fmt.Printf("Recent history for %s (%d events):\n", agentID, history.Count)
+	fmt.Println(strings.Repeat("-", 60))
+
+	for _, evt := range history.Events {
+		// Format based on direction
+		prefix := "  "
+		if evt.Direction == "inbound_to_agent" {
+			prefix = "\033[34m→\033[0m " // Blue arrow for user messages
+		} else if evt.Direction == "outbound_from_agent" {
+			prefix = "\033[32m←\033[0m " // Green arrow for agent messages
+		}
+
+		// Show event based on type
+		switch evt.Type {
+		case "message":
+			text := stripMarkdown(evt.Text)
+			if len(text) > 200 {
+				text = text[:197] + "..."
+			}
+			fmt.Printf("%s%s\n", prefix, text)
+		case "tool_use":
+			fmt.Printf("%s\033[33m[tool]\033[0m %s\n", prefix, truncate(evt.Text, 60))
+		case "tool_result":
+			fmt.Printf("%s\033[2m[result]\033[0m\n", prefix)
+		default:
+			if evt.Text != "" {
+				fmt.Printf("%s[%s] %s\n", prefix, evt.Type, truncate(evt.Text, 60))
+			}
+		}
+	}
+
+	if history.HasMore {
+		fmt.Printf("\033[2m... more history available\033[0m\n")
+	}
+	fmt.Println(strings.Repeat("-", 60))
+
 	return nil
 }
 
@@ -343,17 +446,18 @@ func handleSSEEvent(eventType, data string) error {
 	switch eventType {
 	case "thinking":
 		if text, ok := payload["text"].(string); ok {
-			fmt.Printf("[thinking] %s\n", truncate(text, 80))
+			fmt.Printf("\033[2m[thinking] %s\033[0m\n", truncate(text, 80))
 		}
 
 	case "text":
 		if text, ok := payload["text"].(string); ok {
-			fmt.Print(text)
+			fmt.Print(stripMarkdown(text))
 		}
 
 	case "tool_use":
+		// Field is "name" from SSE event
 		name := payload["name"]
-		fmt.Printf("[tool] using: %v\n", name)
+		fmt.Printf("\033[33m[tool] %v\033[0m\n", name)
 
 	case "tool_result":
 		isError := false
@@ -361,10 +465,26 @@ func handleSSEEvent(eventType, data string) error {
 			isError = e
 		}
 		if isError {
-			fmt.Printf("[tool] error: %v\n", payload["output"])
+			output := truncate(fmt.Sprintf("%v", payload["output"]), 100)
+			fmt.Printf("\033[31m[tool error] %s\033[0m\n", output)
 		} else {
-			fmt.Printf("[tool] result received\n")
+			fmt.Printf("\033[32m[tool done]\033[0m\n")
 		}
+
+	case "tool_state":
+		state := payload["state"]
+		detail := payload["detail"]
+		if detail != nil && detail != "" {
+			fmt.Printf("\033[2m[tool %v] %v\033[0m\n", state, detail)
+		}
+
+	case "tool_approval":
+		name := payload["name"]
+		fmt.Printf("\033[33m[approval needed] %v - respond in web UI\033[0m\n", name)
+
+	case "usage":
+		// Silently ignore usage events in TUI
+		return nil
 
 	case "file":
 		filename := payload["filename"]
@@ -372,15 +492,18 @@ func handleSSEEvent(eventType, data string) error {
 
 	case "done":
 		fmt.Println()
-		fmt.Println("[done]")
+
+	case "cancelled":
+		reason := payload["reason"]
+		fmt.Printf("\033[33m[cancelled] %v\033[0m\n", reason)
 
 	case "error":
 		if errMsg, ok := payload["error"].(string); ok {
-			fmt.Printf("[error] %s\n", errMsg)
+			fmt.Printf("\033[31m[error] %s\033[0m\n", errMsg)
 		}
 
 	default:
-		fmt.Printf("[%s] %v\n", eventType, payload)
+		// Ignore unknown events silently
 	}
 
 	return nil
@@ -392,4 +515,13 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// stripMarkdown removes common markdown formatting from text.
+func stripMarkdown(s string) string {
+	// Remove bold/italic markers (order matters: ** before *)
+	s = strings.ReplaceAll(s, "**", "")
+	s = strings.ReplaceAll(s, "__", "")
+	// Don't remove single * as it's often used for lists
+	return s
 }
