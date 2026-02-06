@@ -1422,24 +1422,26 @@ func TestListBindings_IncludesWorkingDir(t *testing.T) {
 
 // Agent History endpoint tests
 
-func TestHandleAgentHistory_AgentNotFound(t *testing.T) {
+func TestHandleAgentHistory_AgentNotConnected(t *testing.T) {
+	// History should be queryable even for agents that are not currently connected
 	gw := newTestGateway(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/agents/nonexistent-agent/history", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/offline-agent/history", nil)
 	rec := httptest.NewRecorder()
 
 	gw.handleAgentHistory(rec, req)
 
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	// Should return 200 with empty events, not 404
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 
-	var errResp map[string]string
-	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
+	var resp AgentHistoryResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
-	if errResp["error"] != "agent not found" {
-		t.Errorf("unexpected error message: %s", errResp["error"])
+	if len(resp.Events) != 0 {
+		t.Errorf("expected empty events, got %d", len(resp.Events))
 	}
 }
 

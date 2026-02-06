@@ -6,7 +6,6 @@ package webadmin
 import (
 	"bytes"
 	"embed"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -16,7 +15,6 @@ import (
 	"time"
 
 	"github.com/2389/coven-gateway/internal/store"
-	"github.com/google/uuid"
 	"github.com/yuin/goldmark"
 )
 
@@ -39,46 +37,6 @@ type threadViewData struct {
 	AgentName string
 	Connected bool
 	Messages  []*store.Message
-}
-
-// sidebarData holds data for the thread list sidebar
-type sidebarData struct {
-	Threads             bool
-	HasConnected        bool
-	HasDisconnected     bool
-	TodayThreads        []threadItemData
-	YesterdayThreads    []threadItemData
-	WeekThreads         []threadItemData
-	OlderThreads        []threadItemData
-	DisconnectedThreads []threadItemData
-}
-
-// threadItemData represents a single thread in the sidebar
-type threadItemData struct {
-	ID             string
-	Title          string
-	AgentID        string
-	AgentName      string
-	AgentConnected bool
-	Active         bool
-	UpdatedAt      time.Time
-}
-
-// agentPickerData holds data for the agent picker modal
-type agentPickerData struct {
-	Agents []agentPickerItem
-}
-
-// agentPickerItem represents an agent in the picker
-type agentPickerItem struct {
-	ID        string
-	Name      string
-	Connected bool
-}
-
-// searchResultsData holds data for thread search results
-type searchResultsData struct {
-	Results []threadItemData
 }
 
 // handleChatApp renders the main chat app shell
@@ -110,138 +68,70 @@ func (a *Admin) handleChatApp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleThreadsList returns the thread list for the sidebar (HTMX partial)
-func (a *Admin) handleThreadsList(w http.ResponseWriter, r *http.Request) {
-	threads, err := a.store.ListThreads(r.Context(), 100)
-	if err != nil {
-		a.logger.Error("failed to list threads", "error", err)
-		http.Error(w, "Failed to load threads", http.StatusInternalServerError)
-		return
-	}
-
-	// Get active thread ID from query param (for highlighting)
-	activeThreadID := r.URL.Query().Get("active")
-
-	// Build connected agents map
-	connectedAgents := make(map[string]string)
-	if a.manager != nil {
-		for _, info := range a.manager.ListAgents() {
-			connectedAgents[info.ID] = info.Name
-		}
-	}
-
-	// Group threads by date
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	yesterday := today.AddDate(0, 0, -1)
-	weekAgo := today.AddDate(0, 0, -7)
-
-	var data sidebarData
-
-	for _, t := range threads {
-		item := threadItemData{
-			ID:        t.ID,
-			Title:     getThreadTitle(t),
-			AgentID:   t.AgentID,
-			AgentName: getAgentDisplayName(t.AgentID, connectedAgents),
-			Active:    t.ID == activeThreadID,
-			UpdatedAt: t.UpdatedAt,
-		}
-
-		_, item.AgentConnected = connectedAgents[t.AgentID]
-
-		// Separate connected vs disconnected agents
-		if !item.AgentConnected {
-			data.DisconnectedThreads = append(data.DisconnectedThreads, item)
-			continue
-		}
-
-		// Group connected agent threads by date
-		switch {
-		case t.UpdatedAt.After(today) || t.UpdatedAt.Equal(today):
-			data.TodayThreads = append(data.TodayThreads, item)
-		case t.UpdatedAt.After(yesterday) || t.UpdatedAt.Equal(yesterday):
-			data.YesterdayThreads = append(data.YesterdayThreads, item)
-		case t.UpdatedAt.After(weekAgo):
-			data.WeekThreads = append(data.WeekThreads, item)
-		default:
-			data.OlderThreads = append(data.OlderThreads, item)
-		}
-	}
-
-	data.Threads = len(threads) > 0
-	data.HasConnected = len(data.TodayThreads)+len(data.YesterdayThreads)+len(data.WeekThreads)+len(data.OlderThreads) > 0
-	data.HasDisconnected = len(data.DisconnectedThreads) > 0
-
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/sidebar.html"))
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render thread list", "error", err)
-	}
+// agentListData holds data for the agent list sidebar partial
+type agentListData struct {
+	Agents        []agentListItem
+	ActiveAgentID string
 }
 
-// handleAgentPicker returns the agent list for the picker modal (HTMX partial)
-func (a *Admin) handleAgentPicker(w http.ResponseWriter, r *http.Request) {
-	var agents []agentPickerItem
+// agentListItem represents an agent in the sidebar list
+type agentListItem struct {
+	ID        string
+	Name      string
+	Connected bool
+	Active    bool
+}
 
+// handleAgentList returns the agent list for the sidebar (HTMX partial)
+func (a *Admin) handleAgentList(w http.ResponseWriter, r *http.Request) {
+	activeAgentID := r.URL.Query().Get("active")
+
+	var agents []agentListItem
 	if a.manager != nil {
 		for _, info := range a.manager.ListAgents() {
-			agents = append(agents, agentPickerItem{
+			agents = append(agents, agentListItem{
 				ID:        info.ID,
 				Name:      info.Name,
 				Connected: true,
+				Active:    info.ID == activeAgentID,
 			})
 		}
 	}
 
-	data := agentPickerData{
-		Agents: agents,
+	// Sort agents by name for consistent display
+	sort.Slice(agents, func(i, j int) bool {
+		return agents[i].Name < agents[j].Name
+	})
+
+	data := agentListData{
+		Agents:        agents,
+		ActiveAgentID: activeAgentID,
 	}
 
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/agent_picker.html"))
+	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/agent_list.html"))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render agent picker", "error", err)
+		a.logger.Error("failed to render agent list", "error", err)
 	}
 }
 
-// handleCreateThread creates a new thread with the specified agent (HTMX)
-func (a *Admin) handleCreateThread(w http.ResponseWriter, r *http.Request) {
-	if !a.validateCSRF(r) {
-		http.Error(w, "Invalid request", http.StatusForbidden)
-		return
-	}
-
-	user := getUserFromContext(r)
-
-	// Get agent ID from form or JSON
-	var agentID string
-	contentType := r.Header.Get("Content-Type")
-	if strings.Contains(contentType, "application/json") {
-		var req struct {
-			AgentID string `json:"agent_id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-		agentID = req.AgentID
-	} else {
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Invalid form data", http.StatusBadRequest)
-			return
-		}
-		agentID = r.FormValue("agent_id")
-	}
-
+// handleAgentChatView loads the chat view for a specific agent (HTMX partial)
+// Creates or finds the implicit admin-chat thread for this agent/user pair
+func (a *Admin) handleAgentChatView(w http.ResponseWriter, r *http.Request) {
+	agentID := r.PathValue("id")
 	if agentID == "" {
 		http.Error(w, "Agent ID required", http.StatusBadRequest)
 		return
 	}
 
-	// Verify agent exists
+	user := getUserFromContext(r)
+	if user == nil {
+		http.Error(w, "Not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	// Get agent info
 	var agentName string
 	var connected bool
 	if a.manager != nil {
@@ -253,66 +143,32 @@ func (a *Admin) handleCreateThread(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
 	if agentName == "" {
 		agentName = agentID
 	}
 
-	// Create thread
-	now := time.Now()
-	threadID := uuid.New().String()
-	externalID := fmt.Sprintf("webadmin-%s-%s", user.ID, threadID)
+	// Build implicit thread ID for admin chat
+	threadID := "admin-chat-" + agentID + "-" + user.ID
 
-	thread := &store.Thread{
-		ID:           threadID,
-		FrontendName: "webadmin",
-		ExternalID:   externalID,
-		AgentID:      agentID,
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	}
-
-	if err := a.store.CreateThread(r.Context(), thread); err != nil {
-		a.logger.Error("failed to create thread", "error", err)
-		http.Error(w, "Failed to create thread", http.StatusInternalServerError)
-		return
-	}
-
-	a.logger.Info("created thread", "thread_id", threadID, "agent_id", agentID, "user", user.Username)
-
-	// Return the chat view for this new thread
-	a.renderChatView(w, threadID, agentID, agentName, connected, nil)
-}
-
-// handleThreadView returns the chat view for a specific thread (HTMX partial)
-func (a *Admin) handleThreadView(w http.ResponseWriter, r *http.Request) {
-	threadID := r.PathValue("id")
-	if threadID == "" {
-		http.Error(w, "Thread ID required", http.StatusBadRequest)
-		return
-	}
-
+	// Try to get existing thread, create if it doesn't exist
 	thread, err := a.store.GetThread(r.Context(), threadID)
 	if err != nil {
-		a.logger.Error("failed to get thread", "error", err, "thread_id", threadID)
-		http.Error(w, "Thread not found", http.StatusNotFound)
-		return
-	}
-
-	// Get agent info
-	var agentName string
-	var connected bool
-	if a.manager != nil {
-		for _, info := range a.manager.ListAgents() {
-			if info.ID == thread.AgentID {
-				agentName = info.Name
-				connected = true
-				break
-			}
+		// Thread doesn't exist, create it
+		now := time.Now()
+		thread = &store.Thread{
+			ID:           threadID,
+			FrontendName: "webadmin",
+			ExternalID:   agentID + "-" + user.ID,
+			AgentID:      agentID,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		}
-	}
-	if agentName == "" {
-		agentName = thread.AgentID
+		if createErr := a.store.CreateThread(r.Context(), thread); createErr != nil {
+			a.logger.Error("failed to create thread", "error", createErr)
+			http.Error(w, "Failed to create chat session", http.StatusInternalServerError)
+			return
+		}
+		a.logger.Info("created implicit thread", "thread_id", threadID, "agent_id", agentID, "user", user.Username)
 	}
 
 	// Get messages from unified ledger_events storage
@@ -325,7 +181,7 @@ func (a *Admin) handleThreadView(w http.ResponseWriter, r *http.Request) {
 	// Convert events to messages for template compatibility
 	messages := store.EventsToMessages(events)
 
-	a.renderChatView(w, threadID, thread.AgentID, agentName, connected, messages)
+	a.renderChatView(w, threadID, agentID, agentName, connected, messages)
 }
 
 // handleEmptyState returns the empty state partial (HTMX)
@@ -360,113 +216,6 @@ func (a *Admin) handleAgentCount(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%d", agentCount)
 }
 
-// handleDeleteThread deletes a thread (HTMX)
-func (a *Admin) handleDeleteThread(w http.ResponseWriter, r *http.Request) {
-	if !a.validateCSRF(r) {
-		http.Error(w, "Invalid request", http.StatusForbidden)
-		return
-	}
-
-	threadID := r.PathValue("id")
-	if threadID == "" {
-		http.Error(w, "Thread ID required", http.StatusBadRequest)
-		return
-	}
-
-	// TODO: Implement thread deletion in store
-	// For now, return 501 Not Implemented to avoid silent failure
-	a.logger.Info("delete thread requested (not implemented)", "thread_id", threadID)
-	http.Error(w, "Thread deletion not yet implemented", http.StatusNotImplemented)
-}
-
-// handleRenameThread renames a thread (HTMX)
-func (a *Admin) handleRenameThread(w http.ResponseWriter, r *http.Request) {
-	if !a.validateCSRF(r) {
-		http.Error(w, "Invalid request", http.StatusForbidden)
-		return
-	}
-
-	threadID := r.PathValue("id")
-	if threadID == "" {
-		http.Error(w, "Thread ID required", http.StatusBadRequest)
-		return
-	}
-
-	// Get new title from form
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
-		return
-	}
-	_ = r.FormValue("title") // Would update title if Thread had that field
-
-	// TODO: Implement thread renaming - requires Thread.Title field in store
-	// For now, return 501 Not Implemented to avoid silent failure
-	a.logger.Info("rename thread requested (not implemented)", "thread_id", threadID)
-	http.Error(w, "Thread renaming not yet implemented", http.StatusNotImplemented)
-}
-
-// handleThreadSearch searches threads (HTMX partial)
-func (a *Admin) handleThreadSearch(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("q")
-	if query == "" || len(query) < 2 {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(`<p class="text-sm text-warm-400 text-center py-8">Type to search threads...</p>`))
-		return
-	}
-
-	// Get all threads and filter (in production, would use FTS)
-	threads, err := a.store.ListThreads(r.Context(), 100)
-	if err != nil {
-		a.logger.Error("failed to search threads", "error", err)
-		http.Error(w, "Search failed", http.StatusInternalServerError)
-		return
-	}
-
-	// Build connected agents map
-	connectedAgents := make(map[string]string)
-	if a.manager != nil {
-		for _, info := range a.manager.ListAgents() {
-			connectedAgents[info.ID] = info.Name
-		}
-	}
-
-	// Filter threads containing query in agent name or ID
-	queryLower := strings.ToLower(query)
-	var results []threadItemData
-	for _, t := range threads {
-		agentName := getAgentDisplayName(t.AgentID, connectedAgents)
-		if strings.Contains(strings.ToLower(agentName), queryLower) ||
-			strings.Contains(strings.ToLower(t.AgentID), queryLower) ||
-			strings.Contains(strings.ToLower(t.ID), queryLower) {
-
-			_, connected := connectedAgents[t.AgentID]
-			results = append(results, threadItemData{
-				ID:             t.ID,
-				Title:          getThreadTitle(t),
-				AgentID:        t.AgentID,
-				AgentName:      agentName,
-				AgentConnected: connected,
-				UpdatedAt:      t.UpdatedAt,
-			})
-		}
-
-		if len(results) >= 10 {
-			break
-		}
-	}
-
-	data := searchResultsData{
-		Results: results,
-	}
-
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/thread_search_results.html"))
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render search results", "error", err)
-	}
-}
-
 // renderChatView renders the chat view partial
 func (a *Admin) renderChatView(w http.ResponseWriter, threadID, agentID, agentName string, connected bool, messages []*store.Message) {
 	data := struct {
@@ -490,31 +239,6 @@ func (a *Admin) renderChatView(w http.ResponseWriter, threadID, agentID, agentNa
 	if err := tmpl.ExecuteTemplate(w, "chat_view", data); err != nil {
 		a.logger.Error("failed to render chat view", "error", err)
 	}
-}
-
-// getThreadTitle returns a display title for a thread
-func getThreadTitle(t *store.Thread) string {
-	// For now, use frontend + truncated external ID
-	// In future, could fetch first message or add Thread.Title field
-	if t.ExternalID != "" && len(t.ExternalID) > 20 {
-		return t.ExternalID[:20] + "..."
-	}
-	if t.ExternalID != "" {
-		return t.ExternalID
-	}
-	return "Conversation"
-}
-
-// getAgentDisplayName returns the agent's display name or ID
-func getAgentDisplayName(agentID string, connectedAgents map[string]string) string {
-	if name, ok := connectedAgents[agentID]; ok {
-		return name
-	}
-	// Truncate long IDs
-	if len(agentID) > 16 {
-		return agentID[:16] + "..."
-	}
-	return agentID
 }
 
 // handleSettingsAgents returns the agents settings tab content (HTMX)

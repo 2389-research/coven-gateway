@@ -255,14 +255,9 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/link/status/{code}", a.handleLinkStatus)
 
 	// Chat HTMX partials and SSE
-	mux.HandleFunc("GET /threads/list", a.requireAuth(a.handleThreadsList))
-	mux.HandleFunc("GET /threads/search", a.requireAuth(a.handleThreadSearch))
-	mux.HandleFunc("POST /threads", a.requireAuth(a.handleCreateThread))
-	mux.HandleFunc("DELETE /threads/{id}", a.requireAuth(a.handleDeleteThread))
-	mux.HandleFunc("PATCH /threads/{id}", a.requireAuth(a.handleRenameThread))
+	mux.HandleFunc("GET /agents/list", a.requireAuth(a.handleAgentList))
+	mux.HandleFunc("GET /chatview/agent/{id}", a.requireAuth(a.handleAgentChatView))
 	mux.HandleFunc("GET /chatview/empty", a.requireAuth(a.handleEmptyState))
-	mux.HandleFunc("GET /chatview/{id}", a.requireAuth(a.handleThreadView))
-	mux.HandleFunc("GET /agents/picker", a.requireAuth(a.handleAgentPicker))
 	mux.HandleFunc("GET /agents/count", a.requireAuth(a.handleAgentCount))
 	mux.HandleFunc("GET /chat/{id}/send", a.requireAuth(a.handleChatSend))
 	mux.HandleFunc("POST /chat/{id}/send", a.requireAuth(a.handleChatSend))

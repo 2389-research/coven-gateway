@@ -18,27 +18,10 @@ func TestChatAppTemplatesParse(t *testing.T) {
 		t.Fatalf("failed to parse chat_app.html: %v", err)
 	}
 
-	// Test sidebar partial
-	tmpl, err := template.ParseFS(templateFS, "templates/partials/sidebar.html")
+	// Test agent list partial
+	_, err = template.ParseFS(templateFS, "templates/partials/agent_list.html")
 	if err != nil {
-		t.Fatalf("failed to parse sidebar.html: %v", err)
-	}
-
-	// Check that thread_item is defined
-	if tmpl.Lookup("thread_item") == nil {
-		t.Error("thread_item template not found in sidebar.html")
-	}
-
-	// Test agent picker partial
-	_, err = template.ParseFS(templateFS, "templates/partials/agent_picker.html")
-	if err != nil {
-		t.Fatalf("failed to parse agent_picker.html: %v", err)
-	}
-
-	// Test thread search results partial
-	_, err = template.ParseFS(templateFS, "templates/partials/thread_search_results.html")
-	if err != nil {
-		t.Fatalf("failed to parse thread_search_results.html: %v", err)
+		t.Fatalf("failed to parse agent_list.html: %v", err)
 	}
 }
 

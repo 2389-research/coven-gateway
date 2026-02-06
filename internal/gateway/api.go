@@ -970,12 +970,8 @@ func (g *Gateway) handleAgentHistoryImpl(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Verify agent exists
-	_, ok := g.agentManager.GetAgent(agentID)
-	if !ok {
-		g.sendJSONError(w, http.StatusNotFound, "agent not found")
-		return
-	}
+	// Note: We intentionally don't require the agent to be currently connected.
+	// History should be queryable even for offline agents.
 
 	// Parse optional limit parameter (default 50, max 500)
 	limit := 50

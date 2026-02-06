@@ -41,18 +41,8 @@
     <!-- Sidebar -->
     <aside id="sidebar" class="chat-sidebar">
         <div class="sidebar-content">
-            <!-- New Chat Button (only shown when agents are connected) -->
-            {{if gt .AgentCount 0}}
-            <button id="new-chat-btn" class="new-chat-btn">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/>
-                </svg>
-                <span>New Chat</span>
-            </button>
-            {{end}}
-
-            <!-- Thread List -->
-            <div id="thread-list" class="thread-list" hx-get="/threads/list" hx-trigger="load" hx-swap="innerHTML">
+            <!-- Agent List -->
+            <div id="agent-list" class="agent-list" hx-get="/agents/list" hx-trigger="load" hx-swap="innerHTML">
                 <div class="flex items-center justify-center py-8">
                     <div class="flex items-center gap-2 text-warm-400">
                         <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,30 +94,6 @@
         {{template "empty_state" .}}
         {{end}}
     </main>
-
-    <!-- Agent Picker Modal -->
-    <div id="agent-picker-modal" class="modal-overlay hidden">
-        <div class="modal-container">
-            <div class="modal-header">
-                <h3 class="font-serif text-lg text-ink">Select an Agent</h3>
-                <button id="close-agent-picker" class="p-1 text-warm-400 hover:text-ink rounded">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="modal-body" id="agent-list" hx-get="/agents/picker" hx-trigger="load" hx-swap="innerHTML">
-                <div class="flex items-center justify-center py-8">
-                    <div class="flex items-center gap-2 text-warm-400">
-                        <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                        </svg>
-                        <span class="text-xs">Loading agents...</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Search Modal (Cmd+K) -->
     <div id="search-modal" class="modal-overlay hidden">
@@ -256,26 +222,80 @@
     padding: 1rem;
 }
 
-.new-chat-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.75rem 1rem;
-    background: #2D5A47;
-    color: white;
-    font-weight: 500;
-    font-size: 0.875rem;
-    border-radius: 0.5rem;
-    transition: background 0.15s ease;
+.agent-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* Agent List Styles */
+.agent-list-section {
     margin-bottom: 1rem;
 }
 
-.new-chat-btn:hover {
-    background: #3D7A5F;
+.agent-group-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #9A8A78;
+    padding: 0.5rem 0.75rem;
 }
 
+.agent-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.agent-item:hover {
+    background: #F5F1EC;
+}
+
+.agent-item.active {
+    background: rgba(45, 90, 71, 0.08);
+}
+
+.agent-item.active .agent-name {
+    color: #2D5A47;
+    font-weight: 500;
+}
+
+.agent-icon {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(45, 90, 71, 0.1);
+    border-radius: 0.375rem;
+}
+
+.agent-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.agent-name {
+    font-size: 0.875rem;
+    color: #1C1917;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.agent-status {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-top: 0.125rem;
+}
+
+/* Legacy thread list styles (kept for backwards compatibility) */
 .thread-list {
     flex: 1;
     overflow-y: auto;
@@ -885,9 +905,6 @@
     const sidebar = document.getElementById('sidebar');
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
-    const newChatBtn = document.getElementById('new-chat-btn');
-    const agentPickerModal = document.getElementById('agent-picker-modal');
-    const closeAgentPicker = document.getElementById('close-agent-picker');
     const searchModal = document.getElementById('search-modal');
     const searchInput = document.getElementById('search-input');
     const settingsModal = document.getElementById('settings-modal');
@@ -901,23 +918,26 @@
         const agentId = params.get('agent');
         if (!agentId) return;
 
-        // Clear the URL param to avoid re-triggering on refresh
+        // Clear the URL param but keep it in state for refreshes
         const url = new URL(window.location);
         url.searchParams.delete('agent');
-        window.history.replaceState({}, '', url);
+        window.history.replaceState({ agentId: agentId }, '', url);
 
-        // Extract CSRF token for the POST request
-        const csrfToken = document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
+        // Load chat view for this agent directly
+        loadAgentChat(agentId);
+    }
 
-        // Create new thread with this agent
-        htmx.ajax('POST', '/threads', {
-            values: { agent_id: agentId },
+    // Load chat view for an agent
+    function loadAgentChat(agentId) {
+        htmx.ajax('GET', '/chatview/agent/' + encodeURIComponent(agentId), {
             target: '#chat-content',
-            swap: 'innerHTML',
-            headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+            swap: 'innerHTML'
         }).then(() => {
-            // Refresh thread list
-            htmx.trigger('#thread-list', 'load');
+            // Update agent list to show active selection
+            htmx.ajax('GET', '/agents/list?active=' + encodeURIComponent(agentId), {
+                target: '#agent-list',
+                swap: 'innerHTML'
+            });
         });
     }
 
@@ -936,20 +956,6 @@
     sidebarToggle?.addEventListener('click', toggleSidebar);
     sidebarOverlay?.addEventListener('click', toggleSidebar);
 
-    // Agent picker modal
-    function openAgentPicker() {
-        agentPickerModal?.classList.remove('hidden');
-        // Refresh agent list
-        htmx.trigger('#agent-list', 'load');
-    }
-
-    function closeAgentPickerModal() {
-        agentPickerModal?.classList.add('hidden');
-    }
-
-    newChatBtn?.addEventListener('click', openAgentPicker);
-    closeAgentPicker?.addEventListener('click', closeAgentPickerModal);
-
     // Search modal
     function openSearch() {
         searchModal?.classList.remove('hidden');
@@ -960,11 +966,6 @@
         searchModal?.classList.add('hidden');
         if (searchInput) searchInput.value = '';
     }
-
-    // Click outside modal to close
-    agentPickerModal?.addEventListener('click', (e) => {
-        if (e.target === agentPickerModal) closeAgentPickerModal();
-    });
 
     searchModal?.addEventListener('click', (e) => {
         if (e.target === searchModal) closeSearch();
@@ -1036,12 +1037,6 @@
             }
         }
 
-        // Cmd/Ctrl + N = New Chat
-        if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
-            e.preventDefault();
-            openAgentPicker();
-        }
-
         // Cmd/Ctrl + Shift + S = Toggle Sidebar (desktop only)
         if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 's') {
             e.preventDefault();
@@ -1052,9 +1047,6 @@
         if (e.key === 'Escape') {
             if (!settingsModal?.classList.contains('hidden')) {
                 closeSettingsModal();
-            }
-            if (!agentPickerModal?.classList.contains('hidden')) {
-                closeAgentPickerModal();
             }
             if (!searchModal?.classList.contains('hidden')) {
                 closeSearch();
@@ -1086,45 +1078,19 @@
         }, 200);
     });
 
-    // Handle agent selection from picker
+    // Handle agent selection from sidebar
     document.addEventListener('click', function(e) {
-        const agentItem = e.target.closest('.agent-picker-item');
+        const agentItem = e.target.closest('.agent-item');
         if (agentItem && agentItem.dataset.agentId) {
             const agentId = agentItem.dataset.agentId;
-            closeAgentPickerModal();
 
-            // Extract CSRF token for the POST request
-            const csrfToken = document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
+            // Remove active class from all agents
+            document.querySelectorAll('.agent-item').forEach(a => a.classList.remove('active'));
+            // Add active class to clicked agent
+            agentItem.classList.add('active');
 
-            // Create new thread with this agent
-            htmx.ajax('POST', '/threads', {
-                values: { agent_id: agentId },
-                target: '#chat-content',
-                swap: 'innerHTML',
-                headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
-            }).then(() => {
-                // Refresh thread list
-                htmx.trigger('#thread-list', 'load');
-            });
-        }
-    });
-
-    // Handle thread selection
-    document.addEventListener('click', function(e) {
-        const threadItem = e.target.closest('.thread-item');
-        if (threadItem && threadItem.dataset.threadId) {
-            const threadId = threadItem.dataset.threadId;
-
-            // Remove active class from all threads
-            document.querySelectorAll('.thread-item').forEach(t => t.classList.remove('active'));
-            // Add active class to clicked thread
-            threadItem.classList.add('active');
-
-            // Load thread content
-            htmx.ajax('GET', '/chatview/' + threadId, {
-                target: '#chat-content',
-                swap: 'innerHTML'
-            });
+            // Load chat view for this agent
+            loadAgentChat(agentId);
 
             // Close sidebar on mobile
             if (window.innerWidth < 1024 && sidebar?.classList.contains('open')) {
@@ -1132,92 +1098,6 @@
             }
         }
     });
-
-    // Thread right-click context menu (delete/rename)
-    document.addEventListener('contextmenu', function(e) {
-        const threadItem = e.target.closest('.thread-item');
-        if (threadItem) {
-            e.preventDefault();
-            showThreadContextMenu(e, threadItem);
-        }
-    });
-
-    function showThreadContextMenu(e, threadItem) {
-        // Remove any existing context menu
-        document.querySelector('.context-menu')?.remove();
-
-        const threadId = threadItem.dataset.threadId;
-        const menu = document.createElement('div');
-        menu.className = 'context-menu';
-        menu.innerHTML = `
-            <button class="context-menu-item" data-action="rename">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                </svg>
-                Rename
-            </button>
-            <button class="context-menu-item text-danger" data-action="delete">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
-                Delete
-            </button>
-        `;
-        menu.style.cssText = `
-            position: fixed;
-            left: ${e.clientX}px;
-            top: ${e.clientY}px;
-            background: white;
-            border: 1px solid #E8E2DA;
-            border-radius: 0.5rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            padding: 0.25rem;
-            z-index: 100;
-        `;
-
-        document.body.appendChild(menu);
-
-        // Handle menu item clicks
-        const csrfToken = document.querySelector('[hx-headers]')?.getAttribute('hx-headers')?.match(/"X-CSRF-Token":\s*"([^"]+)"/)?.[1];
-        menu.addEventListener('click', function(e) {
-            const action = e.target.closest('.context-menu-item')?.dataset.action;
-            if (action === 'delete') {
-                if (confirm('Delete this conversation?')) {
-                    htmx.ajax('DELETE', '/threads/' + threadId, {
-                        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
-                    }).then(() => {
-                        htmx.trigger('#thread-list', 'load');
-                        // If this was the active thread, show empty state
-                        if (threadItem.classList.contains('active')) {
-                            htmx.ajax('GET', '/chatview/empty', {
-                                target: '#chat-content',
-                                swap: 'innerHTML'
-                            });
-                        }
-                    });
-                }
-            } else if (action === 'rename') {
-                const newName = prompt('Enter new name:');
-                if (newName) {
-                    htmx.ajax('PATCH', '/threads/' + threadId, {
-                        values: { title: newName },
-                        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
-                    }).then(() => {
-                        htmx.trigger('#thread-list', 'load');
-                    });
-                }
-            }
-            menu.remove();
-        });
-
-        // Close on click outside
-        setTimeout(() => {
-            document.addEventListener('click', function closeMenu() {
-                menu.remove();
-                document.removeEventListener('click', closeMenu);
-            }, { once: true });
-        }, 0);
-    }
 })();
 </script>
 
@@ -1250,7 +1130,7 @@
 </style>
 {{end}}
 
-{{/* Empty state template for when no thread is selected */}}
+{{/* Empty state template for when no agent is selected */}}
 {{define "empty_state"}}
 {{if gt .AgentCount 0}}
 {{/* Agents are connected - show normal welcome */}}
@@ -1261,29 +1141,14 @@
         </svg>
     </div>
     <h2 class="font-serif text-2xl text-ink mb-2">Welcome to Coven</h2>
-    <p class="text-warm-500 text-sm max-w-sm mb-6">Select a conversation from the sidebar or start a new chat with an agent.</p>
-    <button id="welcome-new-chat" class="inline-flex items-center gap-2 px-5 py-2.5 bg-forest text-white font-medium text-sm rounded-lg hover:bg-forest-light transition-colors">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/>
-        </svg>
-        Start New Chat
-    </button>
-    <div class="mt-8 flex gap-6 text-xs text-warm-400">
-        <div class="keyboard-hint">
-            <kbd><span class="mod-key">Ctrl</span>+N</kbd>
-            <span>New Chat</span>
-        </div>
+    <p class="text-warm-500 text-sm max-w-sm mb-6">Select an agent from the sidebar to start chatting.</p>
+    <div class="mt-4 flex gap-6 text-xs text-warm-400">
         <div class="keyboard-hint">
             <kbd><span class="mod-key">Ctrl</span>+K</kbd>
             <span>Search</span>
         </div>
     </div>
 </div>
-<script>
-document.getElementById('welcome-new-chat')?.addEventListener('click', function() {
-    document.getElementById('new-chat-btn')?.click();
-});
-</script>
 {{else}}
 {{/* No agents connected - show launch agent prompt */}}
 <div id="no-agents-state" class="flex-1 flex flex-col items-center justify-center p-8 text-center">
