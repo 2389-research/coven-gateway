@@ -1994,9 +1994,14 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     // SSE connection
     let evtSource = null;
     let reconnectAttempts = 0;
+    let reconnectTimer = null;
 
     // Clean up SSE on page unload or HTMX swap
     function cleanupSSE() {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
         if (evtSource) {
             evtSource.close();
             evtSource = null;
@@ -2006,7 +2011,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     document.body.addEventListener('htmx:beforeSwap', cleanupSSE);
 
     function connectSSE() {
-        evtSource = new EventSource('/chat/' + agentId + '/stream');
+        evtSource = new EventSource('/chat/' + encodeURIComponent(agentId) + '/stream');
 
         evtSource.addEventListener('connected', function() {
             console.log('SSE connected');
@@ -2027,7 +2032,9 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
             try {
                 const data = JSON.parse(e.data);
                 if (data.content) appendThinkingBlock(data.content);
-            } catch {}
+            } catch (err) {
+                console.warn('[chat] failed to parse thinking event:', err);
+            }
         });
 
         evtSource.addEventListener('tool_use', function(e) {
@@ -2040,14 +2047,18 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
                 } else {
                     appendToolBlock('use', data.tool_name, data.content);
                 }
-            } catch {}
+            } catch (err) {
+                console.warn('[chat] failed to parse tool_use event:', err);
+            }
         });
 
         evtSource.addEventListener('tool_result', function(e) {
             try {
                 const data = JSON.parse(e.data);
                 if (data.content) appendToolBlock('result', null, data.content);
-            } catch {}
+            } catch (err) {
+                console.warn('[chat] failed to parse tool_result event:', err);
+            }
         });
 
         evtSource.addEventListener('user_question', function(e) {
@@ -2082,7 +2093,7 @@ document.getElementById('welcome-new-chat')?.addEventListener('click', function(
     function attemptReconnect() {
         if (reconnectAttempts >= 5) return;
         reconnectAttempts++;
-        setTimeout(connectSSE, 2000 * reconnectAttempts);
+        reconnectTimer = setTimeout(connectSSE, 2000 * reconnectAttempts);
     }
 
     function startStreaming(initialText) {

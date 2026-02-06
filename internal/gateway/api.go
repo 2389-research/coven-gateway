@@ -964,6 +964,11 @@ func (g *Gateway) handleAgentHistoryImpl(w http.ResponseWriter, r *http.Request)
 		g.sendJSONError(w, http.StatusBadRequest, "agent_id is required")
 		return
 	}
+	// Validate agent ID doesn't contain path traversal characters
+	if strings.Contains(agentID, "/") || strings.Contains(agentID, "..") {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid agent_id")
+		return
+	}
 
 	// Verify agent exists
 	_, ok := g.agentManager.GetAgent(agentID)
@@ -1054,7 +1059,9 @@ func (g *Gateway) handleAgentHistoryImpl(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		g.logger.Error("failed to encode agent history response", "error", err)
+	}
 }
 
 // handleSendToAgent handles POST /api/agents/{id}/send requests.
