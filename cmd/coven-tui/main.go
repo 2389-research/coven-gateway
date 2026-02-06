@@ -163,9 +163,12 @@ func run(ctx context.Context, server, sender, threadID string) error {
 				selectedAgentID = ""
 				fmt.Println("Cleared agent selection, using router")
 			} else {
-				// Set agent selection
+				// Set agent selection and load history
 				selectedAgentID = args
-				fmt.Printf("Now using %s\n", selectedAgentID)
+				fmt.Printf("Now using %s\n\n", selectedAgentID)
+				if err := fetchHistory(ctx, server, selectedAgentID); err != nil {
+					fmt.Printf("\033[2m(no history: %v)\033[0m\n", err)
+				}
 			}
 			fmt.Println()
 			continue
