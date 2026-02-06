@@ -87,9 +87,9 @@ func (s *ClientService) processClientMessage(ctx context.Context, req *pb.Client
 	messageID := uuid.New().String()
 	conversationKey := req.ConversationKey
 
-	// Stable thread ID per agent so the agent maintains conversation context
-	// across messages. One conversation per agent for client connections.
-	threadID := "client-" + conversationKey
+	// Use agentID as threadID so all frontends (TUI, web) share one
+	// conversation per agent. The agent sees a single continuous thread.
+	threadID := conversationKey
 
 	// Store inbound message event
 	if s.store != nil {

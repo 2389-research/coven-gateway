@@ -351,8 +351,8 @@ func TestProcessClientMessage_StableThreadID(t *testing.T) {
 	require.Len(t, requests, 2, "expected two requests to be sent to router")
 	assert.Equal(t, requests[0].ThreadID, requests[1].ThreadID,
 		"ThreadID should be stable across messages to the same agent")
-	assert.Equal(t, "client-agent-stable", requests[0].ThreadID,
-		"ThreadID should be derived from conversation key")
+	assert.Equal(t, "agent-stable", requests[0].ThreadID,
+		"ThreadID should equal the conversation key (agent ID)")
 
 	// Verify inbound events also have the stable ThreadID
 	time.Sleep(50 * time.Millisecond)
@@ -360,7 +360,7 @@ func TestProcessClientMessage_StableThreadID(t *testing.T) {
 	for _, e := range events {
 		if e.Direction == store.EventDirectionInbound {
 			require.NotNil(t, e.ThreadID, "inbound event should have ThreadID")
-			assert.Equal(t, "client-agent-stable", *e.ThreadID)
+			assert.Equal(t, "agent-stable", *e.ThreadID)
 		}
 	}
 }

@@ -88,6 +88,7 @@ type FullStore interface {
 	GetThreadMessages(ctx context.Context, threadID string, limit int) ([]*store.Message, error)
 
 	// Ledger events (unified message storage)
+	GetEvents(ctx context.Context, params store.GetEventsParams) (*store.GetEventsResult, error)
 	GetEventsByThreadID(ctx context.Context, threadID string, limit int) ([]*store.LedgerEvent, error)
 
 	// Messages
@@ -1523,15 +1524,15 @@ func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	// Ensure chat session exists
 	a.chatHub.getOrCreateSession(agentID, user.ID)
 
-	// Build thread ID for admin chat
-	threadID := "admin-chat-" + agentID + "-" + user.ID
+	// Use agentID as threadID so all frontends share one conversation per agent
+	threadID := agentID
 
 	// Send message via ConversationService
 	// This handles: user message persistence, agent dispatch, and response persistence
 	convReq := &conversation.SendRequest{
 		ThreadID:     threadID,
 		FrontendName: "webadmin",
-		ExternalID:   agentID + "-" + user.ID,
+		ExternalID:   agentID,
 		AgentID:      agentID,
 		Sender:       user.Username,
 		Content:      message,

@@ -147,39 +147,48 @@ func (a *Admin) handleAgentChatView(w http.ResponseWriter, r *http.Request) {
 		agentName = agentID
 	}
 
-	// Build implicit thread ID for admin chat
-	threadID := "admin-chat-" + agentID + "-" + user.ID
+	// Use agentID as threadID so all frontends share one conversation per agent
+	threadID := agentID
 
-	// Try to get existing thread, create if it doesn't exist
-	thread, err := a.store.GetThread(r.Context(), threadID)
-	if err != nil {
-		// Thread doesn't exist, create it
+	// Ensure thread record exists for the conversation service
+	if _, err := a.store.GetThread(r.Context(), threadID); err != nil {
 		now := time.Now()
-		thread = &store.Thread{
+		thread := &store.Thread{
 			ID:           threadID,
 			FrontendName: "webadmin",
-			ExternalID:   agentID + "-" + user.ID,
+			ExternalID:   agentID,
 			AgentID:      agentID,
 			CreatedAt:    now,
 			UpdatedAt:    now,
 		}
 		if createErr := a.store.CreateThread(r.Context(), thread); createErr != nil {
-			a.logger.Error("failed to create thread", "error", createErr)
-			http.Error(w, "Failed to create chat session", http.StatusInternalServerError)
-			return
+			// Thread may have been created by another frontend - that's fine
+			if createErr != store.ErrDuplicateThread {
+				a.logger.Error("failed to create thread", "error", createErr)
+				http.Error(w, "Failed to create chat session", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			a.logger.Info("created thread", "thread_id", threadID, "agent_id", agentID, "user", user.Username)
 		}
-		a.logger.Info("created implicit thread", "thread_id", threadID, "agent_id", agentID, "user", user.Username)
 	}
 
-	// Get messages from unified ledger_events storage
-	events, err := a.store.GetEventsByThreadID(r.Context(), threadID, 100)
+	// Get messages by conversation key (agentID) so we see history from all frontends
+	eventsResult, err := a.store.GetEvents(r.Context(), store.GetEventsParams{
+		ConversationKey: agentID,
+		Limit:           100,
+	})
+	var messages []*store.Message
 	if err != nil {
-		a.logger.Error("failed to get events", "error", err, "thread_id", threadID)
-		events = nil
+		a.logger.Error("failed to get events", "error", err, "agent_id", agentID)
+	} else {
+		// Convert value slice to pointer slice for EventsToMessages
+		eventPtrs := make([]*store.LedgerEvent, len(eventsResult.Events))
+		for i := range eventsResult.Events {
+			eventPtrs[i] = &eventsResult.Events[i]
+		}
+		messages = store.EventsToMessages(eventPtrs)
 	}
-
-	// Convert events to messages for template compatibility
-	messages := store.EventsToMessages(events)
 
 	a.renderChatView(w, threadID, agentID, agentName, connected, messages)
 }
