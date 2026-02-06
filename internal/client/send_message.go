@@ -87,11 +87,16 @@ func (s *ClientService) processClientMessage(ctx context.Context, req *pb.Client
 	messageID := uuid.New().String()
 	conversationKey := req.ConversationKey
 
+	// Stable thread ID per agent so the agent maintains conversation context
+	// across messages. One conversation per agent for client connections.
+	threadID := "client-" + conversationKey
+
 	// Store inbound message event
 	if s.store != nil {
 		inboundEvent := &store.LedgerEvent{
 			ID:              messageID,
 			ConversationKey: conversationKey,
+			ThreadID:        &threadID,
 			Direction:       store.EventDirectionInbound,
 			Author:          "client",
 			Timestamp:       time.Now(),
@@ -120,7 +125,7 @@ func (s *ClientService) processClientMessage(ctx context.Context, req *pb.Client
 
 	respChan, err := s.router.SendMessage(routingCtx, &agent.SendRequest{
 		AgentID:  conversationKey,
-		ThreadID: messageID,
+		ThreadID: threadID,
 		Content:  req.Content,
 		Sender:   "client",
 	})
@@ -154,7 +159,7 @@ func (s *ClientService) processClientMessage(ctx context.Context, req *pb.Client
 	consumeCtx, cancel := context.WithTimeout(routingCtx, 10*time.Minute)
 	go func() {
 		defer cancel()
-		s.consumeAgentResponses(consumeCtx, conversationKey, messageID, respChan)
+		s.consumeAgentResponses(consumeCtx, conversationKey, threadID, respChan)
 	}()
 
 	return messageID, nil
@@ -203,6 +208,7 @@ func (s *ClientService) responseToLedgerEvent(convKey, threadID string, resp *ag
 	event := &store.LedgerEvent{
 		ID:              uuid.New().String(),
 		ConversationKey: convKey,
+		ThreadID:        &threadID,
 		Direction:       store.EventDirectionOutbound,
 		Author:          "agent",
 		Timestamp:       time.Now(),

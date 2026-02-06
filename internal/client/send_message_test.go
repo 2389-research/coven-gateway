@@ -5,6 +5,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -326,6 +327,42 @@ func TestProcessClientMessage_RoutesToAgent(t *testing.T) {
 	require.Len(t, requests, 1, "expected one request to be sent to router")
 	assert.Equal(t, "agent-456", requests[0].AgentID)
 	assert.Equal(t, "Route this message", requests[0].Content)
+}
+
+func TestProcessClientMessage_StableThreadID(t *testing.T) {
+	eventStore := &mockEventStore{}
+	router := &mockRouter{agentOnline: true}
+	svc := newTestClientServiceWithRouting(t, eventStore, router)
+
+	// Send two messages to the same agent
+	for i, content := range []string{"First message", "Second message"} {
+		req := &pb.ClientSendMessageRequest{
+			ConversationKey: "agent-stable",
+			Content:         content,
+			IdempotencyKey:  fmt.Sprintf("stable-key-%d", i),
+		}
+		resp, err := svc.SendMessage(context.Background(), req)
+		require.NoError(t, err)
+		assert.Equal(t, "accepted", resp.Status)
+	}
+
+	// Both messages should have been routed with the same stable ThreadID
+	requests := router.getRequests()
+	require.Len(t, requests, 2, "expected two requests to be sent to router")
+	assert.Equal(t, requests[0].ThreadID, requests[1].ThreadID,
+		"ThreadID should be stable across messages to the same agent")
+	assert.Equal(t, "client-agent-stable", requests[0].ThreadID,
+		"ThreadID should be derived from conversation key")
+
+	// Verify inbound events also have the stable ThreadID
+	time.Sleep(50 * time.Millisecond)
+	events := eventStore.getEvents()
+	for _, e := range events {
+		if e.Direction == store.EventDirectionInbound {
+			require.NotNil(t, e.ThreadID, "inbound event should have ThreadID")
+			assert.Equal(t, "client-agent-stable", *e.ThreadID)
+		}
+	}
 }
 
 func TestProcessClientMessage_AgentNotFound(t *testing.T) {
