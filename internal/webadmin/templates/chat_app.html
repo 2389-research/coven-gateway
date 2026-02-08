@@ -1845,6 +1845,9 @@
         });
     }
 
+    // Render markdown for historical agent messages
+    initializeMarkdown();
+
     // Scroll to bottom
     if (chatMessages) {
         chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -1996,6 +1999,30 @@
         scrollToBottom();
     }
 
+    // Render markdown content into an element using marked + DOMPurify
+    function renderMarkdown(element, text) {
+        if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') return;
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        element.innerHTML = DOMPurify.sanitize(marked.parse(trimmed));
+        element.classList.remove('whitespace-pre-wrap');
+        element.classList.add('prose', 'prose-sm', 'max-w-none');
+    }
+
+    // Apply markdown rendering to historical agent messages on page load
+    function initializeMarkdown() {
+        document.querySelectorAll('.message-agent .message-content').forEach(function(el) {
+            // Skip tool blocks, thinking blocks, error blocks, and question blocks
+            if (el.classList.contains('tool') || el.classList.contains('result') ||
+                el.classList.contains('thinking') || el.classList.contains('error') ||
+                el.classList.contains('question-content')) return;
+            // Skip if already rendered (has child elements like <p>, <ul>, etc.)
+            if (el.querySelector('p, ul, ol, pre, h1, h2, h3, table')) return;
+            var text = el.textContent;
+            if (text) renderMarkdown(el, text);
+        });
+    }
+
     function finalizeStreaming() {
         // Remove any lingering thinking block
         removeThinkingBlock();
@@ -2007,13 +2034,8 @@
         currentStreamingMessage.classList.remove('streaming');
 
         const contentDiv = currentStreamingMessage.querySelector('.message-content');
-        if (contentDiv && streamingContent && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
-            // Trim content and parse markdown - trim removes trailing newlines that cause extra spacing
-            const trimmed = streamingContent.trim();
-            contentDiv.innerHTML = DOMPurify.sanitize(marked.parse(trimmed));
-            // Switch from whitespace-pre-wrap to prose styling after markdown rendering
-            contentDiv.classList.remove('whitespace-pre-wrap');
-            contentDiv.classList.add('prose', 'prose-sm', 'max-w-none');
+        if (contentDiv && streamingContent) {
+            renderMarkdown(contentDiv, streamingContent);
         }
 
         currentStreamingMessage = null;
