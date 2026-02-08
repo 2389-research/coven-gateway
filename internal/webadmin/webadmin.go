@@ -110,7 +110,7 @@ type FullStore interface {
 	DeleteExpiredLinkCodes(ctx context.Context) error
 
 	// Builtin tool pack data (for admin UI)
-	SearchLogEntries(ctx context.Context, query string, since *time.Time, limit int) ([]*store.LogEntry, error)
+	SearchLogEntries(ctx context.Context, agentID string, query string, since *time.Time, limit int) ([]*store.LogEntry, error)
 	ListAllTodos(ctx context.Context, limit int) ([]*store.Todo, error)
 	ListBBSThreads(ctx context.Context, limit int) ([]*store.BBSPost, error)
 	GetBBSThread(ctx context.Context, threadID string) (*store.BBSThread, error)
@@ -1189,7 +1189,7 @@ func (a *Admin) handleLogsList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	entries, err := a.store.SearchLogEntries(r.Context(), query, nil, limit)
+	entries, err := a.store.SearchLogEntries(r.Context(), "", query, nil, limit)
 	if err != nil {
 		a.logger.Error("failed to list log entries", "error", err)
 		http.Error(w, "Failed to load logs", http.StatusInternalServerError)
@@ -1691,6 +1691,8 @@ func (a *Admin) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	// The originating client gets events from BOTH the streaming pipe (via chatSession)
 	// and the broadcaster (persisted events). We skip broadcaster events that the
 	// streaming pipe already delivered.
+	// Capped at 10,000 entries to prevent unbounded growth on long-lived connections.
+	const maxSeenEvents = 10_000
 	seenEvents := make(map[string]struct{})
 
 	// Stream messages until client disconnects
@@ -1747,6 +1749,11 @@ func (a *Admin) handleChatStream(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			seenEvents[event.ID] = struct{}{}
+			if len(seenEvents) > maxSeenEvents {
+				// Evict all entries; recent events are unlikely to be re-seen
+				// after this many unique events have passed.
+				seenEvents = make(map[string]struct{})
+			}
 
 			// Convert ledger event to chat message format
 			msg := ledgerEventToChatMessage(event)
@@ -2127,7 +2134,7 @@ func (a *Admin) handleSecretsGetValue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"value":"` + strings.ReplaceAll(strings.ReplaceAll(secret.Value, `\`, `\\`), `"`, `\"`) + `"}`))
+	json.NewEncoder(w).Encode(map[string]string{"value": secret.Value})
 }
 
 // handleSecretsCreate creates a new secret
@@ -2215,6 +2222,12 @@ func (a *Admin) handleSecretsUpdate(w http.ResponseWriter, r *http.Request) {
 	value := r.FormValue("value")
 	if value == "" {
 		http.Error(w, "Value is required", http.StatusBadRequest)
+		return
+	}
+
+	// Limit value length to prevent abuse (same as create)
+	if len(value) > 65536 {
+		http.Error(w, "Value exceeds maximum length (64KB)", http.StatusBadRequest)
 		return
 	}
 

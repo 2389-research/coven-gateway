@@ -27,7 +27,7 @@ func TestLogEntries(t *testing.T) {
 	}
 
 	// Search
-	entries, err := s.SearchLogEntries(ctx, "important", nil, 10)
+	entries, err := s.SearchLogEntries(ctx, "agent-1", "important", nil, 10)
 	if err != nil {
 		t.Fatalf("SearchLogEntries: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestLogEntriesWithSince(t *testing.T) {
 
 	// Search with since filter (only last hour)
 	since := time.Now().Add(-1 * time.Hour)
-	entries, err := s.SearchLogEntries(ctx, "", &since, 10)
+	entries, err := s.SearchLogEntries(ctx, "", "", &since, 10)
 	if err != nil {
 		t.Fatalf("SearchLogEntries: %v", err)
 	}

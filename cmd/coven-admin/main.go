@@ -896,6 +896,7 @@ func chatREPL(ctx context.Context, client pb.ClientServiceClient, agentID string
 	cyan.Printf("Chat with agent %s (Ctrl+D to exit)\n\n", agentID)
 
 	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), 1024*1024) // 1MB max input
 	for {
 		green.Print("> ")
 		if !scanner.Scan() {
@@ -975,6 +976,9 @@ func streamResponse(ctx context.Context, client pb.ClientServiceClient, agentID 
 // generateIdempotencyKey creates a random idempotency key for message sending
 func generateIdempotencyKey() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Fall back to timestamp-based key if crypto/rand fails
+		return fmt.Sprintf("%x", time.Now().UnixNano())
+	}
 	return hex.EncodeToString(b)
 }

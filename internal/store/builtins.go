@@ -39,8 +39,9 @@ func (s *SQLiteStore) CreateLogEntry(ctx context.Context, entry *LogEntry) error
 	return err
 }
 
-// SearchLogEntries searches log entries by message content
-func (s *SQLiteStore) SearchLogEntries(ctx context.Context, query string, since *time.Time, limit int) ([]*LogEntry, error) {
+// SearchLogEntries searches log entries by message content.
+// If agentID is non-empty, results are scoped to that agent.
+func (s *SQLiteStore) SearchLogEntries(ctx context.Context, agentID string, query string, since *time.Time, limit int) ([]*LogEntry, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -48,6 +49,10 @@ func (s *SQLiteStore) SearchLogEntries(ctx context.Context, query string, since 
 	var args []any
 	sqlQuery := `SELECT id, agent_id, message, tags, created_at FROM log_entries WHERE 1=1`
 
+	if agentID != "" {
+		sqlQuery += ` AND agent_id = ?`
+		args = append(args, agentID)
+	}
 	if query != "" {
 		sqlQuery += ` AND message LIKE ?`
 		args = append(args, "%"+query+"%")

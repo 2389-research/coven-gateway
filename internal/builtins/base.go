@@ -6,6 +6,7 @@ package builtins
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -171,7 +172,7 @@ func (b *baseHandlers) LogSearch(ctx context.Context, agentID string, input json
 		since = &t
 	}
 
-	entries, err := b.store.SearchLogEntries(ctx, in.Query, since, in.Limit)
+	entries, err := b.store.SearchLogEntries(ctx, agentID, in.Query, since, in.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +363,10 @@ func (b *baseHandlers) BBSReply(ctx context.Context, agentID string, input json.
 	// Verify thread exists
 	thread, err := b.store.GetBBSThread(ctx, in.ThreadID)
 	if err != nil {
-		return nil, fmt.Errorf("thread not found")
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, fmt.Errorf("thread not found")
+		}
+		return nil, fmt.Errorf("looking up thread: %w", err)
 	}
 	if thread.Post.ThreadID != "" {
 		// This is a reply, not a thread - can't reply to a reply
