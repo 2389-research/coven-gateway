@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"text/tabwriter"
 	"time"
 
@@ -973,12 +974,15 @@ func streamResponse(ctx context.Context, client pb.ClientServiceClient, agentID 
 	}
 }
 
+// idemCounter provides a monotonic fallback sequence for idempotency keys
+var idemCounter atomic.Uint64
+
 // generateIdempotencyKey creates a random idempotency key for message sending
 func generateIdempotencyKey() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		// Fall back to pid+timestamp if crypto/rand fails (avoids cross-process collisions)
-		return fmt.Sprintf("%d-%x", os.Getpid(), time.Now().UnixNano())
+		// Fall back to pid+counter+timestamp (collision-free even within same tick)
+		return fmt.Sprintf("%d-%d-%x", os.Getpid(), idemCounter.Add(1), time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b)
 }

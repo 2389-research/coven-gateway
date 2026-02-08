@@ -478,9 +478,13 @@ func (m *MockStore) GetEventsByThreadID(ctx context.Context, threadID string, li
 		}
 	}
 
-	// Sort by timestamp DESC to pick the most recent N
+	// Sort by timestamp DESC, event_id DESC to pick the most recent N
+	// (mirrors SQLite tie-breaker)
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].Timestamp.After(result[j].Timestamp)
+		if !result[i].Timestamp.Equal(result[j].Timestamp) {
+			return result[i].Timestamp.After(result[j].Timestamp)
+		}
+		return result[i].ID > result[j].ID
 	})
 
 	if len(result) > limit {
@@ -489,7 +493,10 @@ func (m *MockStore) GetEventsByThreadID(ctx context.Context, threadID string, li
 
 	// Re-order ASC for chronological output
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].Timestamp.Before(result[j].Timestamp)
+		if !result[i].Timestamp.Equal(result[j].Timestamp) {
+			return result[i].Timestamp.Before(result[j].Timestamp)
+		}
+		return result[i].ID < result[j].ID
 	})
 
 	return result, nil
