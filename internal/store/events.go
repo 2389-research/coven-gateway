@@ -436,10 +436,10 @@ func (s *SQLiteStore) GetEventsByThreadID(ctx context.Context, threadID string, 
 			       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
 			FROM ledger_events
 			WHERE thread_id = ?
-			ORDER BY timestamp DESC
+			ORDER BY timestamp DESC, event_id DESC
 			LIMIT ?
 		)
-		ORDER BY timestamp ASC
+		ORDER BY timestamp ASC, event_id ASC
 	`
 
 	return s.queryEvents(ctx, query, threadID, limit)

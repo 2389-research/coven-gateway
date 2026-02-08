@@ -455,7 +455,9 @@ func (m *MockStore) ListEventsByActorDesc(ctx context.Context, principalID strin
 	return result, nil
 }
 
-// GetEventsByThreadID retrieves events for a thread, ordered by timestamp ASC.
+// GetEventsByThreadID retrieves the most recent N events for a thread,
+// ordered chronologically (ASC). Mirrors SQLite behavior: pick newest N
+// by timestamp DESC, then re-order ASC.
 func (m *MockStore) GetEventsByThreadID(ctx context.Context, threadID string, limit int) ([]*LedgerEvent, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -476,14 +478,19 @@ func (m *MockStore) GetEventsByThreadID(ctx context.Context, threadID string, li
 		}
 	}
 
-	// Sort by timestamp ASC
+	// Sort by timestamp DESC to pick the most recent N
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].Timestamp.Before(result[j].Timestamp)
+		return result[i].Timestamp.After(result[j].Timestamp)
 	})
 
 	if len(result) > limit {
 		result = result[:limit]
 	}
+
+	// Re-order ASC for chronological output
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Timestamp.Before(result[j].Timestamp)
+	})
 
 	return result, nil
 }

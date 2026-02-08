@@ -1691,9 +1691,10 @@ func (a *Admin) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	// The originating client gets events from BOTH the streaming pipe (via chatSession)
 	// and the broadcaster (persisted events). We skip broadcaster events that the
 	// streaming pipe already delivered.
-	// Capped at 10,000 entries to prevent unbounded growth on long-lived connections.
-	const maxSeenEvents = 10_000
+	// Uses two generations to cap memory while preserving recent IDs for dedup.
+	const maxSeenEvents = 5_000
 	seenEvents := make(map[string]struct{})
+	prevSeenEvents := make(map[string]struct{})
 
 	// Stream messages until client disconnects
 	for {
@@ -1748,10 +1749,15 @@ func (a *Admin) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			if _, seen := seenEvents[event.ID]; seen {
 				continue
 			}
+			if _, seen := prevSeenEvents[event.ID]; seen {
+				continue
+			}
 			seenEvents[event.ID] = struct{}{}
-			if len(seenEvents) > maxSeenEvents {
-				// Evict all entries; recent events are unlikely to be re-seen
-				// after this many unique events have passed.
+			if len(seenEvents) >= maxSeenEvents {
+				// Rotate generations: current becomes previous, start fresh.
+				// This keeps the most recent ~2*maxSeenEvents IDs for dedup
+				// while bounding total memory.
+				prevSeenEvents = seenEvents
 				seenEvents = make(map[string]struct{})
 			}
 

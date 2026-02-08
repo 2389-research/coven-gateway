@@ -977,8 +977,8 @@ func streamResponse(ctx context.Context, client pb.ClientServiceClient, agentID 
 func generateIdempotencyKey() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		// Fall back to timestamp-based key if crypto/rand fails
-		return fmt.Sprintf("%x", time.Now().UnixNano())
+		// Fall back to pid+timestamp if crypto/rand fails (avoids cross-process collisions)
+		return fmt.Sprintf("%d-%x", os.Getpid(), time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b)
 }

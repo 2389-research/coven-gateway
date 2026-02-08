@@ -42,6 +42,40 @@ func TestLogEntries(t *testing.T) {
 	}
 }
 
+func TestLogEntriesAgentScoping(t *testing.T) {
+	s := newBuiltinTestStore(t)
+	ctx := context.Background()
+
+	// Create entries for two agents
+	if err := s.CreateLogEntry(ctx, &LogEntry{AgentID: "agent-1", Message: "agent-1 log"}); err != nil {
+		t.Fatalf("CreateLogEntry: %v", err)
+	}
+	if err := s.CreateLogEntry(ctx, &LogEntry{AgentID: "agent-2", Message: "agent-2 log"}); err != nil {
+		t.Fatalf("CreateLogEntry: %v", err)
+	}
+
+	// Search scoped to agent-1 should only return agent-1's entry
+	entries, err := s.SearchLogEntries(ctx, "agent-1", "", nil, 10)
+	if err != nil {
+		t.Fatalf("SearchLogEntries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry for agent-1, got %d", len(entries))
+	}
+	if entries[0].AgentID != "agent-1" {
+		t.Errorf("expected agent-1, got %s", entries[0].AgentID)
+	}
+
+	// Search with empty agentID should return all entries
+	all, err := s.SearchLogEntries(ctx, "", "", nil, 10)
+	if err != nil {
+		t.Fatalf("SearchLogEntries: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2 entries for unscoped search, got %d", len(all))
+	}
+}
+
 func TestLogEntriesWithSince(t *testing.T) {
 	s := newBuiltinTestStore(t)
 	ctx := context.Background()
