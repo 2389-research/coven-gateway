@@ -289,6 +289,11 @@ func (r *InMemoryQuestionRouter) DeliverAnswer(agentID, questionID string, answe
 		return fmt.Errorf("answer agent_id %q does not match question agent_id %q", agentID, pq.agentID)
 	}
 
+	// Signal cleanup goroutine to exit BEFORE closing answerChan to prevent double-close race.
+	// The cleanup goroutine checks pq.done first, so closing it here ensures it won't
+	// attempt to close answerChan.
+	close(pq.done)
+
 	// Non-blocking send (channel has buffer of 1)
 	select {
 	case pq.answerChan <- answer:
@@ -296,9 +301,6 @@ func (r *InMemoryQuestionRouter) DeliverAnswer(agentID, questionID string, answe
 		// Channel full - should not happen with buffer of 1
 	}
 	close(pq.answerChan)
-
-	// Signal that answer was delivered so cleanup goroutine can exit
-	close(pq.done)
 
 	return nil
 }

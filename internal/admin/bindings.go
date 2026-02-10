@@ -21,6 +21,9 @@ import (
 // frontendPattern validates frontend names: lowercase alphanumeric and underscore, 1-50 chars.
 var frontendPattern = regexp.MustCompile(`^[a-z0-9_]{1,50}$`)
 
+// maxChannelIDLength is the maximum allowed length for channel IDs.
+const maxChannelIDLength = 500
+
 // BindingStore defines the store operations needed for binding management.
 type BindingStore interface {
 	CreateBindingV2(ctx context.Context, b *store.Binding) error
@@ -52,6 +55,9 @@ func (s *AdminService) CreateBinding(ctx context.Context, req *pb.CreateBindingR
 	}
 	if req.ChannelId == "" {
 		return nil, status.Error(codes.InvalidArgument, "channel_id required")
+	}
+	if len(req.ChannelId) > maxChannelIDLength {
+		return nil, status.Errorf(codes.InvalidArgument, "channel_id exceeds %d characters", maxChannelIDLength)
 	}
 	if req.AgentId == "" {
 		return nil, status.Error(codes.InvalidArgument, "agent_id required")

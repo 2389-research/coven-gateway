@@ -4,6 +4,7 @@
 package agent
 
 import (
+	"errors"
 	"log/slog"
 	"sync"
 
@@ -43,6 +44,10 @@ type ConnectionParams struct {
 
 // NewConnection creates a new Connection for a connected agent.
 func NewConnection(params ConnectionParams) *Connection {
+	logger := params.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return &Connection{
 		ID:           params.ID,
 		Name:         params.Name,
@@ -54,12 +59,19 @@ func NewConnection(params ConnectionParams) *Connection {
 		Backend:      params.Backend,
 		stream:       params.Stream,
 		pending:      make(map[string]chan *pb.MessageResponse),
-		logger:       params.Logger,
+		logger:       logger,
 	}
 }
 
+// ErrNilStream is returned when attempting to send on a nil stream.
+var ErrNilStream = errors.New("connection stream is nil")
+
 // Send transmits a ServerMessage to the agent via the GRPC stream.
+// Returns ErrNilStream if the stream is nil.
 func (c *Connection) Send(msg *pb.ServerMessage) error {
+	if c.stream == nil {
+		return ErrNilStream
+	}
 	return c.stream.Send(msg)
 }
 
