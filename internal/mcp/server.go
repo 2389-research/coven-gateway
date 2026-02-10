@@ -120,10 +120,11 @@ const DefaultSessionTTL = time.Hour
 
 // sessionStore manages active MCP sessions (in-memory) with automatic expiration.
 type sessionStore struct {
-	mu       sync.RWMutex
-	sessions map[string]*mcpSession
-	ttl      time.Duration
-	done     chan struct{}
+	mu        sync.RWMutex
+	sessions  map[string]*mcpSession
+	ttl       time.Duration
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 func newSessionStore() *sessionStore {
@@ -140,9 +141,9 @@ func newSessionStoreWithTTL(ttl time.Duration) *sessionStore {
 	return s
 }
 
-// Close stops the background cleanup goroutine.
+// Close stops the background cleanup goroutine. Safe to call multiple times.
 func (s *sessionStore) Close() {
-	close(s.done)
+	s.closeOnce.Do(func() { close(s.done) })
 }
 
 // cleanupLoop periodically removes expired sessions.

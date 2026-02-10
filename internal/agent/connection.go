@@ -103,9 +103,8 @@ func (c *Connection) Close() {
 func (c *Connection) HandleResponse(resp *pb.MessageResponse) {
 	c.mu.RLock()
 	ch, ok := c.pending[resp.GetRequestId()]
-	c.mu.RUnlock()
-
 	if !ok {
+		c.mu.RUnlock()
 		c.logger.Warn("received response for unknown request",
 			"request_id", resp.GetRequestId(),
 			"agent_id", c.ID,
@@ -113,7 +112,8 @@ func (c *Connection) HandleResponse(resp *pb.MessageResponse) {
 		return
 	}
 
-	// Non-blocking send to avoid deadlock if channel is full
+	// Non-blocking send to avoid deadlock if channel is full.
+	// Keep RLock held to prevent Close/CloseRequest from closing channel mid-send.
 	select {
 	case ch <- resp:
 	default:
@@ -122,4 +122,5 @@ func (c *Connection) HandleResponse(resp *pb.MessageResponse) {
 			"agent_id", c.ID,
 		)
 	}
+	c.mu.RUnlock()
 }
