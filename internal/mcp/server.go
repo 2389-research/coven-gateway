@@ -155,23 +155,15 @@ func (s *sessionStore) delete(id string) bool {
 	return existed
 }
 
-// DefaultToolTimeout was the default timeout for tool execution.
-// This constant is kept for backwards compatibility but is not used.
-//
-// Deprecated: The router now handles per-tool timeouts from tool definitions.
-const DefaultToolTimeout = 60 * time.Second
-
 // Config holds configuration for the MCP server.
-
 type Config struct {
 	Registry      *packs.Registry
 	Router        *packs.Router
 	Logger        *slog.Logger
 	TokenVerifier auth.TokenVerifier
-	TokenStore    *TokenStore   // Token-based auth (URL query param)
-	RequireAuth   bool          // If true, reject requests without valid auth
-	DefaultCaps   []string      // Capabilities to use when no auth is provided
-	ToolTimeout   time.Duration // Timeout for tool execution (default: 60s)
+	TokenStore    *TokenStore // Token-based auth (URL query param)
+	RequireAuth   bool        // If true, reject requests without valid auth
+	DefaultCaps   []string    // Capabilities to use when no auth is provided
 }
 
 // Server implements MCP-compatible HTTP endpoints for external agents.
@@ -185,7 +177,6 @@ type Server struct {
 	requireAuth bool
 	defaultCaps []string
 	sessions    *sessionStore
-	toolTimeout time.Duration
 }
 
 // NewServer creates a new MCP server with the given configuration.
@@ -211,11 +202,6 @@ func NewServer(cfg Config) (*Server, error) {
 		copy(defaultCaps, cfg.DefaultCaps)
 	}
 
-	toolTimeout := cfg.ToolTimeout
-	if toolTimeout <= 0 {
-		toolTimeout = DefaultToolTimeout
-	}
-
 	return &Server{
 		registry:    cfg.Registry,
 		router:      cfg.Router,
@@ -225,7 +211,6 @@ func NewServer(cfg Config) (*Server, error) {
 		requireAuth: cfg.RequireAuth,
 		defaultCaps: defaultCaps,
 		sessions:    newSessionStore(),
-		toolTimeout: toolTimeout,
 	}, nil
 }
 
