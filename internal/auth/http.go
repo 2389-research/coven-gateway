@@ -4,11 +4,28 @@
 package auth
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/2389/coven-gateway/internal/store"
 )
+
+// errorResponse is the JSON structure for error responses.
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+// jsonError writes a JSON error response with the given status code.
+func jsonError(w http.ResponseWriter, message string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(errorResponse{Error: message}); err != nil {
+		// If JSON encoding fails, the response is already partially written.
+		// Log would be ideal but we don't have a logger here; silently fail.
+		_ = err
+	}
+}
 
 // extractBearerToken extracts a bearer token from the Authorization header.
 // Returns the token and an error message (empty if successful).
@@ -63,19 +80,19 @@ func HTTPAuthMiddleware(principals PrincipalStore, roles RoleStore, verifier Tok
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token, errMsg := extractBearerToken(r.Header.Get("Authorization"))
 			if errMsg != "" {
-				http.Error(w, `{"error":"`+errMsg+`"}`, http.StatusUnauthorized)
+				jsonError(w, errMsg, http.StatusUnauthorized)
 				return
 			}
 
 			principalID, err := verifier.Verify(token)
 			if err != nil {
-				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				jsonError(w, "invalid token", http.StatusUnauthorized)
 				return
 			}
 
 			principal, err := principals.GetPrincipal(r.Context(), principalID)
 			if err != nil {
-				http.Error(w, `{"error":"principal not found"}`, http.StatusUnauthorized)
+				jsonError(w, "principal not found", http.StatusUnauthorized)
 				return
 			}
 
@@ -84,7 +101,7 @@ func HTTPAuthMiddleware(principals PrincipalStore, roles RoleStore, verifier Tok
 				if errMsg == "unknown principal status" {
 					status = http.StatusInternalServerError
 				}
-				http.Error(w, `{"error":"`+errMsg+`"}`, status)
+				jsonError(w, errMsg, status)
 				return
 			}
 
@@ -102,12 +119,12 @@ func RequireAdminHTTP() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authCtx := FromContext(r.Context())
 			if authCtx == nil {
-				http.Error(w, `{"error":"not authenticated"}`, http.StatusUnauthorized)
+				jsonError(w, "not authenticated", http.StatusUnauthorized)
 				return
 			}
 
 			if !authCtx.IsAdmin() {
-				http.Error(w, `{"error":"admin role required"}`, http.StatusForbidden)
+				jsonError(w, "admin role required", http.StatusForbidden)
 				return
 			}
 
