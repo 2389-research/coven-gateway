@@ -48,12 +48,18 @@ func (m *MockStore) CreateThread(ctx context.Context, thread *Thread) error {
 
 	// Make a copy to avoid external modification
 	t := *thread
+
+	// Only check for duplicates when both FrontendName and ExternalID are set
+	// (matches SQLiteStore behavior which uses UNIQUE constraint on non-null values)
+	if t.FrontendName != "" && t.ExternalID != "" {
+		key := t.FrontendName + ":" + t.ExternalID
+		if _, exists := m.threadIndex[key]; exists {
+			return ErrDuplicateThread
+		}
+		m.threadIndex[key] = t.ID
+	}
+
 	m.threads[t.ID] = &t
-
-	// Index by frontend name and external ID
-	key := t.FrontendName + ":" + t.ExternalID
-	m.threadIndex[key] = t.ID
-
 	return nil
 }
 
