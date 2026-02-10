@@ -1,6 +1,12 @@
 name: CI
 
-on: [push, pull_request]
+# Run on PRs targeting main (pre-merge validation) and pushes to main (post-merge).
+# This avoids duplicate CI runs for PRs from branches in the same repo.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
