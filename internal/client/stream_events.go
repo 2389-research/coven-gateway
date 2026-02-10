@@ -6,6 +6,7 @@ package client
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"time"
 
@@ -189,10 +190,11 @@ func (s *ClientService) sendInitialEvents(ctx context.Context, stream pb.ClientS
 	}
 
 	result, err := s.store.GetEvents(ctx, params)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		// Context cancelled - return nil to match streaming behavior
+		return "", nil
+	}
 	if err != nil {
-		if ctx.Err() != nil {
-			return "", ctx.Err()
-		}
 		return "", status.Error(codes.Internal, "failed to fetch events")
 	}
 
@@ -223,10 +225,11 @@ func (s *ClientService) pollAndSendNewEvents(ctx context.Context, stream pb.Clie
 	}
 
 	result, err := s.store.GetEvents(ctx, params)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		// Context cancelled - return nil to match streaming behavior
+		return cursor, false, nil
+	}
 	if err != nil {
-		if ctx.Err() != nil {
-			return cursor, false, ctx.Err()
-		}
 		return cursor, false, status.Error(codes.Internal, "failed to poll for events")
 	}
 
