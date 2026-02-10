@@ -31,8 +31,7 @@ func TestBroadcaster_SingleSubscriberReceivesEvent(t *testing.T) {
 	b := NewEventBroadcaster(nil)
 	defer b.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch, _ := b.Subscribe(ctx, "agent-1")
 
@@ -51,8 +50,7 @@ func TestBroadcaster_MultipleSubscribersReceiveSameEvent(t *testing.T) {
 	b := NewEventBroadcaster(nil)
 	defer b.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch1, _ := b.Subscribe(ctx, "agent-1")
 	ch2, _ := b.Subscribe(ctx, "agent-1")
@@ -75,8 +73,7 @@ func TestBroadcaster_DifferentConversationKeysAreIsolated(t *testing.T) {
 	b := NewEventBroadcaster(nil)
 	defer b.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch1, _ := b.Subscribe(ctx, "agent-1")
 	ch2, _ := b.Subscribe(ctx, "agent-2")
@@ -105,8 +102,7 @@ func TestBroadcaster_ExcludeSubIDSkipsOriginator(t *testing.T) {
 	b := NewEventBroadcaster(nil)
 	defer b.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch1, subID1 := b.Subscribe(ctx, "agent-1")
 	ch2, _ := b.Subscribe(ctx, "agent-1")
@@ -135,15 +131,14 @@ func TestBroadcaster_SlowConsumerDoesNotBlockPublisher(t *testing.T) {
 	b := NewEventBroadcaster(nil)
 	defer b.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Subscribe but never read from ch1 (slow consumer)
 	_, _ = b.Subscribe(ctx, "agent-1")
 	ch2, _ := b.Subscribe(ctx, "agent-1")
 
 	// Publish more events than the buffer size to overflow ch1
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		event := makeEvent("evt-overflow-"+string(rune('0'+i%10)), "agent-1")
 		b.Publish("agent-1", event, "")
 	}
@@ -203,8 +198,7 @@ func TestBroadcaster_ManualUnsubscribe(t *testing.T) {
 	b := NewEventBroadcaster(nil)
 	defer b.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	ch, subID := b.Subscribe(ctx, "agent-1")
 
@@ -226,10 +220,8 @@ func TestBroadcaster_ManualUnsubscribe(t *testing.T) {
 func TestBroadcaster_CloseClosesAllSubscriptions(t *testing.T) {
 	b := NewEventBroadcaster(nil)
 
-	ctx1, cancel1 := context.WithCancel(context.Background())
-	defer cancel1()
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	defer cancel2()
+	ctx1 := t.Context()
+	ctx2 := t.Context()
 
 	ch1, _ := b.Subscribe(ctx1, "agent-1")
 	ch2, _ := b.Subscribe(ctx2, "agent-2")
@@ -252,36 +244,31 @@ func TestBroadcaster_ConcurrentPublishSubscribe(t *testing.T) {
 	defer b.Close()
 
 	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Spawn concurrent subscribers
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			ch, _ := b.Subscribe(ctx, "agent-concurrent")
 			// Read a few events then exit
-			for j := 0; j < 5; j++ {
+			for range 5 {
 				select {
 				case <-ch:
 				case <-time.After(500 * time.Millisecond):
 					return
 				}
 			}
-		}()
+		})
 	}
 
 	// Spawn concurrent publishers
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
-			for j := 0; j < 10; j++ {
+	for range 10 {
+		wg.Go(func() {
+			for range 10 {
 				event := makeEvent("concurrent-evt", "agent-concurrent")
 				b.Publish("agent-concurrent", event, "")
 			}
-		}(i)
+		})
 	}
 
 	wg.Wait()
@@ -292,8 +279,7 @@ func TestBroadcaster_SubscribeReturnsUniqueIDs(t *testing.T) {
 	b := NewEventBroadcaster(nil)
 	defer b.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	_, id1 := b.Subscribe(ctx, "agent-1")
 	_, id2 := b.Subscribe(ctx, "agent-1")

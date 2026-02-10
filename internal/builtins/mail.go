@@ -6,6 +6,7 @@ package builtins
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/2389/coven-gateway/internal/packs"
@@ -67,13 +68,13 @@ func (m *mailHandlers) Send(ctx context.Context, agentID string, input json.RawM
 	}
 
 	if in.ToAgentID == "" {
-		return nil, fmt.Errorf("to_agent_id is required")
+		return nil, errors.New("to_agent_id is required")
 	}
 	if in.Subject == "" {
-		return nil, fmt.Errorf("subject is required")
+		return nil, errors.New("subject is required")
 	}
 	if in.Content == "" {
-		return nil, fmt.Errorf("content is required")
+		return nil, errors.New("content is required")
 	}
 
 	mail := &store.AgentMail{
@@ -124,7 +125,7 @@ func (m *mailHandlers) Read(ctx context.Context, agentID string, input json.RawM
 	}
 
 	if in.MessageID == "" {
-		return nil, fmt.Errorf("message_id is required")
+		return nil, errors.New("message_id is required")
 	}
 
 	mail, err := m.store.GetMail(ctx, in.MessageID)
@@ -134,7 +135,7 @@ func (m *mailHandlers) Read(ctx context.Context, agentID string, input json.RawM
 
 	// Verify the calling agent is the recipient
 	if mail.ToAgentID != agentID {
-		return nil, fmt.Errorf("message not found")
+		return nil, errors.New("message not found")
 	}
 
 	// Mark as read

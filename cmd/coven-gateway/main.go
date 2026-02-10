@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -42,7 +43,7 @@ const banner = `
 `
 
 // getConfigPath returns the path to the gateway config file.
-// Priority: COVEN_CONFIG env var > XDG_CONFIG_HOME/coven/gateway.yaml > ~/.config/coven/gateway.yaml
+// Priority: COVEN_CONFIG env var > XDG_CONFIG_HOME/coven/gateway.yaml > ~/.config/coven/gateway.yaml.
 func getConfigPath() string {
 	if envPath := os.Getenv("COVEN_CONFIG"); envPath != "" {
 		return envPath
@@ -61,7 +62,7 @@ func getConfigPath() string {
 }
 
 // getDataPath returns the path to the coven data directory.
-// Priority: XDG_DATA_HOME/coven > ~/.local/share/coven
+// Priority: XDG_DATA_HOME/coven > ~/.local/share/coven.
 func getDataPath() string {
 	dataDir := os.Getenv("XDG_DATA_HOME")
 	if dataDir == "" {
@@ -76,6 +77,10 @@ func getDataPath() string {
 }
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: coven-gateway <command>")
 		fmt.Println()
@@ -85,7 +90,7 @@ func main() {
 		fmt.Println("  bootstrap --name NAME  Create initial owner principal and token")
 		fmt.Println("  health                 Check gateway health")
 		fmt.Println("  agents                 List connected agents")
-		os.Exit(1)
+		return 1
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -105,13 +110,14 @@ func main() {
 		err = runAgents(ctx)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
-		os.Exit(1)
+		return 1
 	}
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 func runServe(ctx context.Context) error {
@@ -119,11 +125,11 @@ func runServe(ctx context.Context) error {
 
 	// Print banner
 	cyan := color.New(color.FgCyan)
-	cyan.Print(banner)
+	_, _ = cyan.Print(banner)
 
 	// Version info
 	gray := color.New(color.FgHiBlack)
-	gray.Printf("    version: %s\n\n", version)
+	_, _ = gray.Printf("    version: %s\n\n", version)
 
 	// Load configuration
 	cfg, err := config.Load(configPath)
@@ -138,23 +144,23 @@ func runServe(ctx context.Context) error {
 	green := color.New(color.FgGreen)
 	yellow := color.New(color.FgYellow)
 
-	green.Print("    ▶ ")
+	_, _ = green.Print("    ▶ ")
 	fmt.Printf("Config:    %s\n", configPath)
-	green.Print("    ▶ ")
+	_, _ = green.Print("    ▶ ")
 	fmt.Printf("gRPC:      %s\n", cfg.Server.GRPCAddr)
-	green.Print("    ▶ ")
+	_, _ = green.Print("    ▶ ")
 	fmt.Printf("HTTP:      %s\n", cfg.Server.HTTPAddr)
 
 	// Tailscale status
 	if cfg.Tailscale.Enabled {
-		green.Print("    ▶ ")
+		_, _ = green.Print("    ▶ ")
 		fmt.Printf("Tailscale: ")
-		cyan.Print(cfg.Tailscale.Hostname)
+		_, _ = cyan.Print(cfg.Tailscale.Hostname)
 		if cfg.Tailscale.Funnel {
-			yellow.Print(" [funnel]")
+			_, _ = yellow.Print(" [funnel]")
 		}
 		if cfg.Tailscale.Ephemeral {
-			gray.Print(" (ephemeral)")
+			_, _ = gray.Print(" (ephemeral)")
 		}
 		fmt.Println()
 	}
@@ -345,83 +351,57 @@ func runAgents(ctx context.Context) error {
 	return nil
 }
 
-// runBootstrap performs first-time setup of the gateway:
-// 1. Creates config file with random JWT secret (if not exists)
-// 2. Creates database and owner principal
-// 3. Generates JWT token for the owner
-//
-// This is a one-command setup: coven-gateway bootstrap --name "Your Name"
-func runBootstrap(ctx context.Context) error {
-	// Parse args with explicit error handling
-	// Supports both "--name value" and "--name=value" formats
-	var displayName string
-	args := os.Args[2:]
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--name" || arg == "-n":
-			if i+1 >= len(args) {
-				return fmt.Errorf("--name requires a value")
-			}
-			displayName = args[i+1]
-			i++
-		case strings.HasPrefix(arg, "--name="):
-			displayName = strings.TrimPrefix(arg, "--name=")
-		case strings.HasPrefix(arg, "-n="):
-			displayName = strings.TrimPrefix(arg, "-n=")
-		case strings.HasPrefix(arg, "-"):
-			return fmt.Errorf("unknown flag: %s", arg)
-		default:
-			return fmt.Errorf("unexpected argument: %s", arg)
-		}
+// bootstrapConfigResult holds the result of loading or creating config.
+type bootstrapConfigResult struct {
+	Config    *config.Config
+	JWTSecret string
+	Created   bool
+}
+
+// loadOrCreateBootstrapConfig loads existing config or creates a new one.
+func loadOrCreateBootstrapConfig(configPath, dbPath string) (*bootstrapConfigResult, error) {
+	_, err := os.Stat(configPath)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("checking config: %w", err)
 	}
 
-	if displayName == "" {
-		return fmt.Errorf("--name flag is required")
+	if !os.IsNotExist(err) {
+		// Config exists, load it
+		cfg, err := config.Load(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("loading config: %w", err)
+		}
+		if cfg.Auth.JWTSecret == "" {
+			return nil, fmt.Errorf("jwt_secret not configured in %s (required for bootstrap)", configPath)
+		}
+		return &bootstrapConfigResult{
+			Config:    cfg,
+			JWTSecret: cfg.Auth.JWTSecret,
+			Created:   false,
+		}, nil
 	}
 
-	// Validate display name
-	displayName = strings.TrimSpace(displayName)
-	if displayName == "" {
-		return fmt.Errorf("display name cannot be empty or whitespace only")
+	// Config doesn't exist, create it
+	secretBytes := make([]byte, 32)
+	if _, err := rand.Read(secretBytes); err != nil {
+		return nil, fmt.Errorf("generating JWT secret: %w", err)
 	}
-	if len(displayName) > 100 {
-		return fmt.Errorf("display name exceeds maximum length of 100 characters")
+	jwtSecret := base64.StdEncoding.EncodeToString(secretBytes)
+
+	// Create config directory
+	configDir := filepath.Dir(configPath)
+	if err := os.MkdirAll(configDir, 0750); err != nil {
+		return nil, fmt.Errorf("creating config directory: %w", err)
 	}
 
-	configPath := getConfigPath()
-	dataPath := getDataPath()
-	dbPath := filepath.Join(dataPath, "gateway.db")
+	// Create data directory
+	dataPath := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dataPath, 0750); err != nil {
+		return nil, fmt.Errorf("creating data directory: %w", err)
+	}
 
-	green := color.New(color.FgGreen)
-	cyan := color.New(color.FgCyan)
-	yellow := color.New(color.FgYellow)
-
-	// Check if config exists, create if not
-	var cfg *config.Config
-	var jwtSecret string
-
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		// Generate random JWT secret
-		secretBytes := make([]byte, 32)
-		if _, err := rand.Read(secretBytes); err != nil {
-			return fmt.Errorf("generating JWT secret: %w", err)
-		}
-		jwtSecret = base64.StdEncoding.EncodeToString(secretBytes)
-
-		// Create config directory
-		configDir := filepath.Dir(configPath)
-		if err := os.MkdirAll(configDir, 0755); err != nil {
-			return fmt.Errorf("creating config directory: %w", err)
-		}
-
-		// Create data directory
-		if err := os.MkdirAll(dataPath, 0755); err != nil {
-			return fmt.Errorf("creating data directory: %w", err)
-		}
-
-		// Write config file
-		configContent := fmt.Sprintf(`# coven-gateway configuration
+	// Write config file
+	configContent := fmt.Sprintf(`# coven-gateway configuration
 # Generated by coven-gateway bootstrap
 
 server:
@@ -439,32 +419,88 @@ logging:
   format: "text"
 `, dbPath, jwtSecret)
 
-		if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
-			return fmt.Errorf("writing config file: %w", err)
-		}
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		return nil, fmt.Errorf("writing config file: %w", err)
+	}
 
-		green.Printf("  ✓ Created config: %s\n", configPath)
+	// Load the config we just created
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("loading config: %w", err)
+	}
 
-		// Load the config we just created
-		cfg, err = config.Load(configPath)
-		if err != nil {
-			return fmt.Errorf("loading config: %w", err)
+	return &bootstrapConfigResult{
+		Config:    cfg,
+		JWTSecret: jwtSecret,
+		Created:   true,
+	}, nil
+}
+
+// runBootstrap performs first-time setup of the gateway:
+// 1. Creates config file with random JWT secret (if not exists)
+// 2. Creates database and owner principal
+// 3. Generates JWT token for the owner
+//
+// This is a one-command setup: coven-gateway bootstrap --name "Your Name".
+func runBootstrap(ctx context.Context) error {
+	// Parse args with explicit error handling
+	// Supports both "--name value" and "--name=value" formats
+	var displayName string
+	args := os.Args[2:]
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--name" || arg == "-n":
+			if i+1 >= len(args) {
+				return errors.New("--name requires a value")
+			}
+			displayName = args[i+1]
+			i++
+		case strings.HasPrefix(arg, "--name="):
+			displayName = strings.TrimPrefix(arg, "--name=")
+		case strings.HasPrefix(arg, "-n="):
+			displayName = strings.TrimPrefix(arg, "-n=")
+		case strings.HasPrefix(arg, "-"):
+			return fmt.Errorf("unknown flag: %s", arg)
+		default:
+			return fmt.Errorf("unexpected argument: %s", arg)
 		}
+	}
+
+	if displayName == "" {
+		return errors.New("--name flag is required")
+	}
+
+	// Validate display name
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" {
+		return errors.New("display name cannot be empty or whitespace only")
+	}
+	if len(displayName) > 100 {
+		return errors.New("display name exceeds maximum length of 100 characters")
+	}
+
+	configPath := getConfigPath()
+	dataPath := getDataPath()
+	dbPath := filepath.Join(dataPath, "gateway.db")
+
+	green := color.New(color.FgGreen)
+	cyan := color.New(color.FgCyan)
+	yellow := color.New(color.FgYellow)
+
+	// Load or create config
+	result, err := loadOrCreateBootstrapConfig(configPath, dbPath)
+	if err != nil {
+		return err
+	}
+
+	cfg := result.Config
+	jwtSecret := result.JWTSecret
+
+	if result.Created {
+		_, _ = green.Printf("  ✓ Created config: %s\n", configPath)
 	} else {
-		// Config exists, load it
-		var err error
-		cfg, err = config.Load(configPath)
-		if err != nil {
-			return fmt.Errorf("loading config: %w", err)
-		}
-
-		// Check JWT secret is configured
-		if cfg.Auth.JWTSecret == "" {
-			return fmt.Errorf("jwt_secret not configured in %s (required for bootstrap)", configPath)
-		}
-		jwtSecret = cfg.Auth.JWTSecret
-
-		cyan.Printf("  Using existing config: %s\n", configPath)
+		_, _ = cyan.Printf("  Using existing config: %s\n", configPath)
 	}
 
 	// Open the store directly
@@ -472,9 +508,9 @@ logging:
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
-	green.Printf("  ✓ Database: %s\n", cfg.Database.Path)
+	_, _ = green.Printf("  ✓ Database: %s\n", cfg.Database.Path)
 
 	// Check if any principals already exist
 	count, err := s.CountPrincipals(ctx, store.PrincipalFilter{})
@@ -508,7 +544,7 @@ logging:
 		return fmt.Errorf("granting owner role: %w", err)
 	}
 
-	green.Printf("  ✓ Created owner principal: %s\n", displayName)
+	_, _ = green.Printf("  ✓ Created owner principal: %s\n", displayName)
 
 	// Generate JWT token
 	verifier, err := auth.NewJWTVerifier([]byte(jwtSecret))
@@ -531,14 +567,14 @@ logging:
 		return fmt.Errorf("writing token file: %w", err)
 	}
 
-	green.Printf("  ✓ Saved token: %s\n", tokenPath)
+	_, _ = green.Printf("  ✓ Saved token: %s\n", tokenPath)
 
 	// Print results
 	fmt.Println()
-	green.Println("  Bootstrap complete!")
+	_, _ = green.Println("  Bootstrap complete!")
 	fmt.Println()
-	cyan.Println("  Owner Principal")
-	cyan.Println("  ---------------")
+	_, _ = cyan.Println("  Owner Principal")
+	_, _ = cyan.Println("  ---------------")
 	fmt.Printf("  ID:           %s\n", principalID)
 	fmt.Printf("  Display Name: %s\n", displayName)
 	fmt.Printf("  Type:         client\n")
@@ -547,7 +583,7 @@ logging:
 	fmt.Printf("  Token:        %s (expires %s)\n", tokenPath, expiresAt.Format("Jan 02, 2006"))
 	fmt.Println()
 
-	yellow.Println("  Ready to go:")
+	_, _ = yellow.Println("  Ready to go:")
 	fmt.Println("    coven-gateway serve    # start the gateway")
 	fmt.Println("    coven-admin me         # verify your identity")
 	fmt.Println()
@@ -565,7 +601,7 @@ func runInit() error {
 	// Default paths
 	defaultConfigPath := getConfigPath()
 	defaultDataPath := getDataPath()
-	defaultDbPath := filepath.Join(defaultDataPath, "gateway.db")
+	defaultDBPath := filepath.Join(defaultDataPath, "gateway.db")
 
 	// Output filename
 	outputFile := prompt(reader, "Config file path", defaultConfigPath)
@@ -586,7 +622,7 @@ func runInit() error {
 
 	// Database
 	fmt.Println("\n--- Database Configuration ---")
-	dbPath := prompt(reader, "SQLite database path", defaultDbPath)
+	dbPath := prompt(reader, "SQLite database path", defaultDBPath)
 
 	// Tailscale
 	fmt.Println("\n--- Tailscale Configuration ---")
@@ -652,18 +688,18 @@ func runInit() error {
 
 	// Ensure config directory exists
 	configDir := filepath.Dir(outputFile)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0750); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
 	}
 
 	// Write config file
-	if err := os.WriteFile(outputFile, []byte(cfg.String()), 0644); err != nil {
+	if err := os.WriteFile(outputFile, []byte(cfg.String()), 0600); err != nil {
 		return fmt.Errorf("writing config file: %w", err)
 	}
 
 	// Ensure data directory exists
 	dataDir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, 0750); err != nil {
 		return fmt.Errorf("creating data directory: %w", err)
 	}
 

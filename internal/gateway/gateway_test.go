@@ -5,6 +5,7 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -21,7 +22,7 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// testConfig creates a minimal config for testing with available ports
+// testConfig creates a minimal config for testing with available ports.
 func testConfig(t *testing.T) *config.Config {
 	t.Helper()
 
@@ -56,7 +57,7 @@ func testConfig(t *testing.T) *config.Config {
 	}
 }
 
-// testLogger creates a silent logger for tests
+// testLogger creates a silent logger for tests.
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
@@ -109,7 +110,7 @@ func TestGatewayRunAndShutdown(t *testing.T) {
 
 	select {
 	case err := <-errCh:
-		if err != nil && err != context.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Errorf("Run() returned unexpected error: %v", err)
 		}
 	case <-time.After(5 * time.Second):
@@ -126,8 +127,7 @@ func TestHealthEndpoint(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Run gateway
 	go func() {
@@ -158,8 +158,7 @@ func TestReadyEndpoint_NoAgents(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go func() {
 		_ = gw.Run(ctx)
@@ -188,8 +187,7 @@ func TestAgentStreamRegistration(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go func() {
 		_ = gw.Run(ctx)
@@ -275,8 +273,7 @@ func TestAgentStreamHeartbeat(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go func() {
 		_ = gw.Run(ctx)
@@ -350,8 +347,7 @@ func TestAgentStreamDisconnect(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go func() {
 		_ = gw.Run(ctx)
@@ -399,7 +395,7 @@ func TestAgentStreamDisconnect(t *testing.T) {
 		t.Error("agent should be registered")
 	}
 
-	// Disconnect by cancelling context and closing connection
+	// Disconnect by canceling context and closing connection
 	agentCancel()
 	conn.Close()
 
@@ -421,8 +417,7 @@ func TestAgentStream_NoRegistrationFirst(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go func() {
 		_ = gw.Run(ctx)
@@ -473,8 +468,7 @@ func TestAgentStream_DuplicateRegistration(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go func() {
 		_ = gw.Run(ctx)
@@ -567,8 +561,7 @@ func TestFullMessageRoundTrip(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go func() {
 		_ = gw.Run(ctx)
@@ -794,8 +787,7 @@ func TestMessageRoundTrip_ToolUse(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go func() {
 		_ = gw.Run(ctx)
@@ -976,8 +968,7 @@ func TestMessageRoundTrip_Error(t *testing.T) {
 		t.Fatalf("New() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go func() {
 		_ = gw.Run(ctx)

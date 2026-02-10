@@ -4,11 +4,73 @@
 package auth
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/2389/coven-gateway/internal/store"
 )
+
+// errorResponse is the JSON structure for error responses.
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+// jsonError writes a JSON error response with the given status code.
+func jsonError(w http.ResponseWriter, message string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(errorResponse{Error: message}); err != nil {
+		// If JSON encoding fails, the response is already partially written.
+		// Log would be ideal but we don't have a logger here; silently fail.
+		_ = err
+	}
+}
+
+// extractBearerToken extracts a bearer token from the Authorization header.
+// Returns the token and an error message (empty if successful).
+func extractBearerToken(authHeader string) (string, string) {
+	if authHeader == "" {
+		return "", "missing authorization header"
+	}
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return "", "invalid authorization header format"
+	}
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if token == "" {
+		return "", "empty token"
+	}
+	return token, ""
+}
+
+// checkPrincipalStatus validates that a principal has an allowed status.
+// Returns an error message (empty if allowed).
+func checkPrincipalStatus(status store.PrincipalStatus) string {
+	switch status {
+	case store.PrincipalStatusApproved, store.PrincipalStatusOnline, store.PrincipalStatusOffline:
+		return ""
+	case store.PrincipalStatusPending:
+		return "principal status is pending"
+	case store.PrincipalStatusRevoked:
+		return "principal has been revoked"
+	default:
+		return "unknown principal status"
+	}
+}
+
+// buildAuthContext creates an AuthContext from a principal and role list.
+func buildAuthContext(principalID string, principalType store.PrincipalType, roleNames []store.RoleName) *AuthContext {
+	roleStrings := make([]string, len(roleNames))
+	for i, rn := range roleNames {
+		roleStrings[i] = string(rn)
+	}
+	return &AuthContext{
+		PrincipalID:   principalID,
+		PrincipalType: string(principalType),
+		MemberID:      nil,
+		Roles:         roleStrings,
+	}
+}
 
 // HTTPAuthMiddleware creates an HTTP middleware that extracts and validates JWT tokens.
 // It looks up the principal and adds AuthContext to the request context using the same
@@ -16,76 +78,35 @@ import (
 func HTTPAuthMiddleware(principals PrincipalStore, roles RoleStore, verifier TokenVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Extract token from Authorization header
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				http.Error(w, `{"error":"missing authorization header"}`, http.StatusUnauthorized)
+			token, errMsg := extractBearerToken(r.Header.Get("Authorization"))
+			if errMsg != "" {
+				jsonError(w, errMsg, http.StatusUnauthorized)
 				return
 			}
 
-			// Check Bearer prefix
-			if !strings.HasPrefix(authHeader, "Bearer ") {
-				http.Error(w, `{"error":"invalid authorization header format"}`, http.StatusUnauthorized)
-				return
-			}
-
-			token := strings.TrimPrefix(authHeader, "Bearer ")
-			if token == "" {
-				http.Error(w, `{"error":"empty token"}`, http.StatusUnauthorized)
-				return
-			}
-
-			// Verify token and extract principal ID
 			principalID, err := verifier.Verify(token)
 			if err != nil {
-				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				jsonError(w, "invalid token", http.StatusUnauthorized)
 				return
 			}
 
-			// Look up principal
 			principal, err := principals.GetPrincipal(r.Context(), principalID)
 			if err != nil {
-				http.Error(w, `{"error":"principal not found"}`, http.StatusUnauthorized)
+				jsonError(w, "principal not found", http.StatusUnauthorized)
 				return
 			}
 
-			// Check principal status - allow approved/online/offline, deny pending/revoked
-			switch principal.Status {
-			case store.PrincipalStatusApproved, store.PrincipalStatusOnline, store.PrincipalStatusOffline:
-				// allowed
-			case store.PrincipalStatusPending:
-				http.Error(w, `{"error":"principal status is pending"}`, http.StatusForbidden)
-				return
-			case store.PrincipalStatusRevoked:
-				http.Error(w, `{"error":"principal has been revoked"}`, http.StatusForbidden)
-				return
-			default:
-				http.Error(w, `{"error":"unknown principal status"}`, http.StatusInternalServerError)
+			if errMsg = checkPrincipalStatus(principal.Status); errMsg != "" {
+				status := http.StatusForbidden
+				if errMsg == "unknown principal status" {
+					status = http.StatusInternalServerError
+				}
+				jsonError(w, errMsg, status)
 				return
 			}
 
-			// Look up roles
-			roleNames, err := roles.ListRoles(r.Context(), store.RoleSubjectPrincipal, principalID)
-			if err != nil {
-				// Log but don't fail - empty roles is valid
-				roleNames = nil
-			}
-
-			// Convert role names to strings
-			roleStrings := make([]string, len(roleNames))
-			for i, rn := range roleNames {
-				roleStrings[i] = string(rn)
-			}
-
-			// Build AuthContext
-			authCtx := &AuthContext{
-				PrincipalID:   principalID,
-				PrincipalType: string(principal.Type),
-				MemberID:      nil,
-				Roles:         roleStrings,
-			}
-
-			// Continue with authenticated request
+			roleNames, _ := roles.ListRoles(r.Context(), store.RoleSubjectPrincipal, principalID)
+			authCtx := buildAuthContext(principalID, principal.Type, roleNames)
 			next.ServeHTTP(w, r.WithContext(WithAuth(r.Context(), authCtx)))
 		})
 	}
@@ -98,12 +119,12 @@ func RequireAdminHTTP() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authCtx := FromContext(r.Context())
 			if authCtx == nil {
-				http.Error(w, `{"error":"not authenticated"}`, http.StatusUnauthorized)
+				jsonError(w, "not authenticated", http.StatusUnauthorized)
 				return
 			}
 
 			if !authCtx.IsAdmin() {
-				http.Error(w, `{"error":"admin role required"}`, http.StatusForbidden)
+				jsonError(w, "admin role required", http.StatusForbidden)
 				return
 			}
 
@@ -117,60 +138,31 @@ func RequireAdminHTTP() func(http.Handler) http.Handler {
 func OptionalAuthMiddleware(principals PrincipalStore, roles RoleStore, verifier TokenVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Extract token from Authorization header
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-				// No auth - continue as anonymous
-				next.ServeHTTP(w, r)
+			token, errMsg := extractBearerToken(r.Header.Get("Authorization"))
+			if errMsg != "" {
+				next.ServeHTTP(w, r) // Continue as anonymous
 				return
 			}
 
-			token := strings.TrimPrefix(authHeader, "Bearer ")
-			if token == "" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Try to verify token
 			principalID, err := verifier.Verify(token)
 			if err != nil {
-				// Invalid token - continue as anonymous
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// Look up principal
 			principal, err := principals.GetPrincipal(r.Context(), principalID)
 			if err != nil {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// Check principal status
-			switch principal.Status {
-			case store.PrincipalStatusApproved, store.PrincipalStatusOnline, store.PrincipalStatusOffline:
-				// allowed - continue below
-			default:
-				// Invalid status - continue as anonymous
+			if checkPrincipalStatus(principal.Status) != "" {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// Look up roles
 			roleNames, _ := roles.ListRoles(r.Context(), store.RoleSubjectPrincipal, principalID)
-			roleStrings := make([]string, len(roleNames))
-			for i, rn := range roleNames {
-				roleStrings[i] = string(rn)
-			}
-
-			// Build AuthContext
-			authCtx := &AuthContext{
-				PrincipalID:   principalID,
-				PrincipalType: string(principal.Type),
-				MemberID:      nil,
-				Roles:         roleStrings,
-			}
-
+			authCtx := buildAuthContext(principalID, principal.Type, roleNames)
 			next.ServeHTTP(w, r.WithContext(WithAuth(r.Context(), authCtx)))
 		})
 	}

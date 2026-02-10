@@ -12,17 +12,17 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// QuestionAnswerer defines the interface for delivering user question answers
+// QuestionAnswerer defines the interface for delivering user question answers.
 type QuestionAnswerer interface {
 	DeliverAnswer(agentID, questionID string, answer *pb.AnswerQuestionRequest) error
 }
 
-// SetQuestionAnswerer sets the question answerer for user question operations
+// SetQuestionAnswerer sets the question answerer for user question operations.
 func (s *ClientService) SetQuestionAnswerer(answerer QuestionAnswerer) {
 	s.answerer = answerer
 }
 
-// AnswerQuestion responds to a user question from the ask_user tool
+// AnswerQuestion responds to a user question from the ask_user tool.
 func (s *ClientService) AnswerQuestion(ctx context.Context, req *pb.AnswerQuestionRequest) (*pb.AnswerQuestionResponse, error) {
 	if req.AgentId == "" {
 		return nil, status.Error(codes.InvalidArgument, "agent_id required")

@@ -4,15 +4,17 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents the complete coven-gateway configuration
+// Config represents the complete coven-gateway configuration.
 type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Tailscale TailscaleConfig `yaml:"tailscale"`
@@ -25,13 +27,13 @@ type Config struct {
 	WebAdmin  WebAdminConfig  `yaml:"webadmin"`
 }
 
-// AuthConfig holds authentication configuration
+// AuthConfig holds authentication configuration.
 type AuthConfig struct {
 	JWTSecret             string `yaml:"jwt_secret"`
 	AgentAutoRegistration string `yaml:"agent_auto_registration"` // "approved", "pending", or "disabled"
 }
 
-// TailscaleConfig holds Tailscale tsnet configuration
+// TailscaleConfig holds Tailscale tsnet configuration.
 type TailscaleConfig struct {
 	Enabled   bool   `yaml:"enabled"`
 	Hostname  string `yaml:"hostname"`
@@ -42,18 +44,18 @@ type TailscaleConfig struct {
 	Funnel    bool   `yaml:"funnel"` // Enable public Funnel (implies HTTPS)
 }
 
-// ServerConfig holds server address configuration
+// ServerConfig holds server address configuration.
 type ServerConfig struct {
 	GRPCAddr string `yaml:"grpc_addr"`
 	HTTPAddr string `yaml:"http_addr"`
 }
 
-// DatabaseConfig holds database configuration
+// DatabaseConfig holds database configuration.
 type DatabaseConfig struct {
 	Path string `yaml:"path"`
 }
 
-// AgentsConfig holds agent-related timing configuration
+// AgentsConfig holds agent-related timing configuration.
 type AgentsConfig struct {
 	HeartbeatInterval    time.Duration `yaml:"-"`
 	HeartbeatTimeout     time.Duration `yaml:"-"`
@@ -65,13 +67,13 @@ type AgentsConfig struct {
 	ReconnectGracePeriodRaw string `yaml:"reconnect_grace_period"`
 }
 
-// FrontendsConfig holds configuration for all frontend integrations
+// FrontendsConfig holds configuration for all frontend integrations.
 type FrontendsConfig struct {
 	Slack  SlackConfig  `yaml:"slack"`
 	Matrix MatrixConfig `yaml:"matrix"`
 }
 
-// SlackConfig holds Slack integration configuration
+// SlackConfig holds Slack integration configuration.
 type SlackConfig struct {
 	Enabled         bool     `yaml:"enabled"`
 	AppToken        string   `yaml:"app_token"`
@@ -79,7 +81,7 @@ type SlackConfig struct {
 	AllowedChannels []string `yaml:"allowed_channels"`
 }
 
-// MatrixConfig holds Matrix integration configuration
+// MatrixConfig holds Matrix integration configuration.
 type MatrixConfig struct {
 	Enabled      bool     `yaml:"enabled"`
 	Homeserver   string   `yaml:"homeserver"`
@@ -89,19 +91,19 @@ type MatrixConfig struct {
 	AllowedRooms []string `yaml:"allowed_rooms"`
 }
 
-// LoggingConfig holds logging configuration
+// LoggingConfig holds logging configuration.
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
 }
 
-// MetricsConfig holds metrics endpoint configuration
+// MetricsConfig holds metrics endpoint configuration.
 type MetricsConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Path    string `yaml:"path"`
 }
 
-// WebAdminConfig holds web admin UI configuration
+// WebAdminConfig holds web admin UI configuration.
 type WebAdminConfig struct {
 	// BaseURL is the external URL for the admin UI (used for invite links)
 	// If not set, it's auto-detected from server.http_addr or tailscale hostname
@@ -112,7 +114,7 @@ type WebAdminConfig struct {
 // Environment variables in the format ${VAR_NAME} are expanded.
 // Duration strings are parsed into time.Duration values.
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, fmt.Errorf("reading config file: %w", err)
 	}
@@ -157,26 +159,26 @@ func (c *Config) Validate() error {
 	// Server addresses are required unless Tailscale is enabled
 	if !c.Tailscale.Enabled {
 		if c.Server.GRPCAddr == "" {
-			return fmt.Errorf("server.grpc_addr is required (or enable tailscale)")
+			return errors.New("server.grpc_addr is required (or enable tailscale)")
 		}
 		if c.Server.HTTPAddr == "" {
-			return fmt.Errorf("server.http_addr is required (or enable tailscale)")
+			return errors.New("server.http_addr is required (or enable tailscale)")
 		}
 	}
 
 	// Tailscale requires a hostname
 	if c.Tailscale.Enabled && c.Tailscale.Hostname == "" {
-		return fmt.Errorf("tailscale.hostname is required when tailscale is enabled")
+		return errors.New("tailscale.hostname is required when tailscale is enabled")
 	}
 
 	if c.Database.Path == "" {
-		return fmt.Errorf("database.path is required")
+		return errors.New("database.path is required")
 	}
 
 	return nil
 }
 
-// parseDurations converts the raw duration strings into time.Duration values
+// parseDurations converts the raw duration strings into time.Duration values.
 func parseDurations(cfg *Config) error {
 	var err error
 

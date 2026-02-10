@@ -6,7 +6,6 @@ package agent
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"sync"
 
@@ -79,7 +78,7 @@ func (m *Manager) Unregister(agentID string) {
 // AgentID is required - the caller must specify which agent should receive the message.
 func (m *Manager) SendMessage(ctx context.Context, req *SendRequest) (<-chan *Response, error) {
 	if req.AgentID == "" {
-		return nil, fmt.Errorf("agent_id is required")
+		return nil, errors.New("agent_id is required")
 	}
 
 	agent, ok := m.GetAgent(req.AgentID)
@@ -155,7 +154,7 @@ func (m *Manager) transformResponses(
 		case <-ctx.Done():
 			outChan <- &Response{
 				Event: EventError,
-				Error: "context cancelled",
+				Error: "context canceled",
 				Done:  true,
 			}
 			return
@@ -176,94 +175,165 @@ func (m *Manager) transformResponses(
 }
 
 // convertResponse transforms a pb.MessageResponse into a Response.
-func (m *Manager) convertResponse(pbResp *pb.MessageResponse) *Response {
-	resp := &Response{}
+// Response builders for each event type.
 
-	switch event := pbResp.GetEvent().(type) {
-	case *pb.MessageResponse_Thinking:
-		resp.Event = EventThinking
-		resp.Text = event.Thinking
+func buildThinkingResponse(event *pb.MessageResponse_Thinking) *Response {
+	return &Response{Event: EventThinking, Text: event.Thinking}
+}
 
-	case *pb.MessageResponse_Text:
-		resp.Event = EventText
-		resp.Text = event.Text
+func buildTextResponse(event *pb.MessageResponse_Text) *Response {
+	return &Response{Event: EventText, Text: event.Text}
+}
 
-	case *pb.MessageResponse_ToolUse:
-		resp.Event = EventToolUse
-		resp.ToolUse = &ToolUseEvent{
+func buildToolUseResponse(event *pb.MessageResponse_ToolUse) *Response {
+	return &Response{
+		Event: EventToolUse,
+		ToolUse: &ToolUseEvent{
 			ID:        event.ToolUse.GetId(),
 			Name:      event.ToolUse.GetName(),
 			InputJSON: event.ToolUse.GetInputJson(),
-		}
+		},
+	}
+}
 
-	case *pb.MessageResponse_ToolResult:
-		resp.Event = EventToolResult
-		resp.ToolResult = &ToolResultEvent{
+func buildToolResultResponse(event *pb.MessageResponse_ToolResult) *Response {
+	return &Response{
+		Event: EventToolResult,
+		ToolResult: &ToolResultEvent{
 			ID:      event.ToolResult.GetId(),
 			Output:  event.ToolResult.GetOutput(),
 			IsError: event.ToolResult.GetIsError(),
-		}
+		},
+	}
+}
 
-	case *pb.MessageResponse_File:
-		resp.Event = EventFile
-		resp.File = &FileEvent{
+func buildFileResponse(event *pb.MessageResponse_File) *Response {
+	return &Response{
+		Event: EventFile,
+		File: &FileEvent{
 			Filename: event.File.GetFilename(),
 			MimeType: event.File.GetMimeType(),
 			Data:     event.File.GetData(),
-		}
+		},
+	}
+}
 
-	case *pb.MessageResponse_Done:
-		resp.Event = EventDone
-		resp.Text = event.Done.GetFullResponse()
-		resp.Done = true
+func buildDoneResponse(event *pb.MessageResponse_Done) *Response {
+	return &Response{Event: EventDone, Text: event.Done.GetFullResponse(), Done: true}
+}
 
-	case *pb.MessageResponse_Error:
-		resp.Event = EventError
-		resp.Error = event.Error
-		resp.Done = true
+func buildErrorResponse(event *pb.MessageResponse_Error) *Response {
+	return &Response{Event: EventError, Error: event.Error, Done: true}
+}
 
-	case *pb.MessageResponse_SessionInit:
-		resp.Event = EventSessionInit
-		resp.SessionID = event.SessionInit.GetSessionId()
+func buildSessionInitResponse(event *pb.MessageResponse_SessionInit) *Response {
+	return &Response{Event: EventSessionInit, SessionID: event.SessionInit.GetSessionId()}
+}
 
-	case *pb.MessageResponse_SessionOrphaned:
-		resp.Event = EventSessionOrphaned
-		resp.Error = event.SessionOrphaned.GetReason()
+func buildSessionOrphanedResponse(event *pb.MessageResponse_SessionOrphaned) *Response {
+	return &Response{Event: EventSessionOrphaned, Error: event.SessionOrphaned.GetReason()}
+}
 
-	case *pb.MessageResponse_Usage:
-		resp.Event = EventUsage
-		resp.Usage = &UsageEvent{
+func buildUsageResponse(event *pb.MessageResponse_Usage) *Response {
+	return &Response{
+		Event: EventUsage,
+		Usage: &UsageEvent{
 			InputTokens:      event.Usage.GetInputTokens(),
 			OutputTokens:     event.Usage.GetOutputTokens(),
 			CacheReadTokens:  event.Usage.GetCacheReadTokens(),
 			CacheWriteTokens: event.Usage.GetCacheWriteTokens(),
 			ThinkingTokens:   event.Usage.GetThinkingTokens(),
-		}
+		},
+	}
+}
 
-	case *pb.MessageResponse_ToolState:
-		resp.Event = EventToolState
-		resp.ToolState = &ToolStateEvent{
+func buildToolStateResponse(event *pb.MessageResponse_ToolState) *Response {
+	return &Response{
+		Event: EventToolState,
+		ToolState: &ToolStateEvent{
 			ID:     event.ToolState.GetId(),
 			State:  toolStateToString(event.ToolState.GetState()),
 			Detail: event.ToolState.GetDetail(),
-		}
+		},
+	}
+}
 
-	case *pb.MessageResponse_Cancelled:
-		resp.Event = EventCancelled
-		resp.Error = event.Cancelled.GetReason()
-		resp.Done = true
+func buildCancelledResponse(event *pb.MessageResponse_Cancelled) *Response {
+	return &Response{Event: EventCanceled, Error: event.Cancelled.GetReason(), Done: true}
+}
 
-	case *pb.MessageResponse_ToolApprovalRequest:
-		resp.Event = EventToolApprovalRequest
-		resp.ToolApprovalRequest = &ToolApprovalRequestEvent{
+func buildToolApprovalRequestResponse(event *pb.MessageResponse_ToolApprovalRequest, requestID string) *Response {
+	return &Response{
+		Event: EventToolApprovalRequest,
+		ToolApprovalRequest: &ToolApprovalRequestEvent{
 			ID:        event.ToolApprovalRequest.GetId(),
 			Name:      event.ToolApprovalRequest.GetName(),
 			InputJSON: event.ToolApprovalRequest.GetInputJson(),
-			RequestID: pbResp.GetRequestId(),
-		}
+			RequestID: requestID,
+		},
 	}
+}
 
-	return resp
+// convertContentEvent handles message content events (thinking, text, tool interactions, file).
+func convertContentEvent(event any) *Response {
+	switch e := event.(type) {
+	case *pb.MessageResponse_Thinking:
+		return buildThinkingResponse(e)
+	case *pb.MessageResponse_Text:
+		return buildTextResponse(e)
+	case *pb.MessageResponse_ToolUse:
+		return buildToolUseResponse(e)
+	case *pb.MessageResponse_ToolResult:
+		return buildToolResultResponse(e)
+	case *pb.MessageResponse_File:
+		return buildFileResponse(e)
+	}
+	return nil
+}
+
+// convertControlEvent handles control flow events (done, error, session, usage).
+func convertControlEvent(event any) *Response {
+	switch e := event.(type) {
+	case *pb.MessageResponse_Done:
+		return buildDoneResponse(e)
+	case *pb.MessageResponse_Error:
+		return buildErrorResponse(e)
+	case *pb.MessageResponse_SessionInit:
+		return buildSessionInitResponse(e)
+	case *pb.MessageResponse_SessionOrphaned:
+		return buildSessionOrphanedResponse(e)
+	case *pb.MessageResponse_Usage:
+		return buildUsageResponse(e)
+	}
+	return nil
+}
+
+// convertToolStateEvent handles tool state events.
+func convertToolStateEvent(event any, requestID string) *Response {
+	switch e := event.(type) {
+	case *pb.MessageResponse_ToolState:
+		return buildToolStateResponse(e)
+	case *pb.MessageResponse_Cancelled:
+		return buildCancelledResponse(e)
+	case *pb.MessageResponse_ToolApprovalRequest:
+		return buildToolApprovalRequestResponse(e, requestID)
+	}
+	return nil
+}
+
+// convertResponse converts a protobuf response to the internal Response type.
+func (m *Manager) convertResponse(pbResp *pb.MessageResponse) *Response {
+	event := pbResp.GetEvent()
+	if resp := convertContentEvent(event); resp != nil {
+		return resp
+	}
+	if resp := convertControlEvent(event); resp != nil {
+		return resp
+	}
+	if resp := convertToolStateEvent(event, pbResp.GetRequestId()); resp != nil {
+		return resp
+	}
+	return &Response{}
 }
 
 // toolStateToString converts a pb.ToolState enum to a string.
@@ -284,7 +354,7 @@ func toolStateToString(state pb.ToolState) string {
 	case pb.ToolState_TOOL_STATE_TIMEOUT:
 		return "timeout"
 	case pb.ToolState_TOOL_STATE_CANCELLED:
-		return "cancelled"
+		return "canceled"
 	default:
 		return "unknown"
 	}
@@ -433,7 +503,7 @@ const (
 	EventSessionOrphaned
 	EventUsage               // Token usage update
 	EventToolState           // Tool lifecycle state change
-	EventCancelled           // Request was cancelled
+	EventCanceled            // Request was canceled
 	EventToolApprovalRequest // Tool needs approval before execution
 )
 
@@ -470,7 +540,7 @@ type UsageEvent struct {
 // ToolStateEvent represents a tool lifecycle state change.
 type ToolStateEvent struct {
 	ID     string
-	State  string // "pending", "awaiting_approval", "running", "completed", "failed", "denied", "timeout", "cancelled"
+	State  string // "pending", "awaiting_approval", "running", "completed", "failed", "denied", "timeout", "canceled"
 	Detail string
 }
 

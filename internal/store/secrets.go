@@ -24,7 +24,7 @@ type Secret struct {
 	CreatedBy *string
 }
 
-// SecretsStore defines methods for managing secrets
+// SecretsStore defines methods for managing secrets.
 type SecretsStore interface {
 	CreateSecret(ctx context.Context, secret *Secret) error
 	GetSecret(ctx context.Context, id string) (*Secret, error)
@@ -181,7 +181,7 @@ func (s *SQLiteStore) ListAllSecrets(ctx context.Context) ([]*Secret, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying secrets: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var secrets []*Secret
 	for rows.Next() {
@@ -241,7 +241,7 @@ func (s *SQLiteStore) GetEffectiveSecrets(ctx context.Context, agentID string) (
 	if err != nil {
 		return nil, fmt.Errorf("querying effective secrets: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	secrets := make(map[string]string)
 	for rows.Next() {
@@ -259,7 +259,7 @@ func (s *SQLiteStore) GetEffectiveSecrets(ctx context.Context, agentID string) (
 	return secrets, nil
 }
 
-// ptrToString returns the dereferenced string or empty string if nil
+// ptrToString returns the dereferenced string or empty string if nil.
 func ptrToString(s *string) string {
 	if s == nil {
 		return ""
@@ -267,5 +267,5 @@ func ptrToString(s *string) string {
 	return *s
 }
 
-// Ensure SQLiteStore implements SecretsStore
+// Ensure SQLiteStore implements SecretsStore.
 var _ SecretsStore = (*SQLiteStore)(nil)

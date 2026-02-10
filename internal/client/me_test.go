@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// seedPrincipal creates a test principal in the store
+// seedPrincipal creates a test principal in the store.
 func seedPrincipal(t *testing.T, s *store.SQLiteStore, id, displayName string, principalType store.PrincipalType, status store.PrincipalStatus) *store.Principal {
 	t.Helper()
 	ctx := context.Background()

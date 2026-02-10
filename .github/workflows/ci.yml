@@ -1,6 +1,12 @@
 name: CI
 
-on: [push, pull_request]
+# Run on PRs targeting main (pre-merge validation) and pushes to main (post-merge).
+# This avoids duplicate CI runs for PRs from branches in the same repo.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -11,18 +17,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          submodules: true
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.25'
           cache: true
 
       - name: Install protoc
         uses: arduino/setup-protoc@v3
         with:
-          version: "25.x"
+          version: "33.x"
 
       - name: Install protoc plugins
         run: |
@@ -32,7 +40,8 @@ jobs:
       - name: Proto sync check
         run: |
           make proto
-          git diff --exit-code proto/ || (echo "Proto files out of sync. Run 'make proto' and commit." && exit 1)
+          # Ignore protoc version comment differences (only metadata, not functional)
+          git diff --ignore-matching-lines='protoc.*v[0-9]' --exit-code proto/ || (echo "Proto files out of sync. Run 'make proto' and commit." && exit 1)
 
       - name: Run tests
         run: go test -race -v ./...
@@ -51,16 +60,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          submodules: true
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.25'
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           args: --timeout=5m
@@ -70,12 +81,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          submodules: true
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.25'
           cache: true
 
       - name: Build

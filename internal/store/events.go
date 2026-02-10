@@ -14,10 +14,10 @@ import (
 	"time"
 )
 
-// ErrEventNotFound is returned when a requested event does not exist
+// ErrEventNotFound is returned when a requested event does not exist.
 var ErrEventNotFound = errors.New("event not found")
 
-// EventDirection indicates whether an event is inbound (to agent) or outbound (from agent)
+// EventDirection indicates whether an event is inbound (to agent) or outbound (from agent).
 type EventDirection string
 
 const (
@@ -25,7 +25,7 @@ const (
 	EventDirectionOutbound EventDirection = "outbound_from_agent"
 )
 
-// EventType categorizes the kind of event
+// EventType categorizes the kind of event.
 type EventType string
 
 const (
@@ -71,7 +71,7 @@ type LedgerEvent struct {
 	ActorMemberID    *string // member_id if principal is linked to a member (nullable in v1)
 }
 
-// SaveEvent persists a ledger event to the database
+// SaveEvent persists a ledger event to the database.
 func (s *SQLiteStore) SaveEvent(ctx context.Context, event *LedgerEvent) error {
 	query := `
 		INSERT INTO ledger_events (
@@ -107,7 +107,7 @@ func (s *SQLiteStore) SaveEvent(ctx context.Context, event *LedgerEvent) error {
 	return nil
 }
 
-// GetEvent retrieves a single event by ID
+// GetEvent retrieves a single event by ID.
 func (s *SQLiteStore) GetEvent(ctx context.Context, id string) (*LedgerEvent, error) {
 	query := `
 		SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
@@ -135,7 +135,7 @@ func (s *SQLiteStore) GetEvent(ctx context.Context, id string) (*LedgerEvent, er
 		&event.ActorMemberID,
 	)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrEventNotFound
 	}
 	if err != nil {
@@ -152,7 +152,7 @@ func (s *SQLiteStore) GetEvent(ctx context.Context, id string) (*LedgerEvent, er
 	return event, nil
 }
 
-// ListEventsByConversation retrieves events for a conversation key, ordered by timestamp ASC
+// ListEventsByConversation retrieves events for a conversation key, ordered by timestamp ASC.
 func (s *SQLiteStore) ListEventsByConversation(ctx context.Context, conversationKey string, limit int) ([]*LedgerEvent, error) {
 	if limit <= 0 {
 		limit = 100
@@ -173,7 +173,7 @@ func (s *SQLiteStore) ListEventsByConversation(ctx context.Context, conversation
 	return s.queryEvents(ctx, query, conversationKey, limit)
 }
 
-// ListEventsByActor retrieves events created by a specific principal
+// ListEventsByActor retrieves events created by a specific principal.
 func (s *SQLiteStore) ListEventsByActor(ctx context.Context, principalID string, limit int) ([]*LedgerEvent, error) {
 	if limit <= 0 {
 		limit = 100
@@ -194,7 +194,7 @@ func (s *SQLiteStore) ListEventsByActor(ctx context.Context, principalID string,
 	return s.queryEvents(ctx, query, principalID, limit)
 }
 
-// ListEventsByActorDesc retrieves events created by a specific principal, ordered newest first
+// ListEventsByActorDesc retrieves events created by a specific principal, ordered newest first.
 func (s *SQLiteStore) ListEventsByActorDesc(ctx context.Context, principalID string, limit int) ([]*LedgerEvent, error) {
 	if limit <= 0 {
 		limit = 100
@@ -215,13 +215,13 @@ func (s *SQLiteStore) ListEventsByActorDesc(ctx context.Context, principalID str
 	return s.queryEvents(ctx, query, principalID, limit)
 }
 
-// queryEvents is a helper that executes a query and returns events
+// queryEvents is a helper that executes a query and returns events.
 func (s *SQLiteStore) queryEvents(ctx context.Context, query string, args ...any) ([]*LedgerEvent, error) {
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying events: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var events []*LedgerEvent
 	for rows.Next() {
@@ -264,7 +264,7 @@ func (s *SQLiteStore) queryEvents(ctx context.Context, query string, args ...any
 }
 
 // encodeCursor creates an opaque cursor string from a timestamp and event ID.
-// Format is base64(timestamp_rfc3339|event_id)
+// Format is base64(timestamp_rfc3339|event_id).
 func encodeCursor(ts time.Time, id string) string {
 	data := fmt.Sprintf("%s|%s", ts.Format(time.RFC3339), id)
 	return base64.StdEncoding.EncodeToString([]byte(data))
@@ -280,7 +280,7 @@ func decodeCursor(cursor string) (time.Time, string, error) {
 
 	parts := strings.SplitN(string(decoded), "|", 2)
 	if len(parts) != 2 {
-		return time.Time{}, "", fmt.Errorf("invalid cursor format: expected timestamp|event_id")
+		return time.Time{}, "", errors.New("invalid cursor format: expected timestamp|event_id")
 	}
 
 	ts, err := time.Parse(time.RFC3339, parts[0])
@@ -291,134 +291,145 @@ func decodeCursor(cursor string) (time.Time, string, error) {
 	return ts, parts[1], nil
 }
 
-// GetEvents retrieves events for a conversation with pagination support.
-// Events are returned in chronological order (oldest first).
-func (s *SQLiteStore) GetEvents(ctx context.Context, p GetEventsParams) (*GetEventsResult, error) {
-	// Validate required params
-	if p.ConversationKey == "" {
-		return nil, errors.New("conversation_key required")
-	}
+// eventsQueryBuilder helps construct the events query.
+type eventsQueryBuilder struct {
+	query string
+	args  []any
+}
 
-	// Apply default and cap limit
-	if p.Limit <= 0 {
-		p.Limit = 50
-	}
-	if p.Limit > 500 {
-		p.Limit = 500
-	}
-
-	// Parse cursor if provided
-	var cursorTS time.Time
-	var cursorID string
-	if p.Cursor != "" {
-		var err error
-		cursorTS, cursorID, err = decodeCursor(p.Cursor)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cursor: %w", err)
-		}
-	}
-
-	// Build the query dynamically based on which parameters are set
-	var args []any
-	query := `
+// buildEventsQuery constructs the SQL query and args for GetEvents.
+func buildEventsQuery(p GetEventsParams, cursorTS time.Time, cursorID string) (string, []any) {
+	b := &eventsQueryBuilder{}
+	b.query = `
 		SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
 		       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
 		FROM ledger_events
 		WHERE conversation_key = ?
 	`
-	args = append(args, p.ConversationKey)
+	b.args = append(b.args, p.ConversationKey)
 
-	// Add Since filter
+	b.addTimeFilters(p)
+	b.addCursorFilter(p.Cursor, cursorTS, cursorID)
+	b.query += ` ORDER BY timestamp ASC, event_id ASC LIMIT ?`
+	b.args = append(b.args, p.Limit+1)
+
+	return b.query, b.args
+}
+
+func (b *eventsQueryBuilder) addTimeFilters(p GetEventsParams) {
 	if p.Since != nil {
-		query += ` AND timestamp >= ?`
-		args = append(args, p.Since.Format(time.RFC3339))
+		b.query += ` AND timestamp >= ?`
+		b.args = append(b.args, p.Since.Format(time.RFC3339))
 	}
-
-	// Add Until filter
 	if p.Until != nil {
-		query += ` AND timestamp <= ?`
-		args = append(args, p.Until.Format(time.RFC3339))
+		b.query += ` AND timestamp <= ?`
+		b.args = append(b.args, p.Until.Format(time.RFC3339))
+	}
+}
+
+func (b *eventsQueryBuilder) addCursorFilter(cursor string, cursorTS time.Time, cursorID string) {
+	if cursor != "" {
+		b.query += ` AND (timestamp > ? OR (timestamp = ? AND event_id > ?))`
+		tsStr := cursorTS.Format(time.RFC3339)
+		b.args = append(b.args, tsStr, tsStr, cursorID)
+	}
+}
+
+// scanLedgerEvent scans a single row into a LedgerEvent.
+func scanLedgerEvent(scanner interface {
+	Scan(dest ...any) error
+}) (LedgerEvent, error) {
+	var event LedgerEvent
+	var timestampStr, direction, eventType string
+
+	if err := scanner.Scan(
+		&event.ID,
+		&event.ConversationKey,
+		&event.ThreadID,
+		&direction,
+		&event.Author,
+		&timestampStr,
+		&eventType,
+		&event.Text,
+		&event.RawTransport,
+		&event.RawPayloadRef,
+		&event.ActorPrincipalID,
+		&event.ActorMemberID,
+	); err != nil {
+		return event, fmt.Errorf("scanning event row: %w", err)
 	}
 
-	// Add cursor-based pagination
-	if p.Cursor != "" {
-		query += ` AND (timestamp > ? OR (timestamp = ? AND event_id > ?))`
-		args = append(args, cursorTS.Format(time.RFC3339), cursorTS.Format(time.RFC3339), cursorID)
+	event.Direction = EventDirection(direction)
+	event.Type = EventType(eventType)
+	var err error
+	event.Timestamp, err = time.Parse(time.RFC3339, timestampStr)
+	if err != nil {
+		return event, fmt.Errorf("parsing timestamp: %w", err)
 	}
 
-	// Order by timestamp, then event_id for deterministic pagination
-	query += ` ORDER BY timestamp ASC, event_id ASC`
+	return event, nil
+}
 
-	// Fetch limit+1 to detect if there are more results
-	query += ` LIMIT ?`
-	args = append(args, p.Limit+1)
+// GetEvents retrieves events for a conversation with pagination support.
+// Events are returned in chronological order (oldest first).
+func (s *SQLiteStore) GetEvents(ctx context.Context, p GetEventsParams) (*GetEventsResult, error) {
+	if p.ConversationKey == "" {
+		return nil, errors.New("conversation_key required")
+	}
+	p.Limit = normalizeLimit(p.Limit)
 
+	// Parse cursor if provided
+	cursorTS, cursorID, err := parseCursor(p.Cursor)
+	if err != nil {
+		return nil, err
+	}
+
+	query, args := buildEventsQuery(p, cursorTS, cursorID)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying events: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
-	var events []LedgerEvent
-	for rows.Next() {
-		var event LedgerEvent
-		var timestampStr string
-		var direction, eventType string
-
-		if err := rows.Scan(
-			&event.ID,
-			&event.ConversationKey,
-			&event.ThreadID,
-			&direction,
-			&event.Author,
-			&timestampStr,
-			&eventType,
-			&event.Text,
-			&event.RawTransport,
-			&event.RawPayloadRef,
-			&event.ActorPrincipalID,
-			&event.ActorMemberID,
-		); err != nil {
-			return nil, fmt.Errorf("scanning event row: %w", err)
-		}
-
-		event.Direction = EventDirection(direction)
-		event.Type = EventType(eventType)
-		event.Timestamp, err = time.Parse(time.RFC3339, timestampStr)
-		if err != nil {
-			return nil, fmt.Errorf("parsing timestamp: %w", err)
-		}
-
-		events = append(events, event)
+	events, err := collectEventRows(rows)
+	if err != nil {
+		return nil, err
 	}
 
+	return buildPaginatedResult(events, p.Limit), nil
+}
+
+// parseCursor decodes a cursor string, returning zero values for empty cursor.
+func parseCursor(cursor string) (time.Time, string, error) {
+	if cursor == "" {
+		return time.Time{}, "", nil
+	}
+	ts, id, err := decodeCursor(cursor)
+	if err != nil {
+		return time.Time{}, "", fmt.Errorf("invalid cursor: %w", err)
+	}
+	return ts, id, nil
+}
+
+// collectEventRows scans all rows into a slice of LedgerEvents.
+func collectEventRows(rows *sql.Rows) ([]LedgerEvent, error) {
+	var events []LedgerEvent
+	for rows.Next() {
+		event, err := scanLedgerEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating event rows: %w", err)
 	}
-
-	// Determine if there are more results
-	hasMore := len(events) > p.Limit
-	if hasMore {
-		events = events[:p.Limit] // Trim to requested limit
-	}
-
-	// Build result
-	result := &GetEventsResult{
-		Events:  events,
-		HasMore: hasMore,
-	}
-
-	// Set next cursor if there are more results
-	if hasMore && len(events) > 0 {
-		lastEvent := events[len(events)-1]
-		result.NextCursor = encodeCursor(lastEvent.Timestamp, lastEvent.ID)
-	}
-
-	return result, nil
+	return events, nil
 }
 
-// GetEventsByThreadID retrieves events for a thread, ordered by timestamp ASC.
-// Queries by thread_id column which is populated for all thread-based events.
+// GetEventsByThreadID retrieves the most recent events for a thread, ordered
+// chronologically (ASC). Uses a DESC subquery to pick the N most recent rows,
+// then re-orders ASC so callers receive events in conversation order.
 func (s *SQLiteStore) GetEventsByThreadID(ctx context.Context, threadID string, limit int) ([]*LedgerEvent, error) {
 	if limit <= 0 {
 		limit = 100
@@ -430,10 +441,15 @@ func (s *SQLiteStore) GetEventsByThreadID(ctx context.Context, threadID string, 
 	query := `
 		SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
 		       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
-		FROM ledger_events
-		WHERE thread_id = ?
-		ORDER BY timestamp ASC
-		LIMIT ?
+		FROM (
+			SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
+			       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
+			FROM ledger_events
+			WHERE thread_id = ?
+			ORDER BY timestamp DESC, event_id DESC
+			LIMIT ?
+		)
+		ORDER BY timestamp ASC, event_id ASC
 	`
 
 	return s.queryEvents(ctx, query, threadID, limit)

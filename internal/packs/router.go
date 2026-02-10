@@ -61,37 +61,42 @@ func NewRouter(cfg RouterConfig) *Router {
 
 // RouteToolCall routes a tool call to the appropriate pack or builtin handler.
 // Returns the ExecuteToolResponse or an error if the tool is not found, pack disconnected,
-// context cancelled, or timeout exceeded.
-func (r *Router) RouteToolCall(ctx context.Context, toolName, inputJSON, requestID string, agentID string) (*pb.ExecuteToolResponse, error) {
-	// Check if it's a builtin tool first
-	if builtin := r.registry.GetBuiltinTool(toolName); builtin != nil {
-		r.logger.Info("→ dispatching to builtin",
+// context canceled, or timeout exceeded.
+// handleBuiltinTool executes a builtin tool and returns the response.
+func (r *Router) handleBuiltinTool(ctx context.Context, builtin *BuiltinTool, toolName, inputJSON, requestID, agentID string) *pb.ExecuteToolResponse {
+	r.logger.Info("→ dispatching to builtin",
+		"tool_name", toolName,
+		"request_id", requestID,
+		"agent_id", agentID,
+	)
+
+	result, err := builtin.Handler(ctx, agentID, json.RawMessage(inputJSON))
+	if err != nil {
+		r.logger.Warn("builtin tool error",
 			"tool_name", toolName,
 			"request_id", requestID,
-			"agent_id", agentID,
-		)
-
-		result, err := builtin.Handler(ctx, agentID, json.RawMessage(inputJSON))
-		if err != nil {
-			r.logger.Warn("builtin tool error",
-				"tool_name", toolName,
-				"request_id", requestID,
-				"error", err,
-			)
-			return &pb.ExecuteToolResponse{
-				RequestId: requestID,
-				Result:    &pb.ExecuteToolResponse_Error{Error: err.Error()},
-			}, nil
-		}
-
-		r.logger.Info("← builtin responded",
-			"tool_name", toolName,
-			"request_id", requestID,
+			"error", err,
 		)
 		return &pb.ExecuteToolResponse{
 			RequestId: requestID,
-			Result:    &pb.ExecuteToolResponse_OutputJson{OutputJson: string(result)},
-		}, nil
+			Result:    &pb.ExecuteToolResponse_Error{Error: err.Error()},
+		}
+	}
+
+	r.logger.Info("← builtin responded",
+		"tool_name", toolName,
+		"request_id", requestID,
+	)
+	return &pb.ExecuteToolResponse{
+		RequestId: requestID,
+		Result:    &pb.ExecuteToolResponse_OutputJson{OutputJson: string(result)},
+	}
+}
+
+func (r *Router) RouteToolCall(ctx context.Context, toolName, inputJSON, requestID string, agentID string) (*pb.ExecuteToolResponse, error) {
+	// Check if it's a builtin tool first
+	if builtin := r.registry.GetBuiltinTool(toolName); builtin != nil {
+		return r.handleBuiltinTool(ctx, builtin, toolName, inputJSON, requestID, agentID), nil
 	}
 
 	// Look up the tool and its pack (external pack routing)
@@ -133,7 +138,11 @@ func (r *Router) RouteToolCall(ctx context.Context, toolName, inputJSON, request
 		return nil, err
 	}
 
-	// Wait for response
+	return r.waitForPackResponse(ctx, respCh, pack, toolName, requestID, timeout)
+}
+
+// waitForPackResponse waits for a response from the pack or timeout.
+func (r *Router) waitForPackResponse(ctx context.Context, respCh <-chan *pb.ExecuteToolResponse, pack *Pack, toolName, requestID string, timeout time.Duration) (*pb.ExecuteToolResponse, error) {
 	select {
 	case resp, ok := <-respCh:
 		if !ok {
@@ -151,7 +160,7 @@ func (r *Router) RouteToolCall(ctx context.Context, toolName, inputJSON, request
 		)
 		return resp, nil
 	case <-ctx.Done():
-		r.logger.Warn("tool call timed out or cancelled",
+		r.logger.Warn("tool call timed out or canceled",
 			"tool_name", toolName,
 			"pack_id", pack.ID,
 			"request_id", requestID,
@@ -286,5 +295,5 @@ func (r *Router) Close() {
 		delete(r.pending, requestID)
 	}
 
-	r.logger.Info("router closed", "pending_cancelled", len(r.pending))
+	r.logger.Info("router closed", "pending_canceled", len(r.pending))
 }

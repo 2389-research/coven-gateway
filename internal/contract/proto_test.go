@@ -5,6 +5,7 @@ package contract
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/2389/coven-gateway/proto/coven"
@@ -91,13 +92,7 @@ func TestProtoSurface(t *testing.T) {
 
 			// Report any extra methods not in contract (informational, not failure)
 			for method := range actualMethods {
-				found := false
-				for _, expected := range expected.methods {
-					if method == expected {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(expected.methods, method)
 				if !found {
 					t.Logf("INFO: extra method %s/%s not in contract (consider adding)", serviceName, method)
 				}
@@ -105,13 +100,7 @@ func TestProtoSurface(t *testing.T) {
 
 			// Report any extra streams not in contract (informational, not failure)
 			for stream := range actualStreams {
-				found := false
-				for _, expected := range expected.streams {
-					if stream == expected {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(expected.streams, stream)
 				if !found {
 					t.Logf("INFO: extra stream %s/%s not in contract (consider adding)", serviceName, stream)
 				}

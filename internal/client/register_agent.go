@@ -6,6 +6,7 @@ package client
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"log/slog"
 	"regexp"
 	"slices"
@@ -21,22 +22,22 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// PrincipalWriter defines the store operations needed for creating principals
+// PrincipalWriter defines the store operations needed for creating principals.
 type PrincipalWriter interface {
 	CreatePrincipal(ctx context.Context, p *store.Principal) error
 	AddRole(ctx context.Context, subjectType store.RoleSubjectType, subjectID string, role store.RoleName) error
 }
 
 const (
-	// Maximum display name length
+	// Maximum display name length.
 	maxDisplayNameLength = 100
 
-	// Rate limiting: max registrations per principal per window
+	// Rate limiting: max registrations per principal per window.
 	maxRegistrationsPerWindow = 5
 	registrationRateWindow    = time.Minute
 )
 
-// displayNamePattern allows alphanumeric, hyphens, underscores, spaces, and basic punctuation
+// displayNamePattern allows alphanumeric, hyphens, underscores, spaces, and basic punctuation.
 var displayNamePattern = regexp.MustCompile(`^[a-zA-Z0-9\-_\.\s]+$`)
 
 // registrationRateLimiter tracks recent registration attempts per principal.
@@ -47,7 +48,7 @@ type registrationRateLimiter struct {
 	lastCleanup time.Time
 }
 
-// cleanupInterval determines how often we scan for stale entries
+// cleanupInterval determines how often we scan for stale entries.
 const cleanupInterval = 5 * time.Minute
 
 var regRateLimiter = &registrationRateLimiter{
@@ -107,18 +108,57 @@ func (r *registrationRateLimiter) cleanup(cutoff time.Time) {
 	}
 }
 
-// RegisterAgent allows authenticated members to register an agent with their SSH key
+// hasSufficientRole checks if the roles include member, admin, or owner.
+func hasSufficientRole(roles []string) bool {
+	return slices.Contains(roles, string(store.RoleMember)) ||
+		slices.Contains(roles, string(store.RoleAdmin)) ||
+		slices.Contains(roles, string(store.RoleOwner))
+}
+
+// validateDisplayName checks display name requirements.
+func validateDisplayName(name string) error {
+	if name == "" {
+		return status.Error(codes.InvalidArgument, "display_name required")
+	}
+	if len(name) > maxDisplayNameLength {
+		return status.Errorf(codes.InvalidArgument, "display_name exceeds %d characters", maxDisplayNameLength)
+	}
+	if !displayNamePattern.MatchString(name) {
+		return status.Error(codes.InvalidArgument, "display_name contains invalid characters (allowed: alphanumeric, hyphens, underscores, periods, spaces)")
+	}
+	return nil
+}
+
+// validateFingerprint checks fingerprint format requirements.
+func validateFingerprint(fp string) error {
+	if fp == "" {
+		return status.Error(codes.InvalidArgument, "fingerprint required")
+	}
+	if len(fp) != 64 {
+		return status.Error(codes.InvalidArgument, "fingerprint must be 64 hex characters (SHA256)")
+	}
+	if _, err := hex.DecodeString(fp); err != nil {
+		return status.Error(codes.InvalidArgument, "fingerprint must be valid hex characters")
+	}
+	return nil
+}
+
+// handleCreatePrincipalError converts creation errors to gRPC status.
+func handleCreatePrincipalError(err error) error {
+	if errors.Is(err, store.ErrDuplicatePubkey) {
+		return status.Error(codes.AlreadyExists, "fingerprint already registered")
+	}
+	return status.Errorf(codes.Internal, "failed to create principal: %v", err)
+}
+
+// RegisterAgent allows authenticated members to register an agent with their SSH key.
 func (s *ClientService) RegisterAgent(ctx context.Context, req *pb.RegisterAgentRequest) (*pb.RegisterAgentResponse, error) {
 	authCtx := auth.MustFromContext(ctx)
 
-	// Require member role for registration
-	if !slices.Contains(authCtx.Roles, string(store.RoleMember)) &&
-		!slices.Contains(authCtx.Roles, string(store.RoleAdmin)) &&
-		!slices.Contains(authCtx.Roles, string(store.RoleOwner)) {
+	if !hasSufficientRole(authCtx.Roles) {
 		return nil, status.Error(codes.PermissionDenied, "member role required to register agents")
 	}
 
-	// Rate limiting: prevent registration spam
 	if !regRateLimiter.checkAndRecord(authCtx.PrincipalID) {
 		slog.Warn("registration rate limit exceeded",
 			"principal_id", authCtx.PrincipalID,
@@ -127,35 +167,18 @@ func (s *ClientService) RegisterAgent(ctx context.Context, req *pb.RegisterAgent
 		return nil, status.Errorf(codes.ResourceExhausted, "rate limit exceeded: max %d registrations per %v", maxRegistrationsPerWindow, registrationRateWindow)
 	}
 
-	// Validate display name
-	if req.DisplayName == "" {
-		return nil, status.Error(codes.InvalidArgument, "display_name required")
+	if err := validateDisplayName(req.DisplayName); err != nil {
+		return nil, err
 	}
-	if len(req.DisplayName) > maxDisplayNameLength {
-		return nil, status.Errorf(codes.InvalidArgument, "display_name exceeds %d characters", maxDisplayNameLength)
-	}
-	if !displayNamePattern.MatchString(req.DisplayName) {
-		return nil, status.Error(codes.InvalidArgument, "display_name contains invalid characters (allowed: alphanumeric, hyphens, underscores, periods, spaces)")
+	if err := validateFingerprint(req.Fingerprint); err != nil {
+		return nil, err
 	}
 
-	// Validate fingerprint
-	if req.Fingerprint == "" {
-		return nil, status.Error(codes.InvalidArgument, "fingerprint required")
-	}
-	if len(req.Fingerprint) != 64 {
-		return nil, status.Error(codes.InvalidArgument, "fingerprint must be 64 hex characters (SHA256)")
-	}
-	if _, err := hex.DecodeString(req.Fingerprint); err != nil {
-		return nil, status.Error(codes.InvalidArgument, "fingerprint must be valid hex characters")
-	}
-
-	// Need principal writer capability
 	writer, ok := s.principals.(PrincipalWriter)
 	if !ok {
 		return nil, status.Error(codes.Internal, "principal creation not available")
 	}
 
-	// Create the agent principal
 	principalID := uuid.New().String()
 	principal := &store.Principal{
 		ID:          principalID,
@@ -167,20 +190,14 @@ func (s *ClientService) RegisterAgent(ctx context.Context, req *pb.RegisterAgent
 	}
 
 	if err := writer.CreatePrincipal(ctx, principal); err != nil {
-		if err == store.ErrDuplicatePubkey {
-			return nil, status.Error(codes.AlreadyExists, "fingerprint already registered")
-		}
-		return nil, status.Errorf(codes.Internal, "failed to create principal: %v", err)
+		return nil, handleCreatePrincipalError(err)
 	}
 
-	// Add member role - if this fails, we still have a valid principal but it won't be able to do much
-	// Log and return error to let caller know the registration was incomplete
 	if err := writer.AddRole(ctx, store.RoleSubjectPrincipal, principalID, store.RoleMember); err != nil {
 		slog.Error("failed to add member role to registered agent - registration incomplete",
 			"agent_principal_id", principalID,
 			"registered_by", authCtx.PrincipalID,
 			"error", err)
-		// Note: principal exists but has no role - admin will need to add role manually
 		return nil, status.Errorf(codes.Internal, "agent created but role assignment failed: %v", err)
 	}
 

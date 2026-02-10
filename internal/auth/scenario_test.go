@@ -5,6 +5,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,7 +18,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// createTestStore creates a real SQLite store in a temp directory
+// createTestStore creates a real SQLite store in a temp directory.
 func createTestStore(t *testing.T) *store.SQLiteStore {
 	t.Helper()
 
@@ -37,7 +38,7 @@ func createTestStore(t *testing.T) *store.SQLiteStore {
 	return s
 }
 
-// scenarioContextWithAuth creates a context with authorization header
+// scenarioContextWithAuth creates a context with authorization header.
 func scenarioContextWithAuth(token string) context.Context {
 	md := metadata.New(map[string]string{
 		"authorization": "Bearer " + token,
@@ -45,7 +46,7 @@ func scenarioContextWithAuth(token string) context.Context {
 	return metadata.NewIncomingContext(context.Background(), md)
 }
 
-// scenarioTestSecret is a 32-byte secret that meets MinSecretLength requirement
+// scenarioTestSecret is a 32-byte secret that meets MinSecretLength requirement.
 var scenarioTestSecret = []byte("scenario-test-secret-32-bytes!!!")
 
 func TestScenario_FullAuthFlow(t *testing.T) {
@@ -92,7 +93,7 @@ func TestScenario_FullAuthFlow(t *testing.T) {
 	var capturedCtx context.Context
 	handlerCalled := false
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		capturedCtx = ctx
 		return "success", nil
@@ -178,9 +179,9 @@ func TestScenario_RevokedPrincipalDenied(t *testing.T) {
 	interceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil)
 
 	reqCtx := scenarioContextWithAuth(token)
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called for revoked principal")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, err = interceptor(reqCtx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -233,9 +234,9 @@ func TestScenario_ExpiredTokenRejected(t *testing.T) {
 	interceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil)
 
 	reqCtx := scenarioContextWithAuth(token)
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called for expired token")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, err = interceptor(reqCtx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -288,9 +289,9 @@ func TestScenario_PendingPrincipalDenied(t *testing.T) {
 	interceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil)
 
 	reqCtx := scenarioContextWithAuth(token)
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called for pending principal")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, err = interceptor(reqCtx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -351,13 +352,13 @@ func TestScenario_OnlineAndOfflineStatusesAllowed(t *testing.T) {
 			reqCtx := scenarioContextWithAuth(token)
 
 			handlerCalled := false
-			handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+			handler := func(ctx context.Context, req any) (any, error) {
 				handlerCalled = true
 				authCtx := FromContext(ctx)
 				if authCtx == nil {
 					t.Error("AuthContext not found")
 				}
-				return nil, nil
+				return struct{}{}, nil
 			}
 
 			_, err = interceptor(reqCtx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -390,9 +391,9 @@ func TestScenario_NonexistentPrincipal(t *testing.T) {
 	interceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil)
 
 	reqCtx := scenarioContextWithAuth(token)
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called for nonexistent principal")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, err = interceptor(reqCtx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -447,9 +448,9 @@ func TestScenario_PrincipalWithNoRoles(t *testing.T) {
 	reqCtx := scenarioContextWithAuth(token)
 	var capturedCtx context.Context
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		capturedCtx = ctx
-		return nil, nil
+		return struct{}{}, nil
 	}
 
 	_, err = interceptor(reqCtx, nil, &grpc.UnaryServerInfo{}, handler)

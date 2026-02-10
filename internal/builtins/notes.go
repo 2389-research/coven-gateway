@@ -6,6 +6,7 @@ package builtins
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/2389/coven-gateway/internal/packs"
@@ -75,7 +76,7 @@ func (n *notesHandlers) Set(ctx context.Context, agentID string, input json.RawM
 	}
 
 	if in.Key == "" {
-		return nil, fmt.Errorf("key is required")
+		return nil, errors.New("key is required")
 	}
 
 	note := &store.AgentNote{
@@ -101,7 +102,7 @@ func (n *notesHandlers) Get(ctx context.Context, agentID string, input json.RawM
 	}
 
 	if in.Key == "" {
-		return nil, fmt.Errorf("key is required")
+		return nil, errors.New("key is required")
 	}
 
 	note, err := n.store.GetNote(ctx, agentID, in.Key)
@@ -137,7 +138,7 @@ func (n *notesHandlers) Delete(ctx context.Context, agentID string, input json.R
 	}
 
 	if in.Key == "" {
-		return nil, fmt.Errorf("key is required")
+		return nil, errors.New("key is required")
 	}
 
 	if err := n.store.DeleteNote(ctx, agentID, in.Key); err != nil {

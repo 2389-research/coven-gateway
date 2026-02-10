@@ -13,9 +13,9 @@ import (
 	"github.com/2389/coven-gateway/internal/store"
 )
 
-// chatMessage represents a message in the chat stream
+// chatMessage represents a message in the chat stream.
 type chatMessage struct {
-	Type      string    `json:"type"` // "user", "text", "thinking", "tool_use", "tool_result", "usage", "tool_state", "tool_approval", "user_question", "cancelled", "error", "done"
+	Type      string    `json:"type"` // "user", "text", "thinking", "tool_use", "tool_result", "usage", "tool_state", "tool_approval", "user_question", "canceled", "error", "done"
 	Content   string    `json:"content,omitempty"`
 	ToolName  string    `json:"tool_name,omitempty"`
 	ToolID    string    `json:"tool_id,omitempty"`
@@ -32,7 +32,7 @@ type chatMessage struct {
 	State  string `json:"state,omitempty"`
 	Detail string `json:"detail,omitempty"`
 
-	// Cancelled fields (for type="cancelled")
+	// Canceled fields (for type="canceled")
 	Reason string `json:"reason,omitempty"`
 
 	// ToolApproval fields (for type="tool_approval")
@@ -48,13 +48,13 @@ type chatMessage struct {
 	TimeoutSeconds int32            `json:"timeout_seconds,omitempty"`
 }
 
-// questionOption represents a choice in a user question
+// questionOption represents a choice in a user question.
 type questionOption struct {
 	Label       string `json:"label"`
 	Description string `json:"description,omitempty"`
 }
 
-// chatSession represents an active chat between a user and an agent
+// chatSession represents an active chat between a user and an agent.
 type chatSession struct {
 	mu             sync.RWMutex
 	agentID        string
@@ -70,7 +70,7 @@ type chatSession struct {
 }
 
 // send safely sends a message to the session channel
-// Returns false if the session is closed or channel is full
+// Returns false if the session is closed or channel is full.
 func (s *chatSession) send(msg *chatMessage) bool {
 	s.mu.RLock()
 	if s.closed {
@@ -89,7 +89,7 @@ func (s *chatSession) send(msg *chatMessage) bool {
 	}
 }
 
-// close safely closes the session
+// close safely closes the session.
 func (s *chatSession) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -101,14 +101,14 @@ func (s *chatSession) close() {
 	close(s.messages)
 }
 
-// isClosed checks if the session is closed
+// isClosed checks if the session is closed.
 func (s *chatSession) isClosed() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.closed
 }
 
-// chatHub manages active chat sessions between users and agents
+// chatHub manages active chat sessions between users and agents.
 type chatHub struct {
 	mu       sync.RWMutex
 	sessions map[string]*chatSession // keyed by "agentID|userID"
@@ -127,12 +127,12 @@ func newChatHub() *chatHub {
 }
 
 // sessionKey generates a key for the session map
-// Uses | as delimiter since it's not valid in UUIDs
+// Uses | as delimiter since it's not valid in UUIDs.
 func sessionKey(agentID, userID string) string {
 	return agentID + "|" + userID
 }
 
-// cleanupLoop periodically removes stale sessions
+// cleanupLoop periodically removes stale sessions.
 func (h *chatHub) cleanupLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -147,7 +147,7 @@ func (h *chatHub) cleanupLoop(ctx context.Context) {
 	}
 }
 
-// cleanupStaleSessions removes sessions idle for more than 30 minutes
+// cleanupStaleSessions removes sessions idle for more than 30 minutes.
 func (h *chatHub) cleanupStaleSessions() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -167,7 +167,7 @@ func (h *chatHub) cleanupStaleSessions() {
 	}
 }
 
-// getOrCreateSession gets an existing session or creates a new one
+// getOrCreateSession gets an existing session or creates a new one.
 func (h *chatHub) getOrCreateSession(agentID, userID string) *chatSession {
 	key := sessionKey(agentID, userID)
 
@@ -198,7 +198,7 @@ func (h *chatHub) getOrCreateSession(agentID, userID string) *chatSession {
 	return session
 }
 
-// getSession gets an existing session if it exists
+// getSession gets an existing session if it exists.
 func (h *chatHub) getSession(agentID, userID string) (*chatSession, bool) {
 	key := sessionKey(agentID, userID)
 
@@ -214,79 +214,12 @@ func (h *chatHub) getSession(agentID, userID string) (*chatSession, bool) {
 	return session, ok
 }
 
-// removeSession removes and closes a session
-func (h *chatHub) removeSession(agentID, userID string) {
-	key := sessionKey(agentID, userID)
-
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	if session, ok := h.sessions[key]; ok {
-		session.close()
-		delete(h.sessions, key)
-	}
-}
+// removeSession removes and closes a session.
 
 // pipeAgentResponses reads from an agent response channel and sends to the chat session
-// This function is designed to exit gracefully in all cases
-func (h *chatHub) pipeAgentResponses(ctx context.Context, agentID, userID string, respChan <-chan *agent.Response) {
-	session, ok := h.getSession(agentID, userID)
-	if !ok {
-		// Session doesn't exist, drain the response channel to prevent agent blocking
-		for range respChan {
-		}
-		return
-	}
+// This function is designed to exit gracefully in all cases.
 
-	for {
-		select {
-		case <-ctx.Done():
-			// Request context cancelled - send error and exit
-			session.send(&chatMessage{
-				Type:      "error",
-				Content:   "Request cancelled",
-				Timestamp: time.Now(),
-			})
-			// Drain remaining messages to unblock agent
-			go drainChannel(respChan)
-			return
-
-		case <-session.ctx.Done():
-			// Session closed - drain and exit
-			go drainChannel(respChan)
-			return
-
-		case resp, ok := <-respChan:
-			if !ok {
-				// Agent response channel closed - normal completion
-				return
-			}
-
-			msg := convertAgentResponse(resp)
-
-			// Try to send with timeout to prevent blocking forever
-			sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			sent := sendWithContext(sendCtx, session, msg)
-			cancel()
-
-			if !sent {
-				// Could not send (channel full or closed) - log but continue
-				// to drain agent responses and prevent blocking
-				if session.isClosed() {
-					go drainChannel(respChan)
-					return
-				}
-				// Channel full - message dropped, continue processing
-			}
-
-			if resp.Done {
-				return
-			}
-		}
-	}
-}
-
-// sendWithContext attempts to send a message with context-aware cancellation
+// sendWithContext attempts to send a message with context-aware cancellation.
 func sendWithContext(ctx context.Context, session *chatSession, msg *chatMessage) bool {
 	// First try non-blocking send
 	if session.send(msg) {
@@ -305,90 +238,94 @@ func sendWithContext(ctx context.Context, session *chatSession, msg *chatMessage
 	}
 }
 
-// drainChannel consumes all remaining messages from a channel
+// drainChannel consumes all remaining messages from a channel.
 func drainChannel(ch <-chan *agent.Response) {
 	for range ch {
 	}
 }
 
-// convertAgentResponse converts an agent.Response to a chatMessage
+// convertAgentResponse converts an agent.Response to a chatMessage.
+// chatMsgConverter converts an agent.Response to a chatMessage.
+type chatMsgConverter func(*agent.Response, *chatMessage)
+
+// chatConverters maps event types to their conversion functions.
+var chatConverters = map[agent.ResponseEvent]chatMsgConverter{
+	agent.EventThinking: func(r *agent.Response, m *chatMessage) {
+		m.Type = "thinking"
+		m.Content = r.Text
+	},
+	agent.EventText: func(r *agent.Response, m *chatMessage) {
+		m.Type = "text"
+		m.Content = r.Text
+	},
+	agent.EventToolUse: func(r *agent.Response, m *chatMessage) {
+		m.Type = "tool_use"
+		if r.ToolUse != nil {
+			m.ToolName = r.ToolUse.Name
+			m.ToolID = r.ToolUse.ID
+			m.Content = r.ToolUse.InputJSON
+		}
+	},
+	agent.EventToolResult: func(r *agent.Response, m *chatMessage) {
+		m.Type = "tool_result"
+		if r.ToolResult != nil {
+			m.ToolID = r.ToolResult.ID
+			m.Content = r.ToolResult.Output
+		}
+	},
+	agent.EventDone: func(r *agent.Response, m *chatMessage) {
+		m.Type = "done"
+		m.Content = r.Text
+	},
+	agent.EventError: func(r *agent.Response, m *chatMessage) {
+		m.Type = "error"
+		m.Content = r.Error
+	},
+	agent.EventUsage: func(r *agent.Response, m *chatMessage) {
+		m.Type = "usage"
+		if r.Usage != nil {
+			m.InputTokens = r.Usage.InputTokens
+			m.OutputTokens = r.Usage.OutputTokens
+			m.CacheReadTokens = r.Usage.CacheReadTokens
+			m.CacheWriteTokens = r.Usage.CacheWriteTokens
+			m.ThinkingTokens = r.Usage.ThinkingTokens
+		}
+	},
+	agent.EventToolState: func(r *agent.Response, m *chatMessage) {
+		m.Type = "tool_state"
+		if r.ToolState != nil {
+			m.ToolID = r.ToolState.ID
+			m.State = r.ToolState.State
+			m.Detail = r.ToolState.Detail
+		}
+	},
+	agent.EventCanceled: func(r *agent.Response, m *chatMessage) {
+		m.Type = "canceled"
+		m.Reason = r.Text
+	},
+	agent.EventToolApprovalRequest: func(r *agent.Response, m *chatMessage) {
+		m.Type = "tool_approval"
+		if r.ToolApprovalRequest != nil {
+			m.ToolID = r.ToolApprovalRequest.ID
+			m.ToolName = r.ToolApprovalRequest.Name
+			m.InputJSON = r.ToolApprovalRequest.InputJSON
+			m.RequestID = r.ToolApprovalRequest.RequestID
+		}
+	},
+}
+
 func convertAgentResponse(resp *agent.Response) *chatMessage {
-	msg := &chatMessage{
-		Timestamp: time.Now(),
-	}
-
-	switch resp.Event {
-	case agent.EventThinking:
-		msg.Type = "thinking"
-		msg.Content = resp.Text
-
-	case agent.EventText:
-		msg.Type = "text"
-		msg.Content = resp.Text
-
-	case agent.EventToolUse:
-		msg.Type = "tool_use"
-		if resp.ToolUse != nil {
-			msg.ToolName = resp.ToolUse.Name
-			msg.ToolID = resp.ToolUse.ID
-			msg.Content = resp.ToolUse.InputJSON
-		}
-
-	case agent.EventToolResult:
-		msg.Type = "tool_result"
-		if resp.ToolResult != nil {
-			msg.ToolID = resp.ToolResult.ID
-			msg.Content = resp.ToolResult.Output
-		}
-
-	case agent.EventDone:
-		msg.Type = "done"
-		msg.Content = resp.Text // Full response if available
-
-	case agent.EventError:
-		msg.Type = "error"
-		msg.Content = resp.Error
-
-	case agent.EventUsage:
-		msg.Type = "usage"
-		if resp.Usage != nil {
-			msg.InputTokens = resp.Usage.InputTokens
-			msg.OutputTokens = resp.Usage.OutputTokens
-			msg.CacheReadTokens = resp.Usage.CacheReadTokens
-			msg.CacheWriteTokens = resp.Usage.CacheWriteTokens
-			msg.ThinkingTokens = resp.Usage.ThinkingTokens
-		}
-
-	case agent.EventToolState:
-		msg.Type = "tool_state"
-		if resp.ToolState != nil {
-			msg.ToolID = resp.ToolState.ID
-			msg.State = resp.ToolState.State
-			msg.Detail = resp.ToolState.Detail
-		}
-
-	case agent.EventCancelled:
-		msg.Type = "cancelled"
-		msg.Reason = resp.Text
-
-	case agent.EventToolApprovalRequest:
-		msg.Type = "tool_approval"
-		if resp.ToolApprovalRequest != nil {
-			msg.ToolID = resp.ToolApprovalRequest.ID
-			msg.ToolName = resp.ToolApprovalRequest.Name
-			msg.InputJSON = resp.ToolApprovalRequest.InputJSON
-			msg.RequestID = resp.ToolApprovalRequest.RequestID
-		}
-
-	default:
+	msg := &chatMessage{Timestamp: time.Now()}
+	if conv, ok := chatConverters[resp.Event]; ok {
+		conv(resp, msg)
+	} else {
 		msg.Type = "text"
 		msg.Content = resp.Text
 	}
-
 	return msg
 }
 
-// sendToAgent sends a message to all sessions for a given agent
+// sendToAgent sends a message to all sessions for a given agent.
 func (h *chatHub) sendToAgent(agentID string, msg *chatMessage) int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -405,74 +342,82 @@ func (h *chatHub) sendToAgent(agentID string, msg *chatMessage) int {
 	return sent
 }
 
+// parseToolCallData parses tool call JSON data from event text.
+func parseToolCallData(text *string, msg *chatMessage) {
+	if text == nil {
+		return
+	}
+	var toolData struct {
+		Name  string `json:"name"`
+		ID    string `json:"id"`
+		Input string `json:"input"`
+	}
+	if err := json.Unmarshal([]byte(*text), &toolData); err == nil {
+		msg.ToolName = toolData.Name
+		msg.ToolID = toolData.ID
+		msg.Content = toolData.Input
+	} else {
+		msg.Content = *text
+	}
+}
+
+// parseToolResultData parses tool result JSON data from event text.
+func parseToolResultData(text *string, msg *chatMessage) {
+	if text == nil {
+		return
+	}
+	var resultData struct {
+		ID     string `json:"id"`
+		Output string `json:"output"`
+	}
+	if err := json.Unmarshal([]byte(*text), &resultData); err == nil {
+		msg.ToolID = resultData.ID
+		msg.Content = resultData.Output
+	} else {
+		msg.Content = *text
+	}
+}
+
+// textFromEvent extracts text content from an event.
+func textFromEvent(text *string) string {
+	if text != nil {
+		return *text
+	}
+	return ""
+}
+
 // ledgerEventToChatMessage converts a persisted LedgerEvent into a chatMessage
 // for the web SSE stream. This enables cross-client awareness: when client B
 // sends a message, client A sees it via the broadcaster.
 func ledgerEventToChatMessage(event *store.LedgerEvent) *chatMessage {
-	msg := &chatMessage{
-		Timestamp: event.Timestamp,
-	}
+	msg := &chatMessage{Timestamp: event.Timestamp}
 
 	switch event.Type {
 	case store.EventTypeMessage:
 		if event.Direction == store.EventDirectionInbound {
 			msg.Type = "user"
-			if event.Text != nil {
-				msg.Content = *event.Text
-			}
 		} else {
 			msg.Type = "text"
-			if event.Text != nil {
-				msg.Content = *event.Text
-			}
 		}
+		msg.Content = textFromEvent(event.Text)
 	case store.EventTypeToolCall:
 		msg.Type = "tool_use"
-		if event.Text != nil {
-			// Parse tool metadata from JSON
-			var toolData struct {
-				Name  string `json:"name"`
-				ID    string `json:"id"`
-				Input string `json:"input"`
-			}
-			if err := json.Unmarshal([]byte(*event.Text), &toolData); err == nil {
-				msg.ToolName = toolData.Name
-				msg.ToolID = toolData.ID
-				msg.Content = toolData.Input
-			} else {
-				msg.Content = *event.Text
-			}
-		}
+		parseToolCallData(event.Text, msg)
 	case store.EventTypeToolResult:
 		msg.Type = "tool_result"
-		if event.Text != nil {
-			var resultData struct {
-				ID     string `json:"id"`
-				Output string `json:"output"`
-			}
-			if err := json.Unmarshal([]byte(*event.Text), &resultData); err == nil {
-				msg.ToolID = resultData.ID
-				msg.Content = resultData.Output
-			} else {
-				msg.Content = *event.Text
-			}
-		}
+		parseToolResultData(event.Text, msg)
 	case store.EventTypeError:
 		msg.Type = "error"
-		if event.Text != nil {
-			msg.Content = *event.Text
-		}
+		msg.Content = textFromEvent(event.Text)
 	default:
 		msg.Type = "text"
-		if event.Text != nil {
-			msg.Content = *event.Text
-		}
+		msg.Content = textFromEvent(event.Text)
 	}
 
 	return msg
 }
 
-// Close closes all sessions and stops the cleanup goroutine
+// Close closes all sessions and stops the cleanup goroutine.
 func (h *chatHub) Close() {
 	h.cancel()
 

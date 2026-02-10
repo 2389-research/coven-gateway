@@ -5,7 +5,9 @@ package webadmin
 
 import (
 	"bytes"
+	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -14,14 +16,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/2389/coven-gateway/internal/packs"
 	"github.com/2389/coven-gateway/internal/store"
 	"github.com/yuin/goldmark"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 //go:embed docs/help/*.md
 var helpDocsFS embed.FS
 
-// chatAppData holds data for the main chat app shell
+// chatAppData holds data for the main chat app shell.
 type chatAppData struct {
 	Title        string
 	User         *store.AdminUser
@@ -30,7 +35,7 @@ type chatAppData struct {
 	AgentCount   int
 }
 
-// threadViewData holds data for the chat view partial
+// threadViewData holds data for the chat view partial.
 type threadViewData struct {
 	ThreadID  string
 	AgentID   string
@@ -39,10 +44,10 @@ type threadViewData struct {
 	Messages  []*store.Message
 }
 
-// handleChatApp renders the main chat app shell
+// handleChatApp renders the main chat app shell.
 func (a *Admin) handleChatApp(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 
 	// Count connected agents
 	agentCount := 0
@@ -68,13 +73,13 @@ func (a *Admin) handleChatApp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// agentListData holds data for the agent list sidebar partial
+// agentListData holds data for the agent list sidebar partial.
 type agentListData struct {
 	Agents        []agentListItem
 	ActiveAgentID string
 }
 
-// agentListItem represents an agent in the sidebar list
+// agentListItem represents an agent in the sidebar list.
 type agentListItem struct {
 	ID        string
 	Name      string
@@ -82,7 +87,7 @@ type agentListItem struct {
 	Active    bool
 }
 
-// handleAgentList returns the agent list for the sidebar (HTMX partial)
+// handleAgentList returns the agent list for the sidebar (HTMX partial).
 func (a *Admin) handleAgentList(w http.ResponseWriter, r *http.Request) {
 	activeAgentID := r.URL.Query().Get("active")
 
@@ -116,8 +121,72 @@ func (a *Admin) handleAgentList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// agentInfo holds agent display info.
+type agentInfo struct {
+	name      string
+	connected bool
+}
+
+// findAgentInfo looks up an agent's name and connection status.
+func (a *Admin) findAgentInfo(agentID string) agentInfo {
+	info := agentInfo{name: agentID}
+	if a.manager == nil {
+		return info
+	}
+	for _, agent := range a.manager.ListAgents() {
+		if agent.ID == agentID {
+			info.name = agent.Name
+			info.connected = true
+			break
+		}
+	}
+	return info
+}
+
+// ensureChatThread creates the thread record if it doesn't exist.
+func (a *Admin) ensureChatThread(ctx context.Context, threadID, agentID, username string) error {
+	if _, err := a.store.GetThread(ctx, threadID); err == nil {
+		return nil // Thread already exists
+	}
+
+	now := time.Now()
+	thread := &store.Thread{
+		ID:           threadID,
+		FrontendName: "webadmin",
+		ExternalID:   agentID,
+		AgentID:      agentID,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if createErr := a.store.CreateThread(ctx, thread); createErr != nil {
+		if errors.Is(createErr, store.ErrDuplicateThread) {
+			return nil // Created by another frontend - fine
+		}
+		return createErr
+	}
+	a.logger.Info("created thread", "thread_id", threadID, "agent_id", agentID, "user", username)
+	return nil
+}
+
+// loadChatMessages retrieves chat history for an agent.
+func (a *Admin) loadChatMessages(ctx context.Context, agentID string) []*store.Message {
+	eventsResult, err := a.store.GetEvents(ctx, store.GetEventsParams{
+		ConversationKey: agentID,
+		Limit:           100,
+	})
+	if err != nil {
+		a.logger.Error("failed to get events", "error", err, "agent_id", agentID)
+		return nil
+	}
+	eventPtrs := make([]*store.LedgerEvent, len(eventsResult.Events))
+	for i := range eventsResult.Events {
+		eventPtrs[i] = &eventsResult.Events[i]
+	}
+	return store.EventsToMessages(eventPtrs)
+}
+
 // handleAgentChatView loads the chat view for a specific agent (HTMX partial)
-// Creates or finds the implicit admin-chat thread for this agent/user pair
+// Creates or finds the implicit admin-chat thread for this agent/user pair.
 func (a *Admin) handleAgentChatView(w http.ResponseWriter, r *http.Request) {
 	agentID := r.PathValue("id")
 	if agentID == "" {
@@ -131,69 +200,20 @@ func (a *Admin) handleAgentChatView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get agent info
-	var agentName string
-	var connected bool
-	if a.manager != nil {
-		for _, info := range a.manager.ListAgents() {
-			if info.ID == agentID {
-				agentName = info.Name
-				connected = true
-				break
-			}
-		}
-	}
-	if agentName == "" {
-		agentName = agentID
-	}
-
-	// Use agentID as threadID so all frontends share one conversation per agent
+	info := a.findAgentInfo(agentID)
 	threadID := agentID
 
-	// Ensure thread record exists for the conversation service
-	if _, err := a.store.GetThread(r.Context(), threadID); err != nil {
-		now := time.Now()
-		thread := &store.Thread{
-			ID:           threadID,
-			FrontendName: "webadmin",
-			ExternalID:   agentID,
-			AgentID:      agentID,
-			CreatedAt:    now,
-			UpdatedAt:    now,
-		}
-		if createErr := a.store.CreateThread(r.Context(), thread); createErr != nil {
-			// Thread may have been created by another frontend - that's fine
-			if createErr != store.ErrDuplicateThread {
-				a.logger.Error("failed to create thread", "error", createErr)
-				http.Error(w, "Failed to create chat session", http.StatusInternalServerError)
-				return
-			}
-		} else {
-			a.logger.Info("created thread", "thread_id", threadID, "agent_id", agentID, "user", user.Username)
-		}
+	if err := a.ensureChatThread(r.Context(), threadID, agentID, user.Username); err != nil {
+		a.logger.Error("failed to create thread", "error", err)
+		http.Error(w, "Failed to create chat session", http.StatusInternalServerError)
+		return
 	}
 
-	// Get messages by conversation key (agentID) so we see history from all frontends
-	eventsResult, err := a.store.GetEvents(r.Context(), store.GetEventsParams{
-		ConversationKey: agentID,
-		Limit:           100,
-	})
-	var messages []*store.Message
-	if err != nil {
-		a.logger.Error("failed to get events", "error", err, "agent_id", agentID)
-	} else {
-		// Convert value slice to pointer slice for EventsToMessages
-		eventPtrs := make([]*store.LedgerEvent, len(eventsResult.Events))
-		for i := range eventsResult.Events {
-			eventPtrs[i] = &eventsResult.Events[i]
-		}
-		messages = store.EventsToMessages(eventPtrs)
-	}
-
-	a.renderChatView(w, threadID, agentID, agentName, connected, messages)
+	messages := a.loadChatMessages(r.Context(), agentID)
+	a.renderChatView(w, threadID, agentID, info.name, info.connected, messages)
 }
 
-// handleEmptyState returns the empty state partial (HTMX)
+// handleEmptyState returns the empty state partial (HTMX).
 func (a *Admin) handleEmptyState(w http.ResponseWriter, r *http.Request) {
 	// Count connected agents
 	agentCount := 0
@@ -215,17 +235,17 @@ func (a *Admin) handleEmptyState(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleAgentCount returns the current agent count (for polling)
+// handleAgentCount returns the current agent count (for polling).
 func (a *Admin) handleAgentCount(w http.ResponseWriter, r *http.Request) {
 	agentCount := 0
 	if a.manager != nil {
 		agentCount = len(a.manager.ListAgents())
 	}
 	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintf(w, "%d", agentCount)
+	_, _ = fmt.Fprintf(w, "%d", agentCount)
 }
 
-// renderChatView renders the chat view partial
+// renderChatView renders the chat view partial.
 func (a *Admin) renderChatView(w http.ResponseWriter, threadID, agentID, agentName string, connected bool, messages []*store.Message) {
 	data := struct {
 		ThreadID  string
@@ -250,9 +270,9 @@ func (a *Admin) renderChatView(w http.ResponseWriter, threadID, agentID, agentNa
 	}
 }
 
-// handleSettingsAgents returns the agents settings tab content (HTMX)
+// handleSettingsAgents returns the agents settings tab content (HTMX).
 func (a *Admin) handleSettingsAgents(w http.ResponseWriter, r *http.Request) {
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 
 	// Get connected agents from manager
 	type agentData struct {
@@ -287,74 +307,72 @@ func (a *Admin) handleSettingsAgents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSettingsTools returns the tools settings tab content (HTMX)
-func (a *Admin) handleSettingsTools(w http.ResponseWriter, r *http.Request) {
-	// Group tools by pack (similar to handleToolsList)
-	type toolData struct {
-		Name        string
-		Description string
-	}
-	type packData struct {
-		ID      string
-		Version string
-		Tools   []toolData
-	}
+// handleSettingsTools returns the tools settings tab content (HTMX).
+// settingsToolData represents a tool in the settings view.
+type settingsToolData struct {
+	Name        string
+	Description string
+}
 
-	var packs []packData
-	if a.registry != nil {
-		// Get builtin packs first
-		builtinPacks := a.registry.ListBuiltinPacks()
-		for _, bp := range builtinPacks {
-			var tools []toolData
-			for _, t := range bp.Tools {
-				if t.Definition == nil {
-					continue
-				}
-				tools = append(tools, toolData{
+// settingsPackData represents a pack in the settings view.
+type settingsPackData struct {
+	ID      string
+	Version string
+	Tools   []settingsToolData
+}
+
+// collectBuiltinPacks collects tool data from builtin packs.
+func collectBuiltinPacks(builtinPacks []packs.BuiltinPackInfo) []settingsPackData {
+	var result []settingsPackData
+	for _, bp := range builtinPacks {
+		var tools []settingsToolData
+		for _, t := range bp.Tools {
+			if t.Definition != nil {
+				tools = append(tools, settingsToolData{
 					Name:        t.Definition.GetName(),
 					Description: t.Definition.GetDescription(),
 				})
 			}
-			if len(tools) > 0 {
-				packs = append(packs, packData{
-					ID:      bp.ID,
-					Version: "builtin",
-					Tools:   tools,
-				})
-			}
 		}
+		if len(tools) > 0 {
+			result = append(result, settingsPackData{ID: bp.ID, Version: "builtin", Tools: tools})
+		}
+	}
+	return result
+}
 
-		// Get external packs
-		packInfos := a.registry.ListPacks()
-		allTools := a.registry.GetAllTools()
-
-		toolsByPack := make(map[string][]toolData)
-		for _, t := range allTools {
-			if t.Definition == nil {
-				continue
-			}
-			toolsByPack[t.PackID] = append(toolsByPack[t.PackID], toolData{
+// collectExternalPacks collects tool data from external packs.
+func collectExternalPacks(packInfos []*packs.PackInfo, allTools []*packs.Tool) []settingsPackData {
+	toolsByPack := make(map[string][]settingsToolData)
+	for _, t := range allTools {
+		if t.Definition != nil {
+			toolsByPack[t.PackID] = append(toolsByPack[t.PackID], settingsToolData{
 				Name:        t.Definition.GetName(),
 				Description: t.Definition.GetDescription(),
 			})
 		}
+	}
 
-		for _, pi := range packInfos {
-			tools := toolsByPack[pi.ID]
-			if len(tools) > 0 {
-				packs = append(packs, packData{
-					ID:      pi.ID,
-					Version: pi.Version,
-					Tools:   tools,
-				})
-			}
+	var result []settingsPackData
+	for _, pi := range packInfos {
+		if tools := toolsByPack[pi.ID]; len(tools) > 0 {
+			result = append(result, settingsPackData{ID: pi.ID, Version: pi.Version, Tools: tools})
 		}
+	}
+	return result
+}
+
+func (a *Admin) handleSettingsTools(w http.ResponseWriter, r *http.Request) {
+	var packList []settingsPackData
+	if a.registry != nil {
+		packList = append(packList, collectBuiltinPacks(a.registry.ListBuiltinPacks())...)
+		packList = append(packList, collectExternalPacks(a.registry.ListPacks(), a.registry.GetAllTools())...)
 	}
 
 	data := struct {
-		Packs []packData
+		Packs []settingsPackData
 	}{
-		Packs: packs,
+		Packs: packList,
 	}
 
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/settings_tools.html"))
@@ -365,9 +383,9 @@ func (a *Admin) handleSettingsTools(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSettingsSecurity returns the security settings tab content (HTMX)
+// handleSettingsSecurity returns the security settings tab content (HTMX).
 func (a *Admin) handleSettingsSecurity(w http.ResponseWriter, r *http.Request) {
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 
 	// Get principals (empty filter = all)
 	principals, err := a.store.ListPrincipals(r.Context(), store.PrincipalFilter{})
@@ -401,26 +419,31 @@ func (a *Admin) handleSettingsSecurity(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// helpTopic represents a help documentation topic
+// helpTopic represents a help documentation topic.
 type helpTopic struct {
 	Slug   string
 	Title  string
 	Active bool
 }
 
-// handleSettingsHelp returns the help settings tab content (HTMX)
-func (a *Admin) handleSettingsHelp(w http.ResponseWriter, r *http.Request) {
-	selectedTopic := r.URL.Query().Get("topic")
-	if selectedTopic == "" {
-		selectedTopic = "getting-started"
-	}
+// helpTopicOrder defines the logical ordering for help topics.
+var helpTopicOrder = map[string]int{
+	"getting-started":    1,
+	"installation":       2,
+	"configuration":      3,
+	"tailscale":          4,
+	"docker":             5,
+	"agents":             6,
+	"tools":              7,
+	"keyboard-shortcuts": 8,
+	"troubleshooting":    9,
+}
 
-	// List all help topics
+// loadHelpTopics reads all help topic files and creates the topic list.
+func loadHelpTopics(selectedTopic string) ([]helpTopic, error) {
 	entries, err := helpDocsFS.ReadDir("docs/help")
 	if err != nil {
-		a.logger.Error("failed to read help docs", "error", err)
-		http.Error(w, "Failed to load help", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
 	var topics []helpTopic
@@ -429,33 +452,24 @@ func (a *Admin) handleSettingsHelp(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		slug := strings.TrimSuffix(entry.Name(), ".md")
-		title := formatHelpTitle(slug)
 		topics = append(topics, helpTopic{
 			Slug:   slug,
-			Title:  title,
+			Title:  formatHelpTitle(slug),
 			Active: slug == selectedTopic,
 		})
 	}
+	return topics, nil
+}
 
-	// Sort topics in a logical order
-	topicOrder := map[string]int{
-		"getting-started":    1,
-		"installation":       2,
-		"configuration":      3,
-		"tailscale":          4,
-		"docker":             5,
-		"agents":             6,
-		"tools":              7,
-		"keyboard-shortcuts": 8,
-		"troubleshooting":    9,
-	}
+// sortHelpTopics sorts topics according to the predefined order.
+func sortHelpTopics(topics []helpTopic) {
 	sort.Slice(topics, func(i, j int) bool {
-		orderI, okI := topicOrder[topics[i].Slug]
-		orderJ, okJ := topicOrder[topics[j].Slug]
-		if !okI {
+		orderI := helpTopicOrder[topics[i].Slug]
+		orderJ := helpTopicOrder[topics[j].Slug]
+		if orderI == 0 {
 			orderI = 100
 		}
-		if !okJ {
+		if orderJ == 0 {
 			orderJ = 100
 		}
 		if orderI != orderJ {
@@ -463,43 +477,61 @@ func (a *Admin) handleSettingsHelp(w http.ResponseWriter, r *http.Request) {
 		}
 		return topics[i].Slug < topics[j].Slug
 	})
+}
 
-	// Read and convert the selected topic
-	mdPath := filepath.Join("docs/help", selectedTopic+".md")
+// loadHelpContent loads and converts a help topic markdown to HTML.
+func (a *Admin) loadHelpContent(topic string) template.HTML {
+	mdPath := filepath.Join("docs/help", topic+".md")
 	mdContent, err := helpDocsFS.ReadFile(mdPath)
 	if err != nil {
-		a.logger.Error("failed to read help topic", "topic", selectedTopic, "error", err)
+		a.logger.Error("failed to read help topic", "topic", topic, "error", err)
 		mdContent = []byte("# Not Found\n\nThis help topic could not be found.")
 	}
 
-	// Convert markdown to HTML
 	var htmlBuf bytes.Buffer
 	if err := goldmark.Convert(mdContent, &htmlBuf); err != nil {
 		a.logger.Error("failed to convert markdown", "error", err)
 		htmlBuf.WriteString("<p>Failed to render help content.</p>")
 	}
+	return template.HTML(htmlBuf.String())
+}
+
+// handleSettingsHelp returns the help settings tab content (HTMX).
+func (a *Admin) handleSettingsHelp(w http.ResponseWriter, r *http.Request) {
+	selectedTopic := r.URL.Query().Get("topic")
+	if selectedTopic == "" {
+		selectedTopic = "getting-started"
+	}
+
+	topics, err := loadHelpTopics(selectedTopic)
+	if err != nil {
+		a.logger.Error("failed to read help docs", "error", err)
+		http.Error(w, "Failed to load help", http.StatusInternalServerError)
+		return
+	}
+	sortHelpTopics(topics)
 
 	data := struct {
 		Topics  []helpTopic
 		Content template.HTML
 	}{
 		Topics:  topics,
-		Content: template.HTML(htmlBuf.String()),
+		Content: a.loadHelpContent(selectedTopic),
 	}
 
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/settings_help.html"))
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render settings help", "error", err)
 	}
 }
 
-// formatHelpTitle converts a slug to a display title
+// formatHelpTitle converts a slug to a display title.
 func formatHelpTitle(slug string) string {
+	caser := cases.Title(language.English)
 	words := strings.Split(slug, "-")
 	for i, word := range words {
-		words[i] = strings.Title(word)
+		words[i] = caser.String(word)
 	}
 	return strings.Join(words, " ")
 }

@@ -14,7 +14,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// generateTestKeyPair creates a new ed25519 key pair for testing
+// generateTestKeyPair creates a new ed25519 key pair for testing.
 func generateTestKeyPair(t *testing.T) (ssh.Signer, ssh.PublicKey, string) {
 	t.Helper()
 
@@ -41,7 +41,7 @@ func generateTestKeyPair(t *testing.T) (ssh.Signer, ssh.PublicKey, string) {
 	return signer, sshPub, pubkeyStr
 }
 
-// signMessage creates an SSH signature over a message
+// signMessage creates an SSH signature over a message.
 func signMessage(t *testing.T, signer ssh.Signer, message string) string {
 	t.Helper()
 

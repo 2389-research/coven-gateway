@@ -17,17 +17,6 @@ import (
 )
 
 // mockTokenVerifier implements auth.TokenVerifier for testing.
-type mockTokenVerifier struct {
-	principalID string
-	err         error
-}
-
-func (m *mockTokenVerifier) Verify(token string) (string, error) {
-	if m.err != nil {
-		return "", m.err
-	}
-	return m.principalID, nil
-}
 
 // setupTestRegistry creates a registry with test tools.
 func setupTestRegistry(t *testing.T) *packs.Registry {
@@ -85,7 +74,10 @@ func makeJSONRPCRequest(method string, params any) []byte {
 	if params != nil {
 		req["params"] = params
 	}
-	body, _ := json.Marshal(req)
+	body, err := json.Marshal(req)
+	if err != nil {
+		panic("failed to marshal JSON-RPC request: " + err.Error())
+	}
 	return body
 }
 
@@ -680,7 +672,10 @@ func TestNotificationHandling(t *testing.T) {
 		"jsonrpc": "2.0",
 		"method":  "notifications/initialized",
 	}
-	body, _ := json.Marshal(notification)
+	body, err := json.Marshal(notification)
+	if err != nil {
+		t.Fatalf("failed to marshal notification: %v", err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Mcp-Session-Id", sessionID)

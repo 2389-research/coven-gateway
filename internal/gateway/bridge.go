@@ -59,7 +59,7 @@ func (g *Gateway) HandleBridgeMessage(ctx context.Context, msg *BridgeMessage) e
 // processMessage handles the actual message processing logic.
 // This is separated from HandleBridgeMessage to allow the dedupe pattern:
 // check -> process -> mark (only mark after successful processing).
-func (g *Gateway) processMessage(ctx context.Context, msg *BridgeMessage) error {
+func (g *Gateway) processMessage(_ context.Context, msg *BridgeMessage) error {
 	g.logger.Debug("processing bridge message",
 		"frontend", msg.Frontend,
 		"platform_id", msg.PlatformMessageID,

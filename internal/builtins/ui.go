@@ -6,6 +6,7 @@ package builtins
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -84,7 +85,7 @@ type uiHandlers struct {
 	router QuestionRouter
 }
 
-// AskUserInput is the input schema for the ask_user tool
+// AskUserInput is the input schema for the ask_user tool.
 type AskUserInput struct {
 	Question       string          `json:"question"`
 	Options        []AskUserOption `json:"options"`
@@ -98,7 +99,7 @@ type AskUserOption struct {
 	Description string `json:"description,omitempty"`
 }
 
-// AskUserOutput is the output schema for the ask_user tool
+// AskUserOutput is the output schema for the ask_user tool.
 type AskUserOutput struct {
 	Answered   bool     `json:"answered"`
 	Selected   []string `json:"selected,omitempty"`
@@ -106,47 +107,45 @@ type AskUserOutput struct {
 	Reason     string   `json:"reason,omitempty"`
 }
 
-func (u *uiHandlers) AskUser(ctx context.Context, agentID string, input json.RawMessage) (json.RawMessage, error) {
-	var in AskUserInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return nil, fmt.Errorf("invalid input: %w", err)
-	}
-
-	// Validate input
+// validateAskUserInput validates the input fields for the ask_user tool.
+func validateAskUserInput(in *AskUserInput) error {
 	if in.Question == "" {
-		return nil, fmt.Errorf("question is required")
+		return errors.New("question is required")
 	}
 	if len(in.Options) < 1 {
-		return nil, fmt.Errorf("at least one option is required")
+		return errors.New("at least one option is required")
 	}
-
-	// Validate no duplicate option labels
 	seenLabels := make(map[string]bool)
 	for _, opt := range in.Options {
 		if seenLabels[opt.Label] {
-			return nil, fmt.Errorf("duplicate option label: %q", opt.Label)
+			return fmt.Errorf("duplicate option label: %q", opt.Label)
 		}
 		seenLabels[opt.Label] = true
 	}
+	return nil
+}
 
-	// Set default timeout
-	timeout := in.TimeoutSeconds
-	if timeout <= 0 {
-		timeout = 60
+// normalizeTimeout returns a timeout in seconds, clamped to [1, 300].
+func normalizeTimeout(requested int) int32 {
+	switch {
+	case requested <= 0:
+		return 60
+	case requested > 300:
+		return 300
+	default:
+		return int32(requested)
 	}
-	if timeout > 300 {
-		timeout = 300
-	}
+}
 
-	// Build the proto request
-	questionID := uuid.New().String()
+// buildQuestionRequest creates a UserQuestionRequest from validated input.
+func buildQuestionRequest(agentID string, in *AskUserInput, timeout int32) *pb.UserQuestionRequest {
 	req := &pb.UserQuestionRequest{
 		AgentId:        agentID,
-		QuestionId:     questionID,
+		QuestionId:     uuid.New().String(),
 		Question:       in.Question,
 		Options:        make([]*pb.QuestionOption, len(in.Options)),
 		MultiSelect:    in.MultiSelect,
-		TimeoutSeconds: int32(timeout),
+		TimeoutSeconds: timeout,
 	}
 	if in.Header != "" {
 		req.Header = &in.Header
@@ -157,50 +156,54 @@ func (u *uiHandlers) AskUser(ctx context.Context, agentID string, input json.Raw
 			req.Options[i].Description = &opt.Description
 		}
 	}
+	return req
+}
 
-	// Create timeout context BEFORE sending the question so cleanup goroutine
-	// in SendQuestion will be notified when timeout fires
+func (u *uiHandlers) AskUser(ctx context.Context, agentID string, input json.RawMessage) (json.RawMessage, error) {
+	var in AskUserInput
+	if err := json.Unmarshal(input, &in); err != nil {
+		return nil, fmt.Errorf("invalid input: %w", err)
+	}
+	if err := validateAskUserInput(&in); err != nil {
+		return nil, err
+	}
+
+	timeout := normalizeTimeout(in.TimeoutSeconds)
+	req := buildQuestionRequest(agentID, &in, timeout)
+
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	// Send question and wait for answer
 	answerChan, err := u.router.SendQuestion(timeoutCtx, agentID, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send question: %w", err)
 	}
 
+	return u.awaitAnswer(answerChan, timeoutCtx)
+}
+
+// awaitAnswer waits for an answer from the channel or returns timeout.
+func (u *uiHandlers) awaitAnswer(answerChan <-chan *pb.AnswerQuestionRequest, ctx context.Context) (json.RawMessage, error) {
 	select {
 	case answer, ok := <-answerChan:
 		if !ok || answer == nil {
-			// Channel closed without answer (client disconnected, etc.)
-			return json.Marshal(AskUserOutput{
-				Answered: false,
-				Reason:   "no_response",
-			})
+			return json.Marshal(AskUserOutput{Answered: false, Reason: "no_response"})
 		}
-		// Got an answer
-		out := AskUserOutput{
-			Answered: true,
-			Selected: answer.Selected,
-		}
+		out := AskUserOutput{Answered: true, Selected: answer.Selected}
 		if answer.CustomText != nil {
 			out.CustomText = *answer.CustomText
 		}
 		return json.Marshal(out)
-
-	case <-timeoutCtx.Done():
-		return json.Marshal(AskUserOutput{
-			Answered: false,
-			Reason:   "timeout",
-		})
+	case <-ctx.Done():
+		return json.Marshal(AskUserOutput{Answered: false, Reason: "timeout"})
 	}
 }
 
-// pendingQuestion tracks a question awaiting an answer
+// pendingQuestion tracks a question awaiting an answer.
 type pendingQuestion struct {
 	agentID    string
 	answerChan chan *pb.AnswerQuestionRequest
-	done       chan struct{} // signals when answer delivered or context cancelled
+	done       chan struct{} // signals when answer delivered or context canceled
 }
 
 // InMemoryQuestionRouter is a simple in-memory implementation of QuestionRouter.
@@ -211,13 +214,13 @@ type InMemoryQuestionRouter struct {
 	streamer ClientStreamer
 }
 
-// ClientStreamer is the interface for sending events to clients
+// ClientStreamer is the interface for sending events to clients.
 type ClientStreamer interface {
 	// SendToAgent sends an event to clients subscribed to an agent's conversation
 	SendUserQuestion(agentID string, req *pb.UserQuestionRequest) error
 }
 
-// NewInMemoryQuestionRouter creates a new question router
+// NewInMemoryQuestionRouter creates a new question router.
 func NewInMemoryQuestionRouter(streamer ClientStreamer) *InMemoryQuestionRouter {
 	return &InMemoryQuestionRouter{
 		pending:  make(map[string]*pendingQuestion),

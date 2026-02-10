@@ -6,7 +6,9 @@ package builtins
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/2389/coven-gateway/internal/agent"
@@ -88,59 +90,75 @@ type agentMessagesInput struct {
 	Cursor  string `json:"cursor"`
 }
 
+// clampLimit returns limit clamped to [1, 500] with default 50.
+func clampLimit(limit int) int {
+	switch {
+	case limit <= 0:
+		return 50
+	case limit > 500:
+		return 500
+	default:
+		return limit
+	}
+}
+
+// convertEventToMap converts a store ledger event to a JSON-friendly map.
+func convertEventToMap(evt store.LedgerEvent) map[string]any {
+	e := map[string]any{
+		"id":        evt.ID,
+		"direction": string(evt.Direction),
+		"author":    evt.Author,
+		"type":      string(evt.Type),
+		"timestamp": evt.Timestamp.Format(time.RFC3339),
+	}
+	if evt.ThreadID != nil {
+		e["thread_id"] = *evt.ThreadID
+	}
+	if evt.Text != nil {
+		e["text"] = *evt.Text
+	}
+	return e
+}
+
+// usageToMap converts usage stats to a JSON-friendly map.
+func usageToMap(stats *store.UsageStats) map[string]any {
+	return map[string]any{
+		"total_input":       stats.TotalInput,
+		"total_output":      stats.TotalOutput,
+		"total_cache_read":  stats.TotalCacheRead,
+		"total_cache_write": stats.TotalCacheWrite,
+		"total_thinking":    stats.TotalThinking,
+		"total_tokens":      stats.TotalTokens,
+		"request_count":     stats.RequestCount,
+	}
+}
+
 // AgentMessages retrieves all events for an agent in chronological order with usage stats.
 func (a *adminHandlers) AgentMessages(ctx context.Context, callerAgentID string, input json.RawMessage) (json.RawMessage, error) {
 	var in agentMessagesInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
 	}
-
 	if in.AgentID == "" {
-		return nil, fmt.Errorf("agent_id is required")
+		return nil, errors.New("agent_id is required")
 	}
 
-	limit := in.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 500 {
-		limit = 500
-	}
-
-	// Get paginated events keyed by agent's conversation key
 	result, err := a.store.GetEvents(ctx, store.GetEventsParams{
 		ConversationKey: in.AgentID,
-		Limit:           limit,
+		Limit:           clampLimit(in.Limit),
 		Cursor:          in.Cursor,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("querying events: %w", err)
 	}
 
-	// Convert events to a JSON-friendly format with timing
 	events := make([]map[string]any, len(result.Events))
 	for i, evt := range result.Events {
-		e := map[string]any{
-			"id":        evt.ID,
-			"direction": string(evt.Direction),
-			"author":    evt.Author,
-			"type":      string(evt.Type),
-			"timestamp": evt.Timestamp.Format(time.RFC3339),
-		}
-		if evt.ThreadID != nil {
-			e["thread_id"] = *evt.ThreadID
-		}
-		if evt.Text != nil {
-			e["text"] = *evt.Text
-		}
-		events[i] = e
+		events[i] = convertEventToMap(evt)
 	}
 
-	// Get aggregated usage stats for the agent
 	agentID := in.AgentID
-	stats, err := a.usageStore.GetUsageStats(ctx, store.UsageFilter{
-		AgentID: &agentID,
-	})
+	stats, err := a.usageStore.GetUsageStats(ctx, store.UsageFilter{AgentID: &agentID})
 	if err != nil {
 		return nil, fmt.Errorf("querying usage stats: %w", err)
 	}
@@ -150,21 +168,11 @@ func (a *adminHandlers) AgentMessages(ctx context.Context, callerAgentID string,
 		"events":   events,
 		"count":    len(events),
 		"has_more": result.HasMore,
-		"usage": map[string]any{
-			"total_input":       stats.TotalInput,
-			"total_output":      stats.TotalOutput,
-			"total_cache_read":  stats.TotalCacheRead,
-			"total_cache_write": stats.TotalCacheWrite,
-			"total_thinking":    stats.TotalThinking,
-			"total_tokens":      stats.TotalTokens,
-			"request_count":     stats.RequestCount,
-		},
+		"usage":    usageToMap(stats),
 	}
-
 	if result.NextCursor != "" {
 		resp["next_cursor"] = result.NextCursor
 	}
-
 	return json.Marshal(resp)
 }
 
@@ -173,36 +181,10 @@ type sendMessageInput struct {
 	Content string `json:"content"`
 }
 
-// SendMessage sends a message to another agent.
-func (a *adminHandlers) SendMessage(ctx context.Context, callerAgentID string, input json.RawMessage) (json.RawMessage, error) {
-	var in sendMessageInput
-	if err := json.Unmarshal(input, &in); err != nil {
-		return nil, fmt.Errorf("invalid input: %w", err)
-	}
-
-	if in.AgentID == "" {
-		return nil, fmt.Errorf("agent_id is required")
-	}
-	if in.Content == "" {
-		return nil, fmt.Errorf("content is required")
-	}
-
-	// Create the send request
-	req := &agent.SendRequest{
-		AgentID: in.AgentID,
-		Content: in.Content,
-		Sender:  "admin:" + callerAgentID,
-	}
-
-	// Send the message
-	respChan, err := a.manager.SendMessage(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("sending message: %w", err)
-	}
-
-	// Collect responses until done
+// collectResponses reads from the response channel and returns the final text and done state.
+func collectResponses(respChan <-chan *agent.Response) (string, bool, error) {
 	var textParts []string
-	var responseText string
+	var fullResponse string
 	var gotDone bool
 
 	for resp := range respChan {
@@ -210,18 +192,50 @@ func (a *adminHandlers) SendMessage(ctx context.Context, callerAgentID string, i
 		case agent.EventText:
 			textParts = append(textParts, resp.Text)
 		case agent.EventDone:
-			responseText = resp.Text
+			fullResponse = resp.Text
 			gotDone = true
 		case agent.EventError:
-			return nil, fmt.Errorf("agent error: %s", resp.Error)
+			return "", false, fmt.Errorf("agent error: %s", resp.Error)
 		}
 	}
 
-	// Use full response if available, otherwise concatenate text parts
-	if responseText == "" && len(textParts) > 0 {
+	if fullResponse == "" {
+		var fullResponseSb201 strings.Builder
 		for _, part := range textParts {
-			responseText += part
+			fullResponseSb201.WriteString(part)
 		}
+		fullResponse += fullResponseSb201.String()
+	}
+	return fullResponse, gotDone, nil
+}
+
+// SendMessage sends a message to another agent.
+func (a *adminHandlers) SendMessage(ctx context.Context, callerAgentID string, input json.RawMessage) (json.RawMessage, error) {
+	var in sendMessageInput
+	if err := json.Unmarshal(input, &in); err != nil {
+		return nil, fmt.Errorf("invalid input: %w", err)
+	}
+	if in.AgentID == "" {
+		return nil, errors.New("agent_id is required")
+	}
+	if in.Content == "" {
+		return nil, errors.New("content is required")
+	}
+
+	req := &agent.SendRequest{
+		AgentID: in.AgentID,
+		Content: in.Content,
+		Sender:  "admin:" + callerAgentID,
+	}
+
+	respChan, err := a.manager.SendMessage(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("sending message: %w", err)
+	}
+
+	responseText, gotDone, err := collectResponses(respChan)
+	if err != nil {
+		return nil, err
 	}
 
 	return json.Marshal(map[string]any{

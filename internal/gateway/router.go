@@ -11,32 +11,32 @@ import (
 	"github.com/2389/coven-gateway/internal/store"
 )
 
-// Router errors
+// Router errors.
 var (
-	// ErrNoRoute means no binding exists for this frontend+channel
+	// ErrNoRoute means no binding exists for this frontend+channel.
 	ErrNoRoute = errors.New("no route for channel")
 
-	// ErrAgentOffline means the bound agent is not connected
+	// ErrAgentOffline means the bound agent is not connected.
 	ErrAgentOffline = errors.New("agent is offline")
 )
 
-// BindingStore provides access to channel-to-agent bindings
+// BindingStore provides access to channel-to-agent bindings.
 type BindingStore interface {
 	GetBindingByChannel(ctx context.Context, frontend, channelID string) (*store.Binding, error)
 }
 
-// AgentChecker checks whether an agent is currently connected
+// AgentChecker checks whether an agent is currently connected.
 type AgentChecker interface {
 	IsOnline(agentID string) bool
 }
 
-// Router routes messages from frontends to agents based on channel bindings
+// Router routes messages from frontends to agents based on channel bindings.
 type Router struct {
 	bindings BindingStore
 	agents   AgentChecker
 }
 
-// NewRouter creates a new Router with the given binding store and agent checker
+// NewRouter creates a new Router with the given binding store and agent checker.
 func NewRouter(bindings BindingStore, agents AgentChecker) *Router {
 	return &Router{
 		bindings: bindings,

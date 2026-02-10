@@ -42,7 +42,7 @@ func NewEventBroadcaster(logger *slog.Logger) *EventBroadcaster {
 // Subscribe registers a subscriber for events on the given conversation key.
 // Returns a channel that receives events and a subscription ID for later
 // unsubscription. The subscription is automatically cleaned up when ctx is
-// cancelled.
+// canceled.
 func (b *EventBroadcaster) Subscribe(ctx context.Context, conversationKey string) (<-chan *store.LedgerEvent, string) {
 	subID := uuid.New().String()
 	ch := make(chan *store.LedgerEvent, subscriberBufferSize)

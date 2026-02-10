@@ -16,7 +16,7 @@ type AuthContext struct {
 	Roles         []string // roles assigned to this principal
 }
 
-// IsAdmin returns true if the principal has admin or owner role
+// IsAdmin returns true if the principal has admin or owner role.
 func (a *AuthContext) IsAdmin() bool {
 	for _, r := range a.Roles {
 		if r == "admin" || r == "owner" {
@@ -26,15 +26,15 @@ func (a *AuthContext) IsAdmin() bool {
 	return false
 }
 
-// authContextKey is the key type for storing AuthContext in context.Context
+// authContextKey is the key type for storing AuthContext in context.Context.
 type authContextKey struct{}
 
-// WithAuth returns a new context with the AuthContext attached
+// WithAuth returns a new context with the AuthContext attached.
 func WithAuth(ctx context.Context, auth *AuthContext) context.Context {
 	return context.WithValue(ctx, authContextKey{}, auth)
 }
 
-// FromContext retrieves the AuthContext from the context, returning nil if not present
+// FromContext retrieves the AuthContext from the context, returning nil if not present.
 func FromContext(ctx context.Context) *AuthContext {
 	val := ctx.Value(authContextKey{})
 	if val == nil {
@@ -47,7 +47,7 @@ func FromContext(ctx context.Context) *AuthContext {
 	return auth
 }
 
-// MustFromContext retrieves the AuthContext from the context, panicking if not present
+// MustFromContext retrieves the AuthContext from the context, panicking if not present.
 func MustFromContext(ctx context.Context) *AuthContext {
 	auth := FromContext(ctx)
 	if auth == nil {

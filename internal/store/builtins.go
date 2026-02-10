@@ -7,15 +7,17 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-// Ensure SQLiteStore implements BuiltinStore
+// Ensure SQLiteStore implements BuiltinStore.
 var _ BuiltinStore = (*SQLiteStore)(nil)
 
-// CreateLogEntry creates a new log entry
+// CreateLogEntry creates a new log entry.
 func (s *SQLiteStore) CreateLogEntry(ctx context.Context, entry *LogEntry) error {
 	if entry.ID == "" {
 		entry.ID = uuid.New().String()
@@ -26,7 +28,10 @@ func (s *SQLiteStore) CreateLogEntry(ctx context.Context, entry *LogEntry) error
 
 	var tagsJSON *string
 	if len(entry.Tags) > 0 {
-		b, _ := json.Marshal(entry.Tags)
+		b, err := json.Marshal(entry.Tags)
+		if err != nil {
+			return fmt.Errorf("marshaling tags: %w", err)
+		}
 		str := string(b)
 		tagsJSON = &str
 	}
@@ -39,8 +44,9 @@ func (s *SQLiteStore) CreateLogEntry(ctx context.Context, entry *LogEntry) error
 	return err
 }
 
-// SearchLogEntries searches log entries by message content
-func (s *SQLiteStore) SearchLogEntries(ctx context.Context, query string, since *time.Time, limit int) ([]*LogEntry, error) {
+// SearchLogEntries searches log entries by message content.
+// If agentID is non-empty, results are scoped to that agent.
+func (s *SQLiteStore) SearchLogEntries(ctx context.Context, agentID string, query string, since *time.Time, limit int) ([]*LogEntry, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -48,6 +54,10 @@ func (s *SQLiteStore) SearchLogEntries(ctx context.Context, query string, since 
 	var args []any
 	sqlQuery := `SELECT id, agent_id, message, tags, created_at FROM log_entries WHERE 1=1`
 
+	if agentID != "" {
+		sqlQuery += ` AND agent_id = ?`
+		args = append(args, agentID)
+	}
 	if query != "" {
 		sqlQuery += ` AND message LIKE ?`
 		args = append(args, "%"+query+"%")
@@ -64,7 +74,7 @@ func (s *SQLiteStore) SearchLogEntries(ctx context.Context, query string, since 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var entries []*LogEntry
 	for rows.Next() {
@@ -76,14 +86,14 @@ func (s *SQLiteStore) SearchLogEntries(ctx context.Context, query string, since 
 		}
 		e.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		if tagsJSON.Valid {
-			json.Unmarshal([]byte(tagsJSON.String), &e.Tags)
+			_ = json.Unmarshal([]byte(tagsJSON.String), &e.Tags) // Best effort: invalid JSON leaves tags empty
 		}
 		entries = append(entries, &e)
 	}
 	return entries, rows.Err()
 }
 
-// CreateTodo creates a new todo
+// CreateTodo creates a new todo.
 func (s *SQLiteStore) CreateTodo(ctx context.Context, todo *Todo) error {
 	if todo.ID == "" {
 		todo.ID = uuid.New().String()
@@ -115,7 +125,7 @@ func (s *SQLiteStore) CreateTodo(ctx context.Context, todo *Todo) error {
 	return err
 }
 
-// GetTodo retrieves a todo by ID
+// GetTodo retrieves a todo by ID.
 func (s *SQLiteStore) GetTodo(ctx context.Context, id string) (*Todo, error) {
 	var t Todo
 	var notes, dueDate sql.NullString
@@ -144,7 +154,7 @@ func (s *SQLiteStore) GetTodo(ctx context.Context, id string) (*Todo, error) {
 	return &t, nil
 }
 
-// ListTodos lists todos for an agent with optional filters
+// ListTodos lists todos for an agent with optional filters.
 func (s *SQLiteStore) ListTodos(ctx context.Context, agentID string, status, priority string) ([]*Todo, error) {
 	var args []any
 	sqlQuery := `SELECT id, agent_id, description, status, priority, notes, due_date, created_at, updated_at FROM todos WHERE agent_id = ?`
@@ -164,7 +174,7 @@ func (s *SQLiteStore) ListTodos(ctx context.Context, agentID string, status, pri
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var todos []*Todo
 	for rows.Next() {
@@ -186,7 +196,7 @@ func (s *SQLiteStore) ListTodos(ctx context.Context, agentID string, status, pri
 	return todos, rows.Err()
 }
 
-// ListAllTodos lists all todos across all agents
+// ListAllTodos lists all todos across all agents.
 func (s *SQLiteStore) ListAllTodos(ctx context.Context, limit int) ([]*Todo, error) {
 	if limit <= 0 {
 		limit = 100
@@ -199,7 +209,7 @@ func (s *SQLiteStore) ListAllTodos(ctx context.Context, limit int) ([]*Todo, err
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var todos []*Todo
 	for rows.Next() {
@@ -221,7 +231,7 @@ func (s *SQLiteStore) ListAllTodos(ctx context.Context, limit int) ([]*Todo, err
 	return todos, rows.Err()
 }
 
-// UpdateTodo updates an existing todo
+// UpdateTodo updates an existing todo.
 func (s *SQLiteStore) UpdateTodo(ctx context.Context, todo *Todo) error {
 	todo.UpdatedAt = time.Now()
 
@@ -246,7 +256,7 @@ func (s *SQLiteStore) UpdateTodo(ctx context.Context, todo *Todo) error {
 	return nil
 }
 
-// DeleteTodo deletes a todo by ID
+// DeleteTodo deletes a todo by ID.
 func (s *SQLiteStore) DeleteTodo(ctx context.Context, id string) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM todos WHERE id = ?`, id)
 	if err != nil {
@@ -259,7 +269,7 @@ func (s *SQLiteStore) DeleteTodo(ctx context.Context, id string) error {
 	return nil
 }
 
-// CreateBBSPost creates a new BBS post or reply
+// CreateBBSPost creates a new BBS post or reply.
 func (s *SQLiteStore) CreateBBSPost(ctx context.Context, post *BBSPost) error {
 	if post.ID == "" {
 		post.ID = uuid.New().String()
@@ -285,7 +295,7 @@ func (s *SQLiteStore) CreateBBSPost(ctx context.Context, post *BBSPost) error {
 	return err
 }
 
-// GetBBSPost retrieves a single post by ID
+// GetBBSPost retrieves a single post by ID.
 func (s *SQLiteStore) GetBBSPost(ctx context.Context, id string) (*BBSPost, error) {
 	var p BBSPost
 	var threadID, subject sql.NullString
@@ -310,7 +320,7 @@ func (s *SQLiteStore) GetBBSPost(ctx context.Context, id string) (*BBSPost, erro
 	return &p, nil
 }
 
-// ListBBSThreads lists top-level threads (posts with no thread_id)
+// ListBBSThreads lists top-level threads (posts with no thread_id).
 func (s *SQLiteStore) ListBBSThreads(ctx context.Context, limit int) ([]*BBSPost, error) {
 	if limit <= 0 {
 		limit = 50
@@ -324,7 +334,7 @@ func (s *SQLiteStore) ListBBSThreads(ctx context.Context, limit int) ([]*BBSPost
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var posts []*BBSPost
 	for rows.Next() {
@@ -342,7 +352,7 @@ func (s *SQLiteStore) ListBBSThreads(ctx context.Context, limit int) ([]*BBSPost
 	return posts, rows.Err()
 }
 
-// GetBBSThread retrieves a thread with all its replies
+// GetBBSThread retrieves a thread with all its replies.
 func (s *SQLiteStore) GetBBSThread(ctx context.Context, threadID string) (*BBSThread, error) {
 	// Get the thread (top-level post)
 	post, err := s.GetBBSPost(ctx, threadID)
@@ -359,7 +369,7 @@ func (s *SQLiteStore) GetBBSThread(ctx context.Context, threadID string) (*BBSTh
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var replies []*BBSPost
 	for rows.Next() {
@@ -378,7 +388,7 @@ func (s *SQLiteStore) GetBBSThread(ctx context.Context, threadID string) (*BBSTh
 	return &BBSThread{Post: post, Replies: replies}, rows.Err()
 }
 
-// SendMail creates a new mail message
+// SendMail creates a new mail message.
 func (s *SQLiteStore) SendMail(ctx context.Context, mail *AgentMail) error {
 	if mail.ID == "" {
 		mail.ID = uuid.New().String()
@@ -395,7 +405,7 @@ func (s *SQLiteStore) SendMail(ctx context.Context, mail *AgentMail) error {
 	return err
 }
 
-// GetMail retrieves a mail message by ID
+// GetMail retrieves a mail message by ID.
 func (s *SQLiteStore) GetMail(ctx context.Context, id string) (*AgentMail, error) {
 	var m AgentMail
 	var readAt sql.NullString
@@ -422,13 +432,13 @@ func (s *SQLiteStore) GetMail(ctx context.Context, id string) (*AgentMail, error
 	return &m, nil
 }
 
-// ListInbox lists mail for an agent
+// ListInbox lists mail for an agent.
 func (s *SQLiteStore) ListInbox(ctx context.Context, agentID string, unreadOnly bool, limit int) ([]*AgentMail, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 
-	var args []any
+	args := make([]any, 0, 2)
 	sqlQuery := `SELECT id, from_agent_id, to_agent_id, subject, content, read_at, created_at FROM agent_mail WHERE to_agent_id = ?`
 	args = append(args, agentID)
 
@@ -442,7 +452,7 @@ func (s *SQLiteStore) ListInbox(ctx context.Context, agentID string, unreadOnly 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var messages []*AgentMail
 	for rows.Next() {
@@ -462,7 +472,7 @@ func (s *SQLiteStore) ListInbox(ctx context.Context, agentID string, unreadOnly 
 	return messages, rows.Err()
 }
 
-// MarkMailRead marks a mail message as read
+// MarkMailRead marks a mail message as read.
 func (s *SQLiteStore) MarkMailRead(ctx context.Context, id string) error {
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE agent_mail SET read_at = ? WHERE id = ? AND read_at IS NULL
@@ -474,16 +484,18 @@ func (s *SQLiteStore) MarkMailRead(ctx context.Context, id string) error {
 	if n == 0 {
 		// Check if it exists at all
 		var exists bool
-		s.db.QueryRowContext(ctx, `SELECT 1 FROM agent_mail WHERE id = ?`, id).Scan(&exists)
-		if !exists {
-			return ErrNotFound
+		if err := s.db.QueryRowContext(ctx, `SELECT 1 FROM agent_mail WHERE id = ?`, id).Scan(&exists); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrNotFound
+			}
+			return fmt.Errorf("checking mail existence: %w", err)
 		}
 		// Already read, that's fine
 	}
 	return nil
 }
 
-// SetNote creates or updates a note
+// SetNote creates or updates a note.
 func (s *SQLiteStore) SetNote(ctx context.Context, note *AgentNote) error {
 	if note.ID == "" {
 		note.ID = uuid.New().String()
@@ -503,7 +515,7 @@ func (s *SQLiteStore) SetNote(ctx context.Context, note *AgentNote) error {
 	return err
 }
 
-// GetNote retrieves a note by agent and key
+// GetNote retrieves a note by agent and key.
 func (s *SQLiteStore) GetNote(ctx context.Context, agentID, key string) (*AgentNote, error) {
 	var n AgentNote
 	var createdAt, updatedAt string
@@ -526,7 +538,7 @@ func (s *SQLiteStore) GetNote(ctx context.Context, agentID, key string) (*AgentN
 	return &n, nil
 }
 
-// ListNotes lists all notes for an agent
+// ListNotes lists all notes for an agent.
 func (s *SQLiteStore) ListNotes(ctx context.Context, agentID string) ([]*AgentNote, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, agent_id, key, value, created_at, updated_at
@@ -536,7 +548,7 @@ func (s *SQLiteStore) ListNotes(ctx context.Context, agentID string) ([]*AgentNo
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var notes []*AgentNote
 	for rows.Next() {
@@ -552,7 +564,7 @@ func (s *SQLiteStore) ListNotes(ctx context.Context, agentID string) ([]*AgentNo
 	return notes, rows.Err()
 }
 
-// DeleteNote deletes a note by agent and key
+// DeleteNote deletes a note by agent and key.
 func (s *SQLiteStore) DeleteNote(ctx context.Context, agentID, key string) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM agent_notes WHERE agent_id = ? AND key = ?`, agentID, key)
 	if err != nil {

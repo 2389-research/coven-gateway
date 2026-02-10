@@ -187,7 +187,7 @@ func newTestClientService(t *testing.T) *ClientService {
 	return NewClientServiceWithDedupe(nil, nil, dedupeCache)
 }
 
-// mockEventStore implements EventStore for testing
+// mockEventStore implements EventStore for testing.
 type mockEventStore struct {
 	mu     sync.Mutex
 	events []*store.LedgerEvent
@@ -221,7 +221,7 @@ func (m *mockEventStore) getEvents() []*store.LedgerEvent {
 	return result
 }
 
-// mockRouter implements MessageRouter for testing
+// mockRouter implements MessageRouter for testing.
 type mockRouter struct {
 	mu          sync.Mutex
 	requests    []*agent.SendRequest
@@ -256,7 +256,7 @@ func (m *mockRouter) getRequests() []*agent.SendRequest {
 	return result
 }
 
-// newTestClientServiceWithRouting creates a ClientService with routing support for testing
+// newTestClientServiceWithRouting creates a ClientService with routing support for testing.
 func newTestClientServiceWithRouting(t *testing.T, eventStore *mockEventStore, router *mockRouter) *ClientService {
 	t.Helper()
 

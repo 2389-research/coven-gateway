@@ -111,7 +111,7 @@ func (c *Cache) evictOldest() {
 		return
 	}
 
-	key := front.Value.(string)
+	key, _ := front.Value.(string)
 	c.order.Remove(front)
 	delete(c.seen, key)
 }
