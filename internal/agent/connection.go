@@ -85,6 +85,19 @@ func (c *Connection) CloseRequest(requestID string) {
 	}
 }
 
+// Close closes all pending request channels and releases resources.
+// This should be called when the connection is being terminated to unblock
+// any goroutines waiting on response channels.
+func (c *Connection) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for requestID, ch := range c.pending {
+		close(ch)
+		delete(c.pending, requestID)
+	}
+}
+
 // HandleResponse routes a MessageResponse to the appropriate pending request channel.
 // If no matching request is found, the response is logged and discarded.
 func (c *Connection) HandleResponse(resp *pb.MessageResponse) {

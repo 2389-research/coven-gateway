@@ -56,12 +56,15 @@ func (m *Manager) Register(agent *Connection) error {
 	return nil
 }
 
-// Unregister removes an agent from the manager.
+// Unregister removes an agent from the manager and closes all pending request channels.
+// This unblocks any goroutines waiting for responses from the disconnecting agent.
 func (m *Manager) Unregister(agentID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if agent, exists := m.agents[agentID]; exists {
+		// Close all pending request channels to unblock waiting goroutines
+		agent.Close()
 		delete(m.agents, agentID)
 		m.logger.Info("=== AGENT DISCONNECTED ===",
 			"agent_id", agentID,

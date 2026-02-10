@@ -205,3 +205,112 @@ func TestCache_ConfiguredDefaults(t *testing.T) {
 	cache.Mark("prod-key")
 	assert.True(t, cache.Check("prod-key"))
 }
+
+func TestCache_CheckAndMark_NewKey(t *testing.T) {
+	cache := New(5*time.Minute, 100)
+	defer cache.Close()
+
+	// First call for a new key should return false (not seen) and mark it
+	result := cache.CheckAndMark("new-key")
+	assert.False(t, result, "first CheckAndMark should return false for new key")
+
+	// Key should now be marked
+	assert.True(t, cache.Check("new-key"), "key should be marked after CheckAndMark")
+}
+
+func TestCache_CheckAndMark_SeenKey(t *testing.T) {
+	cache := New(5*time.Minute, 100)
+	defer cache.Close()
+
+	// Mark the key first
+	cache.Mark("existing-key")
+
+	// CheckAndMark should return true (already seen)
+	result := cache.CheckAndMark("existing-key")
+	assert.True(t, result, "CheckAndMark should return true for already-seen key")
+}
+
+func TestCache_CheckAndMark_Expired(t *testing.T) {
+	// Use a very short TTL for testing
+	cache := New(10*time.Millisecond, 100)
+	defer cache.Close()
+
+	// Mark via CheckAndMark
+	result := cache.CheckAndMark("expiring-key")
+	assert.False(t, result, "first CheckAndMark should return false")
+
+	// Should be seen immediately
+	assert.True(t, cache.CheckAndMark("expiring-key"), "should be seen before expiry")
+
+	// Wait for TTL to expire
+	time.Sleep(20 * time.Millisecond)
+
+	// Should not be seen after expiry
+	assert.False(t, cache.CheckAndMark("expiring-key"), "should not be seen after expiry")
+}
+
+func TestCache_CheckAndMark_Atomic(t *testing.T) {
+	cache := New(5*time.Minute, 100)
+	defer cache.Close()
+
+	const numGoroutines = 100
+
+	// Count how many goroutines successfully "won" (got false)
+	var successCount int32
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	// All goroutines try to CheckAndMark the same key simultaneously
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			// Only one goroutine should get false (first one)
+			if !cache.CheckAndMark("contested-key") {
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Exactly one goroutine should have succeeded
+	assert.Equal(t, int32(1), successCount,
+		"exactly one goroutine should win the race for CheckAndMark")
+}
+
+func TestCache_EvictionOrder(t *testing.T) {
+	// Test that eviction properly removes oldest entry (O(1) using linked list)
+	cache := New(5*time.Minute, 3)
+	defer cache.Close()
+
+	// Add keys in order
+	cache.Mark("first")
+	time.Sleep(1 * time.Millisecond)
+	cache.Mark("second")
+	time.Sleep(1 * time.Millisecond)
+	cache.Mark("third")
+
+	// All should be present
+	assert.True(t, cache.Check("first"))
+	assert.True(t, cache.Check("second"))
+	assert.True(t, cache.Check("third"))
+
+	// Add fourth - should evict "first" (oldest)
+	cache.Mark("fourth")
+
+	assert.False(t, cache.Check("first"), "first should be evicted")
+	assert.True(t, cache.Check("second"))
+	assert.True(t, cache.Check("third"))
+	assert.True(t, cache.Check("fourth"))
+
+	// Add fifth - should evict "second"
+	cache.Mark("fifth")
+
+	assert.False(t, cache.Check("second"), "second should be evicted")
+	assert.True(t, cache.Check("third"))
+	assert.True(t, cache.Check("fourth"))
+	assert.True(t, cache.Check("fifth"))
+}
