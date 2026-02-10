@@ -30,7 +30,7 @@ jobs:
       - name: Install protoc
         uses: arduino/setup-protoc@v3
         with:
-          version: "25.x"
+          version: "33.x"
 
       - name: Install protoc plugins
         run: |
@@ -40,7 +40,8 @@ jobs:
       - name: Proto sync check
         run: |
           make proto
-          git diff --exit-code proto/ || (echo "Proto files out of sync. Run 'make proto' and commit." && exit 1)
+          # Ignore protoc version comment differences (only metadata, not functional)
+          git diff --ignore-matching-lines='protoc.*v[0-9]' --exit-code proto/ || (echo "Proto files out of sync. Run 'make proto' and commit." && exit 1)
 
       - name: Run tests
         run: go test -race -v ./...
