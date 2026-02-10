@@ -67,11 +67,10 @@ clean:
 dev:
 	@echo "Run: go run ./cmd/coven-gateway serve --config config.yaml"
 
-# Install git hooks
+# Install git hooks (symlink so updates are automatic)
 hooks:
 	@echo "Installing pre-commit hook..."
-	@cp scripts/pre-commit .git/hooks/pre-commit
-	@chmod +x .git/hooks/pre-commit
+	@ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
 	@echo "Pre-commit hook installed!"
 
 # Setup development environment (run after cloning)
