@@ -524,36 +524,43 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := a.store.GetAdminUserByUsername(r.Context(), username)
+	user, userErr := a.store.GetAdminUserByUsername(r.Context(), username)
 
-	// Use a dummy hash for timing-safe comparison when user doesn't exist
-	// This prevents timing attacks that could enumerate valid usernames
+	// Timing-safe authentication: ALWAYS perform bcrypt comparison before
+	// checking any error conditions. This prevents timing attacks that could
+	// distinguish "user not found" from "wrong password" scenarios.
 	dummyHash := "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
 
-	if err != nil {
-		if errors.Is(err, store.ErrAdminUserNotFound) {
-			// Do a dummy bcrypt comparison to maintain constant timing
-			_ = bcrypt.CompareHashAndPassword([]byte(dummyHash), []byte(password))
+	// Determine which hash to compare against
+	hashToCheck := dummyHash
+	if userErr == nil && user.PasswordHash != "" {
+		hashToCheck = user.PasswordHash
+	}
+
+	// ALWAYS perform bcrypt comparison at this point, regardless of user lookup result.
+	// This ensures constant timing whether user exists or not.
+	bcryptErr := bcrypt.CompareHashAndPassword([]byte(hashToCheck), []byte(password))
+
+	// Now check conditions and return appropriate responses
+	if userErr != nil {
+		if errors.Is(userErr, store.ErrAdminUserNotFound) {
 			_, csrfToken := a.ensureCSRFToken(w, r)
 			a.renderLoginPage(w, "Invalid username or password", csrfToken)
 			return
 		}
-		a.logger.Error("failed to get user", "error", err)
+		a.logger.Error("failed to get user", "error", userErr)
 		_, csrfToken := a.ensureCSRFToken(w, r)
 		a.renderLoginPage(w, "An error occurred", csrfToken)
 		return
 	}
 
-	// Check password
 	if user.PasswordHash == "" {
-		// Do a dummy bcrypt comparison to maintain constant timing
-		_ = bcrypt.CompareHashAndPassword([]byte(dummyHash), []byte(password))
 		_, csrfToken := a.ensureCSRFToken(w, r)
 		a.renderLoginPage(w, "Password login not enabled for this account", csrfToken)
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+	if bcryptErr != nil {
 		_, csrfToken := a.ensureCSRFToken(w, r)
 		a.renderLoginPage(w, "Invalid username or password", csrfToken)
 		return
@@ -2127,7 +2134,7 @@ func (a *Admin) handleSecretsGetValue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"value":"` + strings.ReplaceAll(strings.ReplaceAll(secret.Value, `\`, `\\`), `"`, `\"`) + `"}`))
+	json.NewEncoder(w).Encode(map[string]string{"value": secret.Value})
 }
 
 // handleSecretsCreate creates a new secret

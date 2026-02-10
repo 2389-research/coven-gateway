@@ -156,14 +156,18 @@ func (s *sessionStore) delete(id string) bool {
 }
 
 // Config holds configuration for the MCP server.
+// DefaultToolTimeout is the default timeout for tool execution (60 seconds).
+const DefaultToolTimeout = 60 * time.Second
+
 type Config struct {
 	Registry      *packs.Registry
 	Router        *packs.Router
 	Logger        *slog.Logger
 	TokenVerifier auth.TokenVerifier
-	TokenStore    *TokenStore // Token-based auth (URL query param)
-	RequireAuth   bool        // If true, reject requests without valid auth
-	DefaultCaps   []string    // Capabilities to use when no auth is provided
+	TokenStore    *TokenStore    // Token-based auth (URL query param)
+	RequireAuth   bool           // If true, reject requests without valid auth
+	DefaultCaps   []string       // Capabilities to use when no auth is provided
+	ToolTimeout   time.Duration  // Timeout for tool execution (default: 60s)
 }
 
 // Server implements MCP-compatible HTTP endpoints for external agents.
@@ -177,6 +181,7 @@ type Server struct {
 	requireAuth bool
 	defaultCaps []string
 	sessions    *sessionStore
+	toolTimeout time.Duration
 }
 
 // NewServer creates a new MCP server with the given configuration.
@@ -202,6 +207,11 @@ func NewServer(cfg Config) (*Server, error) {
 		copy(defaultCaps, cfg.DefaultCaps)
 	}
 
+	toolTimeout := cfg.ToolTimeout
+	if toolTimeout == 0 {
+		toolTimeout = DefaultToolTimeout
+	}
+
 	return &Server{
 		registry:    cfg.Registry,
 		router:      cfg.Router,
@@ -211,6 +221,7 @@ func NewServer(cfg Config) (*Server, error) {
 		requireAuth: cfg.RequireAuth,
 		defaultCaps: defaultCaps,
 		sessions:    newSessionStore(),
+		toolTimeout: toolTimeout,
 	}, nil
 }
 
@@ -476,8 +487,12 @@ func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSO
 		"agent_id", auth.agentID,
 	)
 
-	// Route the tool call with the agent ID from the auth token
-	resp, err := s.router.RouteToolCall(r.Context(), params.Name, inputJSON, requestID, auth.agentID)
+	// Route the tool call with timeout to prevent hanging tools from blocking indefinitely.
+	// This protects against malicious or buggy tools causing goroutine leaks.
+	toolCtx, cancel := context.WithTimeout(r.Context(), s.toolTimeout)
+	defer cancel()
+
+	resp, err := s.router.RouteToolCall(toolCtx, params.Name, inputJSON, requestID, auth.agentID)
 	if err != nil {
 		s.handleToolError(w, req.ID, params.Name, requestID, err)
 		return

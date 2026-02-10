@@ -81,14 +81,6 @@ func (v *SSHVerifier) Verify(req *SSHAuthRequest) (fingerprint string, err error
 		return "", fmt.Errorf("signature expired (age: %v, max: %v)", age, v.maxAge)
 	}
 
-	// Check for nonce replay attack
-	// The nonce key includes the fingerprint to prevent cross-key replay
-	fp := ComputeFingerprint(pubkey)
-	nonceKey := fmt.Sprintf("%s:%d:%s", fp, req.Timestamp, req.Nonce)
-	if v.nonceCache.Check(nonceKey) {
-		return "", fmt.Errorf("nonce already used (possible replay attack)")
-	}
-
 	// Build the message that was signed: "timestamp|nonce"
 	message := fmt.Sprintf("%d|%s", req.Timestamp, req.Nonce)
 
@@ -109,8 +101,15 @@ func (v *SSHVerifier) Verify(req *SSHAuthRequest) (fingerprint string, err error
 		return "", fmt.Errorf("signature verification failed: %w", err)
 	}
 
-	// Mark nonce as used AFTER successful verification
-	v.nonceCache.Mark(nonceKey)
+	// Atomically check and mark nonce to prevent replay attacks.
+	// The nonce key includes the fingerprint to prevent cross-key replay.
+	// Using CheckAndMark avoids TOCTOU race where two concurrent requests
+	// could both pass a Check before either reaches Mark.
+	fp := ComputeFingerprint(pubkey)
+	nonceKey := fmt.Sprintf("%s:%d:%s", fp, req.Timestamp, req.Nonce)
+	if v.nonceCache.CheckAndMark(nonceKey) {
+		return "", fmt.Errorf("nonce already used (possible replay attack)")
+	}
 
 	return fp, nil
 }
