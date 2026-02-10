@@ -52,8 +52,11 @@ linters:
       check-blank: false
       exclude-functions:
         - (*github.com/spf13/pflag.FlagSet).GetString
+        - (*github.com/fatih/color.Color).Print
+        - (*github.com/fatih/color.Color).Printf
         - (*github.com/fatih/color.Color).Println
         - (io.Closer).Close
+        - (*google.golang.org/grpc.ClientConn).Close
     errorlint:
       errorf: true
       asserts: true

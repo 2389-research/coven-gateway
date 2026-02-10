@@ -8,6 +8,35 @@ coven-gateway is the production control plane for coven agents. It manages coven
 
 The coven-agent is a separate Rust project at `../coven-agent` that connects to this gateway. The shared protobuf definition is at `../coven-agent/proto/coven.proto`.
 
+## Getting Started
+
+**Prerequisites:** Go 1.22+, `protoc` (only for proto regeneration)
+
+**First-time setup:**
+```bash
+make proto-deps    # Install protoc plugins (one-time)
+make               # Generate proto + build all binaries
+```
+
+**Running the gateway:**
+```bash
+cp config.example.yaml config.yaml    # Create config from template
+./bin/coven-gateway serve              # Start (gRPC + HTTP)
+```
+
+**Key files to read first:**
+- `internal/gateway/gateway.go` — Orchestrator: owns gRPC server, HTTP server, agent manager, and store
+- `internal/agent/manager.go` — Agent lifecycle: tracks connections, routes messages
+- `internal/gateway/api.go` — HTTP handlers: SSE streaming, message sending, bindings
+- `internal/store/events.go` — Persistence: ledger events, threads, messages
+- `cmd/coven-gateway/main.go` — Entry point: config loading, server startup
+
+**Common patterns:**
+- `slog` for structured logging (stdlib, not third-party)
+- Context propagation for cancellation throughout
+- Interface-driven testability (`Store`, `messageSender`)
+- Error wrapping: `fmt.Errorf("context: %w", err)`
+
 ## Build Commands
 
 ```bash

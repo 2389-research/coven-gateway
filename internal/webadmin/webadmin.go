@@ -108,7 +108,7 @@ type FullStore interface {
 	DeleteExpiredLinkCodes(ctx context.Context) error
 
 	// Builtin tool pack data (for admin UI)
-	SearchLogEntries(ctx context.Context, query string, since *time.Time, limit int) ([]*store.LogEntry, error)
+	SearchLogEntries(ctx context.Context, agentID string, query string, since *time.Time, limit int) ([]*store.LogEntry, error)
 	ListAllTodos(ctx context.Context, limit int) ([]*store.Todo, error)
 	ListBBSThreads(ctx context.Context, limit int) ([]*store.BBSPost, error)
 	GetBBSThread(ctx context.Context, threadID string) (*store.BBSThread, error)
@@ -1200,7 +1200,7 @@ func (a *Admin) handleLogsList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	entries, err := a.store.SearchLogEntries(r.Context(), query, nil, limit)
+	entries, err := a.store.SearchLogEntries(r.Context(), "", query, nil, limit)
 	if err != nil {
 		a.logger.Error("failed to list log entries", "error", err)
 		http.Error(w, "Failed to load logs", http.StatusInternalServerError)
@@ -2279,6 +2279,12 @@ func (a *Admin) handleSecretsUpdate(w http.ResponseWriter, r *http.Request) {
 	value := r.FormValue("value")
 	if value == "" {
 		http.Error(w, "Value is required", http.StatusBadRequest)
+		return
+	}
+
+	// Limit value length to prevent abuse (same as create)
+	if len(value) > 65536 {
+		http.Error(w, "Value exceeds maximum length (64KB)", http.StatusBadRequest)
 		return
 	}
 

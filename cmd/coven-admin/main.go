@@ -4,14 +4,17 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"text/tabwriter"
 	"time"
 
@@ -70,6 +73,8 @@ func main() {
 		err = cmdStatus(grpcAddr, token)
 	case "invite":
 		err = cmdInvite(args)
+	case "chat":
+		err = cmdChat(grpcAddr, token, args)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -105,6 +110,7 @@ func printUsage() {
 	fmt.Println("  agents delete <id>      Delete an agent by ID")
 	fmt.Println("  token create            Generate a JWT token for a principal")
 	fmt.Println("  invite create           Generate an admin web UI invite link")
+	fmt.Println("  chat <agent-id> [msg]   Chat with an agent (REPL if no message)")
 	fmt.Println()
 	_, _ = yellow.Println("Environment:")
 	fmt.Println("  COVEN_GATEWAY_HOST       Gateway hostname (derives gRPC :50051 and HTTPS URLs)")
@@ -838,4 +844,150 @@ func cmdInviteCreate(args []string) error {
 	fmt.Println()
 
 	return nil
+}
+
+// cmdChat provides one-shot or interactive chat with an agent.
+func cmdChat(addr, token string, args []string) error {
+	if token == "" {
+		return errors.New("COVEN_TOKEN environment variable is required")
+	}
+	if len(args) < 1 {
+		return errors.New("usage: chat <agent-id> [message]")
+	}
+
+	agentID := args[0]
+
+	conn, err := createClient(addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	client := pb.NewClientServiceClient(conn)
+	ctx := authContext(token)
+
+	if len(args) >= 2 {
+		// One-shot mode: send message and stream response
+		message := strings.Join(args[1:], " ")
+		return chatOneShot(ctx, client, agentID, message)
+	}
+
+	// Interactive REPL mode
+	return chatREPL(ctx, client, agentID)
+}
+
+// chatOneShot sends a single message and streams the response.
+func chatOneShot(ctx context.Context, client pb.ClientServiceClient, agentID, message string) error {
+	idemKey := generateIdempotencyKey()
+
+	// Send the message
+	_, err := client.SendMessage(ctx, &pb.ClientSendMessageRequest{
+		ConversationKey: agentID,
+		Content:         message,
+		IdempotencyKey:  idemKey,
+	})
+	if err != nil {
+		return fmt.Errorf("SendMessage: %w", err)
+	}
+
+	// Stream response events
+	return streamResponse(ctx, client, agentID)
+}
+
+// chatREPL runs an interactive read-eval-print loop.
+func chatREPL(ctx context.Context, client pb.ClientServiceClient, agentID string) error {
+	green := color.New(color.FgGreen)
+	cyan := color.New(color.FgCyan)
+
+	_, _ = cyan.Printf("Chat with agent %s (Ctrl+D to exit)\n\n", agentID)
+
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), 1024*1024) // 1MB max input
+	for {
+		_, _ = green.Print("> ")
+		if !scanner.Scan() {
+			// EOF (Ctrl+D) or error
+			fmt.Println()
+			return scanner.Err()
+		}
+
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		idemKey := generateIdempotencyKey()
+
+		_, err := client.SendMessage(ctx, &pb.ClientSendMessageRequest{
+			ConversationKey: agentID,
+			Content:         line,
+			IdempotencyKey:  idemKey,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error sending: %v\n", err)
+			continue
+		}
+
+		if err := streamResponse(ctx, client, agentID); err != nil {
+			fmt.Fprintf(os.Stderr, "Error streaming: %v\n", err)
+			continue
+		}
+		fmt.Println()
+	}
+}
+
+// streamResponse streams events from the agent until done.
+func streamResponse(ctx context.Context, client pb.ClientServiceClient, agentID string) error {
+	stream, err := client.StreamEvents(ctx, &pb.StreamEventsRequest{
+		ConversationKey: agentID,
+	})
+	if err != nil {
+		return fmt.Errorf("StreamEvents: %w", err)
+	}
+
+	dim := color.New(color.Faint, color.Italic)
+	yellow := color.New(color.FgYellow)
+
+	for {
+		event, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("stream recv: %w", err)
+		}
+
+		switch p := event.Payload.(type) {
+		case *pb.ClientStreamEvent_Text:
+			fmt.Print(p.Text.Content)
+		case *pb.ClientStreamEvent_Thinking:
+			_, _ = dim.Print(p.Thinking.Content)
+		case *pb.ClientStreamEvent_ToolUse:
+			_, _ = yellow.Printf("\n[tool: %s]\n", p.ToolUse.Name)
+		case *pb.ClientStreamEvent_ToolResult:
+			if p.ToolResult.IsError {
+				color.Red("  %s\n", p.ToolResult.Output)
+			} else if p.ToolResult.Output != "" {
+				fmt.Printf("  %s\n", p.ToolResult.Output)
+			}
+		case *pb.ClientStreamEvent_Done:
+			fmt.Println()
+			return nil
+		case *pb.ClientStreamEvent_Error:
+			return fmt.Errorf("agent error: %s", p.Error.Message)
+		}
+	}
+}
+
+// idemCounter provides a monotonic fallback sequence for idempotency keys.
+var idemCounter atomic.Uint64
+
+// generateIdempotencyKey creates a random idempotency key for message sending.
+func generateIdempotencyKey() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// Fall back to pid+counter+timestamp (collision-free even within same tick)
+		return fmt.Sprintf("%d-%d-%x", os.Getpid(), idemCounter.Add(1), time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
 }

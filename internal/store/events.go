@@ -427,8 +427,9 @@ func collectEventRows(rows *sql.Rows) ([]LedgerEvent, error) {
 	return events, nil
 }
 
-// GetEventsByThreadID retrieves events for a thread, ordered by timestamp ASC.
-// Queries by thread_id column which is populated for all thread-based events.
+// GetEventsByThreadID retrieves the most recent events for a thread, ordered
+// chronologically (ASC). Uses a DESC subquery to pick the N most recent rows,
+// then re-orders ASC so callers receive events in conversation order.
 func (s *SQLiteStore) GetEventsByThreadID(ctx context.Context, threadID string, limit int) ([]*LedgerEvent, error) {
 	if limit <= 0 {
 		limit = 100
@@ -440,10 +441,15 @@ func (s *SQLiteStore) GetEventsByThreadID(ctx context.Context, threadID string, 
 	query := `
 		SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
 		       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
-		FROM ledger_events
-		WHERE thread_id = ?
-		ORDER BY timestamp ASC
-		LIMIT ?
+		FROM (
+			SELECT event_id, conversation_key, thread_id, direction, author, timestamp, type, text,
+			       raw_transport, raw_payload_ref, actor_principal_id, actor_member_id
+			FROM ledger_events
+			WHERE thread_id = ?
+			ORDER BY timestamp DESC, event_id DESC
+			LIMIT ?
+		)
+		ORDER BY timestamp ASC, event_id ASC
 	`
 
 	return s.queryEvents(ctx, query, threadID, limit)

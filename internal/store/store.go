@@ -159,7 +159,7 @@ type Store interface {
 type BuiltinStore interface {
 	// Log entries
 	CreateLogEntry(ctx context.Context, entry *LogEntry) error
-	SearchLogEntries(ctx context.Context, query string, since *time.Time, limit int) ([]*LogEntry, error)
+	SearchLogEntries(ctx context.Context, agentID string, query string, since *time.Time, limit int) ([]*LogEntry, error)
 
 	// Todos
 	CreateTodo(ctx context.Context, todo *Todo) error
