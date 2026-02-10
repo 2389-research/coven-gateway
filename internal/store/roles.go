@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// RoleSubjectType represents the type of subject that can have roles
+// RoleSubjectType represents the type of subject that can have roles.
 type RoleSubjectType string
 
 const (
@@ -17,7 +17,7 @@ const (
 	RoleSubjectMember    RoleSubjectType = "member"
 )
 
-// RoleName represents a role that can be assigned
+// RoleName represents a role that can be assigned.
 type RoleName string
 
 const (
@@ -27,7 +27,7 @@ const (
 	RoleLeader RoleName = "leader"
 )
 
-// ValidRoleNames lists all valid role names
+// ValidRoleNames lists all valid role names.
 var ValidRoleNames = []RoleName{
 	RoleOwner,
 	RoleAdmin,
@@ -35,7 +35,7 @@ var ValidRoleNames = []RoleName{
 	RoleLeader,
 }
 
-// Role represents a role assignment to a subject
+// Role represents a role assignment to a subject.
 type Role struct {
 	SubjectType RoleSubjectType
 	SubjectID   string
@@ -109,7 +109,7 @@ func (s *SQLiteStore) ListRoles(ctx context.Context, subjectType RoleSubjectType
 	if err != nil {
 		return nil, fmt.Errorf("listing roles: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var roles []RoleName
 	for rows.Next() {

@@ -21,13 +21,13 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// Supported MCP protocol versions
+// Supported MCP protocol versions.
 var supportedProtocolVersions = map[string]bool{
 	"2025-03-26": true,
 	"2025-11-25": true,
 }
 
-// latestProtocolVersion is the version we advertise in initialize responses
+// latestProtocolVersion is the version we advertise in initialize responses.
 const latestProtocolVersion = "2025-11-25"
 
 // MaxRequestBodySize is the maximum allowed size for request bodies (1MB).
@@ -58,7 +58,7 @@ type JSONRPCError struct {
 	Data    any    `json:"data,omitempty"`
 }
 
-// Standard JSON-RPC error codes
+// Standard JSON-RPC error codes.
 const (
 	JSONRPCParseError     = -32700
 	JSONRPCInvalidRequest = -32600
@@ -268,104 +268,122 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePost processes JSON-RPC messages sent via HTTP POST.
+// readRequestBody reads and validates the request body size.
+func (s *Server) readRequestBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, MaxRequestBodySize+1))
+	if err != nil {
+		s.sendJSONRPCError(w, nil, JSONRPCParseError, "failed to read request body")
+		return nil, false
+	}
+	if int64(len(body)) > MaxRequestBodySize {
+		s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "request body too large")
+		return nil, false
+	}
+	return body, true
+}
+
+// parseJSONRPCRequest parses and validates a JSON-RPC request.
+func (s *Server) parseJSONRPCRequest(w http.ResponseWriter, body []byte) (*JSONRPCRequest, bool) {
+	var req JSONRPCRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		s.sendJSONRPCError(w, nil, JSONRPCParseError, "invalid JSON")
+		return nil, false
+	}
+	if req.JSONRPC != "2.0" {
+		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidRequest, "invalid JSON-RPC version")
+		return nil, false
+	}
+	return &req, true
+}
+
+// validateMCPAuth validates auth for the request (initialize vs session-based).
+func (s *Server) validateMCPAuth(w http.ResponseWriter, r *http.Request, isInitialize bool, sessionID string) (authInfo, bool) {
+	if isInitialize {
+		auth, errMsg := s.validateInitializeAuth(r)
+		if errMsg != "" {
+			s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, errMsg)
+			return authInfo{}, false
+		}
+		return auth, true
+	}
+	auth, status, errMsg := s.validateSessionAuth(sessionID)
+	if status != 0 {
+		http.Error(w, errMsg, status)
+		return authInfo{}, false
+	}
+	return auth, true
+}
+
+// handleNotification processes MCP notifications and returns true if this was a notification.
+func (s *Server) handleNotification(w http.ResponseWriter, req *JSONRPCRequest) bool {
+	isNotification := len(req.ID) == 0 || string(req.ID) == "null"
+	if !isNotification {
+		return false
+	}
+	if strings.HasPrefix(req.Method, "notifications/") {
+		s.logger.Debug("accepted MCP notification", "method", req.Method)
+	} else {
+		s.logger.Warn("received notification for non-notification method", "method", req.Method)
+	}
+	w.WriteHeader(http.StatusAccepted)
+	return true
+}
+
+// mcpMethodHandler is a function that handles an MCP method.
+type mcpMethodHandler func(w http.ResponseWriter, r *http.Request, req JSONRPCRequest, auth authInfo)
+
+// getMCPMethodHandlers returns the method routing map.
+func (s *Server) getMCPMethodHandlers() map[string]mcpMethodHandler {
+	return map[string]mcpMethodHandler{
+		"initialize": s.handleInitialize,
+		"tools/list": s.handleToolsList,
+		"tools/call": s.handleToolsCall,
+	}
+}
+
 func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
-	// Validate MCP-Protocol-Version header on non-initialize requests.
-	// Per spec: server default assumption if missing is 2025-03-26.
 	sessionID := r.Header.Get("Mcp-Session-Id")
 	protoVersion := r.Header.Get("Mcp-Protocol-Version")
 
-	// Read and parse the body first so we can check if this is an initialize request
-	body, err := io.ReadAll(io.LimitReader(r.Body, MaxRequestBodySize+1))
-	if err != nil {
-		s.sendJSONRPCError(w, nil, JSONRPCParseError, "failed to read request body", nil)
-		return
-	}
-	if int64(len(body)) > MaxRequestBodySize {
-		s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "request body too large", nil)
+	body, ok := s.readRequestBody(w, r)
+	if !ok {
 		return
 	}
 
-	var req JSONRPCRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		s.sendJSONRPCError(w, nil, JSONRPCParseError, "invalid JSON", nil)
-		return
-	}
-
-	if req.JSONRPC != "2.0" {
-		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidRequest, "invalid JSON-RPC version", nil)
+	req, ok := s.parseJSONRPCRequest(w, body)
+	if !ok {
 		return
 	}
 
 	isInitialize := req.Method == "initialize"
-	isNotification := len(req.ID) == 0 || string(req.ID) == "null"
 
 	// Validate protocol version header (not required on initialize)
-	if !isInitialize && protoVersion != "" {
-		if !supportedProtocolVersions[protoVersion] {
-			http.Error(w, "Bad Request: unsupported MCP-Protocol-Version", http.StatusBadRequest)
-			return
-		}
+	if !isInitialize && protoVersion != "" && !supportedProtocolVersions[protoVersion] {
+		http.Error(w, "Bad Request: unsupported MCP-Protocol-Version", http.StatusBadRequest)
+		return
 	}
 
-	// Validate session on non-initialize requests
-	var auth authInfo
-	if isInitialize {
-		// Extract auth info for the new session
-		extractedAuth, authErr := s.extractAuth(r)
-		if authErr != nil {
-			if errors.Is(authErr, errInvalidToken) {
-				s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "invalid or expired token", nil)
-				return
-			}
-			if s.requireAuth {
-				s.sendJSONRPCError(w, nil, JSONRPCInvalidRequest, "authentication required", nil)
-				return
-			}
-			extractedAuth = authInfo{capabilities: s.defaultCaps}
-		}
-		auth = extractedAuth
-	} else {
-		// Non-initialize requests require a valid session
-		if sessionID == "" {
-			http.Error(w, "Bad Request: missing Mcp-Session-Id", http.StatusBadRequest)
-			return
-		}
-		sess, ok := s.sessions.get(sessionID)
-		if !ok {
-			// Session expired or invalid - client must re-initialize
-			http.Error(w, "Not Found", http.StatusNotFound)
-			return
-		}
-		auth = authInfo{agentID: sess.agentID, capabilities: sess.capabilities}
+	auth, ok := s.validateMCPAuth(w, r, isInitialize, sessionID)
+	if !ok {
+		return
 	}
 
 	s.logger.Debug("MCP request",
 		"method", req.Method,
-		"is_notification", isNotification,
+		"is_notification", len(req.ID) == 0 || string(req.ID) == "null",
 		"session_id", sessionID,
 	)
 
-	// Handle notifications: accept and return HTTP 202 with no body
-	if isNotification {
-		if strings.HasPrefix(req.Method, "notifications/") {
-			s.logger.Debug("accepted MCP notification", "method", req.Method)
-		} else {
-			s.logger.Warn("received notification for non-notification method", "method", req.Method)
-		}
-		w.WriteHeader(http.StatusAccepted)
+	if s.handleNotification(w, req) {
 		return
 	}
 
 	// Route to appropriate handler
-	switch req.Method {
-	case "initialize":
-		s.handleInitialize(w, r, req, auth)
-	case "tools/list":
-		s.handleToolsList(w, r, req, auth)
-	case "tools/call":
-		s.handleToolsCall(w, r, req, auth)
-	default:
-		s.sendJSONRPCError(w, req.ID, JSONRPCMethodNotFound, "method not found", nil)
+	handlers := s.getMCPMethodHandlers()
+	if handler, exists := handlers[req.Method]; exists {
+		handler(w, r, *req, auth)
+	} else {
+		s.sendJSONRPCError(w, req.ID, JSONRPCMethodNotFound, "method not found")
 	}
 }
 
@@ -438,26 +456,26 @@ func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSO
 	var params MCPCallToolParams
 	if len(req.Params) > 0 {
 		if err := json.Unmarshal(req.Params, &params); err != nil {
-			s.sendJSONRPCError(w, req.ID, JSONRPCInvalidParams, "invalid params", nil)
+			s.sendJSONRPCError(w, req.ID, JSONRPCInvalidParams, "invalid params")
 			return
 		}
 	}
 
 	if params.Name == "" {
-		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidParams, "tool name is required", nil)
+		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidParams, "tool name is required")
 		return
 	}
 
 	// Get tool definition to check capabilities
 	toolDef := s.router.GetToolDefinition(params.Name)
 	if toolDef == nil {
-		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidParams, "tool not found", nil)
+		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidParams, "tool not found")
 		return
 	}
 
 	// Verify caller has required capabilities
 	if !s.hasRequiredCapabilities(auth.capabilities, toolDef.GetRequiredCapabilities()) {
-		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidRequest, "insufficient capabilities for this tool", nil)
+		s.sendJSONRPCError(w, req.ID, JSONRPCInvalidRequest, "insufficient capabilities for this tool")
 		return
 	}
 
@@ -476,7 +494,9 @@ func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSO
 		"agent_id", auth.agentID,
 	)
 
-	// Route the tool call with the agent ID from the auth token
+	// Route the tool call - the router applies per-tool timeouts from tool definitions.
+	// We don't apply a blanket timeout here since tools like ask_user may have longer
+	// timeouts (e.g., 300s) that would be overridden by a shorter parent context.
 	resp, err := s.router.RouteToolCall(r.Context(), params.Name, inputJSON, requestID, auth.agentID)
 	if err != nil {
 		s.handleToolError(w, req.ID, params.Name, requestID, err)
@@ -510,34 +530,65 @@ func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSO
 // invalid tokens rather than falling through to unauthenticated access.
 var errInvalidToken = errors.New("invalid or expired token")
 
+// validateInitializeAuth extracts and validates auth info for a new session.
+// Returns auth info and an error string for the response (empty if successful).
+func (s *Server) validateInitializeAuth(r *http.Request) (authInfo, string) {
+	extractedAuth, authErr := s.extractAuth(r)
+	if authErr == nil {
+		return extractedAuth, ""
+	}
+
+	if errors.Is(authErr, errInvalidToken) {
+		return authInfo{}, "invalid or expired token"
+	}
+	if s.requireAuth {
+		return authInfo{}, "authentication required"
+	}
+	return authInfo{capabilities: s.defaultCaps}, ""
+}
+
+// validateSessionAuth validates an existing session and returns its auth info.
+// Returns auth info and an HTTP status code (0 if successful).
+func (s *Server) validateSessionAuth(sessionID string) (authInfo, int, string) {
+	if sessionID == "" {
+		return authInfo{}, http.StatusBadRequest, "Bad Request: missing Mcp-Session-Id"
+	}
+	sess, ok := s.sessions.get(sessionID)
+	if !ok {
+		return authInfo{}, http.StatusNotFound, "Not Found"
+	}
+	return authInfo{agentID: sess.agentID, capabilities: sess.capabilities}, 0, ""
+}
+
 // extractAuth extracts authentication info (agent ID and capabilities) from the request.
-func (s *Server) extractAuth(r *http.Request) (authInfo, error) {
-	// First try token from URL path (e.g., /mcp/<token>)
-	if pathToken := strings.TrimPrefix(r.URL.Path, "/mcp/"); pathToken != "" && pathToken != r.URL.Path {
-		// Normalize: trim trailing slashes and reject extra path segments
-		pathToken = strings.TrimRight(pathToken, "/")
-		if strings.Contains(pathToken, "/") {
-			return authInfo{}, errInvalidToken
-		}
-		if s.tokenStore != nil {
-			if info := s.tokenStore.GetTokenInfo(pathToken); info != nil {
-				return authInfo{agentID: info.AgentID, capabilities: info.Capabilities}, nil
-			}
-		}
-		return authInfo{}, errInvalidToken
+// extractPathToken extracts and validates token from URL path.
+// Returns token, hasToken, error.
+func extractPathToken(path string) (string, bool, error) {
+	pathToken := strings.TrimPrefix(path, "/mcp/")
+	if pathToken == "" || pathToken == path {
+		return "", false, nil
 	}
-
-	// Fall back to token query parameter
-	if token := r.URL.Query().Get("token"); token != "" {
-		if s.tokenStore != nil {
-			if info := s.tokenStore.GetTokenInfo(token); info != nil {
-				return authInfo{agentID: info.AgentID, capabilities: info.Capabilities}, nil
-			}
-		}
-		return authInfo{}, errInvalidToken
+	pathToken = strings.TrimRight(pathToken, "/")
+	if strings.Contains(pathToken, "/") {
+		return "", true, errInvalidToken
 	}
+	return pathToken, true, nil
+}
 
-	// Fall back to Authorization header (for JWT-based auth)
+// lookupToken looks up token info from the store.
+func (s *Server) lookupToken(token string) (authInfo, bool) {
+	if s.tokenStore == nil {
+		return authInfo{}, false
+	}
+	info := s.tokenStore.GetTokenInfo(token)
+	if info == nil {
+		return authInfo{}, false
+	}
+	return authInfo{agentID: info.AgentID, capabilities: info.Capabilities}, true
+}
+
+// extractBearerAuth extracts and validates bearer token from Authorization header.
+func (s *Server) extractBearerAuth(r *http.Request) (authInfo, error) {
 	if s.verifier == nil {
 		return authInfo{}, errors.New("no authentication provided")
 	}
@@ -546,7 +597,6 @@ func (s *Server) extractAuth(r *http.Request) (authInfo, error) {
 	if authHeader == "" {
 		return authInfo{}, errors.New("missing authorization")
 	}
-
 	if !strings.HasPrefix(authHeader, "Bearer ") {
 		return authInfo{}, errors.New("invalid authorization header format")
 	}
@@ -561,8 +611,32 @@ func (s *Server) extractAuth(r *http.Request) (authInfo, error) {
 		return authInfo{}, err
 	}
 
-	// JWT auth doesn't have an agent ID, use principal ID as fallback
 	return authInfo{agentID: principalID, capabilities: []string{principalID}}, nil
+}
+
+func (s *Server) extractAuth(r *http.Request) (authInfo, error) {
+	// First try token from URL path (e.g., /mcp/<token>)
+	pathToken, hasPath, err := extractPathToken(r.URL.Path)
+	if err != nil {
+		return authInfo{}, err
+	}
+	if hasPath {
+		if auth, ok := s.lookupToken(pathToken); ok {
+			return auth, nil
+		}
+		return authInfo{}, errInvalidToken
+	}
+
+	// Fall back to token query parameter
+	if token := r.URL.Query().Get("token"); token != "" {
+		if auth, ok := s.lookupToken(token); ok {
+			return auth, nil
+		}
+		return authInfo{}, errInvalidToken
+	}
+
+	// Fall back to Authorization header (for JWT-based auth)
+	return s.extractBearerAuth(r)
 }
 
 // extractOwnerToken derives a stable identity string from the request's auth
@@ -624,10 +698,10 @@ func (s *Server) handleToolError(w http.ResponseWriter, id json.RawMessage, tool
 	case errors.Is(err, context.DeadlineExceeded):
 		message = "tool execution timed out"
 	case errors.Is(err, context.Canceled):
-		message = "request cancelled"
+		message = "request canceled"
 	}
 
-	s.sendJSONRPCError(w, id, code, message, nil)
+	s.sendJSONRPCError(w, id, code, message)
 }
 
 // sendJSONRPCResult sends a successful JSON-RPC response.
@@ -644,14 +718,13 @@ func (s *Server) sendJSONRPCResult(w http.ResponseWriter, id json.RawMessage, re
 }
 
 // sendJSONRPCError sends a JSON-RPC error response.
-func (s *Server) sendJSONRPCError(w http.ResponseWriter, id json.RawMessage, code int, message string, data any) {
+func (s *Server) sendJSONRPCError(w http.ResponseWriter, id json.RawMessage, code int, message string) {
 	resp := JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
 		Error: &JSONRPCError{
 			Code:    code,
 			Message: message,
-			Data:    data,
 		},
 	}
 	w.Header().Set("Content-Type", "application/json")

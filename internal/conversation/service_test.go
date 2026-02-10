@@ -16,7 +16,7 @@ import (
 	"github.com/2389/coven-gateway/internal/store"
 )
 
-// mockSender implements MessageSender for testing
+// mockSender implements MessageSender for testing.
 type mockSender struct {
 	responses []*agent.Response
 	err       error

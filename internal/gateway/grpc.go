@@ -36,97 +36,189 @@ func newCovenControlServer(gw *Gateway, logger *slog.Logger) *covenControlServer
 	}
 }
 
+// agentRegistrationInfo holds extracted registration data.
+type agentRegistrationInfo struct {
+	principalID string
+	workspaces  []string
+	workingDir  string
+	backend     string
+	instanceID  string
+}
+
+// extractRegistrationInfo extracts info from registration message and auth context.
+func (s *covenControlServer) extractRegistrationInfo(ctx context.Context, reg *pb.RegisterAgent) agentRegistrationInfo {
+	info := agentRegistrationInfo{
+		instanceID: uuid.New().String()[:12],
+	}
+	if authCtx := auth.FromContext(ctx); authCtx != nil {
+		info.principalID = authCtx.PrincipalID
+	}
+	if metadata := reg.GetMetadata(); metadata != nil {
+		info.workspaces = metadata.GetWorkspaces()
+		info.workingDir = metadata.GetWorkingDirectory()
+		info.backend = metadata.GetBackend()
+	}
+	return info
+}
+
+// loadAgentSecrets resolves effective secrets for an agent.
+func (s *covenControlServer) loadAgentSecrets(ctx context.Context, agentID string) map[string]string {
+	sqlStore, ok := s.gateway.store.(*store.SQLiteStore)
+	if !ok {
+		return make(map[string]string)
+	}
+	secretsMap, err := sqlStore.GetEffectiveSecrets(ctx, agentID)
+	if err != nil {
+		s.logger.Warn("failed to load secrets for agent", "agent_id", agentID, "error", err)
+		return make(map[string]string)
+	}
+	return secretsMap
+}
+
+// createMCPToken creates an MCP token for the agent if token store is available.
+func (s *covenControlServer) createMCPToken(agentID string, capabilities []string) string {
+	if s.gateway.mcpTokens == nil {
+		return ""
+	}
+	token := s.gateway.mcpTokens.CreateToken(agentID, capabilities)
+	s.logger.Debug("created MCP token for agent", "agent_id", agentID, "capabilities", capabilities)
+	return token
+}
+
+// getAgentTools returns available pack tools filtered by agent's capabilities.
+func (s *covenControlServer) getAgentTools(agentID string, capabilities []string) []*pb.ToolDefinition {
+	if s.gateway.packRegistry == nil {
+		return nil
+	}
+	tools := s.gateway.packRegistry.GetToolsForCapabilities(capabilities)
+	s.logger.Debug("filtered pack tools for agent", "agent_id", agentID, "capabilities", capabilities, "tool_count", len(tools))
+	return tools
+}
+
+// receiveRegistration waits for and validates the registration message.
+// Returns (reg, cleanDisconnect, grpcError).
+func (s *covenControlServer) receiveRegistration(stream pb.CovenControl_AgentStreamServer) (*pb.RegisterAgent, bool, error) {
+	msg, err := stream.Recv()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, true, nil
+		}
+		return nil, false, status.Errorf(codes.Internal, "receiving first message: %v", err)
+	}
+	reg := msg.GetRegister()
+	if reg == nil {
+		return nil, false, status.Error(codes.InvalidArgument, "first message must be RegisterAgent")
+	}
+	if reg.GetAgentId() == "" {
+		return nil, false, status.Error(codes.InvalidArgument, "agent_id is required")
+	}
+	return reg, false, nil
+}
+
+// registerAgent registers the agent and handles duplicate registration errors.
+func (s *covenControlServer) registerAgent(conn *agent.Connection) error {
+	if err := s.gateway.agentManager.Register(conn); err != nil {
+		if errors.Is(err, agent.ErrAgentAlreadyRegistered) {
+			return status.Errorf(codes.AlreadyExists, "agent %s already registered", conn.ID)
+		}
+		return status.Errorf(codes.Internal, "registering agent: %v", err)
+	}
+	return nil
+}
+
+// checkRecvError handles receive errors, returning (shouldContinue, grpcError).
+// Returns (true, nil) if stream should continue, (false, nil) for clean exit, (false, err) for error.
+func (s *covenControlServer) checkRecvError(err error, agentID string) (bool, error) {
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, io.EOF) {
+		s.logger.Debug("agent stream EOF", "agent_id", agentID)
+		return false, nil
+	}
+	if status.Code(err) == codes.Canceled {
+		s.logger.Debug("agent stream canceled", "agent_id", agentID)
+		return false, nil
+	}
+	s.logger.Error("receiving message", "error", err, "agent_id", agentID)
+	return false, status.Errorf(codes.Internal, "receiving message: %v", err)
+}
+
+// dispatchMessage routes an agent message to the appropriate handler.
+func (s *covenControlServer) dispatchMessage(stream pb.CovenControl_AgentStreamServer, conn *agent.Connection, msg *pb.AgentMessage) {
+	switch payload := msg.GetPayload().(type) {
+	case *pb.AgentMessage_Heartbeat:
+		s.handleHeartbeat(conn, payload.Heartbeat)
+	case *pb.AgentMessage_Response:
+		s.handleResponse(conn, payload.Response)
+	case *pb.AgentMessage_Register:
+		s.logger.Warn("received duplicate registration", "agent_id", conn.ID)
+	case *pb.AgentMessage_ExecutePackTool:
+		s.handleExecutePackTool(stream, conn, payload.ExecutePackTool)
+	default:
+		s.logger.Warn("received unknown message type", "agent_id", conn.ID)
+	}
+}
+
+// runMessageLoop handles the main receive loop for an agent connection.
+func (s *covenControlServer) runMessageLoop(stream pb.CovenControl_AgentStreamServer, conn *agent.Connection) error {
+	for {
+		msg, err := stream.Recv()
+		if shouldContinue, grpcErr := s.checkRecvError(err, conn.ID); !shouldContinue {
+			return grpcErr
+		}
+		s.dispatchMessage(stream, conn, msg)
+	}
+}
+
 // AgentStream handles the bidirectional streaming connection with an agent.
 // Protocol flow:
 // 1. Agent sends RegisterAgent message
 // 2. Server responds with Welcome message
 // 3. Agent sends Heartbeat or MessageResponse messages
-// 4. Server sends SendMessage or Shutdown messages
+// 4. Server sends SendMessage or Shutdown messages.
 func (s *covenControlServer) AgentStream(stream pb.CovenControl_AgentStreamServer) error {
 	s.logger.Debug("AgentStream handler invoked, waiting for registration")
 
-	// Send headers immediately to unblock tonic clients waiting for response headers
-	// This is needed because grpc-go delays headers until first Send() by default
+	// Send headers immediately to unblock tonic clients
 	if err := stream.SendHeader(nil); err != nil {
 		s.logger.Error("failed to send initial headers", "error", err)
 	}
 
-	// Wait for registration message
-	msg, err := stream.Recv()
+	// Wait for and validate registration message
+	reg, cleanDisconnect, err := s.receiveRegistration(stream)
+	if cleanDisconnect {
+		return nil
+	}
 	if err != nil {
-		if err == io.EOF {
-			return nil
-		}
-		return status.Errorf(codes.Internal, "receiving first message: %v", err)
+		return err
 	}
 
-	// First message must be a registration
-	reg := msg.GetRegister()
-	if reg == nil {
-		return status.Error(codes.InvalidArgument, "first message must be RegisterAgent")
-	}
-
-	// Validate required fields
-	if reg.GetAgentId() == "" {
-		return status.Error(codes.InvalidArgument, "agent_id is required")
-	}
-
-	// Extract authenticated principal from auth context
-	authCtx := auth.FromContext(stream.Context())
-	var principalID string
-	if authCtx != nil {
-		principalID = authCtx.PrincipalID
-	}
-
-	// Extract metadata from registration
-	var workspaces []string
-	var workingDir string
-	var backend string
-	if metadata := reg.GetMetadata(); metadata != nil {
-		workspaces = metadata.GetWorkspaces()
-		workingDir = metadata.GetWorkingDirectory()
-		backend = metadata.GetBackend()
-	}
-
-	// Generate short instance ID for binding commands
-	// 12 chars provides ~48 bits of entropy, collision probability < 0.1% at 1M agents
-	instanceID := uuid.New().String()[:12]
-
-	// Create connection for this agent
+	// Extract registration info and create connection
+	info := s.extractRegistrationInfo(stream.Context(), reg)
 	conn := agent.NewConnection(agent.ConnectionParams{
 		ID:           reg.GetAgentId(),
 		Name:         reg.GetName(),
 		Capabilities: reg.GetCapabilities(),
-		PrincipalID:  principalID,
-		Workspaces:   workspaces,
-		WorkingDir:   workingDir,
-		InstanceID:   instanceID,
-		Backend:      backend,
+		PrincipalID:  info.principalID,
+		Workspaces:   info.workspaces,
+		WorkingDir:   info.workingDir,
+		InstanceID:   info.instanceID,
+		Backend:      info.backend,
 		Stream:       stream,
 		Logger:       s.logger.With("agent_id", reg.GetAgentId()),
 	})
 
 	// Register the agent with the manager
-	if err := s.gateway.agentManager.Register(conn); err != nil {
-		if errors.Is(err, agent.ErrAgentAlreadyRegistered) {
-			return status.Errorf(codes.AlreadyExists, "agent %s already registered", reg.GetAgentId())
-		}
-		return status.Errorf(codes.Internal, "registering agent: %v", err)
+	if err := s.registerAgent(conn); err != nil {
+		return err
 	}
 
 	// Auto-update bindings that match this agent's workspace name
-	// This handles device prefix changes (e.g., "m_notes" -> "magic_notes")
 	s.maybeUpdateBindingsForWorkspace(stream.Context(), conn.Name, conn.ID)
 
 	// Generate MCP token for this agent's capabilities
-	var mcpToken string
-	if s.gateway.mcpTokens != nil {
-		mcpToken = s.gateway.mcpTokens.CreateToken(conn.ID, reg.GetCapabilities())
-		s.logger.Debug("created MCP token for agent",
-			"agent_id", reg.GetAgentId(),
-			"capabilities", reg.GetCapabilities(),
-		)
-	}
+	mcpToken := s.createMCPToken(conn.ID, reg.GetCapabilities())
 
 	// Ensure we unregister on exit and invalidate MCP token
 	defer func() {
@@ -137,38 +229,18 @@ func (s *covenControlServer) AgentStream(stream pb.CovenControl_AgentStreamServe
 		}
 	}()
 
-	// Get available pack tools filtered by agent's capabilities
-	var availableTools []*pb.ToolDefinition
-	if s.gateway.packRegistry != nil {
-		availableTools = s.gateway.packRegistry.GetToolsForCapabilities(reg.GetCapabilities())
-		s.logger.Debug("filtered pack tools for agent",
-			"agent_id", reg.GetAgentId(),
-			"capabilities", reg.GetCapabilities(),
-			"tool_count", len(availableTools),
-		)
-	}
+	// Get available pack tools and secrets for welcome message
+	availableTools := s.getAgentTools(reg.GetAgentId(), reg.GetCapabilities())
+	secretsMap := s.loadAgentSecrets(stream.Context(), reg.GetAgentId())
 
-	// Resolve effective secrets for this agent (global defaults + agent-specific overrides)
-	var secretsMap map[string]string
-	if sqlStore, ok := s.gateway.store.(*store.SQLiteStore); ok {
-		var err error
-		secretsMap, err = sqlStore.GetEffectiveSecrets(stream.Context(), reg.GetAgentId())
-		if err != nil {
-			s.logger.Warn("failed to load secrets for agent", "agent_id", reg.GetAgentId(), "error", err)
-			secretsMap = make(map[string]string)
-		}
-	} else {
-		secretsMap = make(map[string]string)
-	}
-
-	// Send welcome message with instance ID, principal ID, available tools, MCP token and endpoint
+	// Send welcome message
 	welcome := &pb.ServerMessage{
 		Payload: &pb.ServerMessage_Welcome{
 			Welcome: &pb.Welcome{
 				ServerId:       s.gateway.serverID,
 				AgentId:        reg.GetAgentId(),
-				InstanceId:     instanceID,
-				PrincipalId:    principalID,
+				InstanceId:     info.instanceID,
+				PrincipalId:    info.principalID,
 				AvailableTools: availableTools,
 				McpToken:       mcpToken,
 				McpEndpoint:    s.gateway.mcpEndpoint,
@@ -182,47 +254,12 @@ func (s *covenControlServer) AgentStream(stream pb.CovenControl_AgentStreamServe
 	}
 
 	// Auto-grant leader role if agent has "leader" capability
-	s.maybeGrantLeaderRole(stream.Context(), principalID, reg.GetCapabilities())
+	s.maybeGrantLeaderRole(stream.Context(), info.principalID, reg.GetCapabilities())
 
-	// Main receive loop
-	for {
-		msg, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				s.logger.Debug("agent stream EOF", "agent_id", conn.ID)
-				return nil
-			}
-			// Check for context cancellation
-			if status.Code(err) == codes.Canceled {
-				s.logger.Debug("agent stream cancelled", "agent_id", conn.ID)
-				return nil
-			}
-			s.logger.Error("receiving message", "error", err, "agent_id", conn.ID)
-			return status.Errorf(codes.Internal, "receiving message: %v", err)
-		}
-
-		// Handle different message types
-		switch payload := msg.GetPayload().(type) {
-		case *pb.AgentMessage_Heartbeat:
-			s.handleHeartbeat(conn, payload.Heartbeat)
-
-		case *pb.AgentMessage_Response:
-			s.handleResponse(conn, payload.Response)
-
-		case *pb.AgentMessage_Register:
-			// Registration should only happen once at the start
-			s.logger.Warn("received duplicate registration", "agent_id", conn.ID)
-
-		case *pb.AgentMessage_ExecutePackTool:
-			s.handleExecutePackTool(stream, conn, payload.ExecutePackTool)
-
-		default:
-			s.logger.Warn("received unknown message type", "agent_id", conn.ID)
-		}
-	}
+	return s.runMessageLoop(stream, conn)
 }
 
-// handleHeartbeat processes a heartbeat message from an agent
+// handleHeartbeat processes a heartbeat message from an agent.
 func (s *covenControlServer) handleHeartbeat(conn *agent.Connection, hb *pb.Heartbeat) {
 	s.logger.Debug("received heartbeat",
 		"agent_id", conn.ID,
@@ -230,7 +267,7 @@ func (s *covenControlServer) handleHeartbeat(conn *agent.Connection, hb *pb.Hear
 	)
 }
 
-// handleResponse routes a message response to the appropriate request handler
+// handleResponse routes a message response to the appropriate request handler.
 func (s *covenControlServer) handleResponse(conn *agent.Connection, resp *pb.MessageResponse) {
 	s.logger.Debug("received response",
 		"agent_id", conn.ID,
@@ -315,7 +352,7 @@ func (s *covenControlServer) handleExecutePackTool(stream pb.CovenControl_AgentS
 	}
 }
 
-// sendPackToolError sends an error result for a pack tool execution request
+// sendPackToolError sends an error result for a pack tool execution request.
 func (s *covenControlServer) sendPackToolError(stream pb.CovenControl_AgentStreamServer, requestID, errMsg string) {
 	result := &pb.ServerMessage{
 		Payload: &pb.ServerMessage_PackToolResult{

@@ -12,7 +12,7 @@ import (
 	"github.com/2389/coven-gateway/internal/store"
 )
 
-// httpTestSecret is a 32-byte secret that meets MinSecretLength requirement
+// httpTestSecret is a 32-byte secret that meets MinSecretLength requirement.
 var httpTestSecret = []byte("http-middleware-test-secret-32b!")
 
 func TestHTTPAuthMiddleware_ValidToken(t *testing.T) {
@@ -45,7 +45,7 @@ func TestHTTPAuthMiddleware_ValidToken(t *testing.T) {
 	})
 
 	// Create request with valid token
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 
@@ -78,7 +78,7 @@ func TestHTTPAuthMiddleware_MissingAuthHeader(t *testing.T) {
 		t.Error("handler should not be called")
 	})
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	rec := httptest.NewRecorder()
 
 	middleware(handler).ServeHTTP(rec, req)
@@ -98,7 +98,7 @@ func TestHTTPAuthMiddleware_InvalidToken(t *testing.T) {
 		t.Error("handler should not be called")
 	})
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 	rec := httptest.NewRecorder()
 
@@ -128,7 +128,7 @@ func TestHTTPAuthMiddleware_RevokedPrincipal(t *testing.T) {
 		t.Error("handler should not be called")
 	})
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 
@@ -158,7 +158,7 @@ func TestHTTPAuthMiddleware_PendingPrincipal(t *testing.T) {
 		t.Error("handler should not be called")
 	})
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 
@@ -179,7 +179,7 @@ func TestRequireAdminHTTP_WithAdmin(t *testing.T) {
 	})
 
 	// Create request with admin AuthContext
-	req := httptest.NewRequest("GET", "/api/admin", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin", nil)
 	authCtx := &AuthContext{
 		PrincipalID:   "admin-1",
 		PrincipalType: "client",
@@ -207,7 +207,7 @@ func TestRequireAdminHTTP_WithOwner(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/api/admin", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin", nil)
 	authCtx := &AuthContext{
 		PrincipalID:   "owner-1",
 		PrincipalType: "client",
@@ -233,7 +233,7 @@ func TestRequireAdminHTTP_WithoutAdmin(t *testing.T) {
 		t.Error("handler should not be called")
 	})
 
-	req := httptest.NewRequest("GET", "/api/admin", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin", nil)
 	authCtx := &AuthContext{
 		PrincipalID:   "member-1",
 		PrincipalType: "client",
@@ -256,7 +256,7 @@ func TestRequireAdminHTTP_NoAuthContext(t *testing.T) {
 		t.Error("handler should not be called")
 	})
 
-	req := httptest.NewRequest("GET", "/api/admin", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin", nil)
 	// No AuthContext in request
 	rec := httptest.NewRecorder()
 
@@ -280,7 +280,7 @@ func TestOptionalAuthMiddleware_NoToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	rec := httptest.NewRecorder()
 
 	middleware(handler).ServeHTTP(rec, req)
@@ -317,7 +317,7 @@ func TestOptionalAuthMiddleware_ValidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 
@@ -347,7 +347,7 @@ func TestOptionalAuthMiddleware_InvalidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 	rec := httptest.NewRecorder()
 

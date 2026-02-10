@@ -15,18 +15,18 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// EventStore defines the store operations needed for event retrieval and storage
+// EventStore defines the store operations needed for event retrieval and storage.
 type EventStore interface {
 	GetEvents(ctx context.Context, params store.GetEventsParams) (*store.GetEventsResult, error)
 	SaveEvent(ctx context.Context, event *store.LedgerEvent) error
 }
 
-// PrincipalStore defines the store operations needed for principal retrieval
+// PrincipalStore defines the store operations needed for principal retrieval.
 type PrincipalStore interface {
 	GetPrincipal(ctx context.Context, id string) (*store.Principal, error)
 }
 
-// ClientService implements the ClientService gRPC service
+// ClientService implements the ClientService gRPC service.
 type ClientService struct {
 	pb.UnimplementedClientServiceServer
 	store       EventStore
@@ -39,7 +39,7 @@ type ClientService struct {
 	broadcaster *conversation.EventBroadcaster
 }
 
-// NewClientService creates a new ClientService with the given stores
+// NewClientService creates a new ClientService with the given stores.
 func NewClientService(eventStore EventStore, principalStore PrincipalStore) *ClientService {
 	return &ClientService{
 		store:      eventStore,
@@ -53,7 +53,7 @@ func (s *ClientService) SetBroadcaster(b *conversation.EventBroadcaster) {
 	s.broadcaster = b
 }
 
-// GetEvents retrieves events for a conversation with optional filtering and pagination
+// GetEvents retrieves events for a conversation with optional filtering and pagination.
 func (s *ClientService) GetEvents(ctx context.Context, req *pb.GetEventsRequest) (*pb.GetEventsResponse, error) {
 	if req.ConversationKey == "" {
 		return nil, status.Error(codes.InvalidArgument, "conversation_key required")
@@ -101,7 +101,7 @@ func (s *ClientService) GetEvents(ctx context.Context, req *pb.GetEventsRequest)
 	return resp, nil
 }
 
-// toProtoEvents converts store.LedgerEvent slice to protobuf Event slice
+// toProtoEvents converts store.LedgerEvent slice to protobuf Event slice.
 func toProtoEvents(events []store.LedgerEvent) []*pb.Event {
 	pbEvents := make([]*pb.Event, len(events))
 	for i, e := range events {
@@ -110,7 +110,7 @@ func toProtoEvents(events []store.LedgerEvent) []*pb.Event {
 	return pbEvents
 }
 
-// toProtoEvent converts a single store.LedgerEvent to a protobuf Event
+// toProtoEvent converts a single store.LedgerEvent to a protobuf Event.
 func toProtoEvent(e *store.LedgerEvent) *pb.Event {
 	event := &pb.Event{
 		Id:              e.ID,

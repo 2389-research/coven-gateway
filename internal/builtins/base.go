@@ -136,7 +136,7 @@ func (b *baseHandlers) LogEntry(ctx context.Context, agentID string, input json.
 	}
 
 	if in.Message == "" {
-		return nil, fmt.Errorf("message is required")
+		return nil, errors.New("message is required")
 	}
 
 	entry := &store.LogEntry{
@@ -256,7 +256,7 @@ func (b *baseHandlers) TodoUpdate(ctx context.Context, agentID string, input jso
 
 	// Verify ownership - agents can only update their own todos
 	if todo.AgentID != agentID {
-		return nil, fmt.Errorf("todo not found")
+		return nil, errors.New("todo not found")
 	}
 
 	// Only update fields that were provided
@@ -300,7 +300,7 @@ func (b *baseHandlers) TodoDelete(ctx context.Context, agentID string, input jso
 		return nil, err
 	}
 	if todo.AgentID != agentID {
-		return nil, fmt.Errorf("todo not found")
+		return nil, errors.New("todo not found")
 	}
 
 	if err := b.store.DeleteTodo(ctx, in.ID); err != nil {
@@ -324,10 +324,10 @@ func (b *baseHandlers) BBSCreateThread(ctx context.Context, agentID string, inpu
 	}
 
 	if in.Subject == "" {
-		return nil, fmt.Errorf("subject is required")
+		return nil, errors.New("subject is required")
 	}
 	if in.Content == "" {
-		return nil, fmt.Errorf("content is required")
+		return nil, errors.New("content is required")
 	}
 
 	post := &store.BBSPost{
@@ -354,23 +354,23 @@ func (b *baseHandlers) BBSReply(ctx context.Context, agentID string, input json.
 	}
 
 	if in.ThreadID == "" {
-		return nil, fmt.Errorf("thread_id is required")
+		return nil, errors.New("thread_id is required")
 	}
 	if in.Content == "" {
-		return nil, fmt.Errorf("content is required")
+		return nil, errors.New("content is required")
 	}
 
 	// Verify thread exists
 	thread, err := b.store.GetBBSThread(ctx, in.ThreadID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return nil, fmt.Errorf("thread not found")
+			return nil, errors.New("thread not found")
 		}
 		return nil, fmt.Errorf("looking up thread: %w", err)
 	}
 	if thread.Post.ThreadID != "" {
 		// This is a reply, not a thread - can't reply to a reply
-		return nil, fmt.Errorf("cannot reply to a reply, use original thread_id")
+		return nil, errors.New("cannot reply to a reply, use original thread_id")
 	}
 
 	post := &store.BBSPost{

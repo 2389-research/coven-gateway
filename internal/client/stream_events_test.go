@@ -5,7 +5,6 @@ package client
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -18,7 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// mockStreamServer implements pb.ClientService_StreamEventsServer for testing
+// mockStreamServer implements pb.ClientService_StreamEventsServer for testing.
 type mockStreamServer struct {
 	ctx     context.Context
 	events  []*pb.ClientStreamEvent
@@ -44,8 +43,8 @@ func (m *mockStreamServer) SetHeader(metadata.MD) error  { return nil }
 func (m *mockStreamServer) SendHeader(metadata.MD) error { return nil }
 func (m *mockStreamServer) SetTrailer(metadata.MD)       {}
 func (m *mockStreamServer) Context() context.Context     { return m.ctx }
-func (m *mockStreamServer) SendMsg(interface{}) error    { return nil }
-func (m *mockStreamServer) RecvMsg(interface{}) error    { return nil }
+func (m *mockStreamServer) SendMsg(any) error            { return nil }
+func (m *mockStreamServer) RecvMsg(any) error            { return nil }
 
 func TestStreamEvents_MissingConversationKey(t *testing.T) {
 	s := createTestStore(t)
@@ -82,7 +81,7 @@ func TestStreamEvents_SendsHistoricalEvents(t *testing.T) {
 		ConversationKey: convKey,
 	}, stream)
 
-	// StreamEvents exits cleanly when context is cancelled
+	// StreamEvents exits cleanly when context is canceled
 	require.NoError(t, err)
 
 	// Should have received historical events
@@ -216,25 +215,8 @@ func TestStreamEvents_ContextCancellation(t *testing.T) {
 		ConversationKey: convKey,
 	}, stream)
 
-	// Should return without error when context is cancelled
+	// Should return without error when context is canceled
 	require.NoError(t, err)
 }
 
-// Helper to create a store for stream tests
-func createTestStoreForStream(t *testing.T) *store.SQLiteStore {
-	t.Helper()
-
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	s, err := store.NewSQLiteStore(dbPath)
-	if err != nil {
-		t.Fatalf("failed to create SQLite store: %v", err)
-	}
-
-	t.Cleanup(func() {
-		s.Close()
-	})
-
-	return s
-}
+// Helper to create a store for stream tests.

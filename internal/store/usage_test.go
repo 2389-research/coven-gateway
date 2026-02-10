@@ -117,7 +117,7 @@ func TestStore_GetUsageStats_NoFilter(t *testing.T) {
 	require.NoError(t, store.CreateThread(ctx, thread))
 
 	// Add multiple usage records
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		usage := &TokenUsage{
 			ID:               uuid.New().String(),
 			ThreadID:         "thread-stats-001",

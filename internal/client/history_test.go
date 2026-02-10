@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// createTestStore creates a real SQLite store in a temp directory
+// createTestStore creates a real SQLite store in a temp directory.
 func createTestStore(t *testing.T) *store.SQLiteStore {
 	t.Helper()
 
@@ -37,29 +37,29 @@ func createTestStore(t *testing.T) *store.SQLiteStore {
 	return s
 }
 
-// createClientService creates a ClientService with the given store
+// createClientService creates a ClientService with the given store.
 func createClientService(t *testing.T, s *store.SQLiteStore) *ClientService {
 	t.Helper()
 	return NewClientService(s, s)
 }
 
-// createMemberContext creates a context with member auth for testing
-func createMemberContext(principalID string) context.Context {
+// createMemberContext creates a context with member auth for testing.
+func createMemberContext() context.Context {
 	authCtx := &auth.AuthContext{
-		PrincipalID:   principalID,
+		PrincipalID:   "client-001",
 		PrincipalType: "client",
 		Roles:         []string{"member"},
 	}
 	return auth.WithAuth(context.Background(), authCtx)
 }
 
-// seedEvents creates test events in the store
+// seedEvents creates test events in the store.
 func seedEvents(t *testing.T, s *store.SQLiteStore, convKey string, count int, baseTime time.Time) []store.LedgerEvent {
 	t.Helper()
 	ctx := context.Background()
 
 	events := make([]store.LedgerEvent, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		text := "Message " + string(rune('A'+i))
 		event := &store.LedgerEvent{
 			ID:              generateTestID("event", i),
@@ -77,7 +77,7 @@ func seedEvents(t *testing.T, s *store.SQLiteStore, convKey string, count int, b
 	return events
 }
 
-// generateTestID generates deterministic test IDs
+// generateTestID generates deterministic test IDs.
 func generateTestID(prefix string, index int) string {
 	suffix := string(rune('a' + index))
 	return prefix + "-" + suffix
@@ -86,7 +86,7 @@ func generateTestID(prefix string, index int) string {
 func TestGetEventsRPC_Success(t *testing.T) {
 	s := createTestStore(t)
 	svc := createClientService(t, s)
-	ctx := createMemberContext("client-001")
+	ctx := createMemberContext()
 
 	convKey := "test:conversation:success"
 	baseTime := time.Now().UTC().Truncate(time.Second)
@@ -121,7 +121,7 @@ func TestGetEventsRPC_Success(t *testing.T) {
 func TestGetEventsRPC_MissingKey(t *testing.T) {
 	s := createTestStore(t)
 	svc := createClientService(t, s)
-	ctx := createMemberContext("client-001")
+	ctx := createMemberContext()
 
 	req := &pb.GetEventsRequest{
 		ConversationKey: "",
@@ -139,7 +139,7 @@ func TestGetEventsRPC_MissingKey(t *testing.T) {
 func TestGetEventsRPC_InvalidSince(t *testing.T) {
 	s := createTestStore(t)
 	svc := createClientService(t, s)
-	ctx := createMemberContext("client-001")
+	ctx := createMemberContext()
 
 	invalidSince := "not-a-valid-timestamp"
 	req := &pb.GetEventsRequest{
@@ -159,7 +159,7 @@ func TestGetEventsRPC_InvalidSince(t *testing.T) {
 func TestGetEventsRPC_InvalidUntil(t *testing.T) {
 	s := createTestStore(t)
 	svc := createClientService(t, s)
-	ctx := createMemberContext("client-001")
+	ctx := createMemberContext()
 
 	invalidUntil := "also-not-valid"
 	req := &pb.GetEventsRequest{
@@ -179,7 +179,7 @@ func TestGetEventsRPC_InvalidUntil(t *testing.T) {
 func TestGetEventsRPC_WithTimeFilters(t *testing.T) {
 	s := createTestStore(t)
 	svc := createClientService(t, s)
-	ctx := createMemberContext("client-001")
+	ctx := createMemberContext()
 
 	convKey := "test:conversation:timefilters"
 	baseTime := time.Now().UTC().Truncate(time.Second)
@@ -205,7 +205,7 @@ func TestGetEventsRPC_WithTimeFilters(t *testing.T) {
 func TestGetEventsRPC_Pagination(t *testing.T) {
 	s := createTestStore(t)
 	svc := createClientService(t, s)
-	ctx := createMemberContext("client-001")
+	ctx := createMemberContext()
 
 	convKey := "test:conversation:pagination"
 	baseTime := time.Now().UTC().Truncate(time.Second)
@@ -248,7 +248,7 @@ func TestGetEventsRPC_Pagination(t *testing.T) {
 func TestGetEventsRPC_EmptyResult(t *testing.T) {
 	s := createTestStore(t)
 	svc := createClientService(t, s)
-	ctx := createMemberContext("client-001")
+	ctx := createMemberContext()
 
 	req := &pb.GetEventsRequest{
 		ConversationKey: "nonexistent:conversation",
@@ -266,7 +266,7 @@ func TestGetEventsRPC_EmptyResult(t *testing.T) {
 func TestGetEventsRPC_OptionalFields(t *testing.T) {
 	s := createTestStore(t)
 	svc := createClientService(t, s)
-	ctx := createMemberContext("client-001")
+	ctx := createMemberContext()
 
 	// Create event with optional fields populated
 	convKey := "test:conversation:optional"

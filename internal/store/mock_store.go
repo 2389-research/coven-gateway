@@ -5,9 +5,11 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 )
 
 // MockStore is an in-memory Store implementation for testing.
@@ -127,7 +129,7 @@ func (m *MockStore) ListThreads(ctx context.Context, limit int) ([]*Thread, erro
 	}
 
 	// Sort by UpdatedAt descending
-	for i := 0; i < len(threads)-1; i++ {
+	for i := range len(threads) - 1 {
 		for j := i + 1; j < len(threads); j++ {
 			if threads[j].UpdatedAt.After(threads[i].UpdatedAt) {
 				threads[i], threads[j] = threads[j], threads[i]
@@ -502,89 +504,115 @@ func (m *MockStore) GetEventsByThreadID(ctx context.Context, threadID string, li
 	return result, nil
 }
 
+// normalizeLimit applies default (50) and cap (500) to pagination limit.
+func normalizeLimit(limit int) int {
+	if limit <= 0 {
+		return 50
+	}
+	if limit > 500 {
+		return 500
+	}
+	return limit
+}
+
+// eventMatchesFilters checks if an event matches the GetEventsParams filters.
+func eventMatchesFilters(e *LedgerEvent, p GetEventsParams) bool {
+	if e.ConversationKey != p.ConversationKey {
+		return false
+	}
+	if p.Since != nil && e.Timestamp.Before(*p.Since) {
+		return false
+	}
+	if p.Until != nil && e.Timestamp.After(*p.Until) {
+		return false
+	}
+	return true
+}
+
+// sortEventsByTimestampAndID sorts events by timestamp, then by ID for stable ordering.
+func sortEventsByTimestampAndID(events []LedgerEvent) {
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].Timestamp.Equal(events[j].Timestamp) {
+			return events[i].ID < events[j].ID
+		}
+		return events[i].Timestamp.Before(events[j].Timestamp)
+	})
+}
+
+// applyCursorToEvents filters events to those after the cursor position.
+func applyCursorToEvents(events []LedgerEvent, cursor string) ([]LedgerEvent, error) {
+	if cursor == "" {
+		return events, nil
+	}
+	cursorTS, cursorID, err := decodeCursor(cursor)
+	if err != nil {
+		return nil, fmt.Errorf("invalid cursor: %w", err)
+	}
+	startIdx := findCursorStartIndex(events, cursorTS, cursorID)
+	if startIdx < len(events) {
+		return events[startIdx:], nil
+	}
+	return nil, nil
+}
+
+// findCursorStartIndex finds the index of the first event after the cursor.
+func findCursorStartIndex(events []LedgerEvent, cursorTS time.Time, cursorID string) int {
+	startIdx := 0
+	for i, e := range events {
+		if e.Timestamp.After(cursorTS) || (e.Timestamp.Equal(cursorTS) && e.ID > cursorID) {
+			return i
+		}
+		startIdx = i + 1
+	}
+	return startIdx
+}
+
+// buildPaginatedResult creates a GetEventsResult with pagination metadata.
+func buildPaginatedResult(events []LedgerEvent, limit int) *GetEventsResult {
+	hasMore := len(events) > limit
+	if hasMore {
+		events = events[:limit]
+	}
+	result := &GetEventsResult{
+		Events:  events,
+		HasMore: hasMore,
+	}
+	if hasMore && len(events) > 0 {
+		lastEvent := events[len(events)-1]
+		result.NextCursor = encodeCursor(lastEvent.Timestamp, lastEvent.ID)
+	}
+	return result
+}
+
 // GetEvents retrieves events for a conversation with pagination support.
 func (m *MockStore) GetEvents(ctx context.Context, p GetEventsParams) (*GetEventsResult, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Validate required params
 	if p.ConversationKey == "" {
-		return nil, fmt.Errorf("conversation_key required")
+		return nil, errors.New("conversation_key required")
 	}
 
-	// Apply default and cap limit
-	if p.Limit <= 0 {
-		p.Limit = 50
-	}
-	if p.Limit > 500 {
-		p.Limit = 500
-	}
+	p.Limit = normalizeLimit(p.Limit)
 
 	// Collect matching events
 	var matching []LedgerEvent
 	for _, e := range m.events {
-		if e.ConversationKey != p.ConversationKey {
-			continue
-		}
-		if p.Since != nil && e.Timestamp.Before(*p.Since) {
-			continue
-		}
-		if p.Until != nil && e.Timestamp.After(*p.Until) {
-			continue
-		}
-		eventCopy := *e
-		matching = append(matching, eventCopy)
-	}
-
-	// Sort by timestamp, then event_id
-	sort.Slice(matching, func(i, j int) bool {
-		if matching[i].Timestamp.Equal(matching[j].Timestamp) {
-			return matching[i].ID < matching[j].ID
-		}
-		return matching[i].Timestamp.Before(matching[j].Timestamp)
-	})
-
-	// Apply cursor
-	if p.Cursor != "" {
-		cursorTS, cursorID, err := decodeCursor(p.Cursor)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cursor: %w", err)
-		}
-		// Find events after cursor
-		startIdx := 0
-		for i, e := range matching {
-			if e.Timestamp.After(cursorTS) || (e.Timestamp.Equal(cursorTS) && e.ID > cursorID) {
-				startIdx = i
-				break
-			}
-			startIdx = i + 1
-		}
-		if startIdx < len(matching) {
-			matching = matching[startIdx:]
-		} else {
-			matching = nil
+		if eventMatchesFilters(e, p) {
+			matching = append(matching, *e)
 		}
 	}
 
-	// Determine if there are more results
-	hasMore := len(matching) > p.Limit
-	if hasMore {
-		matching = matching[:p.Limit]
+	sortEventsByTimestampAndID(matching)
+
+	// Apply cursor pagination
+	var err error
+	matching, err = applyCursorToEvents(matching, p.Cursor)
+	if err != nil {
+		return nil, err
 	}
 
-	// Build result
-	result := &GetEventsResult{
-		Events:  matching,
-		HasMore: hasMore,
-	}
-
-	// Set next cursor if there are more results
-	if hasMore && len(matching) > 0 {
-		lastEvent := matching[len(matching)-1]
-		result.NextCursor = encodeCursor(lastEvent.Timestamp, lastEvent.ID)
-	}
-
-	return result, nil
+	return buildPaginatedResult(matching, p.Limit), nil
 }
 
 // Close is a no-op for MockStore.

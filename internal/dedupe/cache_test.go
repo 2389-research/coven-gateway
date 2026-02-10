@@ -164,10 +164,10 @@ func TestCache_Concurrent(t *testing.T) {
 	wg.Add(numGoroutines)
 
 	// Concurrent marks and checks
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < opsPerGoroutine; j++ {
+			for j := range opsPerGoroutine {
 				key := "key-" + string(rune('A'+id%26)) + "-" + string(rune('0'+j%10))
 				cache.Mark(key)
 				cache.Check(key)
@@ -204,4 +204,79 @@ func TestCache_ConfiguredDefaults(t *testing.T) {
 	// Basic operations should work
 	cache.Mark("prod-key")
 	assert.True(t, cache.Check("prod-key"))
+}
+
+func TestCache_CheckAndMark_NewKey(t *testing.T) {
+	cache := New(5*time.Minute, 100)
+	defer cache.Close()
+
+	// First call for a new key should return false (not seen) and mark it
+	result := cache.CheckAndMark("new-key")
+	assert.False(t, result, "first CheckAndMark should return false for new key")
+
+	// Key should now be marked
+	assert.True(t, cache.Check("new-key"), "key should be marked after CheckAndMark")
+}
+
+func TestCache_CheckAndMark_SeenKey(t *testing.T) {
+	cache := New(5*time.Minute, 100)
+	defer cache.Close()
+
+	// Mark the key first
+	cache.Mark("existing-key")
+
+	// CheckAndMark should return true (already seen)
+	result := cache.CheckAndMark("existing-key")
+	assert.True(t, result, "CheckAndMark should return true for already-seen key")
+}
+
+func TestCache_CheckAndMark_Expired(t *testing.T) {
+	// Use a very short TTL for testing
+	cache := New(10*time.Millisecond, 100)
+	defer cache.Close()
+
+	// Mark via CheckAndMark
+	result := cache.CheckAndMark("expiring-key")
+	assert.False(t, result, "first CheckAndMark should return false")
+
+	// Should be seen immediately
+	assert.True(t, cache.CheckAndMark("expiring-key"), "should be seen before expiry")
+
+	// Wait for TTL to expire
+	time.Sleep(20 * time.Millisecond)
+
+	// Should not be seen after expiry
+	assert.False(t, cache.CheckAndMark("expiring-key"), "should not be seen after expiry")
+}
+
+func TestCache_CheckAndMark_Atomic(t *testing.T) {
+	cache := New(5*time.Minute, 100)
+	defer cache.Close()
+
+	const numGoroutines = 100
+
+	// Count how many goroutines successfully "won" (got false)
+	var successCount int32
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	// All goroutines try to CheckAndMark the same key simultaneously
+	for range numGoroutines {
+		go func() {
+			defer wg.Done()
+			// Only one goroutine should get false (first one)
+			if !cache.CheckAndMark("contested-key") {
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Exactly one goroutine should have succeeded
+	assert.Equal(t, int32(1), successCount,
+		"exactly one goroutine should win the race for CheckAndMark")
 }

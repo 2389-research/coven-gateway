@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockAgentLister implements AgentLister for testing
+// mockAgentLister implements AgentLister for testing.
 type mockAgentLister struct {
 	agents []*agent.AgentInfo
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -140,8 +141,8 @@ type ThreadMessagesResponse struct {
 
 // SSEEvent represents a Server-Sent Event.
 type SSEEvent struct {
-	Event string      `json:"event"`
-	Data  interface{} `json:"data"`
+	Event string `json:"event"`
+	Data  any    `json:"data"`
 }
 
 // handleListAgents handles GET /api/agents requests.
@@ -180,17 +181,76 @@ func (g *Gateway) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		g.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
 // containsWorkspace checks if a workspace is in the list of workspaces.
 func containsWorkspace(workspaces []string, target string) bool {
-	for _, ws := range workspaces {
-		if ws == target {
-			return true
-		}
+	return slices.Contains(workspaces, target)
+}
+
+// parseLimitParam parses a limit query parameter with default and max values.
+// Returns parsed value clamped to [1, max], or default if not specified.
+// Returns 0 and error message if invalid.
+func parseLimitParam(r *http.Request, defaultLimit, maxLimit int) (int, string) {
+	limitStr := r.URL.Query().Get("limit")
+	if limitStr == "" {
+		return defaultLimit, ""
 	}
-	return false
+	parsed, err := strconv.Atoi(limitStr)
+	if err != nil || parsed < 1 {
+		return 0, "limit must be a positive integer"
+	}
+	if parsed > maxLimit {
+		return maxLimit, ""
+	}
+	return parsed, ""
+}
+
+// extractPathSegment extracts a segment from a path between prefix and suffix.
+// Returns the segment and true if successful, or empty string and false if invalid.
+func extractPathSegment(path, prefix, suffix string) (string, bool) {
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+		return "", false
+	}
+	segment := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
+	if segment == "" || strings.Contains(segment, "/") || strings.Contains(segment, "..") {
+		return "", false
+	}
+	return segment, true
+}
+
+// eventToHistoryEvent converts a LedgerEvent to an AgentHistoryEvent.
+func eventToHistoryEvent(evt store.LedgerEvent) AgentHistoryEvent {
+	e := AgentHistoryEvent{
+		ID:        evt.ID,
+		Direction: string(evt.Direction),
+		Author:    evt.Author,
+		Type:      string(evt.Type),
+		Timestamp: evt.Timestamp.Format(time.RFC3339),
+	}
+	if evt.ThreadID != nil {
+		e.ThreadID = *evt.ThreadID
+	}
+	if evt.Text != nil {
+		e.Text = *evt.Text
+	}
+	return e
+}
+
+// usageStatsToHistory converts store.UsageStats to AgentHistoryUsage.
+func usageStatsToHistory(stats *store.UsageStats) AgentHistoryUsage {
+	return AgentHistoryUsage{
+		TotalInput:      stats.TotalInput,
+		TotalOutput:     stats.TotalOutput,
+		TotalCacheRead:  stats.TotalCacheRead,
+		TotalCacheWrite: stats.TotalCacheWrite,
+		TotalThinking:   stats.TotalThinking,
+		TotalTokens:     stats.TotalTokens,
+		RequestCount:    stats.RequestCount,
+	}
 }
 
 // handleSendMessage handles POST /api/send requests.
@@ -200,12 +260,72 @@ func containsWorkspace(workspaces []string, target string) bool {
 //
 // Responsibilities:
 //  1. Parse JSON body - decode SendMessageRequest from request body
-//  2. Validate required fields - ensure content and sender are present
-//  3. Resolve agent ID - look up via binding (frontend+channel_id) or use direct agent_id
-//  4. Verify agent online - check agent exists and is available
-//  5. Send via ConversationService - handles thread creation and message persistence
-//  6. Setup SSE streaming - verify flusher support, set SSE headers
-//  7. Stream responses as SSE - responses are already persisted by ConversationService
+//
+// resolvedTarget holds the result of agent/thread resolution.
+type resolvedTarget struct {
+	AgentID      string
+	ThreadID     string
+	FrontendName string
+	ExternalID   string
+}
+
+// resolveTarget resolves agent ID and thread ID from the request.
+// Returns nil with an error message if resolution fails.
+func (g *Gateway) resolveTarget(ctx context.Context, req *SendMessageRequest) (*resolvedTarget, string) {
+	if req.AgentID != "" {
+		// Direct agent ID specified
+		threadID := req.ThreadID
+		if threadID == "" {
+			threadID = uuid.New().String()
+		}
+		// Verify agent exists and is online
+		if _, ok := g.agentManager.GetAgent(req.AgentID); !ok {
+			return nil, "agent unavailable"
+		}
+		return &resolvedTarget{
+			AgentID:      req.AgentID,
+			ThreadID:     threadID,
+			FrontendName: "direct",
+			ExternalID:   threadID,
+		}, ""
+	}
+
+	// Must have frontend + channel_id for binding lookup
+	if req.Frontend == "" || req.ChannelID == "" {
+		return nil, "must specify agent_id or frontend+channel_id"
+	}
+
+	// Use bindingResolver for binding and thread lookup
+	resolver := &bindingResolver{store: g.store}
+	result, err := resolver.Resolve(ctx, req.Frontend, req.ChannelID, req.ThreadID)
+	if errors.Is(err, ErrChannelNotBound) {
+		return nil, "channel not bound to agent"
+	}
+	if err != nil {
+		g.logger.Error("failed to resolve binding", "error", err)
+		return nil, "internal server error"
+	}
+
+	// Find the online agent matching the binding's principal_id + working_dir
+	agentConn := g.agentManager.GetByPrincipalAndWorkDir(result.AgentID, result.WorkingDir)
+	if agentConn == nil {
+		return nil, "agent unavailable"
+	}
+
+	return &resolvedTarget{
+		AgentID:      agentConn.ID,
+		ThreadID:     result.ThreadID,
+		FrontendName: req.Frontend,
+		ExternalID:   req.ChannelID,
+	}, ""
+}
+
+// 2. Validate required fields - ensure content and sender are present
+// 3. Resolve agent ID - look up via binding (frontend+channel_id) or use direct agent_id
+// 4. Verify agent online - check agent exists and is available
+// 5. Send via ConversationService - handles thread creation and message persistence
+// 6. Setup SSE streaming - verify flusher support, set SSE headers
+// 7. Stream responses as SSE - responses are already persisted by ConversationService.
 func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -218,59 +338,27 @@ func (g *Gateway) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve agent ID and thread ID
-	var agentID, threadID string
-	var frontendName, externalID string
-	if req.AgentID != "" {
-		// Direct agent ID specified
-		agentID = req.AgentID
-		threadID = req.ThreadID
-		if threadID == "" {
-			// Generate a new thread ID if none provided - required for unique constraint
-			threadID = uuid.New().String()
+	// Resolve agent ID and thread ID using helper
+	target, errMsg := g.resolveTarget(r.Context(), req)
+	if target == nil {
+		// Determine appropriate status code based on error message
+		var status int
+		switch errMsg {
+		case "agent unavailable":
+			status = http.StatusServiceUnavailable
+		case "internal server error":
+			status = http.StatusInternalServerError
+		default:
+			status = http.StatusBadRequest
 		}
-		frontendName = "direct"
-		externalID = threadID
-	} else {
-		// Must have frontend + channel_id for binding lookup
-		if req.Frontend == "" || req.ChannelID == "" {
-			g.sendJSONError(w, http.StatusBadRequest, "must specify agent_id or frontend+channel_id")
-			return
-		}
-
-		// Use bindingResolver for binding and thread lookup
-		resolver := &bindingResolver{store: g.store}
-		result, err := resolver.Resolve(r.Context(), req.Frontend, req.ChannelID, req.ThreadID)
-		if errors.Is(err, ErrChannelNotBound) {
-			g.sendJSONError(w, http.StatusBadRequest, "channel not bound to agent")
-			return
-		}
-		if err != nil {
-			g.logger.Error("failed to resolve binding", "error", err)
-			g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
-			return
-		}
-
-		// Find the online agent matching the binding's principal_id + working_dir
-		// Bindings store (principal_id, working_dir) but agent manager is keyed by Connection.ID
-		agentConn := g.agentManager.GetByPrincipalAndWorkDir(result.AgentID, result.WorkingDir)
-		if agentConn == nil {
-			g.sendJSONError(w, http.StatusServiceUnavailable, "agent unavailable")
-			return
-		}
-		agentID = agentConn.ID // Use the connection ID, not principal_id
-		threadID = result.ThreadID
-		frontendName = req.Frontend
-		externalID = req.ChannelID
+		g.sendJSONError(w, status, errMsg)
+		return
 	}
 
-	// Verify agent exists and is online (for direct agent_id path)
-	if req.AgentID != "" {
-		if _, ok := g.agentManager.GetAgent(agentID); !ok {
-			g.sendJSONError(w, http.StatusServiceUnavailable, "agent unavailable")
-			return
-		}
-	}
+	agentID := target.AgentID
+	threadID := target.ThreadID
+	frontendName := target.FrontendName
+	externalID := target.ExternalID
 
 	// Check streaming support before sending (fail fast)
 	flusher, ok := w.(http.Flusher)
@@ -322,7 +410,7 @@ func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, fl
 	for {
 		select {
 		case <-ctx.Done():
-			g.writeSSEEvent(w, "error", map[string]string{"error": "request cancelled"})
+			g.writeSSEEvent(w, "error", map[string]string{"error": "request canceled"})
 			flusher.Flush()
 			return
 
@@ -342,124 +430,94 @@ func (g *Gateway) streamResponses(ctx context.Context, w http.ResponseWriter, fl
 	}
 }
 
-// responseToSSEEvent converts an agent response to an SSE event.
-func (g *Gateway) responseToSSEEvent(resp *agent.Response) SSEEvent {
-	switch resp.Event {
-	case agent.EventThinking:
-		return SSEEvent{
-			Event: "thinking",
-			Data:  map[string]string{"text": resp.Text},
-		}
-	case agent.EventText:
-		return SSEEvent{
-			Event: "text",
-			Data:  map[string]string{"text": resp.Text},
-		}
-	case agent.EventToolUse:
-		if resp.ToolUse == nil {
-			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed tool_use event"}}
-		}
-		return SSEEvent{
-			Event: "tool_use",
-			Data: map[string]string{
-				"id":         resp.ToolUse.ID,
-				"name":       resp.ToolUse.Name,
-				"input_json": resp.ToolUse.InputJSON,
-			},
-		}
-	case agent.EventToolResult:
-		if resp.ToolResult == nil {
-			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed tool_result event"}}
-		}
-		return SSEEvent{
-			Event: "tool_result",
-			Data: map[string]interface{}{
-				"id":       resp.ToolResult.ID,
-				"output":   resp.ToolResult.Output,
-				"is_error": resp.ToolResult.IsError,
-			},
-		}
-	case agent.EventFile:
-		if resp.File == nil {
-			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed file event"}}
-		}
-		return SSEEvent{
-			Event: "file",
-			Data: map[string]string{
-				"filename":  resp.File.Filename,
-				"mime_type": resp.File.MimeType,
-			},
-		}
-	case agent.EventDone:
-		return SSEEvent{
-			Event: "done",
-			Data:  map[string]string{"full_response": resp.Text},
-		}
-	case agent.EventError:
-		return SSEEvent{
-			Event: "error",
-			Data:  map[string]string{"error": resp.Error},
-		}
-	case agent.EventSessionInit:
-		return SSEEvent{
-			Event: "session_init",
-			Data:  map[string]string{"session_id": resp.SessionID},
-		}
-	case agent.EventSessionOrphaned:
-		return SSEEvent{
-			Event: "session_orphaned",
-			Data:  map[string]string{"reason": resp.Error},
-		}
-	case agent.EventUsage:
-		if resp.Usage == nil {
-			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed usage event"}}
-		}
-		return SSEEvent{
-			Event: "usage",
-			Data: map[string]interface{}{
-				"input_tokens":       resp.Usage.InputTokens,
-				"output_tokens":      resp.Usage.OutputTokens,
-				"cache_read_tokens":  resp.Usage.CacheReadTokens,
-				"cache_write_tokens": resp.Usage.CacheWriteTokens,
-				"thinking_tokens":    resp.Usage.ThinkingTokens,
-			},
-		}
-	case agent.EventToolState:
-		if resp.ToolState == nil {
-			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed tool_state event"}}
-		}
-		return SSEEvent{
-			Event: "tool_state",
-			Data: map[string]string{
-				"id":     resp.ToolState.ID,
-				"state":  resp.ToolState.State,
-				"detail": resp.ToolState.Detail,
-			},
-		}
-	case agent.EventCancelled:
-		return SSEEvent{
-			Event: "cancelled",
-			Data:  map[string]string{"reason": resp.Error},
-		}
-	case agent.EventToolApprovalRequest:
-		if resp.ToolApprovalRequest == nil {
-			return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed tool_approval event"}}
-		}
-		return SSEEvent{
-			Event: "tool_approval",
-			Data: map[string]string{
-				"id":         resp.ToolApprovalRequest.ID,
-				"name":       resp.ToolApprovalRequest.Name,
-				"input_json": resp.ToolApprovalRequest.InputJSON,
-				"request_id": resp.ToolApprovalRequest.RequestID,
-			},
-		}
-	default:
-		return SSEEvent{
-			Event: "unknown",
-			Data:  map[string]string{"text": resp.Text},
-		}
+// malformedEvent returns an error SSE event for malformed data.
+func malformedEvent(eventType string) SSEEvent {
+	return SSEEvent{Event: "error", Data: map[string]string{"error": "malformed " + eventType + " event"}}
+}
+
+// toolUseToSSE converts a ToolUse event to SSE format.
+func toolUseToSSE(tu *agent.ToolUseEvent) SSEEvent {
+	if tu == nil {
+		return malformedEvent("tool_use")
 	}
+	return SSEEvent{Event: "tool_use", Data: map[string]string{"id": tu.ID, "name": tu.Name, "input_json": tu.InputJSON}}
+}
+
+// toolResultToSSE converts a ToolResult event to SSE format.
+func toolResultToSSE(tr *agent.ToolResultEvent) SSEEvent {
+	if tr == nil {
+		return malformedEvent("tool_result")
+	}
+	return SSEEvent{Event: "tool_result", Data: map[string]any{"id": tr.ID, "output": tr.Output, "is_error": tr.IsError}}
+}
+
+// fileToSSE converts a File event to SSE format.
+func fileToSSE(f *agent.FileEvent) SSEEvent {
+	if f == nil {
+		return malformedEvent("file")
+	}
+	return SSEEvent{Event: "file", Data: map[string]string{"filename": f.Filename, "mime_type": f.MimeType}}
+}
+
+// usageToSSE converts a Usage event to SSE format.
+func usageToSSE(u *agent.UsageEvent) SSEEvent {
+	if u == nil {
+		return malformedEvent("usage")
+	}
+	return SSEEvent{Event: "usage", Data: map[string]any{
+		"input_tokens": u.InputTokens, "output_tokens": u.OutputTokens,
+		"cache_read_tokens": u.CacheReadTokens, "cache_write_tokens": u.CacheWriteTokens,
+		"thinking_tokens": u.ThinkingTokens,
+	}}
+}
+
+// toolStateToSSE converts a ToolState event to SSE format.
+func toolStateToSSE(ts *agent.ToolStateEvent) SSEEvent {
+	if ts == nil {
+		return malformedEvent("tool_state")
+	}
+	return SSEEvent{Event: "tool_state", Data: map[string]string{"id": ts.ID, "state": ts.State, "detail": ts.Detail}}
+}
+
+// toolApprovalToSSE converts a ToolApprovalRequest event to SSE format.
+func toolApprovalToSSE(ta *agent.ToolApprovalRequestEvent) SSEEvent {
+	if ta == nil {
+		return malformedEvent("tool_approval")
+	}
+	return SSEEvent{Event: "tool_approval", Data: map[string]string{"id": ta.ID, "name": ta.Name, "input_json": ta.InputJSON, "request_id": ta.RequestID}}
+}
+
+// responseToSSEEvent converts an agent response to an SSE event.
+// SSE event builders for simple text-based events.
+func textSSE(event, key, value string) SSEEvent {
+	return SSEEvent{Event: event, Data: map[string]string{key: value}}
+}
+
+// responseConverter is a function that converts an agent.Response to an SSEEvent.
+type responseConverter func(*agent.Response) SSEEvent
+
+// sseConverters maps event types to their converter functions.
+var sseConverters = map[agent.ResponseEvent]responseConverter{
+	agent.EventThinking:            func(r *agent.Response) SSEEvent { return textSSE("thinking", "text", r.Text) },
+	agent.EventText:                func(r *agent.Response) SSEEvent { return textSSE("text", "text", r.Text) },
+	agent.EventToolUse:             func(r *agent.Response) SSEEvent { return toolUseToSSE(r.ToolUse) },
+	agent.EventToolResult:          func(r *agent.Response) SSEEvent { return toolResultToSSE(r.ToolResult) },
+	agent.EventFile:                func(r *agent.Response) SSEEvent { return fileToSSE(r.File) },
+	agent.EventDone:                func(r *agent.Response) SSEEvent { return textSSE("done", "full_response", r.Text) },
+	agent.EventError:               func(r *agent.Response) SSEEvent { return textSSE("error", "error", r.Error) },
+	agent.EventSessionInit:         func(r *agent.Response) SSEEvent { return textSSE("session_init", "session_id", r.SessionID) },
+	agent.EventSessionOrphaned:     func(r *agent.Response) SSEEvent { return textSSE("session_orphaned", "reason", r.Error) },
+	agent.EventUsage:               func(r *agent.Response) SSEEvent { return usageToSSE(r.Usage) },
+	agent.EventToolState:           func(r *agent.Response) SSEEvent { return toolStateToSSE(r.ToolState) },
+	agent.EventCanceled:            func(r *agent.Response) SSEEvent { return textSSE("canceled", "reason", r.Error) },
+	agent.EventToolApprovalRequest: func(r *agent.Response) SSEEvent { return toolApprovalToSSE(r.ToolApprovalRequest) },
+}
+
+func (g *Gateway) responseToSSEEvent(resp *agent.Response) SSEEvent {
+	if conv, ok := sseConverters[resp.Event]; ok {
+		return conv(resp)
+	}
+	return textSSE("unknown", "text", resp.Text)
 }
 
 // formatSSEEvent formats an SSE event as a string with the standard format:
@@ -469,22 +527,24 @@ func formatSSEEvent(eventType, data string) string {
 }
 
 // writeSSEEvent writes a single SSE event to the response writer.
-func (g *Gateway) writeSSEEvent(w http.ResponseWriter, event string, data interface{}) {
+func (g *Gateway) writeSSEEvent(w http.ResponseWriter, event string, data any) {
 	dataJSON, err := json.Marshal(data)
 	if err != nil {
 		g.logger.Error("failed to marshal SSE data", "error", err)
 		return
 	}
 
-	fmt.Fprintf(w, "event: %s\n", event)
-	fmt.Fprintf(w, "data: %s\n\n", dataJSON)
+	_, _ = fmt.Fprintf(w, "event: %s\n", event)
+	_, _ = fmt.Fprintf(w, "data: %s\n\n", dataJSON)
 }
 
 // sendJSONError writes a JSON error response.
 func (g *Gateway) sendJSONError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": message}); err != nil {
+		g.logger.Debug("failed to encode error response", "error", err)
+	}
 }
 
 // parseSendRequest parses and validates a SendMessageRequest from the given reader.
@@ -637,7 +697,9 @@ func (g *Gateway) handleListBindings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		g.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
 // handleGetSingleBinding handles GET /api/bindings?frontend=X&channel_id=Y.
@@ -670,25 +732,57 @@ func (g *Gateway) handleGetSingleBinding(w http.ResponseWriter, r *http.Request,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		g.logger.Debug("failed to encode response", "error", err)
+	}
+}
+
+// validateCreateBindingRequest validates the binding request fields.
+func validateCreateBindingRequest(req *CreateBindingRequest) string {
+	if req.Frontend == "" || req.ChannelID == "" || req.InstanceID == "" {
+		return "frontend, channel_id, and instance_id are required"
+	}
+	return ""
+}
+
+// bindingMatchesAgent checks if an existing binding matches the target agent and workdir.
+func bindingMatchesAgent(binding *store.Binding, agentConn *agent.Connection) bool {
+	return binding != nil && binding.AgentID == agentConn.PrincipalID && binding.WorkingDir == agentConn.WorkingDir
 }
 
 // handleCreateBinding handles POST /api/bindings.
 // Looks up an agent by instance_id and creates a binding to it.
 // Handles rebinding if the channel is already bound to a different agent.
-func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
+// decodeAndValidateBindingRequest decodes and validates the request body.
+func (g *Gateway) decodeAndValidateBindingRequest(w http.ResponseWriter, r *http.Request) (*CreateBindingRequest, bool) {
 	var req CreateBindingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		g.sendJSONError(w, http.StatusBadRequest, "invalid JSON body")
+		return nil, false
+	}
+	if errMsg := validateCreateBindingRequest(&req); errMsg != "" {
+		g.sendJSONError(w, http.StatusBadRequest, errMsg)
+		return nil, false
+	}
+	return &req, true
+}
+
+// handleCreateBindingError handles errors from binding creation.
+func (g *Gateway) handleCreateBindingError(w http.ResponseWriter, err error) {
+	if errors.Is(err, store.ErrDuplicateChannel) {
+		g.sendJSONError(w, http.StatusConflict, "binding already exists")
+		return
+	}
+	g.logger.Error("failed to create binding", "error", err)
+	g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+}
+
+func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
+	req, ok := g.decodeAndValidateBindingRequest(w, r)
+	if !ok {
 		return
 	}
 
-	if req.Frontend == "" || req.ChannelID == "" || req.InstanceID == "" {
-		g.sendJSONError(w, http.StatusBadRequest, "frontend, channel_id, and instance_id are required")
-		return
-	}
-
-	// Look up agent by instance_id
 	agentConn := g.agentManager.GetByInstanceID(req.InstanceID)
 	if agentConn == nil {
 		g.sendJSONError(w, http.StatusNotFound, fmt.Sprintf("no agent online with instance_id '%s'", req.InstanceID))
@@ -696,9 +790,6 @@ func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	var reboundFrom *string
-
-	// Check if binding already exists for this (frontend, channel_id)
 	existingBinding, err := g.store.GetBindingByChannel(ctx, req.Frontend, req.ChannelID)
 	if err != nil && !errors.Is(err, store.ErrBindingNotFound) {
 		g.logger.Error("failed to check existing binding", "error", err)
@@ -706,40 +797,45 @@ func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if existingBinding != nil {
-		// Binding already exists
-		if existingBinding.AgentID == agentConn.PrincipalID && existingBinding.WorkingDir == agentConn.WorkingDir {
-			// Same agent and workdir - return existing binding (idempotent)
-			response := CreateBindingResponse{
-				BindingID:   existingBinding.ID,
-				AgentName:   agentConn.Name,
-				WorkingDir:  existingBinding.WorkingDir,
-				ReboundFrom: nil,
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-
-		// Different agent - delete old binding and record rebound
-		oldAgentName := ""
-		// Use GetByPrincipalAndWorkDir since existingBinding.AgentID is principal_id
-		if oldAgent := g.agentManager.GetByPrincipalAndWorkDir(existingBinding.AgentID, existingBinding.WorkingDir); oldAgent != nil {
-			oldAgentName = oldAgent.Name
-		} else {
-			oldAgentName = existingBinding.AgentID // fallback to ID if agent offline
-		}
-		reboundFrom = &oldAgentName
-
-		if err := g.store.DeleteBindingByID(ctx, existingBinding.ID); err != nil {
-			g.logger.Error("failed to delete existing binding", "error", err)
-			g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
-			return
-		}
+	if bindingMatchesAgent(existingBinding, agentConn) {
+		g.sendBindingResponse(w, existingBinding.ID, agentConn.Name, existingBinding.WorkingDir, nil, http.StatusOK)
+		return
 	}
 
-	// Create new binding
+	reboundFrom := g.deleteExistingBinding(ctx, existingBinding)
+	if reboundFrom == nil && existingBinding != nil {
+		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	bindingID, err := g.createBinding(ctx, req, agentConn)
+	if err != nil {
+		g.handleCreateBindingError(w, err)
+		return
+	}
+
+	g.sendBindingResponse(w, bindingID, agentConn.Name, agentConn.WorkingDir, reboundFrom, http.StatusCreated)
+}
+
+// deleteExistingBinding deletes an existing binding and returns the old agent name.
+// Returns nil if no binding exists or error occurred (error is logged).
+func (g *Gateway) deleteExistingBinding(ctx context.Context, existing *store.Binding) *string {
+	if existing == nil {
+		return nil
+	}
+	oldAgentName := existing.AgentID
+	if oldAgent := g.agentManager.GetByPrincipalAndWorkDir(existing.AgentID, existing.WorkingDir); oldAgent != nil {
+		oldAgentName = oldAgent.Name
+	}
+	if err := g.store.DeleteBindingByID(ctx, existing.ID); err != nil {
+		g.logger.Error("failed to delete existing binding", "error", err)
+		return nil
+	}
+	return &oldAgentName
+}
+
+// createBinding creates a new binding in the store.
+func (g *Gateway) createBinding(ctx context.Context, req *CreateBindingRequest, agentConn *agent.Connection) (string, error) {
 	bindingID := uuid.New().String()
 	binding := &store.Binding{
 		ID:         bindingID,
@@ -748,29 +844,24 @@ func (g *Gateway) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 		AgentID:    agentConn.PrincipalID,
 		WorkingDir: agentConn.WorkingDir,
 		CreatedAt:  time.Now(),
-		CreatedBy:  nil, // TODO: get from auth context when available
+		CreatedBy:  nil,
 	}
+	return bindingID, g.store.CreateBindingV2(ctx, binding)
+}
 
-	if err := g.store.CreateBindingV2(ctx, binding); err != nil {
-		if errors.Is(err, store.ErrDuplicateChannel) {
-			g.sendJSONError(w, http.StatusConflict, "binding already exists")
-			return
-		}
-		g.logger.Error("failed to create binding", "error", err)
-		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-
+// sendBindingResponse writes a CreateBindingResponse as JSON.
+func (g *Gateway) sendBindingResponse(w http.ResponseWriter, bindingID, agentName, workDir string, reboundFrom *string, status int) {
 	response := CreateBindingResponse{
 		BindingID:   bindingID,
-		AgentName:   agentConn.Name,
-		WorkingDir:  agentConn.WorkingDir,
+		AgentName:   agentName,
+		WorkingDir:  workDir,
 		ReboundFrom: reboundFrom,
 	}
-
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		g.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
 // handleDeleteBinding handles DELETE /api/bindings?frontend=X&channel_id=Y.
@@ -820,55 +911,31 @@ func (g *Gateway) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract thread ID from path: /api/threads/{id}/messages
-	path := r.URL.Path
-	prefix := "/api/threads/"
-	suffix := "/messages"
-
-	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+	threadID, ok := extractPathSegment(r.URL.Path, "/api/threads/", "/messages")
+	if !ok {
 		g.sendJSONError(w, http.StatusBadRequest, "invalid path")
 		return
 	}
-
-	threadID := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
-	if threadID == "" {
-		g.sendJSONError(w, http.StatusBadRequest, "thread_id is required")
-		return
-	}
-
-	// Validate thread ID is a valid UUID
 	if _, err := uuid.Parse(threadID); err != nil {
 		g.sendJSONError(w, http.StatusBadRequest, "invalid thread_id format")
 		return
 	}
 
-	// Parse optional limit parameter (default 50, max 1000)
-	limit := 50
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		parsed, err := strconv.Atoi(limitStr)
-		if err != nil || parsed < 1 {
-			g.sendJSONError(w, http.StatusBadRequest, "limit must be a positive integer")
-			return
-		}
-		limit = parsed
-		if limit > 1000 {
-			limit = 1000
-		}
-	}
-
-	// Verify thread exists
-	_, err := g.store.GetThread(r.Context(), threadID)
-	if errors.Is(err, store.ErrNotFound) {
-		g.sendJSONError(w, http.StatusNotFound, "thread not found")
+	limit, errMsg := parseLimitParam(r, 50, 1000)
+	if errMsg != "" {
+		g.sendJSONError(w, http.StatusBadRequest, errMsg)
 		return
 	}
-	if err != nil {
+
+	if _, err := g.store.GetThread(r.Context(), threadID); errors.Is(err, store.ErrNotFound) {
+		g.sendJSONError(w, http.StatusNotFound, "thread not found")
+		return
+	} else if err != nil {
 		g.logger.Error("failed to get thread", "error", err)
 		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	// Get messages from unified ledger_events storage
 	events, err := g.store.GetEventsByThreadID(r.Context(), threadID, limit)
 	if err != nil {
 		g.logger.Error("failed to get events", "error", err)
@@ -876,18 +943,15 @@ func (g *Gateway) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build response - convert events to message format for backward compatibility
-	response := ThreadMessagesResponse{
-		ThreadID: threadID,
-		Messages: make([]MessageResponse, len(events)),
-	}
-
+	response := ThreadMessagesResponse{ThreadID: threadID, Messages: make([]MessageResponse, len(events))}
 	for i, evt := range events {
 		response.Messages[i] = g.eventToMessageResponse(threadID, evt)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		g.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
 // eventToMessageResponse converts a ledger event to MessageResponse for API backward compatibility.
@@ -912,7 +976,7 @@ func (g *Gateway) eventToMessageResponse(threadID string, evt *store.LedgerEvent
 // handleAgentRoutes routes /api/agents/{id}/* requests to the appropriate handler.
 // Routes:
 // - GET /api/agents/{id}/history -> handleAgentHistoryImpl
-// - POST /api/agents/{id}/send -> handleSendToAgent
+// - POST /api/agents/{id}/send -> handleSendToAgent.
 func (g *Gateway) handleAgentRoutes(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	prefix := "/api/agents/"
@@ -935,6 +999,7 @@ func (g *Gateway) handleAgentRoutes(w http.ResponseWriter, r *http.Request) {
 
 // handleAgentHistory handles GET /api/agents/{id}/history requests.
 // Returns recent conversation events for a specific agent, ordered by timestamp DESC.
+//
 // Deprecated: use handleAgentRoutes which dispatches to handleAgentHistoryImpl.
 func (g *Gateway) handleAgentHistory(w http.ResponseWriter, r *http.Request) {
 	g.handleAgentRoutes(w, r)
@@ -942,59 +1007,29 @@ func (g *Gateway) handleAgentHistory(w http.ResponseWriter, r *http.Request) {
 
 // handleAgentHistoryImpl handles GET /api/agents/{id}/history requests.
 // Returns conversation events for a specific agent with pagination and usage stats.
-// Query params: limit (default 50, max 500), cursor (for pagination)
+// Query params: limit (default 50, max 500), cursor (for pagination).
 func (g *Gateway) handleAgentHistoryImpl(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Extract agent ID from path: /api/agents/{id}/history
-	path := r.URL.Path
-	prefix := "/api/agents/"
-	suffix := "/history"
-
-	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
-		g.sendJSONError(w, http.StatusBadRequest, "invalid path")
+	agentID, ok := extractPathSegment(r.URL.Path, "/api/agents/", "/history")
+	if !ok {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid path or agent_id")
 		return
 	}
 
-	agentID := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
-	if agentID == "" {
-		g.sendJSONError(w, http.StatusBadRequest, "agent_id is required")
-		return
-	}
-	// Validate agent ID doesn't contain path traversal characters
-	if strings.Contains(agentID, "/") || strings.Contains(agentID, "..") {
-		g.sendJSONError(w, http.StatusBadRequest, "invalid agent_id")
+	limit, errMsg := parseLimitParam(r, 50, 500)
+	if errMsg != "" {
+		g.sendJSONError(w, http.StatusBadRequest, errMsg)
 		return
 	}
 
-	// Note: We intentionally don't require the agent to be currently connected.
-	// History should be queryable even for offline agents.
-
-	// Parse optional limit parameter (default 50, max 500)
-	limit := 50
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		parsed, err := strconv.Atoi(limitStr)
-		if err != nil || parsed < 1 {
-			g.sendJSONError(w, http.StatusBadRequest, "limit must be a positive integer")
-			return
-		}
-		limit = parsed
-		if limit > 500 {
-			limit = 500
-		}
-	}
-
-	// Parse optional cursor parameter for pagination
-	cursor := r.URL.Query().Get("cursor")
-
-	// Query events by conversation key (agent ID), ordered chronologically
 	result, err := g.store.GetEvents(r.Context(), store.GetEventsParams{
 		ConversationKey: agentID,
 		Limit:           limit,
-		Cursor:          cursor,
+		Cursor:          r.URL.Query().Get("cursor"),
 	})
 	if err != nil {
 		g.logger.Error("failed to get events", "error", err)
@@ -1002,62 +1037,39 @@ func (g *Gateway) handleAgentHistoryImpl(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Build events response
 	events := make([]AgentHistoryEvent, len(result.Events))
 	for i, evt := range result.Events {
-		events[i] = AgentHistoryEvent{
-			ID:        evt.ID,
-			Direction: string(evt.Direction),
-			Author:    evt.Author,
-			Type:      string(evt.Type),
-			Timestamp: evt.Timestamp.Format(time.RFC3339),
-		}
-		if evt.ThreadID != nil {
-			events[i].ThreadID = *evt.ThreadID
-		}
-		if evt.Text != nil {
-			events[i].Text = *evt.Text
-		}
+		events[i] = eventToHistoryEvent(evt)
 	}
 
-	// Get aggregated usage stats
-	var usage AgentHistoryUsage
-	usageStore, ok := g.store.(store.UsageStore)
-	if ok {
-		stats, err := usageStore.GetUsageStats(r.Context(), store.UsageFilter{
-			AgentID: &agentID,
-		})
-		if err != nil {
-			g.logger.Warn("failed to get usage stats", "error", err)
-			// Continue without usage stats rather than failing the request
-		} else {
-			usage = AgentHistoryUsage{
-				TotalInput:      stats.TotalInput,
-				TotalOutput:     stats.TotalOutput,
-				TotalCacheRead:  stats.TotalCacheRead,
-				TotalCacheWrite: stats.TotalCacheWrite,
-				TotalThinking:   stats.TotalThinking,
-				TotalTokens:     stats.TotalTokens,
-				RequestCount:    stats.RequestCount,
-			}
-		}
-	}
-
+	usage := g.fetchUsageStats(r.Context(), agentID)
 	response := AgentHistoryResponse{
-		AgentID: agentID,
-		Events:  events,
-		Count:   len(events),
-		HasMore: result.HasMore,
-		Usage:   usage,
-	}
-	if result.NextCursor != "" {
-		response.NextCursor = result.NextCursor
+		AgentID:    agentID,
+		Events:     events,
+		Count:      len(events),
+		HasMore:    result.HasMore,
+		Usage:      usage,
+		NextCursor: result.NextCursor,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		g.logger.Error("failed to encode agent history response", "error", err)
 	}
+}
+
+// fetchUsageStats retrieves usage stats for an agent, returning empty stats on error.
+func (g *Gateway) fetchUsageStats(ctx context.Context, agentID string) AgentHistoryUsage {
+	usageStore, ok := g.store.(store.UsageStore)
+	if !ok {
+		return AgentHistoryUsage{}
+	}
+	stats, err := usageStore.GetUsageStats(ctx, store.UsageFilter{AgentID: &agentID})
+	if err != nil {
+		g.logger.Warn("failed to get usage stats", "error", err)
+		return AgentHistoryUsage{}
+	}
+	return usageStatsToHistory(stats)
 }
 
 // handleSendToAgent handles POST /api/agents/{id}/send requests.
@@ -1068,43 +1080,27 @@ func (g *Gateway) handleSendToAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract agent ID from path: /api/agents/{id}/send
-	path := r.URL.Path
-	prefix := "/api/agents/"
-	suffix := "/send"
-
-	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
-		g.sendJSONError(w, http.StatusBadRequest, "invalid path")
+	agentID, ok := extractPathSegment(r.URL.Path, "/api/agents/", "/send")
+	if !ok {
+		g.sendJSONError(w, http.StatusBadRequest, "invalid path or agent_id")
 		return
 	}
 
-	agentID := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
-	if agentID == "" {
-		g.sendJSONError(w, http.StatusBadRequest, "agent_id is required")
-		return
-	}
-
-	// Parse JSON body
 	var req SendToAgentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		g.sendJSONError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-
-	// Validate message is not empty
 	if req.Message == "" {
 		g.sendJSONError(w, http.StatusBadRequest, "message is required")
 		return
 	}
 
-	// Look up agent by ID to verify it exists
-	_, ok := g.agentManager.GetAgent(agentID)
-	if !ok {
+	if _, ok := g.agentManager.GetAgent(agentID); !ok {
 		g.sendJSONError(w, http.StatusNotFound, "agent not found")
 		return
 	}
 
-	// Check streaming support before sending (fail fast)
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		g.logger.Error("streaming not supported")
@@ -1112,42 +1108,47 @@ func (g *Gateway) handleSendToAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate unique conversation key for this request
-	conversationKey := "leader:" + uuid.New().String()
-
-	// Send message via ConversationService
-	convReq := &conversation.SendRequest{
-		ThreadID:     uuid.New().String(), // New thread for each request
-		FrontendName: "leader",
-		ExternalID:   conversationKey,
-		AgentID:      agentID,
-		Sender:       "coven-leader",
-		Content:      req.Message,
-	}
-
-	convResp, err := g.conversation.SendMessage(r.Context(), convReq)
+	convResp, err := g.sendAgentMessage(r.Context(), agentID, req.Message)
 	if err != nil {
-		if errors.Is(err, agent.ErrAgentNotFound) {
-			g.sendJSONError(w, http.StatusNotFound, "agent not found")
-			return
-		}
-		g.logger.Error("failed to send message", "error", err)
-		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+		g.handleSendError(w, err)
 		return
 	}
 
-	// Set SSE headers
+	g.startSSEStream(r.Context(), w, flusher, convResp)
+}
+
+// sendAgentMessage creates and sends a message to an agent via ConversationService.
+func (g *Gateway) sendAgentMessage(ctx context.Context, agentID, message string) (*conversation.SendResponse, error) {
+	convReq := &conversation.SendRequest{
+		ThreadID:     uuid.New().String(),
+		FrontendName: "leader",
+		ExternalID:   "leader:" + uuid.New().String(),
+		AgentID:      agentID,
+		Sender:       "coven-leader",
+		Content:      message,
+	}
+	return g.conversation.SendMessage(ctx, convReq)
+}
+
+// handleSendError sends the appropriate error response for message send failures.
+func (g *Gateway) handleSendError(w http.ResponseWriter, err error) {
+	if errors.Is(err, agent.ErrAgentNotFound) {
+		g.sendJSONError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	g.logger.Error("failed to send message", "error", err)
+	g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+}
+
+// startSSEStream sets SSE headers and begins streaming responses.
+func (g *Gateway) startSSEStream(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, convResp *conversation.SendResponse) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
-
-	// Send initial "started" event with thread_id so client can track the conversation
 	g.writeSSEEvent(w, "started", map[string]string{"thread_id": convResp.ThreadID})
 	flusher.Flush()
-
-	// Stream responses (persistence is handled by ConversationService)
-	g.streamResponses(r.Context(), w, flusher, convResp.Stream)
+	g.streamResponses(ctx, w, flusher, convResp.Stream)
 }
 
 // UsageStatsResponse is the JSON response for GET /api/stats/usage.
@@ -1244,7 +1245,9 @@ func (g *Gateway) handleUsageStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		g.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
 // handleThreadUsage handles GET /api/threads/{id}/usage requests.
@@ -1255,29 +1258,16 @@ func (g *Gateway) handleThreadUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract thread ID from path: /api/threads/{id}/usage
-	path := r.URL.Path
-	prefix := "/api/threads/"
-	suffix := "/usage"
-
-	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
+	threadID, ok := extractPathSegment(r.URL.Path, "/api/threads/", "/usage")
+	if !ok {
 		g.sendJSONError(w, http.StatusBadRequest, "invalid path")
 		return
 	}
-
-	threadID := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
-	if threadID == "" {
-		g.sendJSONError(w, http.StatusBadRequest, "thread_id is required")
-		return
-	}
-
-	// Validate thread ID is a valid UUID
 	if _, err := uuid.Parse(threadID); err != nil {
 		g.sendJSONError(w, http.StatusBadRequest, "invalid thread_id format")
 		return
 	}
 
-	// Type assert to get UsageStore methods
 	usageStore, ok := g.store.(store.UsageStore)
 	if !ok {
 		g.logger.Error("store does not implement UsageStore")
@@ -1285,19 +1275,11 @@ func (g *Gateway) handleThreadUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify thread exists
-	_, err := g.store.GetThread(r.Context(), threadID)
-	if errors.Is(err, store.ErrNotFound) {
-		g.sendJSONError(w, http.StatusNotFound, "thread not found")
-		return
-	}
-	if err != nil {
-		g.logger.Error("failed to get thread", "error", err)
-		g.sendJSONError(w, http.StatusInternalServerError, "internal server error")
+	if errMsg := g.verifyThreadExists(r.Context(), threadID); errMsg != "" {
+		g.sendJSONError(w, http.StatusNotFound, errMsg)
 		return
 	}
 
-	// Get usage records
 	usages, err := usageStore.GetThreadUsage(r.Context(), threadID)
 	if err != nil {
 		g.logger.Error("failed to get thread usage", "error", err)
@@ -1305,14 +1287,31 @@ func (g *Gateway) handleThreadUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build response
-	response := ThreadUsageResponse{
-		ThreadID: threadID,
-		Usage:    make([]UsageResponse, len(usages)),
+	response := ThreadUsageResponse{ThreadID: threadID, Usage: usagesToResponse(usages)}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		g.logger.Debug("failed to encode response", "error", err)
 	}
+}
 
+// verifyThreadExists checks if a thread exists and returns an error message if not.
+func (g *Gateway) verifyThreadExists(ctx context.Context, threadID string) string {
+	_, err := g.store.GetThread(ctx, threadID)
+	if errors.Is(err, store.ErrNotFound) {
+		return "thread not found"
+	}
+	if err != nil {
+		g.logger.Error("failed to get thread", "error", err)
+		return "internal server error"
+	}
+	return ""
+}
+
+// usagesToResponse converts usage records to response format.
+func usagesToResponse(usages []*store.TokenUsage) []UsageResponse {
+	result := make([]UsageResponse, len(usages))
 	for i, u := range usages {
-		response.Usage[i] = UsageResponse{
+		result[i] = UsageResponse{
 			ID:               u.ID,
 			MessageID:        u.MessageID,
 			RequestID:        u.RequestID,
@@ -1325,9 +1324,7 @@ func (g *Gateway) handleThreadUsage(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:        u.CreatedAt.Format(time.RFC3339),
 		}
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	return result
 }
 
 // ToolApprovalRequestBody is the JSON request for POST /api/tools/approve.
@@ -1374,10 +1371,12 @@ func (g *Gateway) handleToolApproval(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"success":  true,
 		"approved": req.Approved,
-	})
+	}); err != nil {
+		g.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
 // AnswerQuestionRequestBody is the JSON request for POST /api/questions/answer.
@@ -1386,6 +1385,20 @@ type AnswerQuestionRequestBody struct {
 	QuestionID string   `json:"question_id"`
 	Selected   []string `json:"selected"`
 	CustomText string   `json:"custom_text,omitempty"`
+}
+
+// validateAnswerQuestionRequest validates the answer question request.
+func validateAnswerQuestionRequest(req *AnswerQuestionRequestBody) string {
+	if req.AgentID == "" {
+		return "agent_id is required"
+	}
+	if req.QuestionID == "" {
+		return "question_id is required"
+	}
+	if len(req.Selected) == 0 && req.CustomText == "" {
+		return "at least one selection or custom_text is required"
+	}
+	return ""
 }
 
 // handleAnswerQuestion handles POST /api/questions/answer requests.
@@ -1401,28 +1414,15 @@ func (g *Gateway) handleAnswerQuestion(w http.ResponseWriter, r *http.Request) {
 		g.sendJSONError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-
-	if req.AgentID == "" {
-		g.sendJSONError(w, http.StatusBadRequest, "agent_id is required")
+	if errMsg := validateAnswerQuestionRequest(&req); errMsg != "" {
+		g.sendJSONError(w, http.StatusBadRequest, errMsg)
 		return
 	}
-
-	if req.QuestionID == "" {
-		g.sendJSONError(w, http.StatusBadRequest, "question_id is required")
-		return
-	}
-
-	if len(req.Selected) == 0 && req.CustomText == "" {
-		g.sendJSONError(w, http.StatusBadRequest, "at least one selection or custom_text is required")
-		return
-	}
-
 	if g.questionRouter == nil {
 		g.sendJSONError(w, http.StatusServiceUnavailable, "question router not configured")
 		return
 	}
 
-	// Build the proto answer
 	answer := &pb.AnswerQuestionRequest{
 		AgentId:    req.AgentID,
 		QuestionId: req.QuestionID,
@@ -1432,16 +1432,14 @@ func (g *Gateway) handleAnswerQuestion(w http.ResponseWriter, r *http.Request) {
 		answer.CustomText = &req.CustomText
 	}
 
-	err := g.questionRouter.DeliverAnswer(req.AgentID, req.QuestionID, answer)
-	if err != nil {
+	if err := g.questionRouter.DeliverAnswer(req.AgentID, req.QuestionID, answer); err != nil {
 		g.logger.Error("failed to deliver question answer", "error", err)
-		// Return generic error to avoid leaking internal agent IDs
 		g.sendJSONError(w, http.StatusNotFound, "question not found or already answered")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-	})
+	if err := json.NewEncoder(w).Encode(map[string]any{"success": true}); err != nil {
+		g.logger.Debug("failed to encode response", "error", err)
+	}
 }

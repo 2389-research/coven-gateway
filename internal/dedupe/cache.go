@@ -44,6 +44,26 @@ func (c *Cache) Check(key string) bool {
 	return time.Since(t) < c.ttl
 }
 
+// CheckAndMark atomically checks if a key has been seen and marks it if not.
+// Returns true if the key was already seen (duplicate), false if it's new and now marked.
+// This prevents TOCTOU race conditions that could occur with separate Check/Mark calls.
+func (c *Cache) CheckAndMark(key string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	t, ok := c.seen[key]
+	if ok && time.Since(t) < c.ttl {
+		return true // Already seen, reject
+	}
+
+	// Not seen (or expired), mark it
+	if !ok && len(c.seen) >= c.maxSize {
+		c.evictOldest()
+	}
+	c.seen[key] = time.Now()
+	return false
+}
+
 // Mark records that a key has been seen. If the cache is at capacity,
 // the oldest entry is evicted to make room.
 func (c *Cache) Mark(key string) {

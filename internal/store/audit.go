@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// AuditAction represents an auditable action
+// AuditAction represents an auditable action.
 type AuditAction string
 
 const (
@@ -28,7 +28,7 @@ const (
 	AuditDeletePrincipal  AuditAction = "delete_principal"
 )
 
-// ValidAuditActions lists all valid audit actions
+// ValidAuditActions lists all valid audit actions.
 var ValidAuditActions = []AuditAction{
 	AuditApprovePrincipal,
 	AuditRevokePrincipal,
@@ -42,7 +42,7 @@ var ValidAuditActions = []AuditAction{
 	AuditDeletePrincipal,
 }
 
-// AuditEntry represents a single audit log entry
+// AuditEntry represents a single audit log entry.
 type AuditEntry struct {
 	ID               string         // UUID v4
 	ActorPrincipalID string         // who performed the action
@@ -54,7 +54,7 @@ type AuditEntry struct {
 	Detail           map[string]any // additional context (max 64KB JSON)
 }
 
-// AuditFilter specifies filtering options for listing audit entries
+// AuditFilter specifies filtering options for listing audit entries.
 type AuditFilter struct {
 	Since            *time.Time   // entries after this time
 	Until            *time.Time   // entries before this time
@@ -116,52 +116,101 @@ func (s *SQLiteStore) AppendAuditLog(ctx context.Context, e *AuditEntry) error {
 	return nil
 }
 
-// ListAuditLog returns audit entries matching the filter criteria.
-// Results are returned newest first (DESC by timestamp).
-func (s *SQLiteStore) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, error) {
-	// Apply defaults
-	limit := f.Limit
-	if limit <= 0 {
-		limit = 100
+// normalizeAuditLimit applies default (100) and cap (1000) to audit limit.
+func normalizeAuditLimit(limit int) int {
+	switch {
+	case limit <= 0:
+		return 100
+	case limit > 1000:
+		return 1000
+	default:
+		return limit
 	}
-	if limit > 1000 {
-		limit = 1000
-	}
+}
 
-	query := `
-		SELECT audit_id, actor_principal_id, actor_member_id, action, target_type, target_id, ts, detail_json
-		FROM audit_log
-		WHERE (? IS NULL OR ts >= ?)
-		  AND (? IS NULL OR ts <= ?)
-		  AND (? IS NULL OR actor_principal_id = ?)
-		  AND (? IS NULL OR action = ?)
-		  AND (? IS NULL OR target_type = ?)
-		  AND (? IS NULL OR target_id = ?)
-		ORDER BY ts DESC
-		LIMIT ?
-	`
+// auditQueryArgs builds the query arguments from an AuditFilter.
+type auditQueryArgs struct {
+	sinceStr  *string
+	untilStr  *string
+	actionStr *string
+}
 
-	var sinceStr, untilStr *string
+// buildAuditQueryArgs converts filter time/action fields to query args.
+func buildAuditQueryArgs(f AuditFilter) auditQueryArgs {
+	var args auditQueryArgs
 	if f.Since != nil {
 		s := f.Since.UTC().Format(time.RFC3339)
-		sinceStr = &s
+		args.sinceStr = &s
 	}
 	if f.Until != nil {
 		s := f.Until.UTC().Format(time.RFC3339)
-		untilStr = &s
+		args.untilStr = &s
 	}
-
-	var actionStr *string
 	if f.Action != nil {
 		a := string(*f.Action)
-		actionStr = &a
+		args.actionStr = &a
+	}
+	return args
+}
+
+// scanAuditEntry scans a row into an AuditEntry.
+func scanAuditEntry(scanner interface{ Scan(dest ...any) error }) (AuditEntry, error) {
+	var e AuditEntry
+	var actionStr, tsStr string
+	var detailJSON *string
+
+	if err := scanner.Scan(
+		&e.ID,
+		&e.ActorPrincipalID,
+		&e.ActorMemberID,
+		&actionStr,
+		&e.TargetType,
+		&e.TargetID,
+		&tsStr,
+		&detailJSON,
+	); err != nil {
+		return e, fmt.Errorf("scanning audit entry: %w", err)
 	}
 
-	rows, err := s.db.QueryContext(ctx, query,
-		sinceStr, sinceStr,
-		untilStr, untilStr,
+	e.Action = AuditAction(actionStr)
+	var err error
+	e.Timestamp, err = time.Parse(time.RFC3339, tsStr)
+	if err != nil {
+		return e, fmt.Errorf("parsing timestamp: %w", err)
+	}
+
+	if detailJSON != nil {
+		if err := json.Unmarshal([]byte(*detailJSON), &e.Detail); err != nil {
+			return e, fmt.Errorf("unmarshaling detail: %w", err)
+		}
+	}
+	return e, nil
+}
+
+const auditLogQuery = `
+	SELECT audit_id, actor_principal_id, actor_member_id, action, target_type, target_id, ts, detail_json
+	FROM audit_log
+	WHERE (? IS NULL OR ts >= ?)
+	  AND (? IS NULL OR ts <= ?)
+	  AND (? IS NULL OR actor_principal_id = ?)
+	  AND (? IS NULL OR action = ?)
+	  AND (? IS NULL OR target_type = ?)
+	  AND (? IS NULL OR target_id = ?)
+	ORDER BY ts DESC
+	LIMIT ?
+`
+
+// ListAuditLog returns audit entries matching the filter criteria.
+// Results are returned newest first (DESC by timestamp).
+func (s *SQLiteStore) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, error) {
+	limit := normalizeAuditLimit(f.Limit)
+	args := buildAuditQueryArgs(f)
+
+	rows, err := s.db.QueryContext(ctx, auditLogQuery,
+		args.sinceStr, args.sinceStr,
+		args.untilStr, args.untilStr,
 		f.ActorPrincipalID, f.ActorPrincipalID,
-		actionStr, actionStr,
+		args.actionStr, args.actionStr,
 		f.TargetType, f.TargetType,
 		f.TargetID, f.TargetID,
 		limit,
@@ -169,40 +218,14 @@ func (s *SQLiteStore) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditE
 	if err != nil {
 		return nil, fmt.Errorf("querying audit log: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var entries []AuditEntry
 	for rows.Next() {
-		var e AuditEntry
-		var actionStr, tsStr string
-		var detailJSON *string
-
-		if err := rows.Scan(
-			&e.ID,
-			&e.ActorPrincipalID,
-			&e.ActorMemberID,
-			&actionStr,
-			&e.TargetType,
-			&e.TargetID,
-			&tsStr,
-			&detailJSON,
-		); err != nil {
-			return nil, fmt.Errorf("scanning audit entry: %w", err)
-		}
-
-		e.Action = AuditAction(actionStr)
-
-		e.Timestamp, err = time.Parse(time.RFC3339, tsStr)
+		e, err := scanAuditEntry(rows)
 		if err != nil {
-			return nil, fmt.Errorf("parsing timestamp: %w", err)
+			return nil, err
 		}
-
-		if detailJSON != nil {
-			if err := json.Unmarshal([]byte(*detailJSON), &e.Detail); err != nil {
-				return nil, fmt.Errorf("unmarshaling detail: %w", err)
-			}
-		}
-
 		entries = append(entries, e)
 	}
 
@@ -210,10 +233,8 @@ func (s *SQLiteStore) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditE
 		return nil, fmt.Errorf("iterating audit entries: %w", err)
 	}
 
-	// Return empty slice (not nil) if no entries
 	if entries == nil {
 		entries = []AuditEntry{}
 	}
-
 	return entries, nil
 }

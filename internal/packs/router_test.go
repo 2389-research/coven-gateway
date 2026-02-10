@@ -138,7 +138,7 @@ func TestRouterRouteToolCall(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
-		resp, err := router.RouteToolCall(ctx, "slow-tool", `{}`, "req-cancelled", "test-agent")
+		resp, err := router.RouteToolCall(ctx, "slow-tool", `{}`, "req-canceled", "test-agent")
 
 		if !errors.Is(err, context.Canceled) {
 			t.Errorf("expected context.Canceled, got %v", err)
@@ -336,7 +336,7 @@ func TestRouterPendingCount(t *testing.T) {
 
 		// Start multiple requests
 		var wg sync.WaitGroup
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
@@ -360,7 +360,7 @@ func TestRouterPendingCount(t *testing.T) {
 		}
 
 		// Complete the requests
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			select {
 			case req := <-pack.Channel:
 				router.HandleToolResponse(&pb.ExecuteToolResponse{
@@ -445,7 +445,7 @@ func TestRouterConcurrentAccess(t *testing.T) {
 		)
 
 		// Handle requests in background (multiple goroutines to handle concurrency)
-		for i := 0; i < 4; i++ {
+		for range 4 {
 			go func() {
 				for req := range pack.Channel {
 					// Simulate some processing time
@@ -465,7 +465,7 @@ func TestRouterConcurrentAccess(t *testing.T) {
 		numRequests := 10
 		errCh := make(chan error, numRequests)
 
-		for i := 0; i < numRequests; i++ {
+		for i := range numRequests {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()

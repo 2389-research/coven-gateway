@@ -6,6 +6,7 @@ package gateway
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -17,6 +18,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
+	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/tsnet"
 
 	"github.com/2389/coven-gateway/internal/admin"
@@ -75,20 +77,41 @@ type Gateway struct {
 	mockSender messageSender
 }
 
-// New creates a new Gateway instance with the given configuration.
-func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
-	// Initialize store
-	// COVEN_DB_PATH env var overrides config for Docker deployments
-	var s store.Store
-	var err error
+// determineWebAdminBaseURL resolves the web admin base URL from config or environment.
+func determineWebAdminBaseURL(cfg *config.Config, logger *slog.Logger) string {
+	// Use explicit config first
+	if cfg.WebAdmin.BaseURL != "" {
+		return cfg.WebAdmin.BaseURL
+	}
 
+	// Check COVEN_GATEWAY_URL env var (includes full tailnet DNS name)
+	if envURL := os.Getenv("COVEN_GATEWAY_URL"); envURL != "" {
+		return envURL
+	}
+
+	// Auto-detect based on deployment mode
+	if !cfg.Tailscale.Enabled {
+		return "http://" + cfg.Server.HTTPAddr
+	}
+
+	// Tailscale enabled
+	if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
+		logger.Warn("webadmin.base_url/COVEN_GATEWAY_URL not set - WebAuthn/passkeys may fail. Set COVEN_GATEWAY_URL to full tailnet URL (e.g., https://coven-gateway.your-tailnet.ts.net)")
+		return "https://" + cfg.Tailscale.Hostname
+	}
+	return "http://" + cfg.Tailscale.Hostname
+}
+
+// initStore creates and returns a store based on config and environment.
+func initStore(cfg *config.Config) (store.Store, error) {
 	dbPath := cfg.Database.Path
 	if envPath := os.Getenv("COVEN_DB_PATH"); envPath != "" {
 		dbPath = envPath
 	}
 
+	var s store.Store
+	var err error
 	if dbPath == ":memory:" {
-		// For testing, use in-memory store
 		s, err = store.NewSQLiteStore(":memory:")
 	} else {
 		s, err = store.NewSQLiteStore(dbPath)
@@ -96,144 +119,217 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	if err != nil {
 		return nil, fmt.Errorf("initializing store: %w", err)
 	}
+	return s, nil
+}
 
-	// Create agent manager
-	agentMgr := agent.NewManager(logger.With("component", "agent-manager"))
+// grpcServerResult holds the result of creating a gRPC server.
+type grpcServerResult struct {
+	server      *grpc.Server
+	jwtVerifier *auth.JWTVerifier
+}
 
-	// Create dedupe cache for bridge message deduplication
-	// TTL of 5 minutes, max size 100,000 entries
-	dedupeCache := dedupe.New(5*time.Minute, 100_000)
-
-	// Create gRPC server with auth interceptors if JWT secret is configured
-	var grpcServer *grpc.Server
-	var jwtVerifier *auth.JWTVerifier // Stored for token generation
-	if cfg.Auth.JWTSecret != "" {
-		// Create JWT verifier for client auth
-		var err error
-		jwtVerifier, err = auth.NewJWTVerifier([]byte(cfg.Auth.JWTSecret))
-		if err != nil {
-			return nil, fmt.Errorf("creating JWT verifier: %w", err)
-		}
-
-		// Create SSH verifier for agent auth
-		sshVerifier := auth.NewSSHVerifier()
-
-		// Create store adapter for auth interceptors
-		sqlStore := s.(*store.SQLiteStore)
-
-		// Create auth config for auto-registration
-		authConfig := &auth.AuthConfig{
-			AgentAutoRegistration: cfg.Auth.AgentAutoRegistration,
-		}
-		// Default to "disabled" if not set (secure by default)
-		if authConfig.AgentAutoRegistration == "" {
-			authConfig.AgentAutoRegistration = "disabled"
-		}
-
-		// Create gRPC server with auth interceptors
-		// Supports both JWT (clients) and SSH key (agents) authentication
-		grpcServer = grpc.NewServer(
-			grpc.KeepaliveParams(keepalive.ServerParameters{
-				Time:    15 * time.Second, // Ping client if idle for 15s
-				Timeout: 5 * time.Second,  // Wait 5s for ping ack
-			}),
-			grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
-				MinTime:             5 * time.Second, // Allow pings as frequent as every 5s
-				PermitWithoutStream: true,            // Allow pings even without active RPC
-			}),
-			grpc.ChainUnaryInterceptor(
-				auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore),
-				auth.RequireAdmin(),
-			),
-			grpc.ChainStreamInterceptor(
-				auth.StreamInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore),
-				auth.RequireAdminStream(),
-			),
-		)
-		logger.Info("auth interceptors enabled (JWT + SSH)")
-	} else {
-		// No auth - create gRPC server with anonymous auth interceptors
-		// These inject a placeholder auth context to prevent panics in handlers
-		grpcServer = grpc.NewServer(
-			grpc.KeepaliveParams(keepalive.ServerParameters{
-				Time:    15 * time.Second, // Ping client if idle for 15s
-				Timeout: 5 * time.Second,  // Wait 5s for ping ack
-			}),
-			grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
-				MinTime:             5 * time.Second, // Allow pings as frequent as every 5s
-				PermitWithoutStream: true,            // Allow pings even without active RPC
-			}),
-			grpc.ChainUnaryInterceptor(auth.NoAuthUnaryInterceptor()),
-			grpc.ChainStreamInterceptor(auth.NoAuthStreamInterceptor()),
-		)
-		logger.Warn("auth disabled - no jwt_secret configured")
+// createAuthenticatedGRPCServer creates a gRPC server with JWT and SSH auth interceptors.
+func createAuthenticatedGRPCServer(cfg *config.Config, sqlStore *store.SQLiteStore, logger *slog.Logger) (*grpcServerResult, error) {
+	jwtVerifier, err := auth.NewJWTVerifier([]byte(cfg.Auth.JWTSecret))
+	if err != nil {
+		return nil, fmt.Errorf("creating JWT verifier: %w", err)
 	}
 
-	// Create event broadcaster for cross-client push notifications
-	eventBroadcaster := conversation.NewEventBroadcaster(logger.With("component", "broadcaster"))
+	sshVerifier := auth.NewSSHVerifier()
 
-	// Create conversation service (central message persistence layer)
-	convService := conversation.New(
-		s.(*store.SQLiteStore),
-		agentMgr,
-		logger.With("component", "conversation"),
-		eventBroadcaster,
+	authConfig := &auth.AuthConfig{
+		AgentAutoRegistration: cfg.Auth.AgentAutoRegistration,
+	}
+	if authConfig.AgentAutoRegistration == "" {
+		authConfig.AgentAutoRegistration = "disabled"
+	}
+
+	server := grpc.NewServer(
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:    15 * time.Second,
+			Timeout: 5 * time.Second,
+		}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             5 * time.Second,
+			PermitWithoutStream: true,
+		}),
+		grpc.ChainUnaryInterceptor(
+			auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore),
+			auth.RequireAdmin(),
+		),
+		grpc.ChainStreamInterceptor(
+			auth.StreamInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore),
+			auth.RequireAdminStream(),
+		),
 	)
+	logger.Info("auth interceptors enabled (JWT + SSH)")
+	return &grpcServerResult{server: server, jwtVerifier: jwtVerifier}, nil
+}
 
-	// Create pack registry and router for tool pack support
+// createUnauthenticatedGRPCServer creates a gRPC server without auth (anonymous mode).
+func createUnauthenticatedGRPCServer(logger *slog.Logger) *grpc.Server {
+	server := grpc.NewServer(
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:    15 * time.Second,
+			Timeout: 5 * time.Second,
+		}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             5 * time.Second,
+			PermitWithoutStream: true,
+		}),
+		grpc.ChainUnaryInterceptor(auth.NoAuthUnaryInterceptor()),
+		grpc.ChainStreamInterceptor(auth.NoAuthStreamInterceptor()),
+	)
+	logger.Warn("auth disabled - no jwt_secret configured")
+	return server
+}
+
+// createGRPCServer creates a gRPC server with or without auth based on config.
+func createGRPCServer(cfg *config.Config, sqlStore *store.SQLiteStore, logger *slog.Logger) (*grpcServerResult, error) {
+	if cfg.Auth.JWTSecret != "" {
+		return createAuthenticatedGRPCServer(cfg, sqlStore, logger)
+	}
+	return &grpcServerResult{server: createUnauthenticatedGRPCServer(logger)}, nil
+}
+
+// registerBuiltinPacks registers all builtin packs with the registry.
+func registerBuiltinPacks(registry *packs.Registry, agentMgr *agent.Manager, s store.Store, builtinStore *store.SQLiteStore) error {
+	if err := registry.RegisterBuiltinPack(builtins.BasePack(builtinStore)); err != nil {
+		return fmt.Errorf("registering base pack: %w", err)
+	}
+	if err := registry.RegisterBuiltinPack(builtins.AdminPack(agentMgr, s, builtinStore)); err != nil {
+		return fmt.Errorf("registering admin pack: %w", err)
+	}
+	if err := registry.RegisterBuiltinPack(builtins.MailPack(builtinStore)); err != nil {
+		return fmt.Errorf("registering mail pack: %w", err)
+	}
+	if err := registry.RegisterBuiltinPack(builtins.NotesPack(builtinStore)); err != nil {
+		return fmt.Errorf("registering notes pack: %w", err)
+	}
+	return nil
+}
+
+// determineMCPEndpoint resolves the MCP endpoint URL from env or config.
+// Priority: COVEN_MCP_ENDPOINT env > COVEN_GATEWAY_URL + /mcp > derived from config.
+func determineMCPEndpoint(cfg *config.Config, logger *slog.Logger) string {
+	if envEndpoint := os.Getenv("COVEN_MCP_ENDPOINT"); envEndpoint != "" {
+		return envEndpoint
+	}
+	if envGatewayURL := os.Getenv("COVEN_GATEWAY_URL"); envGatewayURL != "" {
+		return envGatewayURL + "/mcp"
+	}
+	if cfg.Tailscale.Enabled {
+		scheme := "https"
+		if !cfg.Tailscale.HTTPS && !cfg.Tailscale.Funnel {
+			logger.Info("Tailscale HTTPS not explicitly enabled, but defaulting to HTTPS for MCP endpoint")
+		}
+		return scheme + "://" + cfg.Tailscale.Hostname + "/mcp"
+	}
+	return "http://" + cfg.Server.HTTPAddr + "/mcp"
+}
+
+// registerGRPCServices registers all gRPC services on the server.
+// Returns the clientService for additional configuration.
+func registerGRPCServices(gw *Gateway, grpcServer *grpc.Server, jwtVerifier *auth.JWTVerifier, sqlStore *store.SQLiteStore, dedupeCache *dedupe.Cache, agentMgr *agent.Manager, eventBroadcaster *conversation.EventBroadcaster, logger *slog.Logger) *client.ClientService {
+	// Register CovenControl service (agent streaming)
+	covenService := newCovenControlServer(gw, logger.With("component", "grpc"))
+	pb.RegisterCovenControlServer(grpcServer, covenService)
+
+	// Register AdminService - PrincipalService if auth enabled, basic otherwise
+	if jwtVerifier != nil {
+		principalService := admin.NewPrincipalService(sqlStore, jwtVerifier)
+		pb.RegisterAdminServiceServer(grpcServer, principalService)
+	} else {
+		adminService := admin.NewAdminService(sqlStore)
+		pb.RegisterAdminServiceServer(grpcServer, adminService)
+	}
+
+	// Register ClientService
+	clientService := client.NewClientServiceWithRouter(sqlStore, sqlStore, dedupeCache, agentMgr, agentMgr)
+	clientService.SetToolApprover(agentMgr)
+	clientService.SetBroadcaster(eventBroadcaster)
+	pb.RegisterClientServiceServer(grpcServer, clientService)
+
+	// Register PackService for tool pack support
+	packService := packs.NewPackServiceServer(gw.packRegistry, gw.packRouter, logger.With("component", "pack-service"))
+	pb.RegisterPackServiceServer(grpcServer, packService)
+
+	return clientService
+}
+
+// registerHTTPAPIRoutes registers API routes on the mux with or without auth middleware.
+func (g *Gateway) registerHTTPAPIRoutes(mux *http.ServeMux, cfg *config.Config, sqlStore *store.SQLiteStore, logger *slog.Logger) error {
+	if cfg.Auth.JWTSecret != "" {
+		httpVerifier, err := auth.NewJWTVerifier([]byte(cfg.Auth.JWTSecret))
+		if err != nil {
+			return fmt.Errorf("creating HTTP JWT verifier: %w", err)
+		}
+		authMiddleware := auth.HTTPAuthMiddleware(sqlStore, sqlStore, httpVerifier)
+		adminMiddleware := auth.RequireAdminHTTP()
+		mux.Handle("/api/agents", authMiddleware(http.HandlerFunc(g.handleListAgents)))
+		mux.Handle("/api/agents/", authMiddleware(http.HandlerFunc(g.handleAgentHistory)))
+		mux.Handle("/api/send", authMiddleware(http.HandlerFunc(g.handleSendMessage)))
+		mux.Handle("/api/threads/", authMiddleware(http.HandlerFunc(g.handleThreadRoutes)))
+		mux.Handle("/api/stats/usage", authMiddleware(http.HandlerFunc(g.handleUsageStats)))
+		mux.Handle("/api/tools/approve", authMiddleware(http.HandlerFunc(g.handleToolApproval)))
+		mux.Handle("/api/questions/answer", authMiddleware(http.HandlerFunc(g.handleAnswerQuestion)))
+		mux.Handle("/api/bindings", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost || r.Method == http.MethodDelete {
+				adminMiddleware(http.HandlerFunc(g.handleBindings)).ServeHTTP(w, r)
+			} else {
+				g.handleBindings(w, r)
+			}
+		})))
+		logger.Info("HTTP auth middleware enabled")
+	} else {
+		mux.HandleFunc("/api/agents", g.handleListAgents)
+		mux.HandleFunc("/api/agents/", g.handleAgentHistory)
+		mux.HandleFunc("/api/send", g.handleSendMessage)
+		mux.HandleFunc("/api/bindings", g.handleBindings)
+		mux.HandleFunc("/api/threads/", g.handleThreadRoutes)
+		mux.HandleFunc("/api/stats/usage", g.handleUsageStats)
+		mux.HandleFunc("/api/tools/approve", g.handleToolApproval)
+		mux.HandleFunc("/api/questions/answer", g.handleAnswerQuestion)
+		logger.Warn("HTTP auth disabled - no jwt_secret configured")
+	}
+	return nil
+}
+
+// New creates a new Gateway instance with the given configuration.
+func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
+	s, err := initStore(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	agentMgr := agent.NewManager(logger.With("component", "agent-manager"))
+	dedupeCache := dedupe.New(5*time.Minute, 100_000) // TTL 5min, max 100k entries
+
+	sqlStore, ok := s.(*store.SQLiteStore)
+	if !ok {
+		return nil, errors.New("unexpected store type: expected SQLiteStore")
+	}
+
+	grpcResult, err := createGRPCServer(cfg, sqlStore, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	eventBroadcaster := conversation.NewEventBroadcaster(logger.With("component", "broadcaster"))
+	convService := conversation.New(sqlStore, agentMgr, logger.With("component", "conversation"), eventBroadcaster)
+
 	packRegistry := packs.NewRegistry(logger.With("component", "pack-registry"))
 	packRouter := packs.NewRouter(packs.RouterConfig{
 		Registry: packRegistry,
 		Logger:   logger.With("component", "pack-router"),
 	})
-
-	// Register built-in packs
-	// SQLiteStore implements both store.Store and store.BuiltinStore interfaces
-	builtinStore := s.(*store.SQLiteStore)
-	if err := packRegistry.RegisterBuiltinPack(builtins.BasePack(builtinStore)); err != nil {
-		return nil, fmt.Errorf("registering base pack: %w", err)
-	}
-	if err := packRegistry.RegisterBuiltinPack(builtins.AdminPack(agentMgr, s, builtinStore)); err != nil {
-		return nil, fmt.Errorf("registering admin pack: %w", err)
-	}
-	if err := packRegistry.RegisterBuiltinPack(builtins.MailPack(builtinStore)); err != nil {
-		return nil, fmt.Errorf("registering mail pack: %w", err)
-	}
-	if err := packRegistry.RegisterBuiltinPack(builtins.NotesPack(builtinStore)); err != nil {
-		return nil, fmt.Errorf("registering notes pack: %w", err)
+	if err := registerBuiltinPacks(packRegistry, agentMgr, s, sqlStore); err != nil {
+		return nil, err
 	}
 
-	// Note: UIPack is registered after webAdmin is created since it needs webAdmin as ClientStreamer
-
-	// Create MCP token store for agent capability-scoped access
 	mcpTokens := mcp.NewTokenStore()
-
-	// Determine MCP endpoint URL
-	// Priority: COVEN_MCP_ENDPOINT env > COVEN_GATEWAY_URL + /mcp > derived from config
-	var mcpEndpoint string
-	if envEndpoint := os.Getenv("COVEN_MCP_ENDPOINT"); envEndpoint != "" {
-		mcpEndpoint = envEndpoint
-	} else if envGatewayURL := os.Getenv("COVEN_GATEWAY_URL"); envGatewayURL != "" {
-		mcpEndpoint = envGatewayURL + "/mcp"
-	} else if cfg.Tailscale.Enabled {
-		// Derive from tailscale config
-		// Default to HTTPS since Tailscale auto-provisions certs for all nodes
-		// Only use HTTP if explicitly disabled via config (not recommended)
-		scheme := "https"
-		if !cfg.Tailscale.HTTPS && !cfg.Tailscale.Funnel {
-			// Check if HTTP-only mode is explicitly configured
-			// For now, still default to HTTPS as it's the common case
-			// Users can override via COVEN_MCP_ENDPOINT if needed
-			logger.Info("Tailscale HTTPS not explicitly enabled, but defaulting to HTTPS for MCP endpoint")
-		}
-		mcpEndpoint = scheme + "://" + cfg.Tailscale.Hostname + "/mcp"
-	} else {
-		// Use HTTP address from config
-		mcpEndpoint = "http://" + cfg.Server.HTTPAddr + "/mcp"
-	}
-	logger.Info("MCP endpoint configured", "endpoint", mcpEndpoint)
-
-	// Create gateway
+	mcpEndpoint := determineMCPEndpoint(cfg, logger)
+	grpcServer := grpcResult.server
 	gw := &Gateway{
 		config:           cfg,
 		agentManager:     agentMgr,
@@ -250,30 +346,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		eventBroadcaster: eventBroadcaster,
 	}
 
-	// Register CovenControl service (agent streaming - no auth required for now)
-	covenService := newCovenControlServer(gw, logger.With("component", "grpc"))
-	pb.RegisterCovenControlServer(grpcServer, covenService)
-
-	// Register AdminService and ClientService
-	sqliteStore := s.(*store.SQLiteStore)
-	if jwtVerifier != nil {
-		// Use PrincipalService which supports token and principal management
-		principalService := admin.NewPrincipalService(sqliteStore, jwtVerifier)
-		pb.RegisterAdminServiceServer(grpcServer, principalService)
-	} else {
-		// Use basic AdminService without token/principal management
-		adminService := admin.NewAdminService(sqliteStore)
-		pb.RegisterAdminServiceServer(grpcServer, adminService)
-	}
-
-	clientService := client.NewClientServiceWithRouter(sqliteStore, sqliteStore, dedupeCache, agentMgr, agentMgr)
-	clientService.SetToolApprover(agentMgr)
-	clientService.SetBroadcaster(eventBroadcaster)
-	pb.RegisterClientServiceServer(grpcServer, clientService)
-
-	// Register PackService for tool pack support
-	packService := packs.NewPackServiceServer(gw.packRegistry, gw.packRouter, logger.With("component", "pack-service"))
-	pb.RegisterPackServiceServer(grpcServer, packService)
+	// Register gRPC services
+	clientService := registerGRPCServices(gw, grpcServer, grpcResult.jwtVerifier, sqlStore, dedupeCache, agentMgr, eventBroadcaster, logger)
 
 	// Create HTTP server for health checks and API
 	mux := http.NewServeMux()
@@ -283,75 +357,15 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	mux.HandleFunc("/health/ready", gw.handleReady)
 
 	// API endpoints - auth required if JWT secret is configured
-	if cfg.Auth.JWTSecret != "" {
-		// Create JWT verifier for HTTP (reuse logic from gRPC)
-		httpVerifier, err := auth.NewJWTVerifier([]byte(cfg.Auth.JWTSecret))
-		if err != nil {
-			return nil, fmt.Errorf("creating HTTP JWT verifier: %w", err)
-		}
-
-		// Create auth middleware
-		authMiddleware := auth.HTTPAuthMiddleware(sqliteStore, sqliteStore, httpVerifier)
-		adminMiddleware := auth.RequireAdminHTTP()
-
-		// Protected endpoints - any authenticated user
-		mux.Handle("/api/agents", authMiddleware(http.HandlerFunc(gw.handleListAgents)))
-		mux.Handle("/api/agents/", authMiddleware(http.HandlerFunc(gw.handleAgentHistory)))
-		mux.Handle("/api/send", authMiddleware(http.HandlerFunc(gw.handleSendMessage)))
-		mux.Handle("/api/threads/", authMiddleware(http.HandlerFunc(gw.handleThreadRoutes)))
-		mux.Handle("/api/stats/usage", authMiddleware(http.HandlerFunc(gw.handleUsageStats)))
-		mux.Handle("/api/tools/approve", authMiddleware(http.HandlerFunc(gw.handleToolApproval)))
-		mux.Handle("/api/questions/answer", authMiddleware(http.HandlerFunc(gw.handleAnswerQuestion)))
-
-		// Admin endpoints - requires admin role for mutations
-		// GET is allowed for any authenticated user, POST/DELETE require admin
-		mux.Handle("/api/bindings", authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == http.MethodPost || r.Method == http.MethodDelete {
-				adminMiddleware(http.HandlerFunc(gw.handleBindings)).ServeHTTP(w, r)
-			} else {
-				gw.handleBindings(w, r)
-			}
-		})))
-
-		logger.Info("HTTP auth middleware enabled")
-	} else {
-		// No auth - register handlers directly
-		mux.HandleFunc("/api/agents", gw.handleListAgents)
-		mux.HandleFunc("/api/agents/", gw.handleAgentHistory)
-		mux.HandleFunc("/api/send", gw.handleSendMessage)
-		mux.HandleFunc("/api/bindings", gw.handleBindings)
-		mux.HandleFunc("/api/threads/", gw.handleThreadRoutes)
-		mux.HandleFunc("/api/stats/usage", gw.handleUsageStats)
-		mux.HandleFunc("/api/tools/approve", gw.handleToolApproval)
-		mux.HandleFunc("/api/questions/answer", gw.handleAnswerQuestion)
-		logger.Warn("HTTP auth disabled - no jwt_secret configured")
+	if err := gw.registerHTTPAPIRoutes(mux, cfg, sqlStore, logger); err != nil {
+		return nil, err
 	}
 
 	// Register web admin UI routes
 	// The admin UI has its own session-based auth (separate from JWT)
-	webAdminBaseURL := cfg.WebAdmin.BaseURL
-	if webAdminBaseURL == "" {
-		// Check COVEN_GATEWAY_URL env var (includes full tailnet DNS name)
-		if envURL := os.Getenv("COVEN_GATEWAY_URL"); envURL != "" {
-			webAdminBaseURL = envURL
-		} else if cfg.Tailscale.Enabled {
-			// Auto-detect based on deployment mode
-			// With Tailscale HTTPS, user MUST set COVEN_GATEWAY_URL or webadmin.base_url
-			// to the full tailnet DNS name for WebAuthn to work
-			if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
-				logger.Warn("webadmin.base_url/COVEN_GATEWAY_URL not set - WebAuthn/passkeys may fail. Set COVEN_GATEWAY_URL to full tailnet URL (e.g., https://coven-gateway.your-tailnet.ts.net)")
-			}
-			scheme := "http"
-			if cfg.Tailscale.HTTPS || cfg.Tailscale.Funnel {
-				scheme = "https"
-			}
-			webAdminBaseURL = scheme + "://" + cfg.Tailscale.Hostname
-		} else {
-			webAdminBaseURL = "http://" + cfg.Server.HTTPAddr
-		}
-	}
+	webAdminBaseURL := determineWebAdminBaseURL(cfg, logger)
 	webAdminCfg := webadmin.NewConfig{
-		Store:        sqliteStore,
+		Store:        sqlStore,
 		Manager:      gw.agentManager,
 		Conversation: convService,
 		Broadcaster:  eventBroadcaster,
@@ -359,8 +373,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		Config: webadmin.Config{
 			BaseURL: webAdminBaseURL,
 		},
-		PrincipalStore: sqliteStore,
-		TokenGenerator: jwtVerifier, // May be nil if auth is disabled
+		PrincipalStore: sqlStore,
+		TokenGenerator: grpcResult.jwtVerifier, // May be nil if auth is disabled
 	}
 	gw.webAdmin = webadmin.NewWithConfig(webAdminCfg)
 	gw.webAdmin.RegisterRoutes(mux)
@@ -390,149 +404,198 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	logger.Info("MCP server enabled at /mcp (JSON-RPC 2.0)")
 
 	gw.httpServer = &http.Server{
-		Addr:    cfg.Server.HTTPAddr,
-		Handler: mux,
+		Addr:              cfg.Server.HTTPAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	return gw, nil
 }
 
-// Run starts the gateway servers and blocks until the context is cancelled.
+// setupTCPListeners creates standard TCP listeners for gRPC and HTTP.
+func (g *Gateway) setupTCPListeners() (grpcLn, httpLn net.Listener, err error) {
+	g.logger.Info("starting gateway",
+		"grpc_addr", g.config.Server.GRPCAddr,
+		"http_addr", g.config.Server.HTTPAddr,
+	)
+
+	grpcLn, err = net.Listen("tcp", g.config.Server.GRPCAddr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("listening on gRPC address: %w", err)
+	}
+
+	httpLn, err = net.Listen("tcp", g.config.Server.HTTPAddr)
+	if err != nil {
+		_ = grpcLn.Close()
+		return nil, nil, fmt.Errorf("listening on HTTP address: %w", err)
+	}
+
+	return grpcLn, httpLn, nil
+}
+
+// Run starts the gateway servers and blocks until the context is canceled.
 // It manages graceful shutdown of both GRPC and HTTP servers.
-// Returns nil on graceful shutdown (context cancelled), or an error if a server fails.
-func (g *Gateway) Run(ctx context.Context) error {
-	// Channel to collect errors from servers
-	errCh := make(chan error, 2)
-
-	var grpcListener, httpListener net.Listener
-	var err error
-
-	// Setup listeners - either via Tailscale or regular TCP
-	if g.config.Tailscale.Enabled {
-		// Warn if server addresses are configured but will be ignored
-		if g.config.Server.GRPCAddr != "" || g.config.Server.HTTPAddr != "" {
-			g.logger.Warn("server.grpc_addr and server.http_addr are ignored when tailscale is enabled",
-				"grpc_addr", g.config.Server.GRPCAddr,
-				"http_addr", g.config.Server.HTTPAddr,
-			)
-		}
-		grpcListener, httpListener, err = g.setupTailscaleListeners(ctx)
-		if err != nil {
-			return fmt.Errorf("setting up tailscale: %w", err)
-		}
-	} else {
-		g.logger.Info("starting gateway",
+// Returns nil on graceful shutdown (context canceled), or an error if a server fails.
+// warnIgnoredAddresses logs a warning if server addresses are configured but Tailscale is enabled.
+func (g *Gateway) warnIgnoredAddresses() {
+	if g.config.Server.GRPCAddr != "" || g.config.Server.HTTPAddr != "" {
+		g.logger.Warn("server.grpc_addr and server.http_addr are ignored when tailscale is enabled",
 			"grpc_addr", g.config.Server.GRPCAddr,
 			"http_addr", g.config.Server.HTTPAddr,
 		)
-
-		grpcListener, err = net.Listen("tcp", g.config.Server.GRPCAddr)
-		if err != nil {
-			return fmt.Errorf("listening on gRPC address: %w", err)
-		}
-
-		httpListener, err = net.Listen("tcp", g.config.Server.HTTPAddr)
-		if err != nil {
-			grpcListener.Close()
-			return fmt.Errorf("listening on HTTP address: %w", err)
-		}
 	}
+}
 
-	// Start GRPC server
+// setupListeners creates listeners based on configuration (Tailscale or TCP).
+func (g *Gateway) setupListeners(ctx context.Context) (grpcLn, httpLn net.Listener, err error) {
+	if g.config.Tailscale.Enabled {
+		g.warnIgnoredAddresses()
+		return g.setupTailscaleListeners(ctx)
+	}
+	return g.setupTCPListeners()
+}
+
+// startServers starts gRPC and HTTP servers in goroutines, returning error channel.
+func (g *Gateway) startServers(grpcLn, httpLn net.Listener) chan error {
+	errCh := make(chan error, 2)
+
 	go func() {
-		g.logger.Info("gRPC server listening", "addr", grpcListener.Addr().String())
-		if err := g.grpcServer.Serve(grpcListener); err != nil {
+		g.logger.Info("gRPC server listening", "addr", grpcLn.Addr().String())
+		if err := g.grpcServer.Serve(grpcLn); err != nil {
 			errCh <- fmt.Errorf("gRPC server: %w", err)
 		}
 	}()
 
-	// Start HTTP server
 	go func() {
-		g.logger.Info("HTTP server listening", "addr", httpListener.Addr().String())
-		if err := g.httpServer.Serve(httpListener); err != nil && err != http.ErrServerClosed {
+		g.logger.Info("HTTP server listening", "addr", httpLn.Addr().String())
+		if err := g.httpServer.Serve(httpLn); err != nil && err != http.ErrServerClosed {
 			errCh <- fmt.Errorf("HTTP server: %w", err)
 		}
 	}()
 
-	// Wait for context cancellation or server error
-	var serverErr error
+	return errCh
+}
+
+// waitForShutdownSignal waits for context cancellation or server error.
+func (g *Gateway) waitForShutdownSignal(ctx context.Context, errCh chan error) error {
 	select {
 	case <-ctx.Done():
-		g.logger.Info("context cancelled, initiating shutdown")
-	case serverErr = <-errCh:
-		g.logger.Error("server error", "error", serverErr)
-		// Drain any additional errors (buffer size 2)
-		select {
-		case additionalErr := <-errCh:
-			g.logger.Error("additional server error", "error", additionalErr)
-		default:
-		}
+		g.logger.Info("context canceled, initiating shutdown")
+		return nil
+	case err := <-errCh:
+		g.logger.Error("server error", "error", err)
+		g.drainErrors(errCh)
+		return err
+	}
+}
+
+// drainErrors drains any remaining errors from the channel.
+func (g *Gateway) drainErrors(errCh chan error) {
+	select {
+	case additionalErr := <-errCh:
+		g.logger.Error("additional server error", "error", additionalErr)
+	default:
+	}
+}
+
+func (g *Gateway) Run(ctx context.Context) error {
+	grpcListener, httpListener, err := g.setupListeners(ctx)
+	if err != nil {
+		return err
 	}
 
-	// Graceful shutdown - use short timeout since agent streams won't close gracefully
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	errCh := g.startServers(grpcListener, httpListener)
+	serverErr := g.waitForShutdownSignal(ctx, errCh)
 
-	shutdownErr := g.Shutdown(shutdownCtx)
+	shutdownErr := g.gracefulShutdown()
 
-	// Return server error if one occurred, otherwise return shutdown error
 	if serverErr != nil {
 		return serverErr
 	}
 	return shutdownErr
 }
 
-// setupTailscaleListeners creates a tsnet server and returns listeners for gRPC and HTTP.
-func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn net.Listener, err error) {
-	tsCfg := g.config.Tailscale
+// gracefulShutdown performs shutdown with a fresh context and timeout.
+// Uses context.Background() intentionally since the original context is already canceled.
+func (g *Gateway) gracefulShutdown() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return g.Shutdown(ctx)
+}
 
-	// Determine state directory
-	stateDir := tsCfg.StateDir
-	if stateDir == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return nil, nil, fmt.Errorf("cannot determine home directory for tailscale state (set tailscale.state_dir explicitly): %w", err)
-		}
-		stateDir = filepath.Join(homeDir, ".local", "share", "coven-gateway", "tailscale")
+// resolveTailscaleStateDir returns the state directory, using default if not configured.
+func resolveTailscaleStateDir(configured string) (string, error) {
+	if configured != "" {
+		return configured, nil
 	}
-
-	// Ensure state directory exists
-	if err := os.MkdirAll(stateDir, 0700); err != nil {
-		return nil, nil, fmt.Errorf("creating tailscale state dir: %w", err)
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory for tailscale state (set tailscale.state_dir explicitly): %w", err)
 	}
+	return filepath.Join(homeDir, ".local", "share", "coven-gateway", "tailscale"), nil
+}
 
-	// Create tsnet server
-	g.tsnetServer = &tsnet.Server{
-		Hostname:  tsCfg.Hostname,
-		Dir:       stateDir,
-		Ephemeral: tsCfg.Ephemeral,
-	}
-
-	// Set auth key - required for non-interactive (container) deployments.
-	// Precedence: config value > TS_AUTHKEY env var.
-	authKey := tsCfg.AuthKey
+// resolveTailscaleAuthKey returns the auth key from config or environment.
+func resolveTailscaleAuthKey(configured string) (string, error) {
+	authKey := configured
 	if authKey == "" {
 		authKey = os.Getenv("TS_AUTHKEY")
 	}
 	if authKey == "" {
-		return nil, nil, fmt.Errorf("tailscale auth key required: set auth_key in config or TS_AUTHKEY environment variable (get one at https://login.tailscale.com/admin/settings/keys)")
+		return "", errors.New("tailscale auth key required: set auth_key in config or TS_AUTHKEY environment variable (get one at https://login.tailscale.com/admin/settings/keys)")
 	}
-	g.tsnetServer.AuthKey = authKey
+	return authKey, nil
+}
 
-	g.logger.Info("starting tailscale node",
-		"hostname", tsCfg.Hostname,
-		"state_dir", stateDir,
-		"ephemeral", tsCfg.Ephemeral,
-	)
+// setupTailscaleListeners creates a tsnet server and returns listeners for gRPC and HTTP.
+func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn net.Listener, err error) {
+	tsCfg := g.config.Tailscale
 
-	// Start and wait for tailscale to be ready
+	stateDir, err := resolveTailscaleStateDir(tsCfg.StateDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		return nil, nil, fmt.Errorf("creating tailscale state dir: %w", err)
+	}
+
+	authKey, err := resolveTailscaleAuthKey(tsCfg.AuthKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	g.tsnetServer = &tsnet.Server{
+		Hostname:  tsCfg.Hostname,
+		Dir:       stateDir,
+		Ephemeral: tsCfg.Ephemeral,
+		AuthKey:   authKey,
+	}
+
+	g.logger.Info("starting tailscale node", "hostname", tsCfg.Hostname, "state_dir", stateDir, "ephemeral", tsCfg.Ephemeral)
 	status, err := g.tsnetServer.Up(ctx)
 	if err != nil {
-		_ = g.tsnetServer.Close() // Cleanup partially initialized server
+		_ = g.tsnetServer.Close()
 		return nil, nil, fmt.Errorf("starting tailscale: %w", err)
 	}
 
-	// Log tailscale address info
+	g.logTailscaleStatus(tsCfg.Hostname, status)
+	g.updateMCPEndpointFromStatus(status)
+
+	grpcLn, err = g.tsnetServer.Listen("tcp", ":50051")
+	if err != nil {
+		_ = g.tsnetServer.Close()
+		return nil, nil, fmt.Errorf("listening on tailscale gRPC port: %w", err)
+	}
+
+	httpLn, err = g.createTailscaleHTTPListener(tsCfg, grpcLn)
+	if err != nil {
+		return nil, nil, err
+	}
+	return grpcLn, httpLn, nil
+}
+
+// logTailscaleStatus logs info about the tailscale node status.
+func (g *Gateway) logTailscaleStatus(hostname string, status *ipnstate.Status) {
 	var tsAddr, dnsName string
 	if len(status.TailscaleIPs) > 0 {
 		tsAddr = status.TailscaleIPs[0].String()
@@ -542,87 +605,72 @@ func (g *Gateway) setupTailscaleListeners(ctx context.Context) (grpcLn, httpLn n
 	if status.Self != nil {
 		dnsName = status.Self.DNSName
 	}
+	g.logger.Info("tailscale node ready", "hostname", hostname, "tailscale_ip", tsAddr, "dns_name", dnsName)
+}
 
-	g.logger.Info("tailscale node ready",
-		"hostname", tsCfg.Hostname,
-		"tailscale_ip", tsAddr,
-		"dns_name", dnsName,
-	)
-
-	// Update MCP endpoint to use the actual DNS name from Tailscale
-	// The short hostname (e.g., "coven") won't resolve from the agent's machine,
-	// but the full DNS name (e.g., "coven.porpoise-alkaline.ts.net") will.
-	if dnsName != "" {
-		// Strip trailing dot from DNS name if present
-		cleanDNS := strings.TrimSuffix(dnsName, ".")
-		// Always use HTTPS for Tailscale - certs are auto-provisioned
-		newEndpoint := "https://" + cleanDNS + "/mcp"
-		if newEndpoint != g.mcpEndpoint {
-			g.logger.Info("updated MCP endpoint to use Tailscale DNS name",
-				"old", g.mcpEndpoint,
-				"new", newEndpoint,
-			)
-			g.mcpEndpoint = newEndpoint
-		}
+// updateMCPEndpointFromStatus updates MCP endpoint to use Tailscale DNS name.
+func (g *Gateway) updateMCPEndpointFromStatus(status *ipnstate.Status) {
+	if status.Self == nil || status.Self.DNSName == "" {
+		return
 	}
-
-	// Create gRPC listener on port 50051
-	grpcLn, err = g.tsnetServer.Listen("tcp", ":50051")
-	if err != nil {
-		g.tsnetServer.Close()
-		return nil, nil, fmt.Errorf("listening on tailscale gRPC port: %w", err)
+	cleanDNS := strings.TrimSuffix(status.Self.DNSName, ".")
+	newEndpoint := "https://" + cleanDNS + "/mcp"
+	if newEndpoint != g.mcpEndpoint {
+		g.logger.Info("updated MCP endpoint to use Tailscale DNS name", "old", g.mcpEndpoint, "new", newEndpoint)
+		g.mcpEndpoint = newEndpoint
 	}
+}
 
-	// Create HTTP listener based on config:
-	// - Funnel: public HTTPS on :443 (Tailscale terminates TLS)
-	// - HTTPS: private HTTPS on :443 (auto-provisioned Tailscale certs)
-	// - Neither: HTTP on :80 (tailnet only, no passkey support)
-	if tsCfg.Funnel {
+// createTailscaleHTTPListener creates the appropriate HTTP listener based on config.
+func (g *Gateway) createTailscaleHTTPListener(tsCfg config.TailscaleConfig, grpcLn net.Listener) (net.Listener, error) {
+	switch {
+	case tsCfg.Funnel:
 		g.logger.Info("enabling tailscale funnel (public HTTPS) on :443")
-		httpLn, err = g.tsnetServer.ListenFunnel("tcp", ":443")
-	} else if tsCfg.HTTPS {
-		// Use Tailscale's auto-provisioned HTTPS certs via LocalClient
-		g.logger.Info("enabling HTTPS with Tailscale certs on :443")
-		ln, listenErr := g.tsnetServer.Listen("tcp", ":443")
-		if listenErr != nil {
-			grpcLn.Close()
-			g.tsnetServer.Close()
-			return nil, nil, fmt.Errorf("listening on tailscale HTTPS port: %w", listenErr)
+		ln, err := g.tsnetServer.ListenFunnel("tcp", ":443")
+		if err != nil {
+			_ = grpcLn.Close()
+			_ = g.tsnetServer.Close()
+			return nil, fmt.Errorf("listening on tailscale HTTP port: %w", err)
 		}
-		lc, lcErr := g.tsnetServer.LocalClient()
-		if lcErr != nil {
-			ln.Close()
-			grpcLn.Close()
-			g.tsnetServer.Close()
-			return nil, nil, fmt.Errorf("getting tailscale local client: %w", lcErr)
+		return ln, nil
+	case tsCfg.HTTPS:
+		return g.createTailscaleTLSListener(grpcLn)
+	default:
+		ln, err := g.tsnetServer.Listen("tcp", ":80")
+		if err != nil {
+			_ = grpcLn.Close()
+			_ = g.tsnetServer.Close()
+			return nil, fmt.Errorf("listening on tailscale HTTP port: %w", err)
 		}
-		httpLn = tls.NewListener(ln, &tls.Config{
-			GetCertificate: lc.GetCertificate,
-		})
-	} else {
-		httpLn, err = g.tsnetServer.Listen("tcp", ":80")
+		return ln, nil
 	}
-	if err != nil {
-		grpcLn.Close()
-		g.tsnetServer.Close()
-		return nil, nil, fmt.Errorf("listening on tailscale HTTP port: %w", err)
-	}
+}
 
-	return grpcLn, httpLn, nil
+// createTailscaleTLSListener creates a TLS listener using Tailscale's auto-provisioned certs.
+func (g *Gateway) createTailscaleTLSListener(grpcLn net.Listener) (net.Listener, error) {
+	g.logger.Info("enabling HTTPS with Tailscale certs on :443")
+	ln, err := g.tsnetServer.Listen("tcp", ":443")
+	if err != nil {
+		_ = grpcLn.Close()
+		_ = g.tsnetServer.Close()
+		return nil, fmt.Errorf("listening on tailscale HTTPS port: %w", err)
+	}
+	lc, err := g.tsnetServer.LocalClient()
+	if err != nil {
+		_ = ln.Close()
+		_ = grpcLn.Close()
+		_ = g.tsnetServer.Close()
+		return nil, fmt.Errorf("getting tailscale local client: %w", err)
+	}
+	return tls.NewListener(ln, &tls.Config{
+		GetCertificate: lc.GetCertificate,
+		MinVersion:     tls.VersionTLS12,
+	}), nil
 }
 
 // Shutdown gracefully stops all gateway servers and releases resources.
-func (g *Gateway) Shutdown(ctx context.Context) error {
-	g.logger.Info("shutting down gateway")
-
-	var errs []error
-
-	// Stop HTTP server gracefully
-	if err := g.httpServer.Shutdown(ctx); err != nil {
-		errs = append(errs, fmt.Errorf("HTTP shutdown: %w", err))
-	}
-
-	// Stop GRPC server gracefully
+// shutdownGRPCServer gracefully stops the gRPC server or force-stops on context cancel.
+func (g *Gateway) shutdownGRPCServer(ctx context.Context) {
 	stopped := make(chan struct{})
 	go func() {
 		g.grpcServer.GracefulStop()
@@ -631,48 +679,52 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 
 	select {
 	case <-stopped:
-		// Graceful stop completed
 	case <-ctx.Done():
-		// Force stop
 		g.grpcServer.Stop()
 	}
+}
 
-	// Close tsnet server if running
-	if g.tsnetServer != nil {
-		if err := g.tsnetServer.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("tailscale shutdown: %w", err))
-		}
+// appendCloseError appends an error with label if err is non-nil.
+func appendCloseError(errs []error, label string, err error) []error {
+	if err != nil {
+		return append(errs, fmt.Errorf("%s: %w", label, err))
 	}
+	return errs
+}
 
-	// Close store
-	if err := g.store.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("store close: %w", err))
-	}
-
-	// Close dedupe cache (stops background cleanup goroutine)
+// closeOptionalComponents closes optional components that may be nil.
+func (g *Gateway) closeOptionalComponents() {
 	if g.dedupe != nil {
 		g.dedupe.Close()
 	}
-
-	// Close event broadcaster (closes all subscriber channels)
 	if g.eventBroadcaster != nil {
 		g.eventBroadcaster.Close()
 	}
-
-	// Close web admin (cleans up chat hub and sessions)
 	if g.webAdmin != nil {
 		g.webAdmin.Close()
 	}
-
-	// Close pack router (cancels pending tool requests)
 	if g.packRouter != nil {
 		g.packRouter.Close()
 	}
-
-	// Close pack registry (disconnects all packs)
 	if g.packRegistry != nil {
 		g.packRegistry.Close()
 	}
+}
+
+func (g *Gateway) Shutdown(ctx context.Context) error {
+	g.logger.Info("shutting down gateway")
+
+	var errs []error
+	errs = appendCloseError(errs, "HTTP shutdown", g.httpServer.Shutdown(ctx))
+
+	g.shutdownGRPCServer(ctx)
+
+	if g.tsnetServer != nil {
+		errs = appendCloseError(errs, "tailscale shutdown", g.tsnetServer.Close())
+	}
+	errs = appendCloseError(errs, "store close", g.store.Close())
+
+	g.closeOptionalComponents()
 
 	if len(errs) > 0 {
 		return fmt.Errorf("shutdown errors: %v", errs)
@@ -680,25 +732,25 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// handleHealth returns 200 OK if the server is alive
+// handleHealth returns 200 OK if the server is alive.
 func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	_, _ = w.Write([]byte("OK"))
 }
 
-// handleReady returns 200 OK if the server has at least one agent connected
+// handleReady returns 200 OK if the server has at least one agent connected.
 func (g *Gateway) handleReady(w http.ResponseWriter, r *http.Request) {
 	agents := g.agentManager.ListAgents()
 	if len(agents) == 0 {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("no agents connected"))
+		_, _ = w.Write([]byte("no agents connected"))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("ready (%d agents)", len(agents))))
+	_, _ = fmt.Fprintf(w, "ready (%d agents)", len(agents))
 }
 
-// generateServerID creates a unique identifier for this gateway instance
+// generateServerID creates a unique identifier for this gateway instance.
 func generateServerID() string {
 	return fmt.Sprintf("coven-gateway-%d", time.Now().UnixNano()%1000000)
 }

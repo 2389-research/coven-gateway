@@ -5,6 +5,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -56,9 +57,9 @@ func TestScenario_AdminGateFullFlow(t *testing.T) {
 
 	// First apply auth interceptor
 	var authCtx context.Context
-	authHandler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	authHandler := func(ctx context.Context, req any) (any, error) {
 		authCtx = ctx
-		return nil, nil
+		return struct{}{}, nil
 	}
 
 	_, err = authInterceptor(reqCtx, nil, &grpc.UnaryServerInfo{}, authHandler)
@@ -68,7 +69,7 @@ func TestScenario_AdminGateFullFlow(t *testing.T) {
 
 	// 5. Verify AdminService call succeeds through admin gate
 	handlerCalled := false
-	adminHandler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	adminHandler := func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return "admin-success", nil
 	}
@@ -141,9 +142,9 @@ func TestScenario_NonAdminBlockedByGate(t *testing.T) {
 
 	// First apply auth interceptor
 	var authCtx context.Context
-	authHandler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	authHandler := func(ctx context.Context, req any) (any, error) {
 		authCtx = ctx
-		return nil, nil
+		return struct{}{}, nil
 	}
 
 	_, err = authInterceptor(reqCtx, nil, &grpc.UnaryServerInfo{}, authHandler)
@@ -152,9 +153,9 @@ func TestScenario_NonAdminBlockedByGate(t *testing.T) {
 	}
 
 	// 5. Verify AdminService call returns PERMISSION_DENIED
-	adminHandler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	adminHandler := func(ctx context.Context, req any) (any, error) {
 		t.Error("admin handler should not be called for non-admin")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	adminInfo := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/ListPrincipals"}
@@ -226,9 +227,9 @@ func TestScenario_OwnerPassesAdminGate(t *testing.T) {
 
 	// First apply auth interceptor
 	var authCtx context.Context
-	authHandler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	authHandler := func(ctx context.Context, req any) (any, error) {
 		authCtx = ctx
-		return nil, nil
+		return struct{}{}, nil
 	}
 
 	_, err = authInterceptor(reqCtx, nil, &grpc.UnaryServerInfo{}, authHandler)
@@ -238,7 +239,7 @@ func TestScenario_OwnerPassesAdminGate(t *testing.T) {
 
 	// 5. Verify AdminService call succeeds for owner
 	handlerCalled := false
-	adminHandler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	adminHandler := func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return "owner-success", nil
 	}
@@ -311,9 +312,9 @@ func TestScenario_NonAdminServiceBypassesGate(t *testing.T) {
 
 	// First apply auth interceptor
 	var authCtx context.Context
-	authHandler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	authHandler := func(ctx context.Context, req any) (any, error) {
 		authCtx = ctx
-		return nil, nil
+		return struct{}{}, nil
 	}
 
 	_, err = authInterceptor(reqCtx, nil, &grpc.UnaryServerInfo{}, authHandler)
@@ -323,7 +324,7 @@ func TestScenario_NonAdminServiceBypassesGate(t *testing.T) {
 
 	// 5. Verify non-admin service call succeeds (bypasses admin gate)
 	handlerCalled := false
-	clientHandler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	clientHandler := func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return "client-success", nil
 	}
@@ -388,7 +389,7 @@ func TestScenario_StreamAdminGateFullFlow(t *testing.T) {
 
 	// First apply stream auth interceptor
 	var authStream grpc.ServerStream
-	authHandler := func(srv interface{}, ss grpc.ServerStream) error {
+	authHandler := func(srv any, ss grpc.ServerStream) error {
 		authStream = ss
 		return nil
 	}
@@ -400,7 +401,7 @@ func TestScenario_StreamAdminGateFullFlow(t *testing.T) {
 
 	// 5. Verify AdminService stream call succeeds
 	handlerCalled := false
-	adminHandler := func(srv interface{}, ss grpc.ServerStream) error {
+	adminHandler := func(srv any, ss grpc.ServerStream) error {
 		handlerCalled = true
 		return nil
 	}

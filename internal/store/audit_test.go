@@ -64,7 +64,7 @@ func TestAuditStore_List_BySince(t *testing.T) {
 	baseTime := now.Add(-time.Hour)
 
 	// Create entries at different times
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		entry := &AuditEntry{
 			ActorPrincipalID: "principal-123",
 			Action:           AuditApprovePrincipal,
@@ -171,7 +171,7 @@ func TestAuditStore_List_Pagination(t *testing.T) {
 	ctx := context.Background()
 
 	// Create 5 entries
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		entry := &AuditEntry{
 			ActorPrincipalID: "principal-123",
 			Action:           AuditApprovePrincipal,

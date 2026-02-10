@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -141,13 +142,7 @@ func TestSchemaSurface(t *testing.T) {
 
 			// Report any extra columns not in contract (informational, not failure)
 			for col := range actualCols {
-				found := false
-				for _, expected := range expectedCols {
-					if col == expected {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(expectedCols, col)
 				if !found {
 					t.Logf("INFO: extra column %s.%s not in contract (consider adding)", table, col)
 				}

@@ -5,6 +5,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -93,7 +94,7 @@ func TestGetThread_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	_, err := store.GetThread(ctx, "nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
@@ -152,7 +153,7 @@ func TestUpdateThread_NotFound(t *testing.T) {
 	}
 
 	err := store.UpdateThread(ctx, thread)
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
@@ -248,7 +249,7 @@ func TestGetThreadMessages_Limit(t *testing.T) {
 
 	// Save 5 messages
 	baseTime := time.Now().UTC().Truncate(time.Second)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		msgID := fmt.Sprintf("msg-%c", 'a'+i)
 		msg := &Message{
 			ID:        msgID,
@@ -368,7 +369,7 @@ func TestAgentState_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	_, err := store.GetAgentState(ctx, "nonexistent-agent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
@@ -422,7 +423,7 @@ func TestGetThreadByFrontendID_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	_, err := store.GetThreadByFrontendID(ctx, "slack", "nonexistent-channel")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
@@ -554,18 +555,18 @@ func TestDeleteBinding(t *testing.T) {
 	}
 
 	_, err := store.GetBinding(ctx, "slack", "C001")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound after delete, got %v", err)
 	}
 
 	// Test deleting non-existent binding returns ErrNotFound
 	err = store.DeleteBinding(ctx, "nonexistent", "C999")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound for non-existent binding, got %v", err)
 	}
 }
 
-// newTestStore creates a new SQLite store in a temporary directory for testing
+// newTestStore creates a new SQLite store in a temporary directory for testing.
 func newTestStore(t *testing.T) *SQLiteStore {
 	t.Helper()
 

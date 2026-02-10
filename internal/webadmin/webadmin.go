@@ -6,7 +6,6 @@ package webadmin
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -30,54 +29,53 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Username validation regex: alphanumeric + underscores, 3-32 characters
+// Username validation regex: alphanumeric + underscores, 3-32 characters.
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{2,31}$`)
 
 const (
-	// SessionCookieName is the name of the session cookie
+	// SessionCookieName is the name of the session cookie.
 	SessionCookieName = "coven_admin_session"
 
-	// CSRFCookieName is the name of the CSRF token cookie
+	// CSRFCookieName is the name of the CSRF token cookie.
 	CSRFCookieName = "coven_admin_csrf"
 
-	// SessionDuration is how long sessions last
+	// SessionDuration is how long sessions last.
 	SessionDuration = 7 * 24 * time.Hour // 7 days
 
-	// InviteDuration is how long invite links are valid
+	// InviteDuration is how long invite links are valid.
 	InviteDuration = 24 * time.Hour
 
-	// LinkCodeDuration is how long link codes are valid
+	// LinkCodeDuration is how long link codes are valid.
 	LinkCodeDuration = 10 * time.Minute
 
-	// LinkCodeLength is the length of the short code
+	// LinkCodeLength is the length of the short code.
 	LinkCodeLength = 6
 )
 
-// contextKey is a custom type for context keys to avoid collisions
+// contextKey is a custom type for context keys to avoid collisions.
 type contextKey string
 
 const userContextKey contextKey = "admin_user"
-const csrfContextKey contextKey = "csrf_token"
 
-// Config holds admin UI configuration
+// Config holds admin UI configuration.
 type Config struct {
 	// BaseURL is the external URL for generating invite links
 	BaseURL string
 }
 
-// TokenGenerator creates JWT tokens for principals
+// TokenGenerator creates JWT tokens for principals.
 type TokenGenerator interface {
 	Generate(principalID string, expiresIn time.Duration) (string, error)
 }
 
-// PrincipalStore provides methods for principal and role management
+// PrincipalStore provides methods for principal and role management.
 type PrincipalStore interface {
 	CreatePrincipal(ctx context.Context, p *store.Principal) error
 	GetPrincipalByPubkey(ctx context.Context, fp string) (*store.Principal, error)
 	AddRole(ctx context.Context, subjectType store.RoleSubjectType, subjectID string, role store.RoleName) error
 }
 
-// FullStore combines AdminStore with thread/message/principal operations
+// FullStore combines AdminStore with thread/message/principal operations.
 type FullStore interface {
 	store.AdminStore
 
@@ -120,7 +118,7 @@ type FullStore interface {
 	GetThreadUsage(ctx context.Context, threadID string) ([]*store.TokenUsage, error)
 }
 
-// Admin handles admin UI routes and authentication
+// Admin handles admin UI routes and authentication.
 type Admin struct {
 	store            FullStore
 	principalStore   PrincipalStore
@@ -136,7 +134,7 @@ type Admin struct {
 	tokenGenerator   TokenGenerator
 }
 
-// NewConfig contains dependencies for creating Admin
+// NewConfig contains dependencies for creating Admin.
 type NewConfig struct {
 	Store          FullStore
 	PrincipalStore PrincipalStore
@@ -148,7 +146,7 @@ type NewConfig struct {
 	TokenGenerator TokenGenerator
 }
 
-// New creates a new Admin handler
+// New creates a new Admin handler.
 func New(fullStore FullStore, manager *agent.Manager, convService *conversation.Service, registry *packs.Registry, cfg Config) *Admin {
 	return NewWithConfig(NewConfig{
 		Store:        fullStore,
@@ -159,7 +157,7 @@ func New(fullStore FullStore, manager *agent.Manager, convService *conversation.
 	})
 }
 
-// NewWithConfig creates a new Admin handler with full configuration
+// NewWithConfig creates a new Admin handler with full configuration.
 func NewWithConfig(cfg NewConfig) *Admin {
 	a := &Admin{
 		store:          cfg.Store,
@@ -182,7 +180,7 @@ func NewWithConfig(cfg NewConfig) *Admin {
 	return a
 }
 
-// Close cleans up admin resources
+// Close cleans up admin resources.
 func (a *Admin) Close() {
 	if a.webauthnSessions != nil {
 		a.webauthnSessions.Close()
@@ -196,7 +194,7 @@ func (a *Admin) Close() {
 // Implements builtins.ClientStreamer interface.
 func (a *Admin) SendUserQuestion(agentID string, req *pb.UserQuestionRequest) error {
 	if a.chatHub == nil {
-		return fmt.Errorf("chat hub not initialized")
+		return errors.New("chat hub not initialized")
 	}
 
 	// Convert proto options to chat message options
@@ -233,15 +231,8 @@ func (a *Admin) SendUserQuestion(agentID string, req *pb.UserQuestionRequest) er
 	return nil
 }
 
-// RegisterRoutes registers all admin routes on the given mux
-// Routes are split into two groups:
-// - Root (/) routes: Chat interface (user-facing)
-// - Admin (/admin/) routes: Management pages
-func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
-	// =========================================================================
-	// Root routes (/) - Chat interface
-	// =========================================================================
-
+// registerRootRoutes registers the root (/) routes - Chat interface.
+func (a *Admin) registerRootRoutes(mux *http.ServeMux) {
 	// Main chat app at root
 	mux.HandleFunc("GET /{$}", a.requireAuth(a.handleChatApp))
 	mux.HandleFunc("POST /logout", a.requireAuth(a.handleLogout))
@@ -283,11 +274,10 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /webauthn/register/finish", a.requireAuth(a.handleWebAuthnRegisterFinish))
 	mux.HandleFunc("POST /webauthn/login/begin", a.handleWebAuthnLoginBegin)
 	mux.HandleFunc("POST /webauthn/login/finish", a.handleWebAuthnLoginFinish)
+}
 
-	// =========================================================================
-	// Admin routes (/admin/) - Management pages
-	// =========================================================================
-
+// registerAdminRoutes registers the /admin/ routes - Management pages.
+func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 	// Admin dashboard
 	mux.HandleFunc("GET /admin/{$}", a.requireAuth(a.handleDashboard))
 	mux.HandleFunc("GET /admin/dashboard", a.requireAuth(a.handleDashboard))
@@ -351,11 +341,16 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 
 	// Invite management
 	mux.HandleFunc("POST /admin/invites/create", a.requireAuth(a.handleCreateInvite))
+}
 
+// RegisterRoutes registers all admin routes on the given mux.
+func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
+	a.registerRootRoutes(mux)
+	a.registerAdminRoutes(mux)
 	a.logger.Info("routes registered", "root_chat", "/", "admin", "/admin/")
 }
 
-// requireAuth wraps a handler to require authentication
+// requireAuth wraps a handler to require authentication.
 func (a *Admin) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, err := a.getUserFromSession(r)
@@ -370,7 +365,7 @@ func (a *Admin) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// getUserFromSession retrieves the authenticated user from the session cookie
+// getUserFromSession retrieves the authenticated user from the session cookie.
 func (a *Admin) getUserFromSession(r *http.Request) (*store.AdminUser, error) {
 	cookie, err := r.Cookie(SessionCookieName)
 	if err != nil {
@@ -390,25 +385,20 @@ func (a *Admin) getUserFromSession(r *http.Request) (*store.AdminUser, error) {
 	return user, nil
 }
 
-// getUserFromContext retrieves the authenticated user from the request context
+// getUserFromContext retrieves the authenticated user from the request context.
 func getUserFromContext(r *http.Request) *store.AdminUser {
 	user, _ := r.Context().Value(userContextKey).(*store.AdminUser)
 	return user
 }
 
-// getCSRFToken retrieves the CSRF token from the request context
-func getCSRFToken(r *http.Request) string {
-	token, _ := r.Context().Value(csrfContextKey).(string)
-	return token
-}
+// getCSRFToken retrieves the CSRF token from the request context.
 
-// ensureCSRFToken generates a CSRF token if not present and adds it to context
-func (a *Admin) ensureCSRFToken(w http.ResponseWriter, r *http.Request) (*http.Request, string) {
+// ensureCSRFToken generates a CSRF token if not present, sets the cookie, and returns the token.
+func (a *Admin) ensureCSRFToken(w http.ResponseWriter, r *http.Request) string {
 	// Try to get existing token from cookie
 	cookie, err := r.Cookie(CSRFCookieName)
 	if err == nil && cookie.Value != "" {
-		ctx := context.WithValue(r.Context(), csrfContextKey, cookie.Value)
-		return r.WithContext(ctx), cookie.Value
+		return cookie.Value
 	}
 
 	// Generate new token
@@ -428,11 +418,10 @@ func (a *Admin) ensureCSRFToken(w http.ResponseWriter, r *http.Request) (*http.R
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	ctx := context.WithValue(r.Context(), csrfContextKey, token)
-	return r.WithContext(ctx), token
+	return token
 }
 
-// validateCSRF checks the CSRF token from form against cookie
+// validateCSRF checks the CSRF token from form against cookie.
 func (a *Admin) validateCSRF(r *http.Request) bool {
 	cookie, err := r.Cookie(CSRFCookieName)
 	if err != nil || cookie.Value == "" {
@@ -448,7 +437,7 @@ func (a *Admin) validateCSRF(r *http.Request) bool {
 	return formToken != "" && formToken == cookie.Value
 }
 
-// createSession creates a new session for a user and sets the cookie
+// createSession creates a new session for a user and sets the cookie.
 func (a *Admin) createSession(w http.ResponseWriter, r *http.Request, userID string) error {
 	sessionID, err := generateSecureToken(32)
 	if err != nil {
@@ -480,7 +469,7 @@ func (a *Admin) createSession(w http.ResponseWriter, r *http.Request, userID str
 	return nil
 }
 
-// handleLoginPage renders the login page
+// handleLoginPage renders the login page.
 func (a *Admin) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	// If no admin users exist, redirect to setup wizard
 	count, err := a.store.CountAdminUsers(r.Context())
@@ -496,22 +485,34 @@ func (a *Admin) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ensure CSRF token is set
-	r, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderLoginPage(w, "", csrfToken)
 }
 
-// handleLogin processes login form submission
+// showLoginError renders the login page with an error message.
+func (a *Admin) showLoginError(w http.ResponseWriter, r *http.Request, msg string) {
+	csrfToken := a.ensureCSRFToken(w, r)
+	a.renderLoginPage(w, msg, csrfToken)
+}
+
+// timingSafeCompare performs a timing-safe password comparison using a dummy hash for nonexistent users.
+func timingSafeCompare(user *store.AdminUser, userErr error, password string) error {
+	dummyHash := "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+	hashToCheck := dummyHash
+	if userErr == nil && user != nil && user.PasswordHash != "" {
+		hashToCheck = user.PasswordHash
+	}
+	return bcrypt.CompareHashAndPassword([]byte(hashToCheck), []byte(password))
+}
+
+// handleLogin processes login form submission.
 func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderLoginPage(w, "Invalid form data", csrfToken)
+		a.showLoginError(w, r, "Invalid form data")
 		return
 	}
-
-	// Validate CSRF token
 	if !a.validateCSRF(r) {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderLoginPage(w, "Invalid request, please try again", csrfToken)
+		a.showLoginError(w, r, "Invalid request, please try again")
 		return
 	}
 
@@ -519,51 +520,36 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 
 	if username == "" || password == "" {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderLoginPage(w, "Username and password required", csrfToken)
+		a.showLoginError(w, r, "Username and password required")
 		return
 	}
 
-	user, err := a.store.GetAdminUserByUsername(r.Context(), username)
+	user, userErr := a.store.GetAdminUserByUsername(r.Context(), username)
+	bcryptErr := timingSafeCompare(user, userErr, password)
 
-	// Use a dummy hash for timing-safe comparison when user doesn't exist
-	// This prevents timing attacks that could enumerate valid usernames
-	dummyHash := "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
-
-	if err != nil {
-		if errors.Is(err, store.ErrAdminUserNotFound) {
-			// Do a dummy bcrypt comparison to maintain constant timing
-			_ = bcrypt.CompareHashAndPassword([]byte(dummyHash), []byte(password))
-			_, csrfToken := a.ensureCSRFToken(w, r)
-			a.renderLoginPage(w, "Invalid username or password", csrfToken)
-			return
+	if userErr != nil {
+		if errors.Is(userErr, store.ErrAdminUserNotFound) {
+			a.showLoginError(w, r, "Invalid username or password")
+		} else {
+			a.logger.Error("failed to get user", "error", userErr)
+			a.showLoginError(w, r, "An error occurred")
 		}
-		a.logger.Error("failed to get user", "error", err)
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderLoginPage(w, "An error occurred", csrfToken)
 		return
 	}
 
-	// Check password
 	if user.PasswordHash == "" {
-		// Do a dummy bcrypt comparison to maintain constant timing
-		_ = bcrypt.CompareHashAndPassword([]byte(dummyHash), []byte(password))
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderLoginPage(w, "Password login not enabled for this account", csrfToken)
+		a.showLoginError(w, r, "Password login not enabled for this account")
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderLoginPage(w, "Invalid username or password", csrfToken)
+	if bcryptErr != nil {
+		a.showLoginError(w, r, "Invalid username or password")
 		return
 	}
 
-	// Create session
 	if err := a.createSession(w, r, user.ID); err != nil {
 		a.logger.Error("failed to create session", "error", err)
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderLoginPage(w, "An error occurred", csrfToken)
+		a.showLoginError(w, r, "An error occurred")
 		return
 	}
 
@@ -571,7 +557,7 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// handleLogout logs out the current user
+// handleLogout logs out the current user.
 func (a *Admin) handleLogout(w http.ResponseWriter, r *http.Request) {
 	// Parse form to get CSRF token
 	if err := r.ParseForm(); err == nil {
@@ -607,7 +593,7 @@ func (a *Admin) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
-// handleSetupPage renders the initial setup wizard
+// handleSetupPage renders the initial setup wizard.
 func (a *Admin) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	// Only allow setup if no admin users exist
 	count, err := a.store.CountAdminUsers(r.Context())
@@ -621,13 +607,94 @@ func (a *Admin) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ensure CSRF token is set
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderSetupPage(w, "", csrfToken)
 }
 
-// handleSetupSubmit processes the initial setup form
+// createOwnerPrincipal creates an owner principal for API access during setup.
+// Returns the generated API token, or empty string on any error.
+func (a *Admin) createOwnerPrincipal(ctx context.Context, displayName string) string {
+	if a.principalStore == nil || a.tokenGenerator == nil {
+		return ""
+	}
+
+	fpBytes, err := generateSecureToken(32)
+	if err != nil {
+		a.logger.Error("failed to generate principal fingerprint", "error", err)
+		return ""
+	}
+
+	principalID := uuid.New().String()
+	principal := &store.Principal{
+		ID:          principalID,
+		Type:        store.PrincipalTypeClient,
+		PubkeyFP:    fpBytes,
+		DisplayName: displayName + " (API)",
+		Status:      store.PrincipalStatusApproved,
+		CreatedAt:   time.Now(),
+	}
+
+	if err := a.principalStore.CreatePrincipal(ctx, principal); err != nil {
+		a.logger.Error("failed to create principal", "error", err)
+		return ""
+	}
+
+	if err := a.principalStore.AddRole(ctx, store.RoleSubjectPrincipal, principalID, store.RoleOwner); err != nil {
+		a.logger.Error("failed to add owner role to principal", "principal_id", principalID, "error", err)
+		// Continue - principal was created even if role assignment failed
+	}
+
+	// Generate 30-day token
+	token, err := a.tokenGenerator.Generate(principalID, 30*24*time.Hour)
+	if err != nil {
+		a.logger.Error("failed to generate API token", "principal_id", principalID, "error", err)
+		return ""
+	}
+
+	a.logger.Info("created owner principal via setup", "principal_id", principalID)
+	return token
+}
+
+// setupFormData holds validated setup form data.
+type setupFormData struct {
+	username        string
+	password        string
+	displayName     string
+	createPrincipal bool
+}
+
+// parseSetupForm validates and returns setup form data, or an error message.
+func parseSetupForm(r *http.Request) (*setupFormData, string) {
+	username := strings.TrimSpace(r.FormValue("username"))
+	password := r.FormValue("password")
+	displayName := strings.TrimSpace(r.FormValue("display_name"))
+
+	if username == "" || password == "" || displayName == "" {
+		return nil, "All fields are required"
+	}
+	if errMsg := validateUsername(username); errMsg != "" {
+		return nil, errMsg
+	}
+	if len(password) < 8 {
+		return nil, "Password must be at least 8 characters"
+	}
+
+	return &setupFormData{
+		username:        username,
+		password:        password,
+		displayName:     displayName,
+		createPrincipal: r.FormValue("create_principal") == "on",
+	}, ""
+}
+
+// showSetupError renders the setup page with an error message.
+func (a *Admin) showSetupError(w http.ResponseWriter, r *http.Request, msg string) {
+	csrfToken := a.ensureCSRFToken(w, r)
+	a.renderSetupPage(w, msg, csrfToken)
+}
+
+// handleSetupSubmit processes the initial setup form.
 func (a *Admin) handleSetupSubmit(w http.ResponseWriter, r *http.Request) {
-	// Verify no admin users exist (race condition protection)
 	count, err := a.store.CountAdminUsers(r.Context())
 	if err != nil || count > 0 {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -635,120 +702,56 @@ func (a *Admin) handleSetupSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseForm(); err != nil {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderSetupPage(w, "Invalid form data", csrfToken)
+		a.showSetupError(w, r, "Invalid form data")
 		return
 	}
-
-	// Validate CSRF
 	if !a.validateCSRF(r) {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderSetupPage(w, "Invalid request, please try again", csrfToken)
+		a.showSetupError(w, r, "Invalid request, please try again")
 		return
 	}
 
-	// Parse form
-	username := strings.TrimSpace(r.FormValue("username"))
-	password := r.FormValue("password")
-	displayName := strings.TrimSpace(r.FormValue("display_name"))
-	createPrincipal := r.FormValue("create_principal") == "on"
-
-	// Validate
-	if username == "" || password == "" || displayName == "" {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderSetupPage(w, "All fields are required", csrfToken)
+	data, errMsg := parseSetupForm(r)
+	if errMsg != "" {
+		a.showSetupError(w, r, errMsg)
 		return
 	}
 
-	// Validate username format
-	if errMsg := validateUsername(username); errMsg != "" {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderSetupPage(w, errMsg, csrfToken)
-		return
-	}
-
-	if len(password) < 8 {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderSetupPage(w, "Password must be at least 8 characters", csrfToken)
-		return
-	}
-
-	// Hash password
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(data.password), bcrypt.DefaultCost)
 	if err != nil {
 		a.logger.Error("failed to hash password", "error", err)
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderSetupPage(w, "Failed to process password", csrfToken)
+		a.showSetupError(w, r, "Failed to process password")
 		return
 	}
 
-	// Create admin user
 	userID := uuid.New().String()
 	user := &store.AdminUser{
 		ID:           userID,
-		Username:     username,
+		Username:     data.username,
 		PasswordHash: string(hash),
-		DisplayName:  displayName,
+		DisplayName:  data.displayName,
 		CreatedAt:    time.Now(),
 	}
 	if err := a.store.CreateAdminUser(r.Context(), user); err != nil {
 		a.logger.Error("failed to create admin user", "error", err)
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderSetupPage(w, "Failed to create user: "+err.Error(), csrfToken)
+		a.showSetupError(w, r, "Failed to create user: "+err.Error())
 		return
 	}
 
-	// Optionally create owner principal for API access
 	var apiToken string
-	if createPrincipal && a.principalStore != nil && a.tokenGenerator != nil {
-		principalID := uuid.New().String()
-		// Generate a unique fingerprint for this setup-created principal
-		fpBytes, err := generateSecureToken(32)
-		if err != nil {
-			a.logger.Error("failed to generate principal fingerprint", "error", err)
-		} else {
-			principal := &store.Principal{
-				ID:          principalID,
-				Type:        store.PrincipalTypeClient,
-				PubkeyFP:    fpBytes, // Use generated token as fingerprint (it's unique)
-				DisplayName: displayName + " (API)",
-				Status:      store.PrincipalStatusApproved,
-				CreatedAt:   time.Now(),
-			}
-			if err := a.principalStore.CreatePrincipal(r.Context(), principal); err == nil {
-				if err := a.principalStore.AddRole(r.Context(), store.RoleSubjectPrincipal, principalID, store.RoleOwner); err != nil {
-					a.logger.Error("failed to add owner role to principal", "principal_id", principalID, "error", err)
-				}
-				// Generate 30-day token
-				var tokenErr error
-				apiToken, tokenErr = a.tokenGenerator.Generate(principalID, 30*24*time.Hour)
-				if tokenErr != nil {
-					a.logger.Error("failed to generate API token", "principal_id", principalID, "error", tokenErr)
-				} else {
-					a.logger.Info("created owner principal via setup", "principal_id", principalID)
-				}
-			} else {
-				a.logger.Error("failed to create principal", "error", err)
-			}
-		}
+	if data.createPrincipal {
+		apiToken = a.createOwnerPrincipal(r.Context(), data.displayName)
 	}
 
-	// Create session
 	if err := a.createSession(w, r, userID); err != nil {
 		a.logger.Error("failed to create session", "error", err)
-		// Still show success page but user will need to log in
 	}
 
-	a.logger.Info("admin setup completed", "username", username)
-
-	// Derive gRPC address from request host
+	a.logger.Info("admin setup completed", "username", data.username)
 	grpcAddress := deriveGRPCAddress(r.Host)
-
-	// Show success page with token (don't redirect immediately)
-	a.renderSetupComplete(w, displayName, apiToken, grpcAddress)
+	a.renderSetupComplete(w, data.displayName, apiToken, grpcAddress)
 }
 
-// handleInvitePage renders the signup page for an invite link
+// handleInvitePage renders the signup page for an invite link.
 func (a *Admin) handleInvitePage(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	if token == "" {
@@ -756,10 +759,13 @@ func (a *Admin) handleInvitePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure CSRF token is set
-	r, csrfToken := a.ensureCSRFToken(w, r)
+	// Capture context before ensureCSRFToken reassigns r
+	ctx := r.Context()
 
-	invite, err := a.store.GetAdminInvite(r.Context(), token)
+	// Ensure CSRF token is set
+	csrfToken := a.ensureCSRFToken(w, r)
+
+	invite, err := a.store.GetAdminInvite(ctx, token)
 	if err != nil {
 		if errors.Is(err, store.ErrAdminInviteNotFound) {
 			a.renderInvitePage(w, token, "Invalid invite link", csrfToken)
@@ -783,7 +789,84 @@ func (a *Admin) handleInvitePage(w http.ResponseWriter, r *http.Request) {
 	a.renderInvitePage(w, token, "", csrfToken)
 }
 
-// handleInviteSignup processes the signup form from an invite link
+// showInviteError renders the invite page with an error message.
+func (a *Admin) showInviteError(w http.ResponseWriter, r *http.Request, token, errMsg string) {
+	csrfToken := a.ensureCSRFToken(w, r)
+	a.renderInvitePage(w, token, errMsg, csrfToken)
+}
+
+// validateInvite checks if an invite is valid and returns an error message if not.
+func (a *Admin) validateInvite(ctx context.Context, token string) (*store.AdminInvite, string) {
+	invite, err := a.store.GetAdminInvite(ctx, token)
+	if err != nil {
+		return nil, "Invalid invite link"
+	}
+	if invite.UsedAt != nil {
+		return nil, "This invite has already been used"
+	}
+	if time.Now().After(invite.ExpiresAt) {
+		return nil, "This invite has expired"
+	}
+	return invite, ""
+}
+
+// inviteSignupData holds validated form data for invite signup.
+type inviteSignupData struct {
+	username    string
+	password    string
+	displayName string
+}
+
+// parseInviteSignupForm validates and parses the signup form, returns error message if invalid.
+func parseInviteSignupForm(r *http.Request) (*inviteSignupData, string) {
+	username := strings.TrimSpace(r.FormValue("username"))
+	password := r.FormValue("password")
+	displayName := strings.TrimSpace(r.FormValue("display_name"))
+
+	if username == "" || password == "" {
+		return nil, "Username and password required"
+	}
+	if errMsg := validateUsername(username); errMsg != "" {
+		return nil, errMsg
+	}
+	if len(password) < 8 {
+		return nil, "Password must be at least 8 characters"
+	}
+	if displayName == "" {
+		displayName = username
+	}
+	return &inviteSignupData{username: username, password: password, displayName: displayName}, ""
+}
+
+// createUserFromSignup creates a new admin user from signup data.
+func (a *Admin) createUserFromSignup(ctx context.Context, data *inviteSignupData) (*store.AdminUser, string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(data.password), bcrypt.DefaultCost)
+	if err != nil {
+		a.logger.Error("failed to hash password", "error", err)
+		return nil, "", err
+	}
+
+	userID, err := generateSecureToken(16)
+	if err != nil {
+		a.logger.Error("failed to generate user ID", "error", err)
+		return nil, "", err
+	}
+
+	user := &store.AdminUser{
+		ID:           userID,
+		Username:     data.username,
+		PasswordHash: string(hash),
+		DisplayName:  data.displayName,
+		CreatedAt:    time.Now(),
+	}
+
+	if err := a.store.CreateAdminUser(ctx, user); err != nil {
+		return nil, userID, err
+	}
+	return user, userID, nil
+}
+
+// handleInviteSignup processes the signup form from an invite link.
 func (a *Admin) handleInviteSignup(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	if token == "" {
@@ -792,151 +875,79 @@ func (a *Admin) handleInviteSignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseForm(); err != nil {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderInvitePage(w, token, "Invalid form data", csrfToken)
+		a.showInviteError(w, r, token, "Invalid form data")
 		return
 	}
-
-	// Validate CSRF token
 	if !a.validateCSRF(r) {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderInvitePage(w, token, "Invalid request, please try again", csrfToken)
+		a.showInviteError(w, r, token, "Invalid request, please try again")
 		return
 	}
 
-	username := strings.TrimSpace(r.FormValue("username"))
-	password := r.FormValue("password")
-	displayName := strings.TrimSpace(r.FormValue("display_name"))
-
-	if username == "" || password == "" {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderInvitePage(w, token, "Username and password required", csrfToken)
+	data, errMsg := parseInviteSignupForm(r)
+	if errMsg != "" {
+		a.showInviteError(w, r, token, errMsg)
 		return
 	}
 
-	// Validate username format
-	if errMsg := validateUsername(username); errMsg != "" {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderInvitePage(w, token, errMsg, csrfToken)
+	if _, errMsg = a.validateInvite(r.Context(), token); errMsg != "" {
+		a.showInviteError(w, r, token, errMsg)
 		return
 	}
 
-	if len(password) < 8 {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderInvitePage(w, token, "Password must be at least 8 characters", csrfToken)
-		return
-	}
-
-	if displayName == "" {
-		displayName = username
-	}
-
-	// Verify invite is still valid
-	invite, err := a.store.GetAdminInvite(r.Context(), token)
+	user, userID, err := a.createUserFromSignup(r.Context(), data)
 	if err != nil {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderInvitePage(w, token, "Invalid invite link", csrfToken)
-		return
-	}
-
-	if invite.UsedAt != nil {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderInvitePage(w, token, "This invite has already been used", csrfToken)
-		return
-	}
-
-	if time.Now().After(invite.ExpiresAt) {
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderInvitePage(w, token, "This invite has expired", csrfToken)
-		return
-	}
-
-	// Hash password
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		a.logger.Error("failed to hash password", "error", err)
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderInvitePage(w, token, "An error occurred", csrfToken)
-		return
-	}
-
-	// Create user
-	userID, err := generateSecureToken(16)
-	if err != nil {
-		a.logger.Error("failed to generate user ID", "error", err)
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderInvitePage(w, token, "An error occurred", csrfToken)
-		return
-	}
-
-	user := &store.AdminUser{
-		ID:           userID,
-		Username:     username,
-		PasswordHash: string(hash),
-		DisplayName:  displayName,
-		CreatedAt:    time.Now(),
-	}
-
-	if err := a.store.CreateAdminUser(r.Context(), user); err != nil {
 		if errors.Is(err, store.ErrUsernameExists) {
-			_, csrfToken := a.ensureCSRFToken(w, r)
-			a.renderInvitePage(w, token, "Username already taken", csrfToken)
-			return
+			a.showInviteError(w, r, token, "Username already taken")
+		} else {
+			a.showInviteError(w, r, token, "An error occurred")
 		}
-		a.logger.Error("failed to create user", "error", err)
-		_, csrfToken := a.ensureCSRFToken(w, r)
-		a.renderInvitePage(w, token, "An error occurred", csrfToken)
 		return
 	}
 
-	// Mark invite as used
 	if err := a.store.UseAdminInvite(r.Context(), token, userID); err != nil {
 		a.logger.Error("failed to mark invite as used", "error", err)
-		// User was created, so continue
 	}
 
-	// Create session and log in
-	if err := a.createSession(w, r, userID); err != nil {
+	if err := a.createSession(w, r, user.ID); err != nil {
 		a.logger.Error("failed to create session", "error", err)
-		// Redirect to login instead
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
-	a.logger.Info("admin user created via invite", "username", username, "invite", token)
+	a.logger.Info("admin user created via invite", "username", data.username, "invite", token)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// handleDashboard renders the main admin dashboard
+// handleDashboard renders the main admin dashboard.
 func (a *Admin) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderDashboard(w, user, csrfToken)
 }
 
-// handleStatsAgents returns connected agent count (htmx partial)
+// handleStatsAgents returns connected agent count (htmx partial).
 func (a *Admin) handleStatsAgents(w http.ResponseWriter, r *http.Request) {
 	count := 0
 	if a.manager != nil {
 		count = len(a.manager.ListAgents())
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, "%d", count)
+	_, _ = fmt.Fprintf(w, "%d", count)
 }
 
-// handleAgentsPage renders the agents management page
+// handleAgentsPage renders the agents management page.
 func (a *Admin) handleAgentsPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderAgentsPage(w, user, csrfToken)
 }
 
-// handleAgentsList returns the agents list (htmx partial)
+// handleAgentsList returns the agents list (htmx partial).
 func (a *Admin) handleAgentsList(w http.ResponseWriter, r *http.Request) {
 	a.renderAgentsList(w)
 }
 
-// handleAgentApprove approves a pending agent principal
+// handleAgentApprove approves a pending agent principal.
 func (a *Admin) handleAgentApprove(w http.ResponseWriter, r *http.Request) {
 	if !a.validateCSRF(r) {
 		http.Error(w, "Invalid request", http.StatusForbidden)
@@ -966,7 +977,7 @@ func (a *Admin) handleAgentApprove(w http.ResponseWriter, r *http.Request) {
 	a.renderAgentsList(w)
 }
 
-// handleAgentRevoke revokes an agent principal
+// handleAgentRevoke revokes an agent principal.
 func (a *Admin) handleAgentRevoke(w http.ResponseWriter, r *http.Request) {
 	if !a.validateCSRF(r) {
 		http.Error(w, "Invalid request", http.StatusForbidden)
@@ -994,7 +1005,7 @@ func (a *Admin) handleAgentRevoke(w http.ResponseWriter, r *http.Request) {
 	a.renderAgentsList(w)
 }
 
-// handleAgentDetail renders the agent detail page
+// handleAgentDetail renders the agent detail page.
 func (a *Admin) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 	agentID := r.PathValue("id")
 	if agentID == "" {
@@ -1038,11 +1049,11 @@ func (a *Admin) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderAgentDetail(w, user, agentInfo, agentThreads, csrfToken)
 }
 
-// handleCreateInvite creates a new invite link
+// handleCreateInvite creates a new invite link.
 func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 	// Validate CSRF (htmx sends via header)
 	if !a.validateCSRF(r) {
@@ -1083,14 +1094,14 @@ func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 // Tools Handlers
 // =============================================================================
 
-// handleToolsPage renders the tools management page
+// handleToolsPage renders the tools management page.
 func (a *Admin) handleToolsPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderToolsPage(w, user, csrfToken)
 }
 
-// handleToolsList returns the tools list grouped by pack (htmx partial)
+// handleToolsList returns the tools list grouped by pack (htmx partial).
 func (a *Admin) handleToolsList(w http.ResponseWriter, r *http.Request) {
 	var items []packItem
 	if a.registry != nil {
@@ -1157,28 +1168,28 @@ func (a *Admin) handleToolsList(w http.ResponseWriter, r *http.Request) {
 	a.renderToolsList(w, items)
 }
 
-// handleStatsPacks returns the registered pack count (htmx partial)
+// handleStatsPacks returns the registered pack count (htmx partial).
 func (a *Admin) handleStatsPacks(w http.ResponseWriter, r *http.Request) {
 	count := 0
 	if a.registry != nil {
 		count = len(a.registry.ListPacks()) + len(a.registry.ListBuiltinPacks())
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, "%d", count)
+	_, _ = fmt.Fprintf(w, "%d", count)
 }
 
 // =============================================================================
 // Activity Logs Handlers (builtin pack data)
 // =============================================================================
 
-// handleLogsPage renders the activity logs page
+// handleLogsPage renders the activity logs page.
 func (a *Admin) handleLogsPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderLogsPage(w, user, csrfToken)
 }
 
-// handleLogsList returns the logs list (htmx partial)
+// handleLogsList returns the logs list (htmx partial).
 func (a *Admin) handleLogsList(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	limitStr := r.URL.Query().Get("limit")
@@ -1203,14 +1214,14 @@ func (a *Admin) handleLogsList(w http.ResponseWriter, r *http.Request) {
 // Todos Handlers (builtin pack data)
 // =============================================================================
 
-// handleTodosPage renders the todos page
+// handleTodosPage renders the todos page.
 func (a *Admin) handleTodosPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderTodosPage(w, user, csrfToken)
 }
 
-// handleTodosList returns the todos list (htmx partial)
+// handleTodosList returns the todos list (htmx partial).
 func (a *Admin) handleTodosList(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
 	limit := 100
@@ -1234,14 +1245,14 @@ func (a *Admin) handleTodosList(w http.ResponseWriter, r *http.Request) {
 // BBS Board Handlers (builtin pack data)
 // =============================================================================
 
-// handleBoardPage renders the BBS board page
+// handleBoardPage renders the BBS board page.
 func (a *Admin) handleBoardPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderBoardPage(w, user, csrfToken)
 }
 
-// handleBoardList returns the board threads list (htmx partial)
+// handleBoardList returns the board threads list (htmx partial).
 func (a *Admin) handleBoardList(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
 	limit := 50
@@ -1261,7 +1272,7 @@ func (a *Admin) handleBoardList(w http.ResponseWriter, r *http.Request) {
 	a.renderBoardList(w, threads)
 }
 
-// handleBoardThread returns a single thread with replies (htmx partial)
+// handleBoardThread returns a single thread with replies (htmx partial).
 func (a *Admin) handleBoardThread(w http.ResponseWriter, r *http.Request) {
 	threadID := r.PathValue("id")
 	if threadID == "" {
@@ -1287,14 +1298,14 @@ func (a *Admin) handleBoardThread(w http.ResponseWriter, r *http.Request) {
 // Principals Handlers
 // =============================================================================
 
-// handlePrincipalsPage renders the principals management page
+// handlePrincipalsPage renders the principals management page.
 func (a *Admin) handlePrincipalsPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderPrincipalsPage(w, user, csrfToken)
 }
 
-// handlePrincipalsList returns the principals list (htmx partial)
+// handlePrincipalsList returns the principals list (htmx partial).
 func (a *Admin) handlePrincipalsList(w http.ResponseWriter, r *http.Request) {
 	// Parse query params for filtering
 	typeFilter := r.URL.Query().Get("type")
@@ -1320,11 +1331,11 @@ func (a *Admin) handlePrincipalsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderPrincipalsList(w, principals, csrfToken)
 }
 
-// handlePrincipalApprove approves a pending principal
+// handlePrincipalApprove approves a pending principal.
 func (a *Admin) handlePrincipalApprove(w http.ResponseWriter, r *http.Request) {
 	if !a.validateCSRF(r) {
 		http.Error(w, "Invalid request", http.StatusForbidden)
@@ -1349,10 +1360,10 @@ func (a *Admin) handlePrincipalApprove(w http.ResponseWriter, r *http.Request) {
 
 	a.logger.Info("principal approved", "principal_id", principalID)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">approved</span>`))
+	_, _ = w.Write([]byte(`<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">approved</span>`))
 }
 
-// handlePrincipalRevoke revokes a principal
+// handlePrincipalRevoke revokes a principal.
 func (a *Admin) handlePrincipalRevoke(w http.ResponseWriter, r *http.Request) {
 	if !a.validateCSRF(r) {
 		http.Error(w, "Invalid request", http.StatusForbidden)
@@ -1377,10 +1388,10 @@ func (a *Admin) handlePrincipalRevoke(w http.ResponseWriter, r *http.Request) {
 
 	a.logger.Info("principal revoked", "principal_id", principalID)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">revoked</span>`))
+	_, _ = w.Write([]byte(`<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">revoked</span>`))
 }
 
-// handlePrincipalDelete deletes a principal
+// handlePrincipalDelete deletes a principal.
 func (a *Admin) handlePrincipalDelete(w http.ResponseWriter, r *http.Request) {
 	if !a.validateCSRF(r) {
 		http.Error(w, "Invalid request", http.StatusForbidden)
@@ -1411,10 +1422,10 @@ func (a *Admin) handlePrincipalDelete(w http.ResponseWriter, r *http.Request) {
 // Threads Handlers
 // =============================================================================
 
-// handleThreadsPage renders the threads list page
+// handleThreadsPage renders the threads list page.
 func (a *Admin) handleThreadsPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 
 	// Load threads from store
 	threads, err := a.store.ListThreads(r.Context(), 100)
@@ -1426,7 +1437,7 @@ func (a *Admin) handleThreadsPage(w http.ResponseWriter, r *http.Request) {
 	a.renderThreadsPageWithData(w, user, threads, csrfToken)
 }
 
-// handleThreadDetail renders a single thread with its messages
+// handleThreadDetail renders a single thread with its messages.
 func (a *Admin) handleThreadDetail(w http.ResponseWriter, r *http.Request) {
 	threadID := r.PathValue("id")
 	if threadID == "" {
@@ -1453,11 +1464,11 @@ func (a *Admin) handleThreadDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderThreadDetail(w, user, thread, messages, csrfToken)
 }
 
-// handleThreadMessages returns messages for a thread (htmx partial)
+// handleThreadMessages returns messages for a thread (htmx partial).
 func (a *Admin) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
 	threadID := r.PathValue("id")
 	if threadID == "" {
@@ -1487,40 +1498,52 @@ func (a *Admin) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
 // Chat Handlers
 // =============================================================================
 
-// handleChatSend sends a message to an agent
-func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
+// handleChatSend sends a message to an agent.
+// validateChatSendRequest validates the chat send request and returns agentID, message, and error.
+func (a *Admin) validateChatSendRequest(w http.ResponseWriter, r *http.Request) (string, string, bool) {
 	if !a.validateCSRF(r) {
 		http.Error(w, "Invalid request", http.StatusForbidden)
-		return
+		return "", "", false
 	}
-
 	agentID := r.PathValue("id")
 	if agentID == "" {
 		http.Error(w, "Agent ID required", http.StatusBadRequest)
-		return
+		return "", "", false
 	}
-
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
-		return
+		return "", "", false
 	}
-
 	message := r.FormValue("message")
 	if message == "" {
 		http.Error(w, "Message required", http.StatusBadRequest)
-		return
+		return "", "", false
 	}
+	return agentID, message, true
+}
 
-	// Send message to agent via ConversationService
+// checkChatSendPrereqs checks conversation service and auth, returns user or writes error.
+func (a *Admin) checkChatSendPrereqs(w http.ResponseWriter, r *http.Request) *store.AdminUser {
 	if a.conversation == nil {
 		http.Error(w, "Conversation service not available", http.StatusServiceUnavailable)
-		return
+		return nil
 	}
-
-	// Get the current user for session tracking
 	user := getUserFromContext(r)
 	if user == nil {
 		http.Error(w, "Not authenticated", http.StatusUnauthorized)
+		return nil
+	}
+	return user
+}
+
+func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
+	agentID, message, ok := a.validateChatSendRequest(w, r)
+	if !ok {
+		return
+	}
+
+	user := a.checkChatSendPrereqs(w, r)
+	if user == nil {
 		return
 	}
 
@@ -1541,8 +1564,8 @@ func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		Content:      message,
 	}
 
-	// Use background context since r.Context() is cancelled when this handler returns
-	convResp, err := a.conversation.SendMessage(context.Background(), convReq)
+	// Use WithoutCancel since r.Context() is canceled when this handler returns
+	convResp, err := a.conversation.SendMessage(context.WithoutCancel(r.Context()), convReq)
 	if err != nil {
 		a.logger.Error("failed to send message to agent", "error", err, "agent_id", agentID)
 		if errors.Is(err, agent.ErrAgentNotFound) {
@@ -1564,7 +1587,7 @@ func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
 
 	// Pipe agent responses to the chat hub in a goroutine
 	// ConversationService handles persistence, this just pipes to SSE clients
-	go a.pipeAgentResponses(context.Background(), agentID, user.ID, convResp.Stream)
+	go a.pipeAgentResponses(context.WithoutCancel(r.Context()), agentID, user.ID, convResp.Stream)
 
 	a.logger.Debug("message sent to agent", "agent_id", agentID, "user", user.Username)
 
@@ -1575,7 +1598,22 @@ func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		a.logger.Debug("failed to encode response", "error", err)
+	}
+}
+
+// handlePipeResponse processes a single response and returns true to continue, false to stop.
+func handlePipeResponse(ctx context.Context, session *chatSession, resp *agent.Response) bool {
+	msg := convertAgentResponse(resp)
+	sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	sent := sendWithContext(sendCtx, session, msg)
+	cancel()
+
+	if !sent && session.isClosed() {
+		return false
+	}
+	return !resp.Done
 }
 
 // pipeAgentResponses pipes agent responses to the chat hub for SSE streaming.
@@ -1583,13 +1621,11 @@ func (a *Admin) handleChatSend(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) pipeAgentResponses(ctx context.Context, agentID, userID string, respChan <-chan *agent.Response) {
 	session, ok := a.chatHub.getSession(agentID, userID)
 	if !ok {
-		// Session doesn't exist, drain the response channel to prevent agent blocking
 		for range respChan {
 		}
 		return
 	}
 
-	// Clear activeRequest when pipe completes (re-enables broadcast for this client)
 	defer func() {
 		session.mu.Lock()
 		session.activeRequest = false
@@ -1599,45 +1635,87 @@ func (a *Admin) pipeAgentResponses(ctx context.Context, agentID, userID string, 
 	for {
 		select {
 		case <-ctx.Done():
-			session.send(&chatMessage{
-				Type:      "error",
-				Content:   "Request cancelled",
-				Timestamp: time.Now(),
-			})
+			session.send(&chatMessage{Type: "error", Content: "Request canceled", Timestamp: time.Now()})
 			go drainChannel(respChan)
 			return
-
 		case <-session.ctx.Done():
 			go drainChannel(respChan)
 			return
-
 		case resp, ok := <-respChan:
-			if !ok {
-				return
-			}
-
-			// Convert and send to SSE stream
-			msg := convertAgentResponse(resp)
-			sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			sent := sendWithContext(sendCtx, session, msg)
-			cancel()
-
-			if !sent && session.isClosed() {
+			if !ok || !handlePipeResponse(ctx, session, resp) {
+				if !ok {
+					return
+				}
 				go drainChannel(respChan)
-				return
-			}
-
-			if resp.Done {
 				return
 			}
 		}
 	}
 }
 
+// chatStreamContext holds state for an SSE chat stream.
+type chatStreamContext struct {
+	w          http.ResponseWriter
+	flusher    http.Flusher
+	session    *chatSession
+	seenEvents map[string]struct{}
+	logger     *slog.Logger
+}
+
+// sendSessionMessage handles a message from the chat session.
+func (ctx *chatStreamContext) sendSessionMessage(msg *chatMessage) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		ctx.logger.Error("failed to marshal chat message", "error", err)
+		return
+	}
+	_, _ = fmt.Fprintf(ctx.w, "event: %s\ndata: %s\n\n", msg.Type, data)
+	ctx.flusher.Flush()
+}
+
+// sendBroadcastEvent handles a broadcast event.
+func (ctx *chatStreamContext) sendBroadcastEvent(event *store.LedgerEvent) {
+	// Skip if client has active request (already getting from session pipe)
+	ctx.session.mu.RLock()
+	active := ctx.session.activeRequest
+	ctx.session.mu.RUnlock()
+	if active {
+		return
+	}
+
+	// Skip already-seen events
+	if _, seen := ctx.seenEvents[event.ID]; seen {
+		return
+	}
+	ctx.seenEvents[event.ID] = struct{}{}
+
+	msg := ledgerEventToChatMessage(event)
+	data, err := json.Marshal(msg)
+	if err != nil {
+		ctx.logger.Error("failed to marshal broadcast event", "error", err)
+		return
+	}
+
+	_, _ = fmt.Fprintf(ctx.w, "event: %s\ndata: %s\n\n", msg.Type, data)
+	ctx.flusher.Flush()
+}
+
+// setupChatStreamBroadcaster subscribes to the broadcaster and configures the session.
+func (a *Admin) setupChatStreamBroadcaster(r *http.Request, session *chatSession, agentID string) <-chan *store.LedgerEvent {
+	if a.broadcaster == nil {
+		return nil
+	}
+	broadcastCh, subID := a.broadcaster.Subscribe(r.Context(), agentID)
+	session.mu.Lock()
+	session.broadcastSubID = subID
+	session.mu.Unlock()
+	return broadcastCh
+}
+
 // handleChatStream handles SSE streaming of chat responses.
 // It merges two event sources:
 // 1. Chat session messages (streaming text chunks from this client's active request)
-// 2. Broadcast events (persisted events from other clients for cross-client awareness)
+// 2. Broadcast events (persisted events from other clients for cross-client awareness).
 func (a *Admin) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	agentID := r.PathValue("id")
 	if agentID == "" {
@@ -1645,18 +1723,16 @@ func (a *Admin) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the current user for session tracking
 	user := getUserFromContext(r)
 	if user == nil {
 		http.Error(w, "Not authenticated", http.StatusUnauthorized)
 		return
 	}
 
-	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+	w.Header().Set("X-Accel-Buffering", "no")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -1664,114 +1740,48 @@ func (a *Admin) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get or create chat session
 	session := a.chatHub.getOrCreateSession(agentID, user.ID)
+	broadcastCh := a.setupChatStreamBroadcaster(r, session, agentID)
 
-	// Subscribe to broadcaster for cross-client events (if available)
-	var broadcastCh <-chan *store.LedgerEvent
-	if a.broadcaster != nil {
-		var subID string
-		broadcastCh, subID = a.broadcaster.Subscribe(r.Context(), agentID)
-		// Store the subID in the session so handleChatSend can use it
-		// to exclude this subscriber from events generated by its own requests
-		session.mu.Lock()
-		session.broadcastSubID = subID
-		session.mu.Unlock()
-	}
-
-	// Send initial connection event
-	fmt.Fprintf(w, "event: connected\ndata: {\"agent_id\": %q}\n\n", agentID)
+	_, _ = fmt.Fprintf(w, "event: connected\ndata: {\"agent_id\": %q}\n\n", agentID)
 	flusher.Flush()
 
-	// Create heartbeat ticker to keep connection alive
 	heartbeat := time.NewTicker(30 * time.Second)
 	defer heartbeat.Stop()
 
-	// Track seen event IDs to deduplicate between session pipe and broadcaster.
-	// The originating client gets events from BOTH the streaming pipe (via chatSession)
-	// and the broadcaster (persisted events). We skip broadcaster events that the
-	// streaming pipe already delivered.
-	// Uses two generations to cap memory while preserving recent IDs for dedup.
-	const maxSeenEvents = 5_000
-	seenEvents := make(map[string]struct{})
-	prevSeenEvents := make(map[string]struct{})
+	ctx := &chatStreamContext{
+		w:          w,
+		flusher:    flusher,
+		session:    session,
+		seenEvents: make(map[string]struct{}),
+		logger:     a.logger,
+	}
 
-	// Stream messages until client disconnects
+	a.runChatStreamLoop(r, ctx, heartbeat, broadcastCh)
+}
+
+// runChatStreamLoop runs the main event loop for chat streaming.
+func (a *Admin) runChatStreamLoop(r *http.Request, ctx *chatStreamContext, heartbeat *time.Ticker, broadcastCh <-chan *store.LedgerEvent) {
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-
-		case <-session.ctx.Done():
-			// Session was closed
+		case <-ctx.session.ctx.Done():
 			return
-
 		case <-heartbeat.C:
-			// Send SSE comment as heartbeat to detect dead connections
-			fmt.Fprint(w, ": heartbeat\n\n")
-			flusher.Flush()
-
-		case msg, ok := <-session.messages:
+			_, _ = fmt.Fprint(ctx.w, ": heartbeat\n\n")
+			ctx.flusher.Flush()
+		case msg, ok := <-ctx.session.messages:
 			if !ok {
-				// Channel closed, session ended
 				return
 			}
-
-			// Encode message as JSON
-			data, err := json.Marshal(msg)
-			if err != nil {
-				a.logger.Error("failed to marshal chat message", "error", err)
-				continue
-			}
-
-			// Send SSE event based on message type
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", msg.Type, data)
-			flusher.Flush()
-
+			ctx.sendSessionMessage(msg)
 		case event, ok := <-broadcastCh:
 			if !ok {
-				// Broadcaster closed (shutdown) — nil out to avoid spinning
 				broadcastCh = nil
 				continue
 			}
-
-			// Skip broadcast events while this client has an active request.
-			// The session pipe (pipeAgentResponses) is already delivering these
-			// events as streaming chunks, so broadcasting them would cause duplicates.
-			session.mu.RLock()
-			active := session.activeRequest
-			session.mu.RUnlock()
-			if active {
-				continue
-			}
-
-			// Skip events we already sent via the streaming pipe
-			if _, seen := seenEvents[event.ID]; seen {
-				continue
-			}
-			if _, seen := prevSeenEvents[event.ID]; seen {
-				continue
-			}
-			seenEvents[event.ID] = struct{}{}
-			if len(seenEvents) >= maxSeenEvents {
-				// Rotate generations: current becomes previous, start fresh.
-				// This keeps the most recent ~2*maxSeenEvents IDs for dedup
-				// while bounding total memory.
-				prevSeenEvents = seenEvents
-				seenEvents = make(map[string]struct{})
-			}
-
-			// Convert ledger event to chat message format
-			msg := ledgerEventToChatMessage(event)
-
-			data, err := json.Marshal(msg)
-			if err != nil {
-				a.logger.Error("failed to marshal broadcast event", "error", err)
-				continue
-			}
-
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", msg.Type, data)
-			flusher.Flush()
+			ctx.sendBroadcastEvent(event)
 		}
 	}
 }
@@ -1780,10 +1790,10 @@ func (a *Admin) handleChatStream(w http.ResponseWriter, r *http.Request) {
 // Device Linking Handlers
 // =============================================================================
 
-// handleLinkPage shows pending link requests for approval
+// handleLinkPage shows pending link requests for approval.
 func (a *Admin) handleLinkPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 
 	// Clean up expired codes
 	_ = a.store.DeleteExpiredLinkCodes(r.Context())
@@ -1798,7 +1808,68 @@ func (a *Admin) handleLinkPage(w http.ResponseWriter, r *http.Request) {
 	a.renderLinkPage(w, user, codes, csrfToken)
 }
 
-// handleLinkApprove approves a link code and creates the principal
+// getOrCreatePrincipalForLink finds an existing principal by fingerprint or creates a new one.
+// Returns the principal ID and any error.
+func (a *Admin) getOrCreatePrincipalForLink(ctx context.Context, linkCode *store.LinkCode) (string, error) {
+	existing, err := a.principalStore.GetPrincipalByPubkey(ctx, linkCode.Fingerprint)
+	if err == nil && existing != nil {
+		a.logger.Info("using existing principal for link", "principal_id", existing.ID, "fingerprint", linkCode.Fingerprint)
+		return existing.ID, nil
+	}
+
+	principalID := uuid.New().String()
+	principal := &store.Principal{
+		ID:          principalID,
+		Type:        store.PrincipalTypeAgent,
+		PubkeyFP:    linkCode.Fingerprint,
+		DisplayName: linkCode.DeviceName,
+		Status:      store.PrincipalStatusApproved,
+		CreatedAt:   time.Now(),
+	}
+
+	if err := a.principalStore.CreatePrincipal(ctx, principal); err != nil {
+		return "", err
+	}
+
+	if err := a.principalStore.AddRole(ctx, store.RoleSubjectPrincipal, principalID, store.RoleMember); err != nil {
+		a.logger.Error("failed to add role", "error", err)
+	}
+	return principalID, nil
+}
+
+// validatePendingLinkCode fetches a link code and validates it's pending.
+func (a *Admin) validatePendingLinkCode(w http.ResponseWriter, ctx context.Context, id string) (*store.LinkCode, bool) {
+	linkCode, err := a.store.GetLinkCode(ctx, id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Code not found", http.StatusNotFound)
+		} else {
+			a.logger.Error("failed to get link code", "error", err)
+			http.Error(w, "Internal error", http.StatusInternalServerError)
+		}
+		return nil, false
+	}
+	if linkCode.Status != store.LinkCodeStatusPending {
+		http.Error(w, "Code already processed", http.StatusBadRequest)
+		return nil, false
+	}
+	return linkCode, true
+}
+
+// generateApprovalToken creates a principal and generates an auth token.
+func (a *Admin) generateApprovalToken(ctx context.Context, linkCode *store.LinkCode) (string, string, error) {
+	principalID, err := a.getOrCreatePrincipalForLink(ctx, linkCode)
+	if err != nil {
+		return "", "", fmt.Errorf("create principal: %w", err)
+	}
+	token, err := a.tokenGenerator.Generate(principalID, 30*24*time.Hour)
+	if err != nil {
+		return "", "", fmt.Errorf("generate token: %w", err)
+	}
+	return principalID, token, nil
+}
+
+// handleLinkApprove approves a link code and creates the principal.
 func (a *Admin) handleLinkApprove(w http.ResponseWriter, r *http.Request) {
 	if !a.validateCSRF(r) {
 		http.Error(w, "Invalid request", http.StatusForbidden)
@@ -1813,75 +1884,24 @@ func (a *Admin) handleLinkApprove(w http.ResponseWriter, r *http.Request) {
 
 	user := getUserFromContext(r)
 
-	// Get the link code
-	linkCode, err := a.store.GetLinkCode(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			http.Error(w, "Code not found", http.StatusNotFound)
-			return
-		}
-		a.logger.Error("failed to get link code", "error", err)
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+	linkCode, ok := a.validatePendingLinkCode(w, r.Context(), id)
+	if !ok {
 		return
 	}
 
-	if linkCode.Status != store.LinkCodeStatusPending {
-		http.Error(w, "Code already processed", http.StatusBadRequest)
-		return
-	}
-
-	// Verify we have a principal store
-	if a.principalStore == nil {
-		a.logger.Error("principal store not configured")
+	if a.principalStore == nil || a.tokenGenerator == nil {
+		a.logger.Error("server not fully configured for link approval")
 		http.Error(w, "Server not configured for link approval", http.StatusInternalServerError)
 		return
 	}
 
-	// Check if a principal with this fingerprint already exists
-	var principalID string
-	existingPrincipal, err := a.principalStore.GetPrincipalByPubkey(r.Context(), linkCode.Fingerprint)
-	if err == nil && existingPrincipal != nil {
-		// Use existing principal
-		principalID = existingPrincipal.ID
-		a.logger.Info("using existing principal for link", "principal_id", principalID, "fingerprint", linkCode.Fingerprint)
-	} else {
-		// Create new principal for the device
-		principalID = uuid.New().String()
-		principal := &store.Principal{
-			ID:          principalID,
-			Type:        store.PrincipalTypeAgent,
-			PubkeyFP:    linkCode.Fingerprint,
-			DisplayName: linkCode.DeviceName,
-			Status:      store.PrincipalStatusApproved,
-			CreatedAt:   time.Now(),
-		}
-
-		if err := a.principalStore.CreatePrincipal(r.Context(), principal); err != nil {
-			a.logger.Error("failed to create principal", "error", err)
-			http.Error(w, "Failed to create principal", http.StatusInternalServerError)
-			return
-		}
-
-		// Add member role for new principal
-		if err := a.principalStore.AddRole(r.Context(), store.RoleSubjectPrincipal, principalID, store.RoleMember); err != nil {
-			a.logger.Error("failed to add role", "error", err)
-		}
-	}
-
-	// Generate token (30 days)
-	if a.tokenGenerator == nil {
-		a.logger.Error("token generator not configured")
-		http.Error(w, "Server not configured for token generation", http.StatusInternalServerError)
-		return
-	}
-	token, err := a.tokenGenerator.Generate(principalID, 30*24*time.Hour)
+	principalID, token, err := a.generateApprovalToken(r.Context(), linkCode)
 	if err != nil {
-		a.logger.Error("failed to generate token", "error", err)
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		a.logger.Error("failed to generate approval", "error", err)
+		http.Error(w, "Failed to approve", http.StatusInternalServerError)
 		return
 	}
 
-	// Update link code with approval
 	if err := a.store.ApproveLinkCode(r.Context(), id, user.ID, principalID, token); err != nil {
 		a.logger.Error("failed to approve link code", "error", err)
 		http.Error(w, "Failed to approve", http.StatusInternalServerError)
@@ -1889,13 +1909,11 @@ func (a *Admin) handleLinkApprove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.logger.Info("link code approved", "code", linkCode.Code, "device", linkCode.DeviceName, "approved_by", user.Username)
-
-	// Return success for HTMX
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<span class="px-2 py-1 text-xs rounded-full bg-success/20 text-success font-medium">Approved</span>`))
+	_, _ = w.Write([]byte(`<span class="px-2 py-1 text-xs rounded-full bg-success/20 text-success font-medium">Approved</span>`))
 }
 
-// handleLinkRequest creates a new link code for a device
+// handleLinkRequest creates a new link code for a device.
 func (a *Admin) handleLinkRequest(w http.ResponseWriter, r *http.Request) {
 	// Parse JSON body
 	var req struct {
@@ -1919,7 +1937,12 @@ func (a *Admin) handleLinkRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate short code
-	code := generateLinkCode(LinkCodeLength)
+	code, err := generateLinkCode(LinkCodeLength)
+	if err != nil {
+		a.logger.Error("failed to generate link code", "error", err)
+		http.Error(w, "Failed to generate code", http.StatusInternalServerError)
+		return
+	}
 	now := time.Now()
 
 	linkCode := &store.LinkCode{
@@ -1946,24 +1969,28 @@ func (a *Admin) handleLinkRequest(w http.ResponseWriter, r *http.Request) {
 	a.logger.Info("link code created", "code", code, "device", req.DeviceName, "fingerprint", fpPreview)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"code":       linkCode.Code,
 		"expires_at": linkCode.ExpiresAt.Format(time.RFC3339),
-	})
+	}); err != nil {
+		a.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
-// generateLinkCode creates a random alphanumeric code
-func generateLinkCode(length int) string {
+// generateLinkCode creates a random alphanumeric code.
+func generateLinkCode(length int) (string, error) {
 	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // No I, O, 0, 1 for readability
 	b := make([]byte, length)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generating random bytes: %w", err)
+	}
 	for i := range b {
 		b[i] = charset[int(b[i])%len(charset)]
 	}
-	return string(b)
+	return string(b), nil
 }
 
-// handleLinkStatus checks the status of a link code (for device polling)
+// handleLinkStatus checks the status of a link code (for device polling).
 func (a *Admin) handleLinkStatus(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	if code == "" {
@@ -1985,9 +2012,11 @@ func (a *Admin) handleLinkStatus(w http.ResponseWriter, r *http.Request) {
 	// Check if expired
 	if time.Now().After(linkCode.ExpiresAt) && linkCode.Status == store.LinkCodeStatusPending {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"status": "expired",
-		})
+		}); err != nil {
+			a.logger.Debug("failed to encode response", "error", err)
+		}
 		return
 	}
 
@@ -2002,21 +2031,23 @@ func (a *Admin) handleLinkStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		a.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
 // =============================================================================
 // Token Usage Handlers
 // =============================================================================
 
-// handleUsagePage renders the token usage analytics page
+// handleUsagePage renders the token usage analytics page.
 func (a *Admin) handleUsagePage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderUsagePage(w, user, csrfToken)
 }
 
-// handleStatsTokens returns token usage stats (htmx partial)
+// handleStatsTokens returns token usage stats (htmx partial).
 func (a *Admin) handleStatsTokens(w http.ResponseWriter, r *http.Request) {
 	// Get stats with optional filters
 	filter := store.UsageFilter{}
@@ -2042,10 +2073,10 @@ func (a *Admin) handleStatsTokens(w http.ResponseWriter, r *http.Request) {
 // Secrets Handlers
 // =============================================================================
 
-// handleSecretsPage renders the secrets management page
+// handleSecretsPage renders the secrets management page.
 func (a *Admin) handleSecretsPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 
 	// Get list of connected agents for the dropdown
 	var agents []agentItem
@@ -2061,7 +2092,7 @@ func (a *Admin) handleSecretsPage(w http.ResponseWriter, r *http.Request) {
 	a.renderSecretsPage(w, user, agents, csrfToken)
 }
 
-// handleSecretsList returns the secrets list (htmx partial)
+// handleSecretsList returns the secrets list (htmx partial).
 func (a *Admin) handleSecretsList(w http.ResponseWriter, r *http.Request) {
 	// Type assert to SQLiteStore to access secrets methods
 	sqlStore, ok := a.store.(*store.SQLiteStore)
@@ -2109,11 +2140,11 @@ func (a *Admin) handleSecretsList(w http.ResponseWriter, r *http.Request) {
 		items = append(items, item)
 	}
 
-	_, csrfToken := a.ensureCSRFToken(w, r)
+	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderSecretsList(w, items, csrfToken)
 }
 
-// handleSecretsGetValue returns a secret's value as JSON (for reveal functionality)
+// handleSecretsGetValue returns a secret's value as JSON (for reveal functionality).
 func (a *Admin) handleSecretsGetValue(w http.ResponseWriter, r *http.Request) {
 	secretID := r.PathValue("id")
 	if secretID == "" {
@@ -2140,43 +2171,70 @@ func (a *Admin) handleSecretsGetValue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"value": secret.Value})
+	if err := json.NewEncoder(w).Encode(map[string]string{"value": secret.Value}); err != nil {
+		a.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
-// handleSecretsCreate creates a new secret
+// secretFormData holds parsed secret creation form data.
+type secretFormData struct {
+	key     string
+	value   string
+	agentID string
+}
+
+// parseSecretForm parses and validates secret creation form data.
+func parseSecretForm(r *http.Request) (*secretFormData, string) {
+	if err := r.ParseForm(); err != nil {
+		return nil, "Invalid form data"
+	}
+
+	data := &secretFormData{
+		key:     strings.TrimSpace(r.FormValue("key")),
+		value:   r.FormValue("value"),
+		agentID: r.FormValue("agent_id"),
+	}
+
+	if data.key == "" || data.value == "" {
+		return nil, "Key and value are required"
+	}
+	if !isValidEnvKey(data.key) {
+		return nil, "Key must be a valid environment variable name (letters, digits, underscores, starting with letter or underscore)"
+	}
+	if len(data.value) > 65536 {
+		return nil, "Value exceeds maximum length (64KB)"
+	}
+	return data, ""
+}
+
+// buildSecret creates a Secret struct from form data.
+func buildSecret(data *secretFormData, userID *string) *store.Secret {
+	secret := &store.Secret{
+		Key:   data.key,
+		Value: data.value,
+	}
+	if data.agentID != "" {
+		secret.AgentID = &data.agentID
+	}
+	if userID != nil {
+		secret.CreatedBy = userID
+	}
+	return secret
+}
+
+// handleSecretsCreate creates a new secret.
 func (a *Admin) handleSecretsCreate(w http.ResponseWriter, r *http.Request) {
 	if !a.validateCSRF(r) {
 		http.Error(w, "Invalid request", http.StatusForbidden)
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
+	data, errMsg := parseSecretForm(r)
+	if errMsg != "" {
+		http.Error(w, errMsg, http.StatusBadRequest)
 		return
 	}
 
-	key := strings.TrimSpace(r.FormValue("key"))
-	value := r.FormValue("value")
-	agentID := r.FormValue("agent_id")
-
-	if key == "" || value == "" {
-		http.Error(w, "Key and value are required", http.StatusBadRequest)
-		return
-	}
-
-	// Validate key is a valid environment variable name
-	if !isValidEnvKey(key) {
-		http.Error(w, "Key must be a valid environment variable name (letters, digits, underscores, starting with letter or underscore)", http.StatusBadRequest)
-		return
-	}
-
-	// Limit value length to prevent abuse
-	if len(value) > 65536 {
-		http.Error(w, "Value exceeds maximum length (64KB)", http.StatusBadRequest)
-		return
-	}
-
-	// Type assert to SQLiteStore
 	sqlStore, ok := a.store.(*store.SQLiteStore)
 	if !ok {
 		http.Error(w, "Server configuration error", http.StatusInternalServerError)
@@ -2184,16 +2242,11 @@ func (a *Admin) handleSecretsCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := getUserFromContext(r)
-	secret := &store.Secret{
-		Key:   key,
-		Value: value,
-	}
-	if agentID != "" {
-		secret.AgentID = &agentID
-	}
+	var userID *string
 	if user != nil {
-		secret.CreatedBy = &user.ID
+		userID = &user.ID
 	}
+	secret := buildSecret(data, userID)
 
 	if err := sqlStore.CreateSecret(r.Context(), secret); err != nil {
 		a.logger.Error("failed to create secret", "error", err)
@@ -2201,13 +2254,11 @@ func (a *Admin) handleSecretsCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.logger.Info("secret created", "key", key, "agent_id", agentID)
-
-	// Return updated list via htmx
+	a.logger.Info("secret created", "key", data.key, "agent_id", data.agentID)
 	a.handleSecretsList(w, r)
 }
 
-// handleSecretsUpdate updates a secret's value
+// handleSecretsUpdate updates a secret's value.
 func (a *Admin) handleSecretsUpdate(w http.ResponseWriter, r *http.Request) {
 	if !a.validateCSRF(r) {
 		http.Error(w, "Invalid request", http.StatusForbidden)
@@ -2270,7 +2321,7 @@ func (a *Admin) handleSecretsUpdate(w http.ResponseWriter, r *http.Request) {
 	a.handleSecretsList(w, r)
 }
 
-// handleSecretsDelete deletes a secret
+// handleSecretsDelete deletes a secret.
 func (a *Admin) handleSecretsDelete(w http.ResponseWriter, r *http.Request) {
 	if !a.validateCSRF(r) {
 		http.Error(w, "Invalid request", http.StatusForbidden)
@@ -2313,23 +2364,28 @@ func isValidEnvKey(key string) bool {
 	if len(key) == 0 || len(key) > 256 {
 		return false
 	}
-	for i, c := range key {
-		if i == 0 {
-			// First char must be letter or underscore
-			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
-				return false
-			}
-		} else {
-			// Subsequent chars can also include digits
-			if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
-				return false
-			}
+	if !isEnvKeyStartChar(rune(key[0])) {
+		return false
+	}
+	for _, c := range key[1:] {
+		if !isEnvKeyChar(c) {
+			return false
 		}
 	}
 	return true
 }
 
-// generateSecureToken generates a cryptographically secure random token
+// isEnvKeyStartChar returns true if c is valid as the first character of an env key.
+func isEnvKeyStartChar(c rune) bool {
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_'
+}
+
+// isEnvKeyChar returns true if c is valid in an env key (not first position).
+func isEnvKeyChar(c rune) bool {
+	return isEnvKeyStartChar(c) || (c >= '0' && c <= '9')
+}
+
+// generateSecureToken generates a cryptographically secure random token.
 func generateSecureToken(bytes int) (string, error) {
 	b := make([]byte, bytes)
 	if _, err := rand.Read(b); err != nil {
@@ -2338,17 +2394,10 @@ func generateSecureToken(bytes int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// generateBase64Token generates a URL-safe base64 token
-func generateBase64Token(bytes int) (string, error) {
-	b := make([]byte, bytes)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(b), nil
-}
+// generateBase64Token generates a URL-safe base64 token.
 
 // validateUsername checks if username meets requirements
-// Returns an error message or empty string if valid
+// Returns an error message or empty string if valid.
 func validateUsername(username string) string {
 	if len(username) < 3 {
 		return "Username must be at least 3 characters"
@@ -2362,7 +2411,7 @@ func validateUsername(username string) string {
 	return ""
 }
 
-// deriveGRPCAddress extracts the hostname from a request Host header and appends the gRPC port
+// deriveGRPCAddress extracts the hostname from a request Host header and appends the gRPC port.
 func deriveGRPCAddress(host string) string {
 	// Strip port if present (e.g., "coven.example.com:443" -> "coven.example.com")
 	hostname := host

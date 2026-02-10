@@ -17,23 +17,23 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// PrincipalStore defines the interface for retrieving principals
+// PrincipalStore defines the interface for retrieving principals.
 type PrincipalStore interface {
 	GetPrincipal(ctx context.Context, id string) (*store.Principal, error)
 	GetPrincipalByPubkey(ctx context.Context, fingerprint string) (*store.Principal, error)
 }
 
-// PrincipalCreator can create new principals (for auto-registration)
+// PrincipalCreator can create new principals (for auto-registration).
 type PrincipalCreator interface {
 	CreatePrincipal(ctx context.Context, p *store.Principal) error
 }
 
-// RoleStore defines the interface for retrieving roles
+// RoleStore defines the interface for retrieving roles.
 type RoleStore interface {
 	ListRoles(ctx context.Context, subjectType store.RoleSubjectType, subjectID string) ([]store.RoleName, error)
 }
 
-// AuthConfig holds auth configuration options
+// AuthConfig holds auth configuration options.
 type AuthConfig struct {
 	AgentAutoRegistration string // "approved", "pending", or "disabled"
 }
@@ -43,10 +43,10 @@ type AuthConfig struct {
 func UnaryInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
-		req interface{},
+		req any,
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
-	) (interface{}, error) {
+	) (any, error) {
 		authCtx, err := extractAuth(ctx, principals, roles, tokens, sshVerifier, config, creator)
 		if err != nil {
 			return nil, err
@@ -61,7 +61,7 @@ func UnaryInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVe
 // The optional config and creator parameters enable agent auto-registration.
 func StreamInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator) grpc.StreamServerInterceptor {
 	return func(
-		srv interface{},
+		srv any,
 		ss grpc.ServerStream,
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
@@ -85,10 +85,10 @@ func StreamInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenV
 func NoAuthUnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
-		req interface{},
+		req any,
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
-	) (interface{}, error) {
+	) (any, error) {
 		// Inject anonymous auth context
 		authCtx := &AuthContext{
 			PrincipalID:   "anonymous",
@@ -105,7 +105,7 @@ func NoAuthUnaryInterceptor() grpc.UnaryServerInterceptor {
 // auth context when authentication is disabled.
 func NoAuthStreamInterceptor() grpc.StreamServerInterceptor {
 	return func(
-		srv interface{},
+		srv any,
 		ss grpc.ServerStream,
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
@@ -125,33 +125,173 @@ func NoAuthStreamInterceptor() grpc.StreamServerInterceptor {
 	}
 }
 
-// wrappedServerStream wraps a grpc.ServerStream with a custom context
+// wrappedServerStream wraps a grpc.ServerStream with a custom context.
 type wrappedServerStream struct {
 	grpc.ServerStream
 	ctx context.Context
 }
 
-// Context returns the wrapped context
+// Context returns the wrapped context.
 func (w *wrappedServerStream) Context() context.Context {
 	return w.ctx
 }
 
 // extractAuth performs the authentication flow:
-// For SSH auth (agents):
-//  1. Extract SSH headers (x-ssh-pubkey, x-ssh-signature, x-ssh-timestamp, x-ssh-nonce)
-//  2. Verify signature over "timestamp|nonce"
-//  3. Compute fingerprint and lookup principal by pubkey
-//     3a. If principal not found and auto-registration is enabled, create a new principal
-//
-// For JWT auth (clients):
-//  1. Get token from metadata: "authorization: Bearer <token>"
-//  2. Verify token, extract principal_id
-//  3. Lookup principal by ID
-//
-// Common steps:
-//  4. Check status: allow approved/online/offline, deny pending/revoked (PERMISSION_DENIED)
-//  5. Lookup roles
-//  6. Build AuthContext
+// sshAuthResult holds the result of SSH authentication.
+type sshAuthResult struct {
+	principal      *store.Principal
+	autoRegistered bool
+}
+
+// validateSSHRequest checks that all required SSH fields are present.
+func validateSSHRequest(req *SSHAuthRequest) error {
+	if req.Pubkey == "" {
+		return status.Error(codes.Unauthenticated, "missing SSH public key")
+	}
+	if req.Signature == "" {
+		return status.Error(codes.Unauthenticated, "missing SSH signature")
+	}
+	if req.Timestamp == 0 {
+		return status.Error(codes.Unauthenticated, "missing SSH timestamp")
+	}
+	if req.Nonce == "" {
+		return status.Error(codes.Unauthenticated, "missing SSH nonce")
+	}
+	return nil
+}
+
+// autoRegisterPrincipal creates a new principal for auto-registration.
+func autoRegisterPrincipal(ctx context.Context, fingerprint string, config *AuthConfig, creator PrincipalCreator) (*store.Principal, error) {
+	if config == nil || config.AgentAutoRegistration == "disabled" || config.AgentAutoRegistration == "" {
+		return nil, status.Error(codes.Unauthenticated, "unknown public key")
+	}
+	if creator == nil {
+		return nil, status.Error(codes.Internal, "auto-registration enabled but no principal creator configured")
+	}
+
+	principalStatus := store.PrincipalStatusPending
+	if config.AgentAutoRegistration == "approved" {
+		principalStatus = store.PrincipalStatusApproved
+	}
+
+	shortFP := fingerprint
+	if len(shortFP) > 8 {
+		shortFP = shortFP[len(shortFP)-8:]
+	}
+
+	newPrincipal := &store.Principal{
+		ID:          uuid.New().String(),
+		Type:        store.PrincipalTypeAgent,
+		PubkeyFP:    fingerprint,
+		DisplayName: "agent-" + shortFP,
+		Status:      principalStatus,
+		CreatedAt:   time.Now().UTC(),
+	}
+
+	if err := creator.CreatePrincipal(ctx, newPrincipal); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to auto-create principal: %v", err)
+	}
+	return newPrincipal, nil
+}
+
+// authenticateWithSSH handles SSH-based authentication for agents.
+func authenticateWithSSH(ctx context.Context, req *SSHAuthRequest, verifier *SSHVerifier, principals PrincipalStore, config *AuthConfig, creator PrincipalCreator) (*sshAuthResult, error) {
+	if verifier == nil {
+		return nil, status.Error(codes.Unauthenticated, "SSH authentication not configured")
+	}
+
+	if err := validateSSHRequest(req); err != nil {
+		return nil, err
+	}
+
+	fingerprint, err := verifier.Verify(req)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "SSH auth failed: %v", err)
+	}
+
+	p, err := principals.GetPrincipalByPubkey(ctx, fingerprint)
+	if err == nil {
+		return &sshAuthResult{principal: p, autoRegistered: false}, nil
+	}
+
+	if !errors.Is(err, store.ErrPrincipalNotFound) {
+		return nil, status.Errorf(codes.Internal, "failed to lookup principal: %v", err)
+	}
+
+	newPrincipal, err := autoRegisterPrincipal(ctx, fingerprint, config, creator)
+	if err != nil {
+		return nil, err
+	}
+	return &sshAuthResult{principal: newPrincipal, autoRegistered: true}, nil
+}
+
+// authenticateWithJWT handles JWT-based authentication for clients.
+func authenticateWithJWT(ctx context.Context, md metadata.MD, tokens TokenVerifier, principals PrincipalStore) (*store.Principal, error) {
+	authHeaders := md.Get("authorization")
+	if len(authHeaders) == 0 {
+		return nil, status.Error(codes.Unauthenticated, "missing authorization header")
+	}
+
+	authHeader := authHeaders[0]
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return nil, status.Error(codes.Unauthenticated, "invalid authorization header format")
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	principalID, err := tokens.Verify(tokenString)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "invalid or expired token")
+	}
+
+	p, err := principals.GetPrincipal(ctx, principalID)
+	if err != nil {
+		if errors.Is(err, store.ErrPrincipalNotFound) {
+			return nil, status.Error(codes.Unauthenticated, "principal not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to lookup principal: %v", err)
+	}
+	return p, nil
+}
+
+// validatePrincipalStatusGRPC validates that the principal has an allowed status for gRPC.
+func validatePrincipalStatusGRPC(p *store.Principal, autoRegistered bool) error {
+	switch p.Status {
+	case store.PrincipalStatusApproved, store.PrincipalStatusOnline, store.PrincipalStatusOffline:
+		return nil
+	case store.PrincipalStatusPending:
+		if autoRegistered {
+			return status.Errorf(codes.PermissionDenied, "agent registered with pending status (principal_id: %s) - admin approval required", p.ID)
+		}
+		return status.Error(codes.PermissionDenied, "principal status is pending - admin approval required")
+	case store.PrincipalStatusRevoked:
+		return status.Error(codes.PermissionDenied, "principal has been revoked")
+	default:
+		return status.Errorf(codes.Internal, "unknown principal status: %s", p.Status)
+	}
+}
+
+// buildAuthContextGRPC creates the AuthContext from a principal and roles for gRPC.
+func buildAuthContextGRPC(ctx context.Context, p *store.Principal, roles RoleStore) (*AuthContext, error) {
+	roleNames, err := roles.ListRoles(ctx, store.RoleSubjectPrincipal, p.ID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to lookup roles: %v", err)
+	}
+
+	roleStrings := make([]string, len(roleNames))
+	for i, r := range roleNames {
+		roleStrings[i] = string(r)
+	}
+
+	return &AuthContext{
+		PrincipalID:   p.ID,
+		PrincipalType: string(p.Type),
+		MemberID:      nil,
+		Roles:         roleStrings,
+	}, nil
+}
+
+// extractAuth extracts authentication context from gRPC metadata.
+// Supports SSH auth for agents and JWT auth for clients.
 func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator) (*AuthContext, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -159,148 +299,27 @@ func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore
 	}
 
 	var principal *store.Principal
-	var principalID string
-	var wasAutoRegistered bool // Track if we just created this principal
+	var autoRegistered bool
 
 	// Try SSH auth first (for agents)
 	if sshReq := ExtractSSHAuthFromMetadata(md); sshReq != nil {
-		if sshVerifier == nil {
-			return nil, status.Error(codes.Unauthenticated, "SSH authentication not configured")
-		}
-
-		// Validate all required fields are present
-		if sshReq.Pubkey == "" {
-			return nil, status.Error(codes.Unauthenticated, "missing SSH public key")
-		}
-		if sshReq.Signature == "" {
-			return nil, status.Error(codes.Unauthenticated, "missing SSH signature")
-		}
-		if sshReq.Timestamp == 0 {
-			return nil, status.Error(codes.Unauthenticated, "missing SSH timestamp")
-		}
-		if sshReq.Nonce == "" {
-			return nil, status.Error(codes.Unauthenticated, "missing SSH nonce")
-		}
-
-		// Verify the SSH signature
-		fingerprint, err := sshVerifier.Verify(sshReq)
+		result, err := authenticateWithSSH(ctx, sshReq, sshVerifier, principals, config, creator)
 		if err != nil {
-			return nil, status.Errorf(codes.Unauthenticated, "SSH auth failed: %v", err)
+			return nil, err
 		}
-
-		// Lookup principal by fingerprint
-		p, err := principals.GetPrincipalByPubkey(ctx, fingerprint)
-		if err != nil {
-			if errors.Is(err, store.ErrPrincipalNotFound) {
-				// Check if auto-registration is enabled
-				if config == nil || config.AgentAutoRegistration == "disabled" || config.AgentAutoRegistration == "" {
-					return nil, status.Error(codes.Unauthenticated, "unknown public key")
-				}
-
-				// Auto-registration is enabled - create a new principal
-				if creator == nil {
-					return nil, status.Error(codes.Internal, "auto-registration enabled but no principal creator configured")
-				}
-
-				// Determine status based on config
-				principalStatus := store.PrincipalStatusPending
-				if config.AgentAutoRegistration == "approved" {
-					principalStatus = store.PrincipalStatusApproved
-				}
-
-				// Create the new principal with a descriptive display name
-				// Use last 8 chars of fingerprint for identification
-				shortFP := fingerprint
-				if len(shortFP) > 8 {
-					shortFP = shortFP[len(shortFP)-8:]
-				}
-				newPrincipal := &store.Principal{
-					ID:          uuid.New().String(),
-					Type:        store.PrincipalTypeAgent,
-					PubkeyFP:    fingerprint,
-					DisplayName: "agent-" + shortFP,
-					Status:      principalStatus,
-					CreatedAt:   time.Now().UTC(),
-				}
-
-				if err := creator.CreatePrincipal(ctx, newPrincipal); err != nil {
-					return nil, status.Errorf(codes.Internal, "failed to auto-create principal: %v", err)
-				}
-
-				p = newPrincipal
-				wasAutoRegistered = true
-			} else {
-				return nil, status.Errorf(codes.Internal, "failed to lookup principal: %v", err)
-			}
-		}
-		principal = p
-		principalID = p.ID
+		principal = result.principal
+		autoRegistered = result.autoRegistered
 	} else {
-		// Fall back to JWT auth (for clients)
-		authHeaders := md.Get("authorization")
-		if len(authHeaders) == 0 {
-			return nil, status.Error(codes.Unauthenticated, "missing authorization header")
-		}
-
-		authHeader := authHeaders[0]
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			return nil, status.Error(codes.Unauthenticated, "invalid authorization header format")
-		}
-
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-
-		// Verify token, extract principal_id
-		pid, err := tokens.Verify(tokenString)
+		p, err := authenticateWithJWT(ctx, md, tokens, principals)
 		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, "invalid or expired token")
-		}
-		principalID = pid
-
-		// Lookup principal by ID
-		p, err := principals.GetPrincipal(ctx, principalID)
-		if err != nil {
-			if errors.Is(err, store.ErrPrincipalNotFound) {
-				return nil, status.Error(codes.Unauthenticated, "principal not found")
-			}
-			return nil, status.Errorf(codes.Internal, "failed to lookup principal: %v", err)
+			return nil, err
 		}
 		principal = p
 	}
 
-	// Check status - allow approved/online/offline, deny pending/revoked
-	switch principal.Status {
-	case store.PrincipalStatusApproved, store.PrincipalStatusOnline, store.PrincipalStatusOffline:
-		// allowed
-	case store.PrincipalStatusPending:
-		if wasAutoRegistered {
-			return nil, status.Errorf(codes.PermissionDenied, "agent registered with pending status (principal_id: %s) - admin approval required", principal.ID)
-		}
-		return nil, status.Error(codes.PermissionDenied, "principal status is pending - admin approval required")
-	case store.PrincipalStatusRevoked:
-		return nil, status.Error(codes.PermissionDenied, "principal has been revoked")
-	default:
-		return nil, status.Errorf(codes.Internal, "unknown principal status: %s", principal.Status)
+	if err := validatePrincipalStatusGRPC(principal, autoRegistered); err != nil {
+		return nil, err
 	}
 
-	// Lookup roles
-	roleNames, err := roles.ListRoles(ctx, store.RoleSubjectPrincipal, principalID)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to lookup roles: %v", err)
-	}
-
-	// Convert role names to strings
-	roleStrings := make([]string, len(roleNames))
-	for i, r := range roleNames {
-		roleStrings[i] = string(r)
-	}
-
-	// Build AuthContext
-	authCtx := &AuthContext{
-		PrincipalID:   principalID,
-		PrincipalType: string(principal.Type),
-		MemberID:      nil, // always nil in v1
-		Roles:         roleStrings,
-	}
-
-	return authCtx, nil
+	return buildAuthContextGRPC(ctx, principal, roles)
 }

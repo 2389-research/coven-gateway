@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// createTestStore creates a real SQLite store in a temp directory
+// createTestStore creates a real SQLite store in a temp directory.
 func createTestStore(t *testing.T) *store.SQLiteStore {
 	t.Helper()
 
@@ -40,13 +40,13 @@ func createTestStore(t *testing.T) *store.SQLiteStore {
 	return s
 }
 
-// createAdminService creates an AdminService with the given store
+// createAdminService creates an AdminService with the given store.
 func createAdminService(t *testing.T, s *store.SQLiteStore) *AdminService {
 	t.Helper()
 	return NewAdminService(s)
 }
 
-// createTestAgent creates a principal with type="agent" for binding tests
+// createTestAgent creates a principal with type="agent" for binding tests.
 func createTestAgent(t *testing.T, s *store.SQLiteStore, id string) {
 	t.Helper()
 	// Create a unique 64-char hex fingerprint from the full ID
@@ -66,7 +66,7 @@ func createTestAgent(t *testing.T, s *store.SQLiteStore, id string) {
 	require.NoError(t, s.CreatePrincipal(context.Background(), p))
 }
 
-// createAdminContext creates a context with admin auth for testing
+// createAdminContext creates a context with admin auth for testing.
 func createAdminContext(principalID string) context.Context {
 	authCtx := &auth.AuthContext{
 		PrincipalID:   principalID,

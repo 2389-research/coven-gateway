@@ -272,7 +272,7 @@ func TestPrincipalStore_List_Pagination(t *testing.T) {
 	ctx := context.Background()
 
 	// Create 5 principals
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		p := &Principal{
 			ID:          generateTestID("principal", i),
 			Type:        PrincipalTypeClient,

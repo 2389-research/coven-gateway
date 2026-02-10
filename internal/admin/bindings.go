@@ -18,10 +18,10 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// frontendPattern validates frontend names: lowercase alphanumeric and underscore, 1-50 chars
+// frontendPattern validates frontend names: lowercase alphanumeric and underscore, 1-50 chars.
 var frontendPattern = regexp.MustCompile(`^[a-z0-9_]{1,50}$`)
 
-// BindingStore defines the store operations needed for binding management
+// BindingStore defines the store operations needed for binding management.
 type BindingStore interface {
 	CreateBindingV2(ctx context.Context, b *store.Binding) error
 	GetBindingByID(ctx context.Context, id string) (*store.Binding, error)
@@ -31,18 +31,18 @@ type BindingStore interface {
 	AppendAuditLog(ctx context.Context, e *store.AuditEntry) error
 }
 
-// AdminService implements the AdminService gRPC service
+// AdminService implements the AdminService gRPC service.
 type AdminService struct {
 	pb.UnimplementedAdminServiceServer
 	store BindingStore
 }
 
-// NewAdminService creates a new AdminService with the given store
+// NewAdminService creates a new AdminService with the given store.
 func NewAdminService(s BindingStore) *AdminService {
 	return &AdminService{store: s}
 }
 
-// CreateBinding creates a new channel-to-agent binding
+// CreateBinding creates a new channel-to-agent binding.
 func (s *AdminService) CreateBinding(ctx context.Context, req *pb.CreateBindingRequest) (*pb.Binding, error) {
 	authCtx := auth.MustFromContext(ctx)
 
@@ -78,7 +78,7 @@ func (s *AdminService) CreateBinding(ctx context.Context, req *pb.CreateBindingR
 	}
 
 	// Audit log
-	s.store.AppendAuditLog(ctx, &store.AuditEntry{
+	_ = s.store.AppendAuditLog(ctx, &store.AuditEntry{
 		ActorPrincipalID: authCtx.PrincipalID,
 		Action:           store.AuditCreateBinding,
 		TargetType:       "binding",
@@ -93,7 +93,7 @@ func (s *AdminService) CreateBinding(ctx context.Context, req *pb.CreateBindingR
 	return toProtoBinding(b), nil
 }
 
-// UpdateBinding updates a binding's agent_id
+// UpdateBinding updates a binding's agent_id.
 func (s *AdminService) UpdateBinding(ctx context.Context, req *pb.UpdateBindingRequest) (*pb.Binding, error) {
 	authCtx := auth.MustFromContext(ctx)
 
@@ -123,7 +123,7 @@ func (s *AdminService) UpdateBinding(ctx context.Context, req *pb.UpdateBindingR
 	}
 
 	// Audit log
-	s.store.AppendAuditLog(ctx, &store.AuditEntry{
+	_ = s.store.AppendAuditLog(ctx, &store.AuditEntry{
 		ActorPrincipalID: authCtx.PrincipalID,
 		Action:           store.AuditUpdateBinding,
 		TargetType:       "binding",
@@ -136,7 +136,7 @@ func (s *AdminService) UpdateBinding(ctx context.Context, req *pb.UpdateBindingR
 	return toProtoBinding(b), nil
 }
 
-// DeleteBinding removes a binding by ID
+// DeleteBinding removes a binding by ID.
 func (s *AdminService) DeleteBinding(ctx context.Context, req *pb.DeleteBindingRequest) (*pb.DeleteBindingResponse, error) {
 	authCtx := auth.MustFromContext(ctx)
 
@@ -163,7 +163,7 @@ func (s *AdminService) DeleteBinding(ctx context.Context, req *pb.DeleteBindingR
 	}
 
 	// Audit log
-	s.store.AppendAuditLog(ctx, &store.AuditEntry{
+	_ = s.store.AppendAuditLog(ctx, &store.AuditEntry{
 		ActorPrincipalID: authCtx.PrincipalID,
 		Action:           store.AuditDeleteBinding,
 		TargetType:       "binding",
@@ -178,7 +178,7 @@ func (s *AdminService) DeleteBinding(ctx context.Context, req *pb.DeleteBindingR
 	return &pb.DeleteBindingResponse{}, nil
 }
 
-// ListBindings returns bindings matching the filter criteria
+// ListBindings returns bindings matching the filter criteria.
 func (s *AdminService) ListBindings(ctx context.Context, req *pb.ListBindingsRequest) (*pb.ListBindingsResponse, error) {
 	// auth.MustFromContext is called by the interceptor, but we call it here
 	// to ensure the context has auth even if this method is called directly in tests
@@ -202,7 +202,7 @@ func (s *AdminService) ListBindings(ctx context.Context, req *pb.ListBindingsReq
 	return &pb.ListBindingsResponse{Bindings: pbBindings}, nil
 }
 
-// validateFrontend validates the frontend name format
+// validateFrontend validates the frontend name format.
 func validateFrontend(frontend string) error {
 	if frontend == "" {
 		return errors.New("frontend required")
@@ -213,7 +213,7 @@ func validateFrontend(frontend string) error {
 	return nil
 }
 
-// toProtoBinding converts a store.Binding to a protobuf Binding
+// toProtoBinding converts a store.Binding to a protobuf Binding.
 func toProtoBinding(b *store.Binding) *pb.Binding {
 	return &pb.Binding{
 		Id:        b.ID,

@@ -5,6 +5,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -15,7 +16,7 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// PrincipalStore defines the interface for principal operations
+// PrincipalStore defines the interface for principal operations.
 type PrincipalStore interface {
 	GetPrincipal(ctx context.Context, id string) (*store.Principal, error)
 	CreatePrincipal(ctx context.Context, p *store.Principal) error
@@ -26,13 +27,13 @@ type PrincipalStore interface {
 	AppendAuditLog(ctx context.Context, entry *store.AuditEntry) error
 }
 
-// PrincipalService extends TokenService with principal management capabilities
+// PrincipalService extends TokenService with principal management capabilities.
 type PrincipalService struct {
 	*TokenService
 	principalStore PrincipalStore
 }
 
-// NewPrincipalService creates an AdminService with full principal management capabilities
+// NewPrincipalService creates an AdminService with full principal management capabilities.
 func NewPrincipalService(s interface {
 	BindingStore
 	PrincipalStore
@@ -43,7 +44,7 @@ func NewPrincipalService(s interface {
 	}
 }
 
-// ListPrincipals returns a list of principals matching the filter
+// ListPrincipals returns a list of principals matching the filter.
 func (s *PrincipalService) ListPrincipals(ctx context.Context, req *pb.ListPrincipalsRequest) (*pb.ListPrincipalsResponse, error) {
 	filter := store.PrincipalFilter{}
 
@@ -94,77 +95,97 @@ func (s *PrincipalService) ListPrincipals(ctx context.Context, req *pb.ListPrinc
 	}, nil
 }
 
-// CreatePrincipal creates a new principal
+// validateCreatePrincipalRequest validates basic request fields.
+func validateCreatePrincipalRequest(req *pb.CreatePrincipalRequest) error {
+	if req.Type == "" {
+		return status.Error(codes.InvalidArgument, "type required")
+	}
+	if req.DisplayName == "" {
+		return status.Error(codes.InvalidArgument, "display_name required")
+	}
+	return nil
+}
+
+// parsePrincipalType validates and converts the type string.
+func parsePrincipalType(typeStr string) (store.PrincipalType, error) {
+	pType := store.PrincipalType(typeStr)
+	switch pType {
+	case store.PrincipalTypeClient, store.PrincipalTypeAgent:
+		return pType, nil
+	default:
+		return "", status.Errorf(codes.InvalidArgument, "invalid type: %s (use 'client' or 'agent')", typeStr)
+	}
+}
+
+// resolveAgentFingerprint extracts fingerprint from pubkey or uses provided fingerprint.
+func resolveAgentFingerprint(req *pb.CreatePrincipalRequest) (string, error) {
+	switch {
+	case req.Pubkey != nil && *req.Pubkey != "":
+		fp, err := auth.ParseFingerprintFromKey(*req.Pubkey)
+		if err != nil {
+			return "", status.Errorf(codes.InvalidArgument, "invalid pubkey: %v", err)
+		}
+		return fp, nil
+	case req.PubkeyFp != nil && *req.PubkeyFp != "":
+		return *req.PubkeyFp, nil
+	default:
+		return "", status.Error(codes.InvalidArgument, "agent principals require pubkey or pubkey_fp")
+	}
+}
+
+// assignRoles attempts to add roles to principal, returning successfully added roles.
+func (s *PrincipalService) assignRoles(ctx context.Context, principalID string, roles []string) []string {
+	var added []string
+	for _, roleStr := range roles {
+		role := store.RoleName(roleStr)
+		if err := s.principalStore.AddRole(ctx, store.RoleSubjectPrincipal, principalID, role); err != nil {
+			continue // Best effort - skip on error
+		}
+		added = append(added, roleStr)
+	}
+	return added
+}
+
+// CreatePrincipal creates a new principal.
 func (s *PrincipalService) CreatePrincipal(ctx context.Context, req *pb.CreatePrincipalRequest) (*pb.Principal, error) {
 	authCtx := auth.MustFromContext(ctx)
 
-	// Validate request
-	if req.Type == "" {
-		return nil, status.Error(codes.InvalidArgument, "type required")
-	}
-	if req.DisplayName == "" {
-		return nil, status.Error(codes.InvalidArgument, "display_name required")
+	if err := validateCreatePrincipalRequest(req); err != nil {
+		return nil, err
 	}
 
-	// Validate type
-	pType := store.PrincipalType(req.Type)
-	switch pType {
-	case store.PrincipalTypeClient, store.PrincipalTypeAgent:
-		// valid
-	default:
-		return nil, status.Errorf(codes.InvalidArgument, "invalid type: %s (use 'client' or 'agent')", req.Type)
+	pType, err := parsePrincipalType(req.Type)
+	if err != nil {
+		return nil, err
 	}
 
-	// Agents must have a pubkey
 	var fingerprint string
 	if pType == store.PrincipalTypeAgent {
-		if req.Pubkey != nil && *req.Pubkey != "" {
-			// Parse the pubkey and compute fingerprint
-			fp, err := auth.ParseFingerprintFromKey(*req.Pubkey)
-			if err != nil {
-				return nil, status.Errorf(codes.InvalidArgument, "invalid pubkey: %v", err)
-			}
-			fingerprint = fp
-		} else if req.PubkeyFp != nil && *req.PubkeyFp != "" {
-			// Use provided fingerprint directly
-			fingerprint = *req.PubkeyFp
-		} else {
-			return nil, status.Error(codes.InvalidArgument, "agent principals require pubkey or pubkey_fp")
+		fingerprint, err = resolveAgentFingerprint(req)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	// Generate principal ID
 	principalID := generatePrincipalID(pType)
-
-	// Create principal
 	p := &store.Principal{
 		ID:          principalID,
 		Type:        pType,
 		PubkeyFP:    fingerprint,
 		DisplayName: req.DisplayName,
-		Status:      store.PrincipalStatusApproved, // Auto-approve admin-created principals
+		Status:      store.PrincipalStatusApproved,
 		CreatedAt:   time.Now().UTC(),
 	}
 
 	if err := s.principalStore.CreatePrincipal(ctx, p); err != nil {
-		if err == store.ErrDuplicatePubkey {
+		if errors.Is(err, store.ErrDuplicatePubkey) {
 			return nil, status.Error(codes.AlreadyExists, "pubkey already registered to another principal")
 		}
 		return nil, status.Errorf(codes.Internal, "failed to create principal: %v", err)
 	}
 
-	// Add requested roles
-	roleStrings := []string{}
-	for _, roleStr := range req.Roles {
-		role := store.RoleName(roleStr)
-		if err := s.principalStore.AddRole(ctx, store.RoleSubjectPrincipal, principalID, role); err != nil {
-			// Best effort - log but don't fail
-			continue
-		}
-		roleStrings = append(roleStrings, roleStr)
-	}
+	roleStrings := s.assignRoles(ctx, principalID, req.Roles)
 
-	// Audit log
 	_ = s.principalStore.AppendAuditLog(ctx, &store.AuditEntry{
 		ActorPrincipalID: authCtx.PrincipalID,
 		Action:           store.AuditCreatePrincipal,
@@ -177,7 +198,6 @@ func (s *PrincipalService) CreatePrincipal(ctx context.Context, req *pb.CreatePr
 		},
 	})
 
-	// Build response
 	proto := &pb.Principal{
 		Id:          principalID,
 		Type:        string(pType),
@@ -193,7 +213,7 @@ func (s *PrincipalService) CreatePrincipal(ctx context.Context, req *pb.CreatePr
 	return proto, nil
 }
 
-// DeletePrincipal deletes a principal
+// DeletePrincipal deletes a principal.
 func (s *PrincipalService) DeletePrincipal(ctx context.Context, req *pb.DeletePrincipalRequest) (*pb.DeletePrincipalResponse, error) {
 	authCtx := auth.MustFromContext(ctx)
 
@@ -204,7 +224,7 @@ func (s *PrincipalService) DeletePrincipal(ctx context.Context, req *pb.DeletePr
 	// Check principal exists
 	_, err := s.principalStore.GetPrincipal(ctx, req.Id)
 	if err != nil {
-		if err == store.ErrPrincipalNotFound {
+		if errors.Is(err, store.ErrPrincipalNotFound) {
 			return nil, status.Error(codes.NotFound, "principal not found")
 		}
 		return nil, status.Errorf(codes.Internal, "failed to lookup principal: %v", err)
@@ -212,7 +232,7 @@ func (s *PrincipalService) DeletePrincipal(ctx context.Context, req *pb.DeletePr
 
 	// Delete
 	if err := s.principalStore.DeletePrincipal(ctx, req.Id); err != nil {
-		if err == store.ErrPrincipalNotFound {
+		if errors.Is(err, store.ErrPrincipalNotFound) {
 			return nil, status.Error(codes.NotFound, "principal not found")
 		}
 		return nil, status.Errorf(codes.Internal, "failed to delete principal: %v", err)
@@ -229,14 +249,14 @@ func (s *PrincipalService) DeletePrincipal(ctx context.Context, req *pb.DeletePr
 	return &pb.DeletePrincipalResponse{}, nil
 }
 
-// generatePrincipalID creates a new unique principal ID
+// generatePrincipalID creates a new unique principal ID.
 func generatePrincipalID(pType store.PrincipalType) string {
 	// Use type prefix + timestamp + random suffix
 	timestamp := time.Now().UnixMilli()
 	return string(pType) + "-" + formatBase36(timestamp)
 }
 
-// formatBase36 converts an int64 to base36 string
+// formatBase36 converts an int64 to base36 string.
 func formatBase36(n int64) string {
 	const digits = "0123456789abcdefghijklmnopqrstuvwxyz"
 	if n == 0 {

@@ -14,7 +14,7 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// GetMe returns the authenticated principal's identity information
+// GetMe returns the authenticated principal's identity information.
 func (s *ClientService) GetMe(ctx context.Context, _ *emptypb.Empty) (*pb.MeResponse, error) {
 	authCtx := auth.MustFromContext(ctx)
 

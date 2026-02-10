@@ -5,17 +5,18 @@ package client
 
 import (
 	"context"
+	"slices"
 
 	"github.com/2389/coven-gateway/internal/agent"
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// AgentLister defines the interface for listing connected agents
+// AgentLister defines the interface for listing connected agents.
 type AgentLister interface {
 	ListAgents() []*agent.AgentInfo
 }
 
-// ListAgents returns all currently connected agents
+// ListAgents returns all currently connected agents.
 func (s *ClientService) ListAgents(ctx context.Context, req *pb.ListAgentsRequest) (*pb.ListAgentsResponse, error) {
 	if s.agents == nil {
 		return &pb.ListAgentsResponse{Agents: []*pb.AgentInfo{}}, nil
@@ -28,11 +29,8 @@ func (s *ClientService) ListAgents(ctx context.Context, req *pb.ListAgentsReques
 	if req.Workspace != nil && *req.Workspace != "" {
 		workspace := *req.Workspace
 		for _, a := range agentInfos {
-			for _, ws := range a.Workspaces {
-				if ws == workspace {
-					filtered = append(filtered, a)
-					break
-				}
+			if slices.Contains(a.Workspaces, workspace) {
+				filtered = append(filtered, a)
 			}
 		}
 	} else {

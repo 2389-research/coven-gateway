@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/fatih/color"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -91,11 +93,11 @@ func printUsage() {
 	cyan := color.New(color.FgCyan)
 	yellow := color.New(color.FgYellow)
 
-	cyan.Print(banner)
+	_, _ = cyan.Print(banner)
 	fmt.Println()
 	fmt.Println("Usage: coven-admin <command> [args]")
 	fmt.Println()
-	yellow.Println("Commands:")
+	_, _ = yellow.Println("Commands:")
 	fmt.Println("  me                      Show your identity (principal + roles)")
 	fmt.Println("  status                  Show gateway status and your identity")
 	fmt.Println("  bindings                List all channel bindings")
@@ -110,15 +112,15 @@ func printUsage() {
 	fmt.Println("  invite create           Generate an admin web UI invite link")
 	fmt.Println("  chat <agent-id> [msg]   Chat with an agent (REPL if no message)")
 	fmt.Println()
-	yellow.Println("Environment:")
+	_, _ = yellow.Println("Environment:")
 	fmt.Println("  COVEN_GATEWAY_HOST       Gateway hostname (derives gRPC :50051 and HTTPS URLs)")
 	fmt.Println("  COVEN_TOKEN              JWT authentication token (required)")
 	fmt.Println()
-	yellow.Println("Legacy (overrides COVEN_GATEWAY_HOST if set):")
+	_, _ = yellow.Println("Legacy (overrides COVEN_GATEWAY_HOST if set):")
 	fmt.Println("  COVEN_GATEWAY_GRPC       Gateway gRPC address (default: localhost:50051)")
 	fmt.Println("  COVEN_ADMIN_URL          Gateway admin URL (default: http://localhost:8080)")
 	fmt.Println()
-	yellow.Println("Examples:")
+	_, _ = yellow.Println("Examples:")
 	fmt.Println("  export COVEN_TOKEN=\"eyJhbG...\"")
 	fmt.Println("  coven-admin me")
 	fmt.Println("  coven-admin bindings")
@@ -127,22 +129,28 @@ func printUsage() {
 	fmt.Println()
 }
 
-// createClient creates a gRPC client connection
+// createClient creates a gRPC client connection.
 func createClient(addr string) (*grpc.ClientConn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx, addr,
+	conn, err := grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("connecting to %s: %w", addr, err)
+		return nil, fmt.Errorf("creating client for %s: %w", addr, err)
 	}
+
+	// Verify connection is reachable with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn.Connect()
+	if !conn.WaitForStateChange(ctx, connectivity.Idle) {
+		_ = conn.Close()
+		return nil, fmt.Errorf("connecting to %s: timeout", addr)
+	}
+
 	return conn, nil
 }
 
-// authContext creates a context with the JWT token in metadata
+// authContext creates a context with the JWT token in metadata.
 func authContext(token string) context.Context {
 	ctx := context.Background()
 	if token != "" {
@@ -152,17 +160,17 @@ func authContext(token string) context.Context {
 	return ctx
 }
 
-// cmdMe shows the current user's identity
+// cmdMe shows the current user's identity.
 func cmdMe(addr, token string) error {
 	if token == "" {
-		return fmt.Errorf("COVEN_TOKEN environment variable is required")
+		return errors.New("COVEN_TOKEN environment variable is required")
 	}
 
 	conn, err := createClient(addr)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := pb.NewClientServiceClient(conn)
 	ctx := authContext(token)
@@ -176,15 +184,15 @@ func cmdMe(addr, token string) error {
 	cyan := color.New(color.FgCyan)
 
 	fmt.Println()
-	cyan.Println("  Identity")
-	cyan.Println("  --------")
+	_, _ = cyan.Println("  Identity")
+	_, _ = cyan.Println("  --------")
 	fmt.Printf("  Principal ID:   %s\n", resp.PrincipalId)
 	fmt.Printf("  Type:           %s\n", resp.PrincipalType)
 	fmt.Printf("  Display Name:   %s\n", resp.DisplayName)
 	fmt.Printf("  Status:         %s\n", resp.Status)
 
 	if len(resp.Roles) > 0 {
-		green.Printf("  Roles:          %s\n", strings.Join(resp.Roles, ", "))
+		_, _ = green.Printf("  Roles:          %s\n", strings.Join(resp.Roles, ", "))
 	} else {
 		fmt.Printf("  Roles:          (none)\n")
 	}
@@ -197,59 +205,64 @@ func cmdMe(addr, token string) error {
 	return nil
 }
 
-// cmdStatus shows gateway status and identity
+// cmdStatus shows gateway status and identity.
 func cmdStatus(addr, token string) error {
 	cyan := color.New(color.FgCyan)
 	green := color.New(color.FgGreen)
 	yellow := color.New(color.FgYellow)
 
-	cyan.Print(banner)
+	_, _ = cyan.Print(banner)
 	fmt.Println()
 
 	// Try to connect
 	conn, err := createClient(addr)
 	if err != nil {
-		yellow.Printf("  Gateway:  ")
+		_, _ = yellow.Printf("  Gateway:  ")
 		color.Red("UNREACHABLE (%v)\n", err)
 		return nil
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
-	green.Printf("  Gateway:  ")
+	_, _ = green.Printf("  Gateway:  ")
 	fmt.Printf("connected to %s\n", addr)
 
-	// If we have a token, show identity
-	if token != "" {
-		client := pb.NewClientServiceClient(conn)
-		ctx := authContext(token)
-
-		resp, err := client.GetMe(ctx, &emptypb.Empty{})
-		if err != nil {
-			yellow.Printf("  Identity: ")
-			color.Red("auth failed (%v)\n", err)
-		} else {
-			green.Printf("  Identity: ")
-			fmt.Printf("%s (%s)\n", resp.DisplayName, resp.PrincipalType)
-			green.Printf("  Roles:    ")
-			if len(resp.Roles) > 0 {
-				fmt.Printf("%s\n", strings.Join(resp.Roles, ", "))
-			} else {
-				fmt.Println("(none)")
-			}
-		}
-	} else {
-		yellow.Printf("  Identity: ")
+	// If we have no token, show warning and return early
+	if token == "" {
+		_, _ = yellow.Printf("  Identity: ")
 		fmt.Println("(no token - set COVEN_TOKEN)")
+		fmt.Println()
+		return nil
+	}
+
+	// Verify identity with token
+	client := pb.NewClientServiceClient(conn)
+	ctx := authContext(token)
+
+	resp, err := client.GetMe(ctx, &emptypb.Empty{})
+	if err != nil {
+		_, _ = yellow.Printf("  Identity: ")
+		color.Red("auth failed (%v)\n", err)
+		fmt.Println()
+		return nil
+	}
+
+	_, _ = green.Printf("  Identity: ")
+	fmt.Printf("%s (%s)\n", resp.DisplayName, resp.PrincipalType)
+	_, _ = green.Printf("  Roles:    ")
+	if len(resp.Roles) > 0 {
+		fmt.Printf("%s\n", strings.Join(resp.Roles, ", "))
+	} else {
+		fmt.Println("(none)")
 	}
 
 	fmt.Println()
 	return nil
 }
 
-// cmdBindings handles bindings subcommands
+// cmdBindings handles bindings subcommands.
 func cmdBindings(addr, token string, args []string) error {
 	if token == "" {
-		return fmt.Errorf("COVEN_TOKEN environment variable is required")
+		return errors.New("COVEN_TOKEN environment variable is required")
 	}
 
 	// Default to list
@@ -271,13 +284,13 @@ func cmdBindings(addr, token string, args []string) error {
 	}
 }
 
-// cmdBindingsList lists all bindings
+// cmdBindingsList lists all bindings.
 func cmdBindingsList(addr, token string) error {
 	conn, err := createClient(addr)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := pb.NewAdminServiceClient(conn)
 	ctx := authContext(token)
@@ -289,8 +302,8 @@ func cmdBindingsList(addr, token string) error {
 
 	cyan := color.New(color.FgCyan)
 	fmt.Println()
-	cyan.Println("  Channel Bindings")
-	cyan.Println("  ----------------")
+	_, _ = cyan.Println("  Channel Bindings")
+	_, _ = cyan.Println("  ----------------")
 
 	if len(resp.Bindings) == 0 {
 		fmt.Println("  (no bindings)")
@@ -299,8 +312,8 @@ func cmdBindingsList(addr, token string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  ID\tFRONTEND\tCHANNEL\tAGENT\tCREATED")
-	fmt.Fprintln(w, "  --\t--------\t-------\t-----\t-------")
+	_, _ = fmt.Fprintln(w, "  ID\tFRONTEND\tCHANNEL\tAGENT\tCREATED")
+	_, _ = fmt.Fprintln(w, "  --\t--------\t-------\t-----\t-------")
 
 	for _, b := range resp.Bindings {
 		id := truncate(b.Id, 12)
@@ -310,15 +323,15 @@ func cmdBindingsList(addr, token string) error {
 		if t, err := time.Parse(time.RFC3339, b.CreatedAt); err == nil {
 			created = t.Format("Jan 02 15:04")
 		}
-		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", id, b.Frontend, channel, agent, created)
+		_, _ = fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", id, b.Frontend, channel, agent, created)
 	}
-	w.Flush()
+	_ = w.Flush()
 	fmt.Println()
 
 	return nil
 }
 
-// cmdBindingsCreate creates a new binding
+// cmdBindingsCreate creates a new binding.
 func cmdBindingsCreate(addr, token string, args []string) error {
 	// Parse args
 	var frontend, channelID, agentID string
@@ -344,14 +357,14 @@ func cmdBindingsCreate(addr, token string, args []string) error {
 	}
 
 	if frontend == "" || channelID == "" || agentID == "" {
-		return fmt.Errorf("usage: bindings create --frontend <name> --channel <id> --agent <id>")
+		return errors.New("usage: bindings create --frontend <name> --channel <id> --agent <id>")
 	}
 
 	conn, err := createClient(addr)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := pb.NewAdminServiceClient(conn)
 	ctx := authContext(token)
@@ -366,7 +379,7 @@ func cmdBindingsCreate(addr, token string, args []string) error {
 	}
 
 	green := color.New(color.FgGreen)
-	green.Printf("✓ Created binding: %s\n", resp.Id)
+	_, _ = green.Printf("✓ Created binding: %s\n", resp.Id)
 	fmt.Printf("  Frontend:  %s\n", resp.Frontend)
 	fmt.Printf("  Channel:   %s\n", resp.ChannelId)
 	fmt.Printf("  Agent:     %s\n", resp.AgentId)
@@ -374,10 +387,10 @@ func cmdBindingsCreate(addr, token string, args []string) error {
 	return nil
 }
 
-// cmdBindingsDelete deletes a binding
+// cmdBindingsDelete deletes a binding.
 func cmdBindingsDelete(addr, token string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: bindings delete <binding-id>")
+		return errors.New("usage: bindings delete <binding-id>")
 	}
 
 	bindingID := args[0]
@@ -386,7 +399,7 @@ func cmdBindingsDelete(addr, token string, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := pb.NewAdminServiceClient(conn)
 	ctx := authContext(token)
@@ -399,15 +412,15 @@ func cmdBindingsDelete(addr, token string, args []string) error {
 	}
 
 	green := color.New(color.FgGreen)
-	green.Printf("✓ Deleted binding: %s\n", bindingID)
+	_, _ = green.Printf("✓ Deleted binding: %s\n", bindingID)
 
 	return nil
 }
 
-// cmdToken handles token subcommands
+// cmdToken handles token subcommands.
 func cmdToken(addr, token string, args []string) error {
 	if token == "" {
-		return fmt.Errorf("COVEN_TOKEN environment variable is required")
+		return errors.New("COVEN_TOKEN environment variable is required")
 	}
 
 	// Default to showing usage
@@ -421,11 +434,11 @@ func cmdToken(addr, token string, args []string) error {
 	case "create":
 		return cmdTokenCreate(addr, token, args)
 	default:
-		return fmt.Errorf("usage: token create --principal <id> [--ttl <duration>]")
+		return errors.New("usage: token create --principal <id> [--ttl <duration>]")
 	}
 }
 
-// cmdTokenCreate creates a new JWT token
+// cmdTokenCreate creates a new JWT token.
 func cmdTokenCreate(addr, token string, args []string) error {
 	// Parse args
 	var principalID string
@@ -452,14 +465,14 @@ func cmdTokenCreate(addr, token string, args []string) error {
 	}
 
 	if principalID == "" {
-		return fmt.Errorf("usage: token create --principal <id> [--ttl <days>]")
+		return errors.New("usage: token create --principal <id> [--ttl <days>]")
 	}
 
 	conn, err := createClient(addr)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := pb.NewAdminServiceClient(conn)
 	ctx := authContext(token)
@@ -479,10 +492,10 @@ func cmdTokenCreate(addr, token string, args []string) error {
 	cyan := color.New(color.FgCyan)
 
 	fmt.Println()
-	green.Println("  Token created successfully")
+	_, _ = green.Println("  Token created successfully")
 	fmt.Println()
-	cyan.Println("  Principal:  " + principalID)
-	cyan.Println("  Expires:    " + resp.ExpiresAt)
+	_, _ = cyan.Println("  Principal:  " + principalID)
+	_, _ = cyan.Println("  Expires:    " + resp.ExpiresAt)
 	fmt.Println()
 	fmt.Println("  Token (keep this secret!):")
 	fmt.Println()
@@ -492,17 +505,17 @@ func cmdTokenCreate(addr, token string, args []string) error {
 	return nil
 }
 
-// parseIntArg parses a string to int64
+// parseIntArg parses a string to int64.
 func parseIntArg(s string) (int64, error) {
 	var v int64
 	_, err := fmt.Sscanf(s, "%d", &v)
 	return v, err
 }
 
-// cmdAgents handles agent subcommands
+// cmdAgents handles agent subcommands.
 func cmdAgents(addr, token string, args []string) error {
 	if token == "" {
-		return fmt.Errorf("COVEN_TOKEN environment variable is required")
+		return errors.New("COVEN_TOKEN environment variable is required")
 	}
 
 	// Default to list
@@ -524,13 +537,13 @@ func cmdAgents(addr, token string, args []string) error {
 	}
 }
 
-// cmdAgentsList lists all agent principals
+// cmdAgentsList lists all agent principals.
 func cmdAgentsList(addr, token string) error {
 	conn, err := createClient(addr)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := pb.NewAdminServiceClient(conn)
 	ctx := authContext(token)
@@ -545,8 +558,8 @@ func cmdAgentsList(addr, token string) error {
 
 	cyan := color.New(color.FgCyan)
 	fmt.Println()
-	cyan.Println("  Agent Principals")
-	cyan.Println("  ----------------")
+	_, _ = cyan.Println("  Agent Principals")
+	_, _ = cyan.Println("  ----------------")
 
 	if len(resp.Principals) == 0 {
 		fmt.Println("  (no agents registered)")
@@ -555,8 +568,8 @@ func cmdAgentsList(addr, token string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  ID\tNAME\tSTATUS\tFINGERPRINT\tCREATED")
-	fmt.Fprintln(w, "  --\t----\t------\t-----------\t-------")
+	_, _ = fmt.Fprintln(w, "  ID\tNAME\tSTATUS\tFINGERPRINT\tCREATED")
+	_, _ = fmt.Fprintln(w, "  --\t----\t------\t-----------\t-------")
 
 	for _, p := range resp.Principals {
 		id := truncate(p.Id, 20)
@@ -569,15 +582,15 @@ func cmdAgentsList(addr, token string) error {
 		if t, err := time.Parse(time.RFC3339, p.CreatedAt); err == nil {
 			created = t.Format("Jan 02 15:04")
 		}
-		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", id, name, p.Status, fp, created)
+		_, _ = fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", id, name, p.Status, fp, created)
 	}
-	w.Flush()
+	_ = w.Flush()
 	fmt.Println()
 
 	return nil
 }
 
-// cmdAgentsCreate creates a new agent principal
+// cmdAgentsCreate creates a new agent principal.
 func cmdAgentsCreate(addr, token string, args []string) error {
 	// Parse args
 	var name, pubkey, pubkeyFP string
@@ -603,18 +616,18 @@ func cmdAgentsCreate(addr, token string, args []string) error {
 	}
 
 	if name == "" {
-		return fmt.Errorf("usage: agents create --name <name> [--pubkey <key> | --pubkey-fp <fingerprint>]")
+		return errors.New("usage: agents create --name <name> [--pubkey <key> | --pubkey-fp <fingerprint>]")
 	}
 
 	if pubkey == "" && pubkeyFP == "" {
-		return fmt.Errorf("agent requires either --pubkey <key> or --pubkey-fp <fingerprint>")
+		return errors.New("agent requires either --pubkey <key> or --pubkey-fp <fingerprint>")
 	}
 
 	conn, err := createClient(addr)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := pb.NewAdminServiceClient(conn)
 	ctx := authContext(token)
@@ -637,7 +650,7 @@ func cmdAgentsCreate(addr, token string, args []string) error {
 	}
 
 	green := color.New(color.FgGreen)
-	green.Printf("✓ Created agent: %s\n", resp.Id)
+	_, _ = green.Printf("✓ Created agent: %s\n", resp.Id)
 	fmt.Printf("  Name:        %s\n", resp.DisplayName)
 	if resp.PubkeyFp != nil {
 		fmt.Printf("  Fingerprint: %s\n", *resp.PubkeyFp)
@@ -647,10 +660,10 @@ func cmdAgentsCreate(addr, token string, args []string) error {
 	return nil
 }
 
-// cmdAgentsDelete deletes an agent principal
+// cmdAgentsDelete deletes an agent principal.
 func cmdAgentsDelete(addr, token string, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: agents delete <agent-id>")
+		return errors.New("usage: agents delete <agent-id>")
 	}
 
 	agentID := args[0]
@@ -659,7 +672,7 @@ func cmdAgentsDelete(addr, token string, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := pb.NewAdminServiceClient(conn)
 	ctx := authContext(token)
@@ -672,7 +685,7 @@ func cmdAgentsDelete(addr, token string, args []string) error {
 	}
 
 	green := color.New(color.FgGreen)
-	green.Printf("✓ Deleted agent: %s\n", agentID)
+	_, _ = green.Printf("✓ Deleted agent: %s\n", agentID)
 
 	return nil
 }
@@ -684,14 +697,7 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-func getEnv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-// getToken returns the JWT token from COVEN_TOKEN env var or ~/.config/coven/token file
+// getToken returns the JWT token from COVEN_TOKEN env var or ~/.config/coven/token file.
 func getToken() string {
 	// Check env var first
 	if token := os.Getenv("COVEN_TOKEN"); token != "" {
@@ -708,7 +714,7 @@ func getToken() string {
 		configDir = filepath.Join(homeDir, ".config")
 	}
 
-	tokenPath := filepath.Join(configDir, "coven", "token")
+	tokenPath := filepath.Clean(filepath.Join(configDir, "coven", "token"))
 	data, err := os.ReadFile(tokenPath)
 	if err != nil {
 		return ""
@@ -717,7 +723,7 @@ func getToken() string {
 	return strings.TrimSpace(string(data))
 }
 
-// cmdInvite handles admin invite subcommands
+// cmdInvite handles admin invite subcommands.
 func cmdInvite(args []string) error {
 	// Default to create
 	subcmd := "create"
@@ -734,7 +740,7 @@ func cmdInvite(args []string) error {
 	}
 }
 
-// cmdInviteCreate creates a new admin invite link
+// cmdInviteCreate creates a new admin invite link.
 func cmdInviteCreate(args []string) error {
 	// Parse args
 	var baseURL string
@@ -768,19 +774,18 @@ func cmdInviteCreate(args []string) error {
 	// Default database path
 	// COVEN_DB_PATH env var takes precedence for Docker deployments
 	if dbPath == "" {
-		if envPath := os.Getenv("COVEN_DB_PATH"); envPath != "" {
-			dbPath = envPath
-		} else {
-			configDir := os.Getenv("XDG_CONFIG_HOME")
-			if configDir == "" {
-				homeDir, err := os.UserHomeDir()
-				if err != nil {
-					return fmt.Errorf("could not determine config directory: %w", err)
-				}
-				configDir = filepath.Join(homeDir, ".config")
+		dbPath = os.Getenv("COVEN_DB_PATH")
+	}
+	if dbPath == "" {
+		configDir := os.Getenv("XDG_CONFIG_HOME")
+		if configDir == "" {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("could not determine config directory: %w", err)
 			}
-			dbPath = filepath.Join(configDir, "coven", "gateway.db")
+			configDir = filepath.Join(homeDir, ".config")
 		}
+		dbPath = filepath.Join(configDir, "coven", "gateway.db")
 	}
 
 	// Default base URL
@@ -801,7 +806,7 @@ func cmdInviteCreate(args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Generate token
 	tokenBytes := make([]byte, 32)
@@ -829,25 +834,25 @@ func cmdInviteCreate(args []string) error {
 	yellow := color.New(color.FgYellow)
 
 	fmt.Println()
-	green.Println("  Admin invite created!")
+	_, _ = green.Println("  Admin invite created!")
 	fmt.Println()
-	cyan.Println("  Invite URL:")
+	_, _ = cyan.Println("  Invite URL:")
 	fmt.Println()
 	fmt.Println("  " + inviteURL)
 	fmt.Println()
-	yellow.Printf("  Expires: %s (%d hours)\n", invite.ExpiresAt.Format(time.RFC3339), ttlHours)
+	_, _ = yellow.Printf("  Expires: %s (%d hours)\n", invite.ExpiresAt.Format(time.RFC3339), ttlHours)
 	fmt.Println()
 
 	return nil
 }
 
-// cmdChat provides one-shot or interactive chat with an agent
+// cmdChat provides one-shot or interactive chat with an agent.
 func cmdChat(addr, token string, args []string) error {
 	if token == "" {
-		return fmt.Errorf("COVEN_TOKEN environment variable is required")
+		return errors.New("COVEN_TOKEN environment variable is required")
 	}
 	if len(args) < 1 {
-		return fmt.Errorf("usage: chat <agent-id> [message]")
+		return errors.New("usage: chat <agent-id> [message]")
 	}
 
 	agentID := args[0]
@@ -871,7 +876,7 @@ func cmdChat(addr, token string, args []string) error {
 	return chatREPL(ctx, client, agentID)
 }
 
-// chatOneShot sends a single message and streams the response
+// chatOneShot sends a single message and streams the response.
 func chatOneShot(ctx context.Context, client pb.ClientServiceClient, agentID, message string) error {
 	idemKey := generateIdempotencyKey()
 
@@ -889,17 +894,17 @@ func chatOneShot(ctx context.Context, client pb.ClientServiceClient, agentID, me
 	return streamResponse(ctx, client, agentID)
 }
 
-// chatREPL runs an interactive read-eval-print loop
+// chatREPL runs an interactive read-eval-print loop.
 func chatREPL(ctx context.Context, client pb.ClientServiceClient, agentID string) error {
 	green := color.New(color.FgGreen)
 	cyan := color.New(color.FgCyan)
 
-	cyan.Printf("Chat with agent %s (Ctrl+D to exit)\n\n", agentID)
+	_, _ = cyan.Printf("Chat with agent %s (Ctrl+D to exit)\n\n", agentID)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), 1024*1024) // 1MB max input
 	for {
-		green.Print("> ")
+		_, _ = green.Print("> ")
 		if !scanner.Scan() {
 			// EOF (Ctrl+D) or error
 			fmt.Println()
@@ -931,7 +936,7 @@ func chatREPL(ctx context.Context, client pb.ClientServiceClient, agentID string
 	}
 }
 
-// streamResponse streams events from the agent until done
+// streamResponse streams events from the agent until done.
 func streamResponse(ctx context.Context, client pb.ClientServiceClient, agentID string) error {
 	stream, err := client.StreamEvents(ctx, &pb.StreamEventsRequest{
 		ConversationKey: agentID,
@@ -945,7 +950,7 @@ func streamResponse(ctx context.Context, client pb.ClientServiceClient, agentID 
 
 	for {
 		event, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return nil
 		}
 		if err != nil {
@@ -956,9 +961,9 @@ func streamResponse(ctx context.Context, client pb.ClientServiceClient, agentID 
 		case *pb.ClientStreamEvent_Text:
 			fmt.Print(p.Text.Content)
 		case *pb.ClientStreamEvent_Thinking:
-			dim.Print(p.Thinking.Content)
+			_, _ = dim.Print(p.Thinking.Content)
 		case *pb.ClientStreamEvent_ToolUse:
-			yellow.Printf("\n[tool: %s]\n", p.ToolUse.Name)
+			_, _ = yellow.Printf("\n[tool: %s]\n", p.ToolUse.Name)
 		case *pb.ClientStreamEvent_ToolResult:
 			if p.ToolResult.IsError {
 				color.Red("  %s\n", p.ToolResult.Output)
@@ -974,10 +979,10 @@ func streamResponse(ctx context.Context, client pb.ClientServiceClient, agentID 
 	}
 }
 
-// idemCounter provides a monotonic fallback sequence for idempotency keys
+// idemCounter provides a monotonic fallback sequence for idempotency keys.
 var idemCounter atomic.Uint64
 
-// generateIdempotencyKey creates a random idempotency key for message sending
+// generateIdempotencyKey creates a random idempotency key for message sending.
 func generateIdempotencyKey() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

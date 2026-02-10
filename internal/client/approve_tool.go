@@ -12,17 +12,17 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// ToolApprover defines the interface for sending tool approval responses
+// ToolApprover defines the interface for sending tool approval responses.
 type ToolApprover interface {
 	SendToolApproval(agentID, toolID string, approved, approveAll bool) error
 }
 
-// SetToolApprover sets the tool approver for tool approval operations
+// SetToolApprover sets the tool approver for tool approval operations.
 func (s *ClientService) SetToolApprover(approver ToolApprover) {
 	s.approver = approver
 }
 
-// ApproveTool responds to a tool approval request from an agent
+// ApproveTool responds to a tool approval request from an agent.
 func (s *ClientService) ApproveTool(ctx context.Context, req *pb.ApproveToolRequest) (*pb.ApproveToolResponse, error) {
 	if req.AgentId == "" {
 		return nil, status.Error(codes.InvalidArgument, "agent_id required")
@@ -51,7 +51,7 @@ func (s *ClientService) ApproveTool(ctx context.Context, req *pb.ApproveToolRequ
 	}, nil
 }
 
-// strPtr returns a pointer to the given string
+// strPtr returns a pointer to the given string.
 func strPtr(s string) *string {
 	return &s
 }
