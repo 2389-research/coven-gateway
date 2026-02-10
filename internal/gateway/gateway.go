@@ -64,6 +64,9 @@ type Gateway struct {
 	// mcpTokens maps MCP access tokens to agent capabilities
 	mcpTokens *mcp.TokenStore
 
+	// mcpServer is the MCP-compatible HTTP server for external agents
+	mcpServer *mcp.Server
+
 	// mcpEndpoint is the base URL for MCP endpoint (e.g., "http://localhost:8080/mcp")
 	mcpEndpoint string
 
@@ -400,8 +403,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating MCP server: %w", err)
 	}
-	mcpServer.RegisterRoutes(mux)
-	logger.Info("MCP server enabled at /mcp (JSON-RPC 2.0)")
+	gw.mcpServer = mcpServer
+	gw.mcpServer.RegisterRoutes(mux)
 
 	gw.httpServer = &http.Server{
 		Addr:              cfg.Server.HTTPAddr,
@@ -702,6 +705,9 @@ func (g *Gateway) closeOptionalComponents() {
 	}
 	if g.webAdmin != nil {
 		g.webAdmin.Close()
+	}
+	if g.mcpServer != nil {
+		g.mcpServer.Close()
 	}
 	if g.packRouter != nil {
 		g.packRouter.Close()

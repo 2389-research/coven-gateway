@@ -280,3 +280,37 @@ func TestCache_CheckAndMark_Atomic(t *testing.T) {
 	assert.Equal(t, int32(1), successCount,
 		"exactly one goroutine should win the race for CheckAndMark")
 }
+
+func TestCache_EvictionOrder(t *testing.T) {
+	// Test that eviction properly removes oldest entry (O(1) using linked list)
+	cache := New(5*time.Minute, 3)
+	defer cache.Close()
+
+	// Add keys in order
+	cache.Mark("first")
+	time.Sleep(1 * time.Millisecond)
+	cache.Mark("second")
+	time.Sleep(1 * time.Millisecond)
+	cache.Mark("third")
+
+	// All should be present
+	assert.True(t, cache.Check("first"))
+	assert.True(t, cache.Check("second"))
+	assert.True(t, cache.Check("third"))
+
+	// Add fourth - should evict "first" (oldest)
+	cache.Mark("fourth")
+
+	assert.False(t, cache.Check("first"), "first should be evicted")
+	assert.True(t, cache.Check("second"))
+	assert.True(t, cache.Check("third"))
+	assert.True(t, cache.Check("fourth"))
+
+	// Add fifth - should evict "second"
+	cache.Mark("fifth")
+
+	assert.False(t, cache.Check("second"), "second should be evicted")
+	assert.True(t, cache.Check("third"))
+	assert.True(t, cache.Check("fourth"))
+	assert.True(t, cache.Check("fifth"))
+}

@@ -4,15 +4,24 @@
 package dedupe
 
 import (
+	"container/list"
 	"sync"
 	"time"
 )
 
+// cacheEntry stores the timestamp and list element for a cached key.
+type cacheEntry struct {
+	timestamp time.Time
+	element   *list.Element
+}
+
 // Cache provides a thread-safe, TTL-based, size-limited cache for tracking
 // seen message keys. It is used to prevent duplicate processing of messages.
+// Uses a doubly-linked list to maintain insertion order for O(1) eviction.
 type Cache struct {
 	mu      sync.RWMutex
-	seen    map[string]time.Time
+	seen    map[string]*cacheEntry
+	order   *list.List // List of keys in insertion order (oldest at front)
 	ttl     time.Duration
 	maxSize int
 	done    chan struct{}
@@ -23,7 +32,8 @@ type Cache struct {
 // A background goroutine periodically cleans up expired entries.
 func New(ttl time.Duration, maxSize int) *Cache {
 	c := &Cache{
-		seen:    make(map[string]time.Time),
+		seen:    make(map[string]*cacheEntry),
+		order:   list.New(),
 		ttl:     ttl,
 		maxSize: maxSize,
 		done:    make(chan struct{}),
@@ -37,11 +47,11 @@ func (c *Cache) Check(key string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	t, ok := c.seen[key]
+	entry, ok := c.seen[key]
 	if !ok {
 		return false
 	}
-	return time.Since(t) < c.ttl
+	return time.Since(entry.timestamp) < c.ttl
 }
 
 // CheckAndMark atomically checks if a key has been seen and marks it if not.
@@ -51,16 +61,13 @@ func (c *Cache) CheckAndMark(key string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	t, ok := c.seen[key]
-	if ok && time.Since(t) < c.ttl {
+	entry, ok := c.seen[key]
+	if ok && time.Since(entry.timestamp) < c.ttl {
 		return true // Already seen, reject
 	}
 
 	// Not seen (or expired), mark it
-	if !ok && len(c.seen) >= c.maxSize {
-		c.evictOldest()
-	}
-	c.seen[key] = time.Now()
+	c.markLocked(key)
 	return false
 }
 
@@ -69,31 +76,44 @@ func (c *Cache) CheckAndMark(key string) bool {
 func (c *Cache) Mark(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.markLocked(key)
+}
 
-	// Evict oldest if at capacity (and key is not already present)
-	if _, exists := c.seen[key]; !exists && len(c.seen) >= c.maxSize {
+// markLocked is the internal mark implementation. Must be called with mu held.
+func (c *Cache) markLocked(key string) {
+	now := time.Now()
+
+	// If key already exists, update timestamp and move to back
+	if entry, exists := c.seen[key]; exists {
+		entry.timestamp = now
+		c.order.MoveToBack(entry.element)
+		return
+	}
+
+	// Evict oldest if at capacity
+	if len(c.seen) >= c.maxSize {
 		c.evictOldest()
 	}
 
-	c.seen[key] = time.Now()
+	// Add new entry
+	elem := c.order.PushBack(key)
+	c.seen[key] = &cacheEntry{
+		timestamp: now,
+		element:   elem,
+	}
 }
 
 // evictOldest removes the oldest entry from the cache.
-// Must be called with mu held.
+// Must be called with mu held. O(1) operation using linked list.
 func (c *Cache) evictOldest() {
-	var oldestKey string
-	var oldestTime time.Time
-
-	for k, t := range c.seen {
-		if oldestKey == "" || t.Before(oldestTime) {
-			oldestKey = k
-			oldestTime = t
-		}
+	front := c.order.Front()
+	if front == nil {
+		return
 	}
 
-	if oldestKey != "" {
-		delete(c.seen, oldestKey)
-	}
+	key, _ := front.Value.(string)
+	c.order.Remove(front)
+	delete(c.seen, key)
 }
 
 // cleanup runs in a background goroutine, periodically removing expired entries.
@@ -117,9 +137,10 @@ func (c *Cache) runCleanup() {
 	defer c.mu.Unlock()
 
 	now := time.Now()
-	for k, t := range c.seen {
-		if now.Sub(t) > c.ttl {
-			delete(c.seen, k)
+	for key, entry := range c.seen {
+		if now.Sub(entry.timestamp) > c.ttl {
+			c.order.Remove(entry.element)
+			delete(c.seen, key)
 		}
 	}
 }

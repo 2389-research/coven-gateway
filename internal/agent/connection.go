@@ -85,14 +85,26 @@ func (c *Connection) CloseRequest(requestID string) {
 	}
 }
 
+// Close closes all pending request channels and releases resources.
+// This should be called when the connection is being terminated to unblock
+// any goroutines waiting on response channels.
+func (c *Connection) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for requestID, ch := range c.pending {
+		close(ch)
+		delete(c.pending, requestID)
+	}
+}
+
 // HandleResponse routes a MessageResponse to the appropriate pending request channel.
 // If no matching request is found, the response is logged and discarded.
 func (c *Connection) HandleResponse(resp *pb.MessageResponse) {
 	c.mu.RLock()
 	ch, ok := c.pending[resp.GetRequestId()]
-	c.mu.RUnlock()
-
 	if !ok {
+		c.mu.RUnlock()
 		c.logger.Warn("received response for unknown request",
 			"request_id", resp.GetRequestId(),
 			"agent_id", c.ID,
@@ -100,7 +112,8 @@ func (c *Connection) HandleResponse(resp *pb.MessageResponse) {
 		return
 	}
 
-	// Non-blocking send to avoid deadlock if channel is full
+	// Non-blocking send to avoid deadlock if channel is full.
+	// Keep RLock held to prevent Close/CloseRequest from closing channel mid-send.
 	select {
 	case ch <- resp:
 	default:
@@ -109,4 +122,5 @@ func (c *Connection) HandleResponse(resp *pb.MessageResponse) {
 			"agent_id", c.ID,
 		)
 	}
+	c.mu.RUnlock()
 }

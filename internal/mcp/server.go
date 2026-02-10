@@ -115,14 +115,63 @@ type authInfo struct {
 	capabilities []string
 }
 
-// sessionStore manages active MCP sessions (in-memory).
+// DefaultSessionTTL is the default session expiration time (1 hour).
+const DefaultSessionTTL = time.Hour
+
+// sessionStore manages active MCP sessions (in-memory) with automatic expiration.
 type sessionStore struct {
-	mu       sync.RWMutex
-	sessions map[string]*mcpSession
+	mu        sync.RWMutex
+	sessions  map[string]*mcpSession
+	ttl       time.Duration
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 func newSessionStore() *sessionStore {
-	return &sessionStore{sessions: make(map[string]*mcpSession)}
+	return newSessionStoreWithTTL(DefaultSessionTTL)
+}
+
+func newSessionStoreWithTTL(ttl time.Duration) *sessionStore {
+	s := &sessionStore{
+		sessions: make(map[string]*mcpSession),
+		ttl:      ttl,
+		done:     make(chan struct{}),
+	}
+	go s.cleanupLoop()
+	return s
+}
+
+// Close stops the background cleanup goroutine. Safe to call multiple times.
+func (s *sessionStore) Close() {
+	s.closeOnce.Do(func() { close(s.done) })
+}
+
+// cleanupLoop periodically removes expired sessions.
+func (s *sessionStore) cleanupLoop() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			s.removeExpired()
+		}
+	}
+}
+
+// removeExpired removes all sessions older than the TTL.
+func (s *sessionStore) removeExpired() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cutoff := time.Now().Add(-s.ttl)
+	for id, sess := range s.sessions {
+		if sess.createdAt.Before(cutoff) {
+			delete(s.sessions, id)
+		}
+	}
 }
 
 func (s *sessionStore) create(protocolVersion string, auth authInfo, ownerToken string) *mcpSession {
@@ -219,6 +268,14 @@ func NewServer(cfg Config) (*Server, error) {
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/mcp", s.handleMCP)
 	mux.HandleFunc("/mcp/", s.handleMCP)
+}
+
+// Close releases resources used by the server, including stopping
+// the session cleanup goroutine.
+func (s *Server) Close() {
+	if s.sessions != nil {
+		s.sessions.Close()
+	}
 }
 
 // handleMCP is the single MCP endpoint supporting POST, GET, and DELETE per the

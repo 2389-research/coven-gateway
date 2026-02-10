@@ -41,13 +41,19 @@ const (
 var displayNamePattern = regexp.MustCompile(`^[a-zA-Z0-9\-_\.\s]+$`)
 
 // registrationRateLimiter tracks recent registration attempts per principal.
+// Includes periodic cleanup to prevent unbounded memory growth.
 type registrationRateLimiter struct {
-	mu      sync.Mutex
-	records map[string][]time.Time
+	mu          sync.Mutex
+	records     map[string][]time.Time
+	lastCleanup time.Time
 }
 
+// cleanupInterval determines how often we scan for stale entries.
+const cleanupInterval = 5 * time.Minute
+
 var regRateLimiter = &registrationRateLimiter{
-	records: make(map[string][]time.Time),
+	records:     make(map[string][]time.Time),
+	lastCleanup: time.Now(),
 }
 
 // checkAndRecord checks if a principal can register and records the attempt.
@@ -58,6 +64,12 @@ func (r *registrationRateLimiter) checkAndRecord(principalID string) bool {
 
 	now := time.Now()
 	cutoff := now.Add(-registrationRateWindow)
+
+	// Periodic cleanup: remove entries with all expired timestamps
+	if now.Sub(r.lastCleanup) > cleanupInterval {
+		r.cleanup(cutoff)
+		r.lastCleanup = now
+	}
 
 	// Get existing timestamps and filter out expired ones
 	timestamps := r.records[principalID]
@@ -77,6 +89,23 @@ func (r *registrationRateLimiter) checkAndRecord(principalID string) bool {
 	// Record this attempt
 	r.records[principalID] = append(valid, now)
 	return true
+}
+
+// cleanup removes entries where all timestamps have expired.
+// Must be called with mu held.
+func (r *registrationRateLimiter) cleanup(cutoff time.Time) {
+	for id, timestamps := range r.records {
+		hasValid := false
+		for _, t := range timestamps {
+			if t.After(cutoff) {
+				hasValid = true
+				break
+			}
+		}
+		if !hasValid {
+			delete(r.records, id)
+		}
+	}
 }
 
 // hasSufficientRole checks if the roles include member, admin, or owner.
