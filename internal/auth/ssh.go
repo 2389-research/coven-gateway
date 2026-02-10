@@ -65,13 +65,13 @@ func (v *SSHVerifier) Close() {
 // The signature must be over the string "timestamp|nonce".
 // Nonces are tracked to prevent replay attacks within the timestamp window.
 func (v *SSHVerifier) Verify(req *SSHAuthRequest) (fingerprint string, err error) {
-	// Parse the public key
+	// Parse the public key (cheap operation)
 	pubkey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(req.Pubkey))
 	if err != nil {
 		return "", fmt.Errorf("invalid public key: %w", err)
 	}
 
-	// Check timestamp is recent
+	// Check timestamp is recent (cheap operation)
 	signedAt := time.Unix(req.Timestamp, 0)
 	age := time.Since(signedAt)
 	if age < 0 {
@@ -81,6 +81,17 @@ func (v *SSHVerifier) Verify(req *SSHAuthRequest) (fingerprint string, err error
 		}
 	} else if age > v.maxAge {
 		return "", fmt.Errorf("signature expired (age: %v, max: %v)", age, v.maxAge)
+	}
+
+	// Check nonce BEFORE expensive signature verification to prevent CPU DoS.
+	// Replay attacks would otherwise cause expensive signature verifications on each attempt.
+	// The nonce key includes the fingerprint to prevent cross-key replay.
+	// Using CheckAndMark avoids TOCTOU race where two concurrent requests
+	// could both pass a Check before either reaches Mark.
+	fp := ComputeFingerprint(pubkey)
+	nonceKey := fmt.Sprintf("%s:%d:%s", fp, req.Timestamp, req.Nonce)
+	if v.nonceCache.CheckAndMark(nonceKey) {
+		return "", errors.New("nonce already used (possible replay attack)")
 	}
 
 	// Build the message that was signed: "timestamp|nonce"
@@ -98,19 +109,9 @@ func (v *SSHVerifier) Verify(req *SSHAuthRequest) (fingerprint string, err error
 		return "", fmt.Errorf("invalid signature format: %w", err)
 	}
 
-	// Verify the signature
+	// Verify the signature (expensive cryptographic operation)
 	if err := pubkey.Verify([]byte(message), sig); err != nil {
 		return "", fmt.Errorf("signature verification failed: %w", err)
-	}
-
-	// Atomically check and mark nonce to prevent replay attacks.
-	// The nonce key includes the fingerprint to prevent cross-key replay.
-	// Using CheckAndMark avoids TOCTOU race where two concurrent requests
-	// could both pass a Check before either reaches Mark.
-	fp := ComputeFingerprint(pubkey)
-	nonceKey := fmt.Sprintf("%s:%d:%s", fp, req.Timestamp, req.Nonce)
-	if v.nonceCache.CheckAndMark(nonceKey) {
-		return "", errors.New("nonce already used (possible replay attack)")
 	}
 
 	return fp, nil

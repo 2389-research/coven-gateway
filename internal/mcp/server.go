@@ -155,7 +155,10 @@ func (s *sessionStore) delete(id string) bool {
 	return existed
 }
 
-// DefaultToolTimeout is the default timeout for tool execution (60 seconds).
+// DefaultToolTimeout was the default timeout for tool execution.
+// This constant is kept for backwards compatibility but is not used.
+//
+// Deprecated: The router now handles per-tool timeouts from tool definitions.
 const DefaultToolTimeout = 60 * time.Second
 
 // Config holds configuration for the MCP server.
@@ -209,7 +212,7 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 
 	toolTimeout := cfg.ToolTimeout
-	if toolTimeout == 0 {
+	if toolTimeout <= 0 {
 		toolTimeout = DefaultToolTimeout
 	}
 
@@ -506,12 +509,10 @@ func (s *Server) handleToolsCall(w http.ResponseWriter, r *http.Request, req JSO
 		"agent_id", auth.agentID,
 	)
 
-	// Route the tool call with timeout to prevent hanging tools from blocking indefinitely.
-	// This protects against malicious or buggy tools causing goroutine leaks.
-	toolCtx, cancel := context.WithTimeout(r.Context(), s.toolTimeout)
-	defer cancel()
-
-	resp, err := s.router.RouteToolCall(toolCtx, params.Name, inputJSON, requestID, auth.agentID)
+	// Route the tool call - the router applies per-tool timeouts from tool definitions.
+	// We don't apply a blanket timeout here since tools like ask_user may have longer
+	// timeouts (e.g., 300s) that would be overridden by a shorter parent context.
+	resp, err := s.router.RouteToolCall(r.Context(), params.Name, inputJSON, requestID, auth.agentID)
 	if err != nil {
 		s.handleToolError(w, req.ID, params.Name, requestID, err)
 		return
