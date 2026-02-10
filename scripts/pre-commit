@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# ABOUTME: Pre-commit hook to catch issues before they reach CI
+# ABOUTME: Validates Go version, runs tests, linting, and proto sync check
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${YELLOW}Running pre-commit checks...${NC}"
+
+# 1. Check Go version
+REQUIRED_GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}' | cut -d. -f1,2)
+CURRENT_GO_VERSION=$(go version | awk '{print $3}' | sed 's/go//' | cut -d. -f1,2)
+
+if [[ "$CURRENT_GO_VERSION" != "$REQUIRED_GO_VERSION" ]]; then
+    echo -e "${RED}✗ Go version mismatch${NC}"
+    echo "  Required: $REQUIRED_GO_VERSION (from go.mod)"
+    echo "  Current:  $CURRENT_GO_VERSION"
+    echo "  Please update your Go version or update go.mod"
+    exit 1
+fi
+echo -e "${GREEN}✓ Go version check passed ($CURRENT_GO_VERSION)${NC}"
+
+# 2. Run go fmt check (fast, catches formatting issues)
+UNFORMATTED=$(gofmt -l . 2>/dev/null | grep -v vendor | head -5)
+if [[ -n "$UNFORMATTED" ]]; then
+    echo -e "${RED}✗ Go formatting issues found${NC}"
+    echo "  Run 'go fmt ./...' to fix:"
+    echo "$UNFORMATTED"
+    exit 1
+fi
+echo -e "${GREEN}✓ Go formatting check passed${NC}"
+
+# 3. Run go vet (fast, catches common issues)
+if ! go vet ./... 2>&1; then
+    echo -e "${RED}✗ go vet found issues${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ go vet passed${NC}"
+
+# 4. Run tests (can be skipped with SKIP_TESTS=1)
+if [[ "${SKIP_TESTS:-0}" != "1" ]]; then
+    echo -e "${YELLOW}Running tests (set SKIP_TESTS=1 to skip)...${NC}"
+    if ! go test -race -short ./... 2>&1; then
+        echo -e "${RED}✗ Tests failed${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Tests passed${NC}"
+else
+    echo -e "${YELLOW}⊘ Tests skipped (SKIP_TESTS=1)${NC}"
+fi
+
+# 5. Check proto sync (only if submodule exists and make proto works)
+if [[ -f "proto/coven-proto/coven.proto" ]]; then
+    echo -e "${YELLOW}Checking proto sync...${NC}"
+    make proto >/dev/null 2>&1 || true
+    if ! git diff --quiet proto/; then
+        echo -e "${RED}✗ Proto files out of sync${NC}"
+        echo "  Run 'make proto' and commit the changes"
+        git diff --stat proto/
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Proto files in sync${NC}"
+else
+    echo -e "${YELLOW}⊘ Proto sync skipped (submodule not initialized)${NC}"
+fi
+
+# 6. Run golangci-lint if available (can be skipped with SKIP_LINT=1)
+if [[ "${SKIP_LINT:-0}" != "1" ]] && command -v golangci-lint &> /dev/null; then
+    echo -e "${YELLOW}Running golangci-lint...${NC}"
+    if ! golangci-lint run --timeout=2m ./... 2>&1; then
+        echo -e "${RED}✗ Linting failed${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Linting passed${NC}"
+elif [[ "${SKIP_LINT:-0}" == "1" ]]; then
+    echo -e "${YELLOW}⊘ Linting skipped (SKIP_LINT=1)${NC}"
+else
+    echo -e "${YELLOW}⊘ Linting skipped (golangci-lint not installed)${NC}"
+fi
+
+echo -e "${GREEN}All pre-commit checks passed!${NC}"

@@ -164,10 +164,10 @@ type Config struct {
 	Router        *packs.Router
 	Logger        *slog.Logger
 	TokenVerifier auth.TokenVerifier
-	TokenStore    *TokenStore    // Token-based auth (URL query param)
-	RequireAuth   bool           // If true, reject requests without valid auth
-	DefaultCaps   []string       // Capabilities to use when no auth is provided
-	ToolTimeout   time.Duration  // Timeout for tool execution (default: 60s)
+	TokenStore    *TokenStore   // Token-based auth (URL query param)
+	RequireAuth   bool          // If true, reject requests without valid auth
+	DefaultCaps   []string      // Capabilities to use when no auth is provided
+	ToolTimeout   time.Duration // Timeout for tool execution (default: 60s)
 }
 
 // Server implements MCP-compatible HTTP endpoints for external agents.

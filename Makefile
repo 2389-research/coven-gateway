@@ -1,7 +1,7 @@
 # ABOUTME: Build and development commands for coven-gateway
 # ABOUTME: Handles proto generation, building, and testing
 
-.PHONY: all build build-gateway build-admin build-tui proto update-proto clean test lint fmt run
+.PHONY: all build build-gateway build-admin build-tui proto update-proto clean test lint fmt run setup hooks
 
 # Default target
 all: proto build
@@ -66,3 +66,15 @@ clean:
 # Development: watch and rebuild
 dev:
 	@echo "Run: go run ./cmd/coven-gateway serve --config config.yaml"
+
+# Install git hooks
+hooks:
+	@echo "Installing pre-commit hook..."
+	@cp scripts/pre-commit .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "Pre-commit hook installed!"
+
+# Setup development environment (run after cloning)
+setup: proto-deps hooks
+	@git submodule update --init --recursive
+	@echo "Development environment ready!"
