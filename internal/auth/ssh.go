@@ -6,6 +6,8 @@ package auth
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -17,20 +19,20 @@ import (
 )
 
 const (
-	// SSHAuthMaxAge is the maximum age of a signature timestamp (5 minutes)
+	// SSHAuthMaxAge is the maximum age of a signature timestamp (5 minutes).
 	SSHAuthMaxAge = 5 * time.Minute
 
-	// SSHNonceCacheSize is the maximum number of nonces to track
+	// SSHNonceCacheSize is the maximum number of nonces to track.
 	SSHNonceCacheSize = 10000
 
-	// SSH auth metadata keys
+	// SSH auth metadata keys.
 	SSHPubkeyHeader    = "x-ssh-pubkey"
 	SSHSignatureHeader = "x-ssh-signature"
 	SSHTimestampHeader = "x-ssh-timestamp"
 	SSHNonceHeader     = "x-ssh-nonce"
 )
 
-// SSHAuthRequest contains the data sent by an agent for SSH authentication
+// SSHAuthRequest contains the data sent by an agent for SSH authentication.
 type SSHAuthRequest struct {
 	Pubkey    string // Full public key (e.g., "ssh-ed25519 AAAA...")
 	Signature string // Base64-encoded signature over "timestamp|nonce"
@@ -38,13 +40,13 @@ type SSHAuthRequest struct {
 	Nonce     string // Random string to prevent replay
 }
 
-// SSHVerifier verifies SSH signatures for agent authentication
+// SSHVerifier verifies SSH signatures for agent authentication.
 type SSHVerifier struct {
 	maxAge     time.Duration
 	nonceCache *dedupe.Cache // Tracks used nonces to prevent replay attacks
 }
 
-// NewSSHVerifier creates a new SSH signature verifier with nonce replay protection
+// NewSSHVerifier creates a new SSH signature verifier with nonce replay protection.
 func NewSSHVerifier() *SSHVerifier {
 	return &SSHVerifier{
 		maxAge:     SSHAuthMaxAge,
@@ -52,7 +54,7 @@ func NewSSHVerifier() *SSHVerifier {
 	}
 }
 
-// Close releases resources used by the verifier
+// Close releases resources used by the verifier.
 func (v *SSHVerifier) Close() {
 	if v.nonceCache != nil {
 		v.nonceCache.Close()
@@ -75,7 +77,7 @@ func (v *SSHVerifier) Verify(req *SSHAuthRequest) (fingerprint string, err error
 	if age < 0 {
 		// Timestamp is in the future - allow small clock skew
 		if age < -time.Minute {
-			return "", fmt.Errorf("timestamp is in the future")
+			return "", errors.New("timestamp is in the future")
 		}
 	} else if age > v.maxAge {
 		return "", fmt.Errorf("signature expired (age: %v, max: %v)", age, v.maxAge)
@@ -108,7 +110,7 @@ func (v *SSHVerifier) Verify(req *SSHAuthRequest) (fingerprint string, err error
 	fp := ComputeFingerprint(pubkey)
 	nonceKey := fmt.Sprintf("%s:%d:%s", fp, req.Timestamp, req.Nonce)
 	if v.nonceCache.CheckAndMark(nonceKey) {
-		return "", fmt.Errorf("nonce already used (possible replay attack)")
+		return "", errors.New("nonce already used (possible replay attack)")
 	}
 
 	return fp, nil
@@ -118,7 +120,7 @@ func (v *SSHVerifier) Verify(req *SSHAuthRequest) (fingerprint string, err error
 // Returns lowercase hex encoding without colons.
 func ComputeFingerprint(pubkey ssh.PublicKey) string {
 	hash := sha256.Sum256(pubkey.Marshal())
-	return fmt.Sprintf("%x", hash[:])
+	return hex.EncodeToString(hash[:])
 }
 
 // ParseFingerprintFromKey parses a public key string and returns its fingerprint.

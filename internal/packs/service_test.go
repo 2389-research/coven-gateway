@@ -158,8 +158,7 @@ func TestPackServiceRegister(t *testing.T) {
 			},
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 		stream := newMockRegisterStream(ctx)
 
 		// Run Register in goroutine
@@ -219,8 +218,7 @@ func TestPackServiceRegister(t *testing.T) {
 			t.Fatalf("failed to pre-register pack: %v", err)
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 		stream := newMockRegisterStream(ctx)
 
 		// Try to register again via service
@@ -319,8 +317,7 @@ func TestPackServiceDispatchTool(t *testing.T) {
 			},
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 		stream := newMockRegisterStream(ctx)
 
 		// Run Register in goroutine
@@ -370,8 +367,7 @@ func TestPackServiceDispatchTool(t *testing.T) {
 			},
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 		stream := newMockRegisterStream(ctx)
 
 		go func() {
@@ -409,8 +405,7 @@ func TestPackServiceDispatchTool(t *testing.T) {
 			},
 		}
 
-		streamCtx, streamCancel := context.WithCancel(context.Background())
-		defer streamCancel()
+		streamCtx := t.Context()
 		stream := newMockRegisterStream(streamCtx)
 
 		go func() {
@@ -513,7 +508,7 @@ func TestPackServicePendingRequests(t *testing.T) {
 		var wg sync.WaitGroup
 		numRequests := 50
 
-		for i := 0; i < numRequests; i++ {
+		for i := range numRequests {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
@@ -561,7 +556,7 @@ func TestPackServicePendingRequests(t *testing.T) {
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
-		// Should return empty since request was cancelled
+		// Should return empty since request was canceled
 		if result == nil {
 			t.Error("expected empty response")
 		}
@@ -575,7 +570,7 @@ func TestPackServiceConcurrentStreams(t *testing.T) {
 		var wg sync.WaitGroup
 		numPacks := 10
 
-		for i := 0; i < numPacks; i++ {
+		for i := range numPacks {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()

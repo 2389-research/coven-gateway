@@ -11,7 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// Token errors
+// Token errors.
 var (
 	ErrInvalidToken = errors.New("invalid token")
 	ErrExpiredToken = errors.New("token expired")
@@ -19,15 +19,15 @@ var (
 	ErrWeakSecret   = errors.New("JWT secret must be at least 32 bytes")
 )
 
-// MinSecretLength is the minimum required length for JWT secrets (256 bits)
+// MinSecretLength is the minimum required length for JWT secrets (256 bits).
 const MinSecretLength = 32
 
-// TokenVerifier defines the interface for token verification
+// TokenVerifier defines the interface for token verification.
 type TokenVerifier interface {
 	Verify(tokenString string) (principalID string, err error)
 }
 
-// JWTVerifier implements TokenVerifier using HS256 signed JWTs
+// JWTVerifier implements TokenVerifier using HS256 signed JWTs.
 type JWTVerifier struct {
 	secret []byte
 }
@@ -42,9 +42,9 @@ func NewJWTVerifier(secret []byte) (*JWTVerifier, error) {
 	return &JWTVerifier{secret: secret}, nil
 }
 
-// Verify validates the token and extracts the principal ID from the "sub" claim
+// Verify validates the token and extracts the principal ID from the "sub" claim.
 func (v *JWTVerifier) Verify(tokenString string) (principalID string, err error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 		// Validate the signing method is HS256
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -57,7 +57,7 @@ func (v *JWTVerifier) Verify(tokenString string) (principalID string, err error)
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return "", ErrExpiredToken
 		}
-		return "", fmt.Errorf("%w: %v", ErrInvalidToken, err)
+		return "", fmt.Errorf("%w: %w", ErrInvalidToken, err)
 	}
 
 	if !token.Valid {
@@ -77,7 +77,7 @@ func (v *JWTVerifier) Verify(tokenString string) (principalID string, err error)
 	return sub, nil
 }
 
-// Generate creates a new JWT token for the given principal ID with expiration
+// Generate creates a new JWT token for the given principal ID with expiration.
 func (v *JWTVerifier) Generate(principalID string, expiresIn time.Duration) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{

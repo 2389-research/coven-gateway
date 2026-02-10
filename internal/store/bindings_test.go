@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// createTestAgent creates a principal with type="agent" for binding tests
+// createTestAgent creates a principal with type="agent" for binding tests.
 func createTestAgent(t *testing.T, store *SQLiteStore, id string) {
 	t.Helper()
 	// Create a unique 64-char hex fingerprint from the full ID

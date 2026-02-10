@@ -9,10 +9,10 @@ import (
 	"time"
 )
 
-// testSecret is a 32-byte secret that meets MinSecretLength requirement
+// testSecret is a 32-byte secret that meets MinSecretLength requirement.
 var testSecret = []byte("test-secret-key-for-jwt-signing!")
 
-// mustNewJWTVerifier creates a JWTVerifier and fails the test if it errors
+// mustNewJWTVerifier creates a JWTVerifier and fails the test if it errors.
 func mustNewJWTVerifier(t *testing.T, secret []byte) *JWTVerifier {
 	t.Helper()
 	verifier, err := NewJWTVerifier(secret)

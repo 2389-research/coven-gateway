@@ -164,10 +164,10 @@ func TestCache_Concurrent(t *testing.T) {
 	wg.Add(numGoroutines)
 
 	// Concurrent marks and checks
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < opsPerGoroutine; j++ {
+			for j := range opsPerGoroutine {
 				key := "key-" + string(rune('A'+id%26)) + "-" + string(rune('0'+j%10))
 				cache.Mark(key)
 				cache.Check(key)
@@ -262,7 +262,7 @@ func TestCache_CheckAndMark_Atomic(t *testing.T) {
 	wg.Add(numGoroutines)
 
 	// All goroutines try to CheckAndMark the same key simultaneously
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		go func() {
 			defer wg.Done()
 			// Only one goroutine should get false (first one)

@@ -55,6 +55,45 @@ func NewPackServiceServer(registry *Registry, router *Router, logger *slog.Logge
 // Register handles a pack connecting with its manifest.
 // The pack stays connected and receives tool execution requests via the stream.
 // When the stream closes, the pack is unregistered.
+// handleRegisterError converts registration errors to gRPC status.
+func handleRegisterError(err error, packID string) error {
+	if errors.Is(err, ErrPackAlreadyRegistered) {
+		return status.Errorf(codes.AlreadyExists, "pack %s already registered", packID)
+	}
+	if errors.Is(err, ErrToolCollision) {
+		return status.Errorf(codes.AlreadyExists, "tool collision: %v", err)
+	}
+	return status.Errorf(codes.Internal, "registering pack: %v", err)
+}
+
+// forwardToolRequests forwards requests from pack channel to stream.
+func (s *PackServiceServer) forwardToolRequests(ctx context.Context, stream grpc.ServerStreamingServer[pb.ExecuteToolRequest], pack *Pack, packID string) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case req, ok := <-pack.Channel:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(req); err != nil {
+				s.logger.Error("failed to send tool request to pack",
+					"pack_id", packID,
+					"tool_name", req.GetToolName(),
+					"request_id", req.GetRequestId(),
+					"error", err,
+				)
+				return status.Errorf(codes.Internal, "sending tool request: %v", err)
+			}
+			s.logger.Debug("sent tool request to pack",
+				"pack_id", packID,
+				"tool_name", req.GetToolName(),
+				"request_id", req.GetRequestId(),
+			)
+		}
+	}
+}
+
 func (s *PackServiceServer) Register(manifest *pb.PackManifest, stream grpc.ServerStreamingServer[pb.ExecuteToolRequest]) error {
 	packID := manifest.GetPackId()
 	if packID == "" {
@@ -67,63 +106,22 @@ func (s *PackServiceServer) Register(manifest *pb.PackManifest, stream grpc.Serv
 		"tool_count", len(manifest.GetTools()),
 	)
 
-	// Register the pack with the registry
 	if err := s.registry.RegisterPack(packID, manifest); err != nil {
-		if errors.Is(err, ErrPackAlreadyRegistered) {
-			return status.Errorf(codes.AlreadyExists, "pack %s already registered", packID)
-		}
-		if errors.Is(err, ErrToolCollision) {
-			return status.Errorf(codes.AlreadyExists, "tool collision: %v", err)
-		}
-		return status.Errorf(codes.Internal, "registering pack: %v", err)
+		return handleRegisterError(err, packID)
 	}
 
-	// Ensure we unregister on exit
 	defer func() {
 		s.registry.UnregisterPack(packID)
 		s.logger.Info("pack disconnected", "pack_id", packID)
 	}()
 
-	// Get the pack's channel for receiving tool requests
 	pack := s.registry.GetPack(packID)
 	if pack == nil {
 		return status.Error(codes.Internal, "pack disappeared after registration")
 	}
 
 	s.logger.Info("pack connected", "pack_id", packID)
-
-	// Main loop: forward tool requests from the registry channel to the stream
-	ctx := stream.Context()
-	for {
-		select {
-		case <-ctx.Done():
-			// Stream context cancelled (client disconnected or server shutting down)
-			return ctx.Err()
-
-		case req, ok := <-pack.Channel:
-			if !ok {
-				// Channel closed, pack was unregistered
-				return nil
-			}
-
-			// Forward the tool request to the pack via the stream
-			if err := stream.Send(req); err != nil {
-				s.logger.Error("failed to send tool request to pack",
-					"pack_id", packID,
-					"tool_name", req.GetToolName(),
-					"request_id", req.GetRequestId(),
-					"error", err,
-				)
-				return status.Errorf(codes.Internal, "sending tool request: %v", err)
-			}
-
-			s.logger.Debug("sent tool request to pack",
-				"pack_id", packID,
-				"tool_name", req.GetToolName(),
-				"request_id", req.GetRequestId(),
-			)
-		}
-	}
+	return s.forwardToolRequests(stream.Context(), stream, pack, packID)
 }
 
 // ToolResult handles a pack sending back the result of a tool execution.
@@ -199,13 +197,13 @@ func (s *PackServiceServer) CancelPendingRequest(requestID string) {
 	delete(s.pendingRequests, requestID)
 	s.pendingMu.Unlock()
 
-	s.logger.Debug("cancelled pending request",
+	s.logger.Debug("canceled pending request",
 		"request_id", requestID,
 	)
 }
 
 // DispatchTool sends a tool execution request to a pack and waits for the result.
-// Returns the tool response or an error if the operation times out or is cancelled.
+// Returns the tool response or an error if the operation times out or is canceled.
 func (s *PackServiceServer) DispatchTool(ctx context.Context, pack *Pack, toolName, inputJSON string, timeout time.Duration) (*pb.ExecuteToolResponse, error) {
 	if pack == nil {
 		return nil, errors.New("pack is nil")

@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -21,10 +22,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// interceptorTestSecret is a 32-byte secret that meets MinSecretLength requirement
+// interceptorTestSecret is a 32-byte secret that meets MinSecretLength requirement.
 var interceptorTestSecret = []byte("interceptor-test-secret-32bytes!")
 
-// mockPrincipalStore implements PrincipalStore for testing
+// mockPrincipalStore implements PrincipalStore for testing.
 type mockPrincipalStore struct {
 	principal *store.Principal
 	err       error
@@ -50,7 +51,7 @@ func (m *mockPrincipalStore) GetPrincipalByPubkey(ctx context.Context, fingerpri
 	return nil, store.ErrPrincipalNotFound
 }
 
-// mockRoleStore implements RoleStore for testing
+// mockRoleStore implements RoleStore for testing.
 type mockRoleStore struct {
 	roles []store.RoleName
 	err   error
@@ -63,7 +64,7 @@ func (m *mockRoleStore) ListRoles(ctx context.Context, subjectType store.RoleSub
 	return m.roles, nil
 }
 
-// Helper to create test context with authorization header
+// Helper to create test context with authorization header.
 func contextWithAuth(token string) context.Context {
 	md := metadata.New(map[string]string{
 		"authorization": "Bearer " + token,
@@ -98,7 +99,7 @@ func TestAuthInterceptor_ValidToken(t *testing.T) {
 	handlerCalled := false
 	var capturedCtx context.Context
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		capturedCtx = ctx
 		return "response", nil
@@ -150,9 +151,9 @@ func TestAuthInterceptor_MissingHeader(t *testing.T) {
 	// Context without authorization header
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.New(map[string]string{}))
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -183,9 +184,9 @@ func TestAuthInterceptor_InvalidToken(t *testing.T) {
 
 	ctx := contextWithAuth("invalid-token")
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -220,9 +221,9 @@ func TestAuthInterceptor_PrincipalNotFound(t *testing.T) {
 
 	ctx := contextWithAuth(token)
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -262,9 +263,9 @@ func TestAuthInterceptor_PrincipalRevoked(t *testing.T) {
 
 	ctx := contextWithAuth(token)
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -304,9 +305,9 @@ func TestAuthInterceptor_PrincipalPending(t *testing.T) {
 
 	ctx := contextWithAuth(token)
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -356,9 +357,9 @@ func TestAuthInterceptor_AllowedStatuses(t *testing.T) {
 			ctx := contextWithAuth(token)
 
 			handlerCalled := false
-			handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+			handler := func(ctx context.Context, req any) (any, error) {
 				handlerCalled = true
-				return nil, nil
+				return struct{}{}, nil
 			}
 
 			_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -391,9 +392,9 @@ func TestAuthInterceptor_StoreError(t *testing.T) {
 
 	ctx := contextWithAuth(token)
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -435,9 +436,9 @@ func TestAuthInterceptor_RoleStoreError(t *testing.T) {
 
 	ctx := contextWithAuth(token)
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, interceptErr := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -455,7 +456,7 @@ func TestAuthInterceptor_RoleStoreError(t *testing.T) {
 	}
 }
 
-// mockServerStream implements grpc.ServerStream for testing StreamInterceptor
+// mockServerStream implements grpc.ServerStream for testing StreamInterceptor.
 type mockServerStream struct {
 	grpc.ServerStream
 	ctx context.Context
@@ -494,7 +495,7 @@ func TestStreamInterceptor_ValidToken(t *testing.T) {
 	handlerCalled := false
 	var capturedStream grpc.ServerStream
 
-	handler := func(srv interface{}, ss grpc.ServerStream) error {
+	handler := func(srv any, ss grpc.ServerStream) error {
 		handlerCalled = true
 		capturedStream = ss
 		return nil
@@ -543,7 +544,7 @@ func TestStreamInterceptor_MissingHeader(t *testing.T) {
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.New(map[string]string{}))
 	stream := &mockServerStream{ctx: ctx}
 
-	handler := func(srv interface{}, ss grpc.ServerStream) error {
+	handler := func(srv any, ss grpc.ServerStream) error {
 		t.Error("handler should not be called")
 		return nil
 	}
@@ -563,21 +564,9 @@ func TestStreamInterceptor_MissingHeader(t *testing.T) {
 	}
 }
 
-// mockPrincipalCreator implements PrincipalCreator for testing
-type mockPrincipalCreator struct {
-	created   []*store.Principal
-	createErr error
-}
+// mockPrincipalCreator implements PrincipalCreator for testing.
 
-func (m *mockPrincipalCreator) CreatePrincipal(ctx context.Context, p *store.Principal) error {
-	if m.createErr != nil {
-		return m.createErr
-	}
-	m.created = append(m.created, p)
-	return nil
-}
-
-// mockPrincipalStoreWithCreator implements both PrincipalStore and tracks created principals
+// mockPrincipalStoreWithCreator implements both PrincipalStore and tracks created principals.
 type mockPrincipalStoreWithCreator struct {
 	principals map[string]*store.Principal
 	err        error
@@ -619,7 +608,7 @@ func (m *mockPrincipalStoreWithCreator) CreatePrincipal(ctx context.Context, p *
 	return nil
 }
 
-// generateTestKeyPairForInterceptor creates a new ed25519 key pair for testing
+// generateTestKeyPairForInterceptor creates a new ed25519 key pair for testing.
 func generateTestKeyPairForInterceptor(t *testing.T) (ssh.Signer, ssh.PublicKey, string) {
 	t.Helper()
 
@@ -642,7 +631,7 @@ func generateTestKeyPairForInterceptor(t *testing.T) (ssh.Signer, ssh.PublicKey,
 	return signer, sshPub, pubkeyStr
 }
 
-// signMessageForInterceptor creates an SSH signature over a message
+// signMessageForInterceptor creates an SSH signature over a message.
 func signMessageForInterceptor(t *testing.T, signer ssh.Signer, message string) string {
 	t.Helper()
 
@@ -654,13 +643,15 @@ func signMessageForInterceptor(t *testing.T, signer ssh.Signer, message string) 
 	return base64.StdEncoding.EncodeToString(ssh.Marshal(sig))
 }
 
-// contextWithSSHAuth creates a context with SSH auth headers
-func contextWithSSHAuth(pubkey, signature string, timestamp int64, nonce string) context.Context {
+const testNonce = "test-nonce-12345"
+
+// contextWithSSHAuth creates a context with SSH auth headers using the standard test nonce.
+func contextWithSSHAuth(pubkey, signature string, timestamp int64) context.Context {
 	md := metadata.New(map[string]string{
 		SSHPubkeyHeader:    pubkey,
 		SSHSignatureHeader: signature,
-		SSHTimestampHeader: fmt.Sprintf("%d", timestamp),
-		SSHNonceHeader:     nonce,
+		SSHTimestampHeader: strconv.FormatInt(timestamp, 10),
+		SSHNonceHeader:     testNonce,
 	})
 	return metadata.NewIncomingContext(context.Background(), md)
 }
@@ -681,18 +672,18 @@ func TestExtractAuth_AutoCreatesPrincipalApproved(t *testing.T) {
 	}
 
 	timestamp := time.Now().Unix()
-	nonce := "test-nonce-12345"
-	message := fmt.Sprintf("%d|%s", timestamp, nonce)
+
+	message := fmt.Sprintf("%d|%s", timestamp, testNonce)
 	signature := signMessageForInterceptor(t, signer, message)
 
-	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp, nonce)
+	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp)
 
 	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, config, principals)
 
 	handlerCalled := false
 	var capturedCtx context.Context
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		capturedCtx = ctx
 		return "response", nil
@@ -771,17 +762,17 @@ func TestExtractAuth_AutoCreatesPrincipalPending(t *testing.T) {
 	}
 
 	timestamp := time.Now().Unix()
-	nonce := "test-nonce-12345"
-	message := fmt.Sprintf("%d|%s", timestamp, nonce)
+
+	message := fmt.Sprintf("%d|%s", timestamp, testNonce)
 	signature := signMessageForInterceptor(t, signer, message)
 
-	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp, nonce)
+	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp)
 
 	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, config, principals)
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called for pending principal")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -837,17 +828,17 @@ func TestExtractAuth_RejectsUnknownWhenDisabled(t *testing.T) {
 	}
 
 	timestamp := time.Now().Unix()
-	nonce := "test-nonce-12345"
-	message := fmt.Sprintf("%d|%s", timestamp, nonce)
+
+	message := fmt.Sprintf("%d|%s", timestamp, testNonce)
 	signature := signMessageForInterceptor(t, signer, message)
 
-	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp, nonce)
+	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp)
 
 	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, config, principals)
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
@@ -879,18 +870,18 @@ func TestExtractAuth_RejectsUnknownWhenConfigNil(t *testing.T) {
 	jwtVerifier, _ := NewJWTVerifier(interceptorTestSecret)
 
 	timestamp := time.Now().Unix()
-	nonce := "test-nonce-12345"
-	message := fmt.Sprintf("%d|%s", timestamp, nonce)
+
+	message := fmt.Sprintf("%d|%s", timestamp, testNonce)
 	signature := signMessageForInterceptor(t, signer, message)
 
-	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp, nonce)
+	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp)
 
 	// config is nil, so auto-registration should be disabled
 	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, nil, nil)
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)

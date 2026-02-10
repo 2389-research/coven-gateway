@@ -133,7 +133,7 @@ func TestEventStore_ListEventsByConversation(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create several events for the same conversation
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		event := &LedgerEvent{
 			ID:              generateTestID("event", i),
 			ConversationKey: convKey,
@@ -178,7 +178,7 @@ func TestEventStore_ListEventsByActor(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create events from our target principal
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		event := &LedgerEvent{
 			ID:               generateTestID("actor-event", i),
 			ConversationKey:  "test:conv",
@@ -230,7 +230,7 @@ func TestEventStore_ListEventsByActorDesc_ReturnsDescOrder(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create events in ascending order
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		event := &LedgerEvent{
 			ID:               generateTestID("desc-event", i),
 			ConversationKey:  "test:conv:desc",
@@ -270,7 +270,7 @@ func TestEventStore_ListEventsByActorDesc_RespectsLimit(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create 10 events
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		event := &LedgerEvent{
 			ID:               generateTestID("limit-event", i),
 			ConversationKey:  "test:conv:limit",
@@ -315,7 +315,7 @@ func TestGetEvents_Basic(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create 5 events
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		event := &LedgerEvent{
 			ID:              generateTestID("basic-event", i),
 			ConversationKey: convKey,
@@ -367,7 +367,7 @@ func TestGetEvents_WithSince(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create 5 events at 1-second intervals
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		event := &LedgerEvent{
 			ID:              generateTestID("since-event", i),
 			ConversationKey: convKey,
@@ -400,7 +400,7 @@ func TestGetEvents_WithUntil(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create 5 events at 1-second intervals
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		event := &LedgerEvent{
 			ID:              generateTestID("until-event", i),
 			ConversationKey: convKey,
@@ -433,7 +433,7 @@ func TestGetEvents_WithBoth(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create 5 events at 1-second intervals
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		event := &LedgerEvent{
 			ID:              generateTestID("both-event", i),
 			ConversationKey: convKey,
@@ -468,7 +468,7 @@ func TestGetEvents_Pagination_FirstPage(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create 10 events
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		event := &LedgerEvent{
 			ID:              generateTestID("page-event", i),
 			ConversationKey: convKey,
@@ -506,7 +506,7 @@ func TestGetEvents_Pagination_SecondPage(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create 10 events
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		event := &LedgerEvent{
 			ID:              generateTestID("page2-event", i),
 			ConversationKey: convKey,
@@ -554,7 +554,7 @@ func TestGetEvents_Pagination_LastPage(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create 5 events
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		event := &LedgerEvent{
 			ID:              generateTestID("last-event", i),
 			ConversationKey: convKey,
@@ -656,7 +656,7 @@ func TestGetEvents_DefaultLimit(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
 	// Create 60 events (more than default 50)
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		event := &LedgerEvent{
 			ID:              generateTestID("deflim-event", i),
 			ConversationKey: convKey,

@@ -8,22 +8,33 @@ linters:
     - bodyclose
     - contextcheck
     - copyloopvar
+    - durationcheck
     - errchkjson
     - errorlint
+    - fatcontext
+    - forcetypeassert
     - funlen
     - gocognit
     - gocritic
     - gocyclo
     - godot
     - gosec
+    - intrange
     - makezero
     - misspell
+    - modernize
     - nestif
     - nilerr
     - nilnil
+    - nolintlint
+    - perfsprint
     - prealloc
+    - predeclared
+    - reassign
+    - sqlclosecheck
     - unconvert
     - unparam
+    - usestdlibvars
     - wastedassign
     - whitespace
   disable:
@@ -57,9 +68,10 @@ linters:
       min-len: 3
       min-occurrences: 15
     gocyclo:
-      min-complexity: 20
+      min-complexity: 10
     gosec:
       excludes:
+        - G203  # template.HTML only used for trusted embedded content
         - G404
     govet:
       disable:
@@ -68,6 +80,8 @@ linters:
       enable-all: true
     misspell:
       locale: US
+      ignore-rules:
+        - cancelled  # British spelling used in protobuf definitions
     nestif:
       min-complexity: 5
     staticcheck:
@@ -77,7 +91,10 @@ linters:
     generated: lax
     rules:
       - linters:
+          - contextcheck
           - errcheck
+          - fatcontext
+          - forcetypeassert
           - funlen
           - gocognit
           - goconst
@@ -85,10 +102,18 @@ linters:
           - gosec
         path: _test\.go
       - linters:
+          - contextcheck
           - funlen
           - gocognit
           - gocyclo
         path: cmd/.*main\.go
+      - linters:
+          - contextcheck
+        text: "gracefulShutdown"
+      - linters:
+          - contextcheck
+        path: internal/webadmin/webadmin\.go
+        text: "GetAdminInvite"
       - linters:
           - lll
         source: '^//go:generate '

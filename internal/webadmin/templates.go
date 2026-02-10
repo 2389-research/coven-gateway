@@ -11,7 +11,7 @@ import (
 	"github.com/2389/coven-gateway/internal/store"
 )
 
-// Template data types
+// Template data types.
 type loginData struct {
 	Title     string
 	Error     string
@@ -144,7 +144,7 @@ type linkPageData struct {
 	CSRFToken string
 }
 
-// renderLoginPage renders the login page
+// renderLoginPage renders the login page.
 func (a *Admin) renderLoginPage(w http.ResponseWriter, errorMsg, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/login.html"))
 
@@ -160,7 +160,7 @@ func (a *Admin) renderLoginPage(w http.ResponseWriter, errorMsg, csrfToken strin
 	}
 }
 
-// renderInvitePage renders the invite/signup page
+// renderInvitePage renders the invite/signup page.
 func (a *Admin) renderInvitePage(w http.ResponseWriter, token, errorMsg, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/invite.html"))
 
@@ -177,7 +177,7 @@ func (a *Admin) renderInvitePage(w http.ResponseWriter, token, errorMsg, csrfTok
 	}
 }
 
-// renderDashboard renders the main dashboard
+// renderDashboard renders the main dashboard.
 func (a *Admin) renderDashboard(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/dashboard.html"))
 
@@ -193,7 +193,7 @@ func (a *Admin) renderDashboard(w http.ResponseWriter, user *store.AdminUser, cs
 	}
 }
 
-// renderAgentsList renders the agents list partial
+// renderAgentsList renders the agents list partial.
 func (a *Admin) renderAgentsList(w http.ResponseWriter) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/agents_list.html"))
 
@@ -219,7 +219,7 @@ func (a *Admin) renderAgentsList(w http.ResponseWriter) {
 	}
 }
 
-// renderInviteCreated renders the invite created partial (htmx response)
+// renderInviteCreated renders the invite created partial (htmx response).
 func (a *Admin) renderInviteCreated(w http.ResponseWriter, inviteURL string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/invite_created.html"))
 
@@ -233,7 +233,7 @@ func (a *Admin) renderInviteCreated(w http.ResponseWriter, inviteURL string) {
 	}
 }
 
-// renderPrincipalsPage renders the principals management page
+// renderPrincipalsPage renders the principals management page.
 func (a *Admin) renderPrincipalsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/principals.html"))
 
@@ -249,7 +249,7 @@ func (a *Admin) renderPrincipalsPage(w http.ResponseWriter, user *store.AdminUse
 	}
 }
 
-// renderPrincipalsList renders the principals list partial
+// renderPrincipalsList renders the principals list partial.
 func (a *Admin) renderPrincipalsList(w http.ResponseWriter, principals []store.Principal, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/principals_list.html"))
 
@@ -264,29 +264,24 @@ func (a *Admin) renderPrincipalsList(w http.ResponseWriter, principals []store.P
 	}
 }
 
-// renderThreadsPage renders the threads list page without preloaded data
-func (a *Admin) renderThreadsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
-	a.renderThreadsPageWithData(w, user, nil, csrfToken)
-}
+// renderThreadsPage renders the threads list page without preloaded data.
 
-// renderThreadsPageWithData renders the threads list page with preloaded threads
+// renderThreadsPageWithData renders the threads list page with preloaded threads.
 func (a *Admin) renderThreadsPageWithData(w http.ResponseWriter, user *store.AdminUser, threads []*store.Thread, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/threads.html"))
-
 	data := threadsPageData{
 		Title:     "Threads",
 		User:      user,
 		Threads:   threads,
 		CSRFToken: csrfToken,
 	}
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render threads page", "error", err)
 	}
 }
 
-// renderThreadDetail renders a single thread with its messages
+// renderThreadDetail renders a single thread with its messages.
 func (a *Admin) renderThreadDetail(w http.ResponseWriter, user *store.AdminUser, thread *store.Thread, messages []*store.Message, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/thread_detail.html"))
 
@@ -304,7 +299,7 @@ func (a *Admin) renderThreadDetail(w http.ResponseWriter, user *store.AdminUser,
 	}
 }
 
-// renderMessagesList renders the messages list partial
+// renderMessagesList renders the messages list partial.
 func (a *Admin) renderMessagesList(w http.ResponseWriter, messages []*store.Message) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/messages_list.html"))
 
@@ -318,7 +313,7 @@ func (a *Admin) renderMessagesList(w http.ResponseWriter, messages []*store.Mess
 	}
 }
 
-// renderToolsPage renders the tools management page
+// renderToolsPage renders the tools management page.
 func (a *Admin) renderToolsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/tools.html"))
 
@@ -334,7 +329,7 @@ func (a *Admin) renderToolsPage(w http.ResponseWriter, user *store.AdminUser, cs
 	}
 }
 
-// renderToolsList renders the tools list partial grouped by pack
+// renderToolsList renders the tools list partial grouped by pack.
 func (a *Admin) renderToolsList(w http.ResponseWriter, packItems []packItem) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/tools_list.html"))
 
@@ -348,7 +343,7 @@ func (a *Admin) renderToolsList(w http.ResponseWriter, packItems []packItem) {
 	}
 }
 
-// renderAgentsPage renders the agents management page
+// renderAgentsPage renders the agents management page.
 func (a *Admin) renderAgentsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/agents.html"))
 
@@ -364,7 +359,7 @@ func (a *Admin) renderAgentsPage(w http.ResponseWriter, user *store.AdminUser, c
 	}
 }
 
-// renderAgentDetail renders the agent detail page
+// renderAgentDetail renders the agent detail page.
 func (a *Admin) renderAgentDetail(w http.ResponseWriter, user *store.AdminUser, agent agentDetailItem, threads []*store.Thread, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/agent_detail.html"))
 
@@ -382,7 +377,7 @@ func (a *Admin) renderAgentDetail(w http.ResponseWriter, user *store.AdminUser, 
 	}
 }
 
-// renderSetupPage renders the initial setup wizard page
+// renderSetupPage renders the initial setup wizard page.
 func (a *Admin) renderSetupPage(w http.ResponseWriter, errorMsg, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/setup.html"))
 
@@ -398,7 +393,7 @@ func (a *Admin) renderSetupPage(w http.ResponseWriter, errorMsg, csrfToken strin
 	}
 }
 
-// renderSetupComplete renders the setup completion page with optional API token
+// renderSetupComplete renders the setup completion page with optional API token.
 func (a *Admin) renderSetupComplete(w http.ResponseWriter, displayName, apiToken, grpcAddress string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/setup_complete.html"))
 
@@ -416,7 +411,7 @@ func (a *Admin) renderSetupComplete(w http.ResponseWriter, displayName, apiToken
 	}
 }
 
-// renderLinkPage renders the device linking approval page
+// renderLinkPage renders the device linking approval page.
 func (a *Admin) renderLinkPage(w http.ResponseWriter, user *store.AdminUser, codes []*store.LinkCode, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/link.html"))
 
@@ -447,7 +442,7 @@ type logsListData struct {
 	Entries []*store.LogEntry
 }
 
-// renderLogsPage renders the activity logs page
+// renderLogsPage renders the activity logs page.
 func (a *Admin) renderLogsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/logs.html"))
 
@@ -463,7 +458,7 @@ func (a *Admin) renderLogsPage(w http.ResponseWriter, user *store.AdminUser, csr
 	}
 }
 
-// renderLogsList renders the logs list partial
+// renderLogsList renders the logs list partial.
 func (a *Admin) renderLogsList(w http.ResponseWriter, entries []*store.LogEntry) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/logs_list.html"))
 
@@ -491,7 +486,7 @@ type todosListData struct {
 	Todos []*store.Todo
 }
 
-// renderTodosPage renders the todos page
+// renderTodosPage renders the todos page.
 func (a *Admin) renderTodosPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/todos.html"))
 
@@ -507,7 +502,7 @@ func (a *Admin) renderTodosPage(w http.ResponseWriter, user *store.AdminUser, cs
 	}
 }
 
-// renderTodosList renders the todos list partial
+// renderTodosList renders the todos list partial.
 func (a *Admin) renderTodosList(w http.ResponseWriter, todos []*store.Todo) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/todos_list.html"))
 
@@ -539,7 +534,7 @@ type boardThreadData struct {
 	Thread *store.BBSThread
 }
 
-// renderBoardPage renders the BBS board page
+// renderBoardPage renders the BBS board page.
 func (a *Admin) renderBoardPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/board.html"))
 
@@ -555,7 +550,7 @@ func (a *Admin) renderBoardPage(w http.ResponseWriter, user *store.AdminUser, cs
 	}
 }
 
-// renderBoardList renders the board threads list partial
+// renderBoardList renders the board threads list partial.
 func (a *Admin) renderBoardList(w http.ResponseWriter, threads []*store.BBSPost) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/board_list.html"))
 
@@ -569,7 +564,7 @@ func (a *Admin) renderBoardList(w http.ResponseWriter, threads []*store.BBSPost)
 	}
 }
 
-// renderBoardThread renders a single thread with replies
+// renderBoardThread renders a single thread with replies.
 func (a *Admin) renderBoardThread(w http.ResponseWriter, thread *store.BBSThread) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/board_thread.html"))
 
@@ -603,7 +598,7 @@ type usageStatsData struct {
 	RequestCount    int64
 }
 
-// renderUsagePage renders the token usage analytics page
+// renderUsagePage renders the token usage analytics page.
 func (a *Admin) renderUsagePage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/usage.html"))
 
@@ -619,7 +614,7 @@ func (a *Admin) renderUsagePage(w http.ResponseWriter, user *store.AdminUser, cs
 	}
 }
 
-// renderUsageStats renders the usage stats partial (for dashboard and usage page)
+// renderUsageStats renders the usage stats partial (for dashboard and usage page).
 func (a *Admin) renderUsageStats(w http.ResponseWriter, stats *store.UsageStats) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/stats_tokens.html"))
 
@@ -643,7 +638,7 @@ func (a *Admin) renderUsageStats(w http.ResponseWriter, stats *store.UsageStats)
 // Secrets Templates
 // =============================================================================
 
-// secretItem represents a secret for display
+// secretItem represents a secret for display.
 type secretItem struct {
 	ID        string
 	Key       string
@@ -666,7 +661,7 @@ type secretsListData struct {
 	CSRFToken string
 }
 
-// renderSecretsPage renders the secrets management page
+// renderSecretsPage renders the secrets management page.
 func (a *Admin) renderSecretsPage(w http.ResponseWriter, user *store.AdminUser, agents []agentItem, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/secrets.html"))
 
@@ -683,7 +678,7 @@ func (a *Admin) renderSecretsPage(w http.ResponseWriter, user *store.AdminUser, 
 	}
 }
 
-// renderSecretsList renders the secrets list partial
+// renderSecretsList renders the secrets list partial.
 func (a *Admin) renderSecretsList(w http.ResponseWriter, secrets []secretItem, csrfToken string) {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/secrets_list.html"))
 

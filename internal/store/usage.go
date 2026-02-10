@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// SaveUsage stores a token usage record
+// SaveUsage stores a token usage record.
 func (s *SQLiteStore) SaveUsage(ctx context.Context, usage *TokenUsage) error {
 	query := `
 		INSERT INTO message_usage (
@@ -48,7 +48,7 @@ func (s *SQLiteStore) SaveUsage(ctx context.Context, usage *TokenUsage) error {
 	return nil
 }
 
-// LinkUsageToMessage updates a usage record with the final message ID
+// LinkUsageToMessage updates a usage record with the final message ID.
 func (s *SQLiteStore) LinkUsageToMessage(ctx context.Context, requestID, messageID string) error {
 	query := `UPDATE message_usage SET message_id = ? WHERE request_id = ?`
 
@@ -70,7 +70,7 @@ func (s *SQLiteStore) LinkUsageToMessage(ctx context.Context, requestID, message
 	return nil
 }
 
-// GetThreadUsage retrieves all usage records for a thread
+// GetThreadUsage retrieves all usage records for a thread.
 func (s *SQLiteStore) GetThreadUsage(ctx context.Context, threadID string) ([]*TokenUsage, error) {
 	query := `
 		SELECT id, thread_id, message_id, request_id, agent_id,
@@ -85,7 +85,7 @@ func (s *SQLiteStore) GetThreadUsage(ctx context.Context, threadID string) ([]*T
 	if err != nil {
 		return nil, fmt.Errorf("querying thread usage: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var usages []*TokenUsage
 	for rows.Next() {
@@ -103,7 +103,7 @@ func (s *SQLiteStore) GetThreadUsage(ctx context.Context, threadID string) ([]*T
 	return usages, nil
 }
 
-// GetUsageStats returns aggregated usage statistics with optional filters
+// GetUsageStats returns aggregated usage statistics with optional filters.
 func (s *SQLiteStore) GetUsageStats(ctx context.Context, filter UsageFilter) (*UsageStats, error) {
 	query := `
 		SELECT
@@ -150,7 +150,7 @@ func (s *SQLiteStore) GetUsageStats(ctx context.Context, filter UsageFilter) (*U
 	return &stats, nil
 }
 
-// scanUsage scans a single usage row into a TokenUsage struct
+// scanUsage scans a single usage row into a TokenUsage struct.
 func scanUsage(rows *sql.Rows) (*TokenUsage, error) {
 	var usage TokenUsage
 	var messageID sql.NullString
@@ -185,5 +185,5 @@ func scanUsage(rows *sql.Rows) (*TokenUsage, error) {
 	return &usage, nil
 }
 
-// Ensure SQLiteStore implements UsageStore interface
+// Ensure SQLiteStore implements UsageStore interface.
 var _ UsageStore = (*SQLiteStore)(nil)

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,7 +35,10 @@ func TestHandleSendMessage_NoAgents(t *testing.T) {
 		Content: "Hello",
 		AgentID: "some-agent",
 	}
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -64,7 +68,10 @@ func TestHandleSendMessage_MissingAgentContext(t *testing.T) {
 		Sender:  "test-user",
 		Content: "Hello",
 	}
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -107,7 +114,10 @@ func TestHandleSendMessage_EmptyContent(t *testing.T) {
 		Sender:  "test-user",
 		Content: "",
 	}
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -143,7 +153,10 @@ func TestHandleSendMessage_SSEHeaders(t *testing.T) {
 		Content: "Hello",
 		AgentID: "test-agent",
 	}
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -333,7 +346,10 @@ func TestHandleSendMessage_WithAgentID(t *testing.T) {
 		Content: "Hello",
 		AgentID: "test-agent",
 	}
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -362,7 +378,10 @@ func TestHandleSendMessage_AgentNotFound(t *testing.T) {
 		Content: "Hello",
 		AgentID: "nonexistent-agent",
 	}
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -396,7 +415,10 @@ func TestHandleSendMessage_BindingLookup(t *testing.T) {
 		Frontend:  "slack",
 		ChannelID: "C001",
 	}
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -424,7 +446,10 @@ func TestHandleSendMessage_BindingNotFound(t *testing.T) {
 		Frontend:  "slack",
 		ChannelID: "UNBOUND",
 	}
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -458,7 +483,10 @@ func TestHandleSendMessage_BoundAgentOffline(t *testing.T) {
 		Frontend:  "slack",
 		ChannelID: "C001",
 	}
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -573,7 +601,7 @@ type testMockStream struct {
 }
 
 func (m *testMockStream) Send(msg *pb.ServerMessage) error { return nil }
-func (m *testMockStream) Recv() (*pb.AgentMessage, error)  { return nil, nil }
+func (m *testMockStream) Recv() (*pb.AgentMessage, error)  { return nil, io.EOF }
 
 func newTestGatewayWithMockManager(t *testing.T) *Gateway {
 	t.Helper()
@@ -926,7 +954,7 @@ func TestResolveBinding_NoBinding(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unbound channel")
 	}
-	if err != ErrChannelNotBound {
+	if !errors.Is(err, ErrChannelNotBound) {
 		t.Errorf("expected ErrChannelNotBound, got %v", err)
 	}
 }
@@ -1316,7 +1344,7 @@ func TestGetBindingStatus(t *testing.T) {
 		t.Fatalf("get binding status: got status %d, want %d. Body: %s", w.Code, http.StatusOK, w.Body.String())
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -1373,7 +1401,7 @@ func TestGetBindingStatus_AgentOffline(t *testing.T) {
 		t.Fatalf("expected status %d, got %d. Body: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -1538,7 +1566,7 @@ func TestHandleAgentHistory_WithEvents(t *testing.T) {
 	ctx := context.Background()
 	baseTime := time.Now().UTC().Truncate(time.Second)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		event := &store.LedgerEvent{
 			ID:              fmt.Sprintf("event-%d", i),
 			ConversationKey: "test-agent", // ConversationKey matches agent ID
@@ -1705,7 +1733,7 @@ func TestHandleUsageStats_WithData(t *testing.T) {
 	}
 
 	// Add usage records
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		usage := &store.TokenUsage{
 			ID:           fmt.Sprintf("usage-api-%d", i),
 			ThreadID:     "thread-usage-api",

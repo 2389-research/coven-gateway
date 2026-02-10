@@ -15,30 +15,30 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// Default TTL for tokens: 30 days
+// Default TTL for tokens: 30 days.
 const defaultTokenTTL = 30 * 24 * time.Hour
 
-// Maximum TTL for tokens: 365 days
+// Maximum TTL for tokens: 365 days.
 const maxTokenTTL = 365 * 24 * time.Hour
 
-// TokenGenerator generates JWT tokens
+// TokenGenerator generates JWT tokens.
 type TokenGenerator interface {
 	Generate(principalID string, ttl time.Duration) (string, error)
 }
 
-// PrincipalLookup looks up principals by ID
+// PrincipalLookup looks up principals by ID.
 type PrincipalLookup interface {
 	GetPrincipal(ctx context.Context, id string) (*store.Principal, error)
 }
 
-// TokenService extends AdminService with token management capabilities
+// TokenService extends AdminService with token management capabilities.
 type TokenService struct {
 	*AdminService
 	tokenGen   TokenGenerator
 	principals PrincipalLookup
 }
 
-// NewTokenService creates an AdminService with token management capabilities
+// NewTokenService creates an AdminService with token management capabilities.
 func NewTokenService(s BindingStore, tokenGen TokenGenerator, principals PrincipalLookup) *TokenService {
 	return &TokenService{
 		AdminService: NewAdminService(s),
@@ -47,7 +47,7 @@ func NewTokenService(s BindingStore, tokenGen TokenGenerator, principals Princip
 	}
 }
 
-// CreateToken generates a JWT token for a principal
+// CreateToken generates a JWT token for a principal.
 func (s *TokenService) CreateToken(ctx context.Context, req *pb.CreateTokenRequest) (*pb.CreateTokenResponse, error) {
 	authCtx := auth.MustFromContext(ctx)
 
@@ -90,7 +90,7 @@ func (s *TokenService) CreateToken(ctx context.Context, req *pb.CreateTokenReque
 	expiresAt := time.Now().Add(ttl).UTC()
 
 	// Audit log (ignore error - best effort)
-	_ = s.AdminService.store.AppendAuditLog(ctx, &store.AuditEntry{
+	_ = s.store.AppendAuditLog(ctx, &store.AuditEntry{
 		ActorPrincipalID: authCtx.PrincipalID,
 		Action:           store.AuditCreateToken,
 		TargetType:       "principal",

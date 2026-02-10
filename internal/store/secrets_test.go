@@ -5,6 +5,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -96,7 +97,7 @@ func TestGetSecret(t *testing.T) {
 
 	// Test not found
 	_, err = store.GetSecret(ctx, "nonexistent-id")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
@@ -132,7 +133,7 @@ func TestUpdateSecret(t *testing.T) {
 
 	// Test update nonexistent
 	nonexistent := &Secret{ID: "nonexistent", Value: "whatever"}
-	if err := store.UpdateSecret(ctx, nonexistent); err != ErrNotFound {
+	if err := store.UpdateSecret(ctx, nonexistent); !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
@@ -158,12 +159,12 @@ func TestDeleteSecret(t *testing.T) {
 
 	// Verify deletion
 	_, err := store.GetSecret(ctx, secret.ID)
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound after delete, got %v", err)
 	}
 
 	// Test delete nonexistent
-	if err := store.DeleteSecret(ctx, "nonexistent"); err != ErrNotFound {
+	if err := store.DeleteSecret(ctx, "nonexistent"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound for nonexistent secret, got %v", err)
 	}
 }

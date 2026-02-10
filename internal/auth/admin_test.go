@@ -5,6 +5,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -24,7 +25,7 @@ func TestAdminGate_AdminCan(t *testing.T) {
 	ctx := WithAuth(context.Background(), authCtx)
 
 	handlerCalled := false
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return "success", nil
 	}
@@ -56,9 +57,9 @@ func TestAdminGate_NonAdminCannot(t *testing.T) {
 	}
 	ctx := WithAuth(context.Background(), authCtx)
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called for non-admin")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	info := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/ListPrincipals"}
@@ -94,7 +95,7 @@ func TestAdminGate_OwnerCan(t *testing.T) {
 	ctx := WithAuth(context.Background(), authCtx)
 
 	handlerCalled := false
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return "owner-success", nil
 	}
@@ -127,7 +128,7 @@ func TestAdminGate_ClientServiceOpen(t *testing.T) {
 	ctx := WithAuth(context.Background(), authCtx)
 
 	handlerCalled := false
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return "client-success", nil
 	}
@@ -161,7 +162,7 @@ func TestAdminGate_AgentServiceOpen(t *testing.T) {
 	ctx := WithAuth(context.Background(), authCtx)
 
 	handlerCalled := false
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return "agent-success", nil
 	}
@@ -189,9 +190,9 @@ func TestAdminGate_NoAuthContext(t *testing.T) {
 	// Create context without any auth
 	ctx := context.Background()
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called without auth")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	info := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/ListPrincipals"}
@@ -229,7 +230,7 @@ func TestAdminGateStream_AdminCan(t *testing.T) {
 	stream := &mockServerStream{ctx: ctx}
 
 	handlerCalled := false
-	handler := func(srv interface{}, ss grpc.ServerStream) error {
+	handler := func(srv any, ss grpc.ServerStream) error {
 		handlerCalled = true
 		return nil
 	}
@@ -259,7 +260,7 @@ func TestAdminGateStream_NonAdminCannot(t *testing.T) {
 
 	stream := &mockServerStream{ctx: ctx}
 
-	handler := func(srv interface{}, ss grpc.ServerStream) error {
+	handler := func(srv any, ss grpc.ServerStream) error {
 		t.Error("handler should not be called for non-admin")
 		return nil
 	}
@@ -295,7 +296,7 @@ func TestAdminGateStream_NonAdminServicePassThrough(t *testing.T) {
 	stream := &mockServerStream{ctx: ctx}
 
 	handlerCalled := false
-	handler := func(srv interface{}, ss grpc.ServerStream) error {
+	handler := func(srv any, ss grpc.ServerStream) error {
 		handlerCalled = true
 		return nil
 	}
@@ -321,7 +322,7 @@ func TestAdminGateStream_NoAuthContext(t *testing.T) {
 
 	stream := &mockServerStream{ctx: ctx}
 
-	handler := func(srv interface{}, ss grpc.ServerStream) error {
+	handler := func(srv any, ss grpc.ServerStream) error {
 		t.Error("handler should not be called without auth")
 		return nil
 	}
@@ -354,9 +355,9 @@ func TestAdminGate_EmptyRoles(t *testing.T) {
 	}
 	ctx := WithAuth(context.Background(), authCtx)
 
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called with no roles")
-		return nil, nil
+		return nil, errors.New("unexpected handler call")
 	}
 
 	info := &grpc.UnaryServerInfo{FullMethod: "/coven.AdminService/ListPrincipals"}
@@ -388,7 +389,7 @@ func TestAdminGate_MultipleRolesIncludingAdmin(t *testing.T) {
 	ctx := WithAuth(context.Background(), authCtx)
 
 	handlerCalled := false
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return "multi-success", nil
 	}

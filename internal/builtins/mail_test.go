@@ -155,7 +155,7 @@ func TestMailInboxLimit(t *testing.T) {
 
 	// Send multiple mails
 	sendHandler := findHandler(pack, "mail_send")
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_, err := sendHandler(context.Background(), "agent-1", json.RawMessage(`{"to_agent_id": "agent-2", "subject": "Test", "content": "Message"}`))
 		if err != nil {
 			t.Fatalf("mail_send: %v", err)

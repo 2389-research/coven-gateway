@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -18,11 +17,11 @@ import (
 )
 
 const (
-	// Polling interval for new events when streaming
+	// Polling interval for new events when streaming.
 	streamPollInterval = 100 * time.Millisecond
-	// Maximum time to keep a stream open without new events
+	// Maximum time to keep a stream open without new events.
 	streamIdleTimeout = 5 * time.Minute
-	// Default limit for initial history fetch
+	// Default limit for initial history fetch.
 	defaultHistoryLimit = 50
 )
 
@@ -191,9 +190,8 @@ func (s *ClientService) sendInitialEvents(ctx context.Context, stream pb.ClientS
 
 	result, err := s.store.GetEvents(ctx, params)
 	if err != nil {
-		// If context was cancelled, return gracefully
 		if ctx.Err() != nil {
-			return "", nil
+			return "", ctx.Err()
 		}
 		return "", status.Error(codes.Internal, "failed to fetch events")
 	}
@@ -226,9 +224,8 @@ func (s *ClientService) pollAndSendNewEvents(ctx context.Context, stream pb.Clie
 
 	result, err := s.store.GetEvents(ctx, params)
 	if err != nil {
-		// If context was cancelled, return gracefully
 		if ctx.Err() != nil {
-			return cursor, false, nil
+			return cursor, false, ctx.Err()
 		}
 		return cursor, false, status.Error(codes.Internal, "failed to poll for events")
 	}
@@ -255,25 +252,7 @@ func (s *ClientService) pollAndSendNewEvents(ctx context.Context, stream pb.Clie
 	return nextCursor, true, nil
 }
 
-// decodeCursor parses an opaque cursor string (unused but kept for reference)
-func decodeCursor(cursor string) (time.Time, string, error) {
-	decoded, err := base64.StdEncoding.DecodeString(cursor)
-	if err != nil {
-		return time.Time{}, "", fmt.Errorf("invalid cursor encoding: %w", err)
-	}
-
-	parts := strings.SplitN(string(decoded), "|", 2)
-	if len(parts) != 2 {
-		return time.Time{}, "", fmt.Errorf("invalid cursor format")
-	}
-
-	ts, err := time.Parse(time.RFC3339, parts[0])
-	if err != nil {
-		return time.Time{}, "", fmt.Errorf("invalid cursor timestamp: %w", err)
-	}
-
-	return ts, parts[1], nil
-}
+// decodeCursor parses an opaque cursor string (unused but kept for reference).
 
 // eventToClientStreamEvent converts a ledger event to a ClientStreamEvent proto.
 func eventToClientStreamEvent(e *store.LedgerEvent) *pb.ClientStreamEvent {

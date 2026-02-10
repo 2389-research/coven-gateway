@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// LinkCodeStatus represents the state of a link code
+// LinkCodeStatus represents the state of a link code.
 type LinkCodeStatus string
 
 const (
@@ -17,7 +17,7 @@ const (
 	LinkCodeStatusExpired  LinkCodeStatus = "expired"
 )
 
-// LinkCode represents a temporary code for device linking
+// LinkCode represents a temporary code for device linking.
 type LinkCode struct {
 	ID          string
 	Code        string // 6-character alphanumeric code
@@ -32,7 +32,7 @@ type LinkCode struct {
 	Token       *string // JWT token (set on approval)
 }
 
-// LinkCodeStore defines operations for link code management
+// LinkCodeStore defines operations for link code management.
 type LinkCodeStore interface {
 	// CreateLinkCode creates a new pending link code
 	CreateLinkCode(ctx context.Context, code *LinkCode) error

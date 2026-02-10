@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-// ErrNotFound is returned when a requested entity does not exist
+// ErrNotFound is returned when a requested entity does not exist.
 var ErrNotFound = errors.New("not found")
 
-// ErrDuplicateThread is returned when trying to create a thread that already exists
+// ErrDuplicateThread is returned when trying to create a thread that already exists.
 var ErrDuplicateThread = errors.New("thread already exists")
 
-// Thread represents a conversation thread linking a frontend conversation to an agent
+// Thread represents a conversation thread linking a frontend conversation to an agent.
 type Thread struct {
 	ID           string
 	FrontendName string
@@ -25,14 +25,14 @@ type Thread struct {
 	UpdatedAt    time.Time
 }
 
-// MessageType constants for message types
+// MessageType constants for message types.
 const (
 	MessageTypeMessage    = "message"     // Regular text message
 	MessageTypeToolUse    = "tool_use"    // Tool invocation
 	MessageTypeToolResult = "tool_result" // Tool result
 )
 
-// Message represents a single message within a thread for audit/history purposes
+// Message represents a single message within a thread for audit/history purposes.
 type Message struct {
 	ID        string
 	ThreadID  string
@@ -44,7 +44,7 @@ type Message struct {
 	CreatedAt time.Time
 }
 
-// ChannelBinding represents a sticky assignment of a frontend channel to an agent
+// ChannelBinding represents a sticky assignment of a frontend channel to an agent.
 type ChannelBinding struct {
 	FrontendName string
 	ChannelID    string
@@ -53,7 +53,7 @@ type ChannelBinding struct {
 	UpdatedAt    time.Time
 }
 
-// LogEntry represents an activity log entry
+// LogEntry represents an activity log entry.
 type LogEntry struct {
 	ID        string
 	AgentID   string
@@ -62,7 +62,7 @@ type LogEntry struct {
 	CreatedAt time.Time
 }
 
-// Todo represents a task
+// Todo represents a task.
 type Todo struct {
 	ID          string
 	AgentID     string
@@ -75,7 +75,7 @@ type Todo struct {
 	UpdatedAt   time.Time
 }
 
-// BBSPost represents a bulletin board post or reply
+// BBSPost represents a bulletin board post or reply.
 type BBSPost struct {
 	ID        string
 	AgentID   string
@@ -85,13 +85,13 @@ type BBSPost struct {
 	CreatedAt time.Time
 }
 
-// BBSThread is a post with its replies
+// BBSThread is a post with its replies.
 type BBSThread struct {
 	Post    *BBSPost
 	Replies []*BBSPost
 }
 
-// AgentMail represents a message between agents
+// AgentMail represents a message between agents.
 type AgentMail struct {
 	ID          string
 	FromAgentID string
@@ -102,7 +102,7 @@ type AgentMail struct {
 	CreatedAt   time.Time
 }
 
-// AgentNote represents a key-value note for an agent
+// AgentNote represents a key-value note for an agent.
 type AgentNote struct {
 	ID        string
 	AgentID   string
@@ -112,7 +112,7 @@ type AgentNote struct {
 	UpdatedAt time.Time
 }
 
-// Store defines the interface for thread and message persistence
+// Store defines the interface for thread and message persistence.
 type Store interface {
 	// Threads
 	CreateThread(ctx context.Context, thread *Thread) error
@@ -155,7 +155,7 @@ type Store interface {
 	Close() error
 }
 
-// BuiltinStore defines methods for built-in tool pack data
+// BuiltinStore defines methods for built-in tool pack data.
 type BuiltinStore interface {
 	// Log entries
 	CreateLogEntry(ctx context.Context, entry *LogEntry) error
@@ -188,7 +188,7 @@ type BuiltinStore interface {
 	DeleteNote(ctx context.Context, agentID, key string) error
 }
 
-// TokenUsage represents token consumption from an LLM response
+// TokenUsage represents token consumption from an LLM response.
 type TokenUsage struct {
 	ID               string
 	ThreadID         string
@@ -203,7 +203,7 @@ type TokenUsage struct {
 	CreatedAt        time.Time
 }
 
-// UsageStats represents aggregated token usage statistics
+// UsageStats represents aggregated token usage statistics.
 type UsageStats struct {
 	TotalInput      int64
 	TotalOutput     int64
@@ -214,14 +214,14 @@ type UsageStats struct {
 	RequestCount    int64
 }
 
-// UsageFilter contains optional filters for usage queries
+// UsageFilter contains optional filters for usage queries.
 type UsageFilter struct {
 	AgentID *string
 	Since   *time.Time
 	Until   *time.Time
 }
 
-// UsageStore defines methods for token usage persistence and retrieval
+// UsageStore defines methods for token usage persistence and retrieval.
 type UsageStore interface {
 	// SaveUsage stores a token usage record
 	SaveUsage(ctx context.Context, usage *TokenUsage) error

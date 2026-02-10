@@ -588,10 +588,8 @@ func TestValidate_TailscaleConfig(t *testing.T) {
 				if !strings.Contains(err.Error(), tt.wantErrSubstr) {
 					t.Errorf("Validate() error = %q, want error containing %q", err.Error(), tt.wantErrSubstr)
 				}
-			} else {
-				if err != nil {
-					t.Errorf("Validate() unexpected error: %v", err)
-				}
+			} else if err != nil {
+				t.Errorf("Validate() unexpected error: %v", err)
 			}
 		})
 	}

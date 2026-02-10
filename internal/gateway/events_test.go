@@ -15,12 +15,12 @@ import (
 	"github.com/2389/coven-gateway/internal/store"
 )
 
-// strPtr returns a pointer to the given string
+// strPtr returns a pointer to the given string.
 func strPtr(s string) *string {
 	return &s
 }
 
-// setupTestGatewayWithStore creates a minimal gateway with a mock store for testing
+// setupTestGatewayWithStore creates a minimal gateway with a mock store for testing.
 func setupTestGatewayWithStore(t *testing.T) (*Gateway, *store.MockStore) {
 	t.Helper()
 	mockStore := store.NewMockStore()

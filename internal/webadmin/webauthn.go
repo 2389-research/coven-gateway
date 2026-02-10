@@ -6,7 +6,6 @@ package webadmin
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -20,7 +19,7 @@ import (
 	"github.com/2389/coven-gateway/internal/store"
 )
 
-// webAuthnUser wraps AdminUser to implement webauthn.User interface
+// webAuthnUser wraps AdminUser to implement webauthn.User interface.
 type webAuthnUser struct {
 	user  *store.AdminUser
 	creds []*store.WebAuthnCredential
@@ -62,7 +61,7 @@ func (u *webAuthnUser) WebAuthnCredentials() []webauthn.Credential {
 	return creds
 }
 
-// sessionData stores WebAuthn session data for in-progress registrations/logins
+// sessionData stores WebAuthn session data for in-progress registrations/logins.
 type sessionData struct {
 	session   *webauthn.SessionData
 	userID    string
@@ -70,7 +69,7 @@ type sessionData struct {
 }
 
 // webAuthnSessionStore is a simple in-memory session store for WebAuthn challenges
-// In production, this should be backed by Redis or the database
+// In production, this should be backed by Redis or the database.
 type webAuthnSessionStore struct {
 	mu       sync.RWMutex
 	sessions map[string]*sessionData // keyed by session token
@@ -88,7 +87,7 @@ func newWebAuthnSessionStore() *webAuthnSessionStore {
 	return store
 }
 
-// Close stops the cleanup goroutine
+// Close stops the cleanup goroutine.
 func (s *webAuthnSessionStore) Close() {
 	if s.cancel != nil {
 		s.cancel()
@@ -141,29 +140,41 @@ func (s *webAuthnSessionStore) cleanupLoop(ctx context.Context) {
 	}
 }
 
-// initWebAuthn initializes the WebAuthn configuration
-func (a *Admin) initWebAuthn() error {
-	rpID := "localhost"
-	rpOrigins := []string{"http://localhost", "https://localhost"}
+// deriveWebAuthnConfig extracts rpID and rpOrigins from a base URL.
+// Returns defaults if URL is empty or invalid.
+func deriveWebAuthnConfig(baseURL string) (rpID string, rpOrigins []string) {
+	// Defaults for localhost development
+	rpID = "localhost"
+	rpOrigins = []string{"http://localhost", "https://localhost"}
 
-	// Extract domain from BaseURL if configured
-	if a.config.BaseURL != "" {
-		parsed, err := url.Parse(a.config.BaseURL)
-		if err == nil && parsed.Host != "" {
-			// Extract hostname (without port)
-			host := parsed.Hostname()
-			if host != "" {
-				rpID = host
-				rpOrigins = []string{a.config.BaseURL}
-				// Also allow both http and https variants
-				if parsed.Scheme == "https" {
-					rpOrigins = append(rpOrigins, "http://"+parsed.Host)
-				} else {
-					rpOrigins = append(rpOrigins, "https://"+parsed.Host)
-				}
-			}
-		}
+	if baseURL == "" {
+		return rpID, rpOrigins
 	}
+
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Host == "" {
+		return rpID, rpOrigins
+	}
+
+	host := parsed.Hostname()
+	if host == "" {
+		return rpID, rpOrigins
+	}
+
+	rpID = host
+	rpOrigins = []string{baseURL}
+	// Also allow both http and https variants
+	if parsed.Scheme == "https" {
+		rpOrigins = append(rpOrigins, "http://"+parsed.Host)
+	} else {
+		rpOrigins = append(rpOrigins, "https://"+parsed.Host)
+	}
+	return rpID, rpOrigins
+}
+
+// initWebAuthn initializes the WebAuthn configuration.
+func (a *Admin) initWebAuthn() error {
+	rpID, rpOrigins := deriveWebAuthnConfig(a.config.BaseURL)
 
 	wconfig := &webauthn.Config{
 		RPDisplayName: "coven admin",
@@ -181,7 +192,7 @@ func (a *Admin) initWebAuthn() error {
 	return nil
 }
 
-// handleWebAuthnRegisterBegin starts the passkey registration process
+// handleWebAuthnRegisterBegin starts the passkey registration process.
 func (a *Admin) handleWebAuthnRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	if a.webauthn == nil {
 		http.Error(w, "WebAuthn not configured", http.StatusServiceUnavailable)
@@ -228,10 +239,59 @@ func (a *Admin) handleWebAuthnRegisterBegin(w http.ResponseWriter, r *http.Reque
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		a.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
-// handleWebAuthnRegisterFinish completes the passkey registration process
+// webAuthnRegisterRequest holds parsed registration request data.
+type webAuthnRegisterRequest struct {
+	sessionToken string
+	response     json.RawMessage
+}
+
+// parseWebAuthnRegisterRequest parses and validates the registration request.
+func parseWebAuthnRegisterRequest(r *http.Request) (*webAuthnRegisterRequest, error) {
+	var req struct {
+		SessionToken string          `json:"sessionToken"`
+		Response     json.RawMessage `json:"response"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return nil, err
+	}
+	return &webAuthnRegisterRequest{sessionToken: req.SessionToken, response: req.Response}, nil
+}
+
+// storeWebAuthnCredential creates and stores a WebAuthn credential.
+func (a *Admin) storeWebAuthnCredential(ctx context.Context, userID string, cred *webauthn.Credential) (string, error) {
+	credID, err := generateSecureToken(16)
+	if err != nil {
+		return "", err
+	}
+
+	transportsJSON, err := json.Marshal(cred.Transport)
+	if err != nil {
+		return "", err
+	}
+
+	storeCred := &store.WebAuthnCredential{
+		ID:              credID,
+		UserID:          userID,
+		CredentialID:    cred.ID,
+		PublicKey:       cred.PublicKey,
+		AttestationType: cred.AttestationType,
+		Transports:      string(transportsJSON),
+		SignCount:       cred.Authenticator.SignCount,
+		CreatedAt:       time.Now(),
+	}
+
+	if err := a.store.CreateWebAuthnCredential(ctx, storeCred); err != nil {
+		return "", err
+	}
+	return credID, nil
+}
+
+// handleWebAuthnRegisterFinish completes the passkey registration process.
 func (a *Admin) handleWebAuthnRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	if a.webauthn == nil {
 		http.Error(w, "WebAuthn not configured", http.StatusServiceUnavailable)
@@ -244,28 +304,20 @@ func (a *Admin) handleWebAuthnRegisterFinish(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get session token from request
-	var req struct {
-		SessionToken string          `json:"sessionToken"`
-		Response     json.RawMessage `json:"response"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	req, err := parseWebAuthnRegisterRequest(r)
+	if err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	// Retrieve session data
-	session, sessionUserID, ok := a.webauthnSessions.Get(req.SessionToken)
+	session, sessionUserID, ok := a.webauthnSessions.Get(req.sessionToken)
 	if !ok || sessionUserID != user.ID {
 		http.Error(w, "Invalid or expired session", http.StatusBadRequest)
 		return
 	}
-	a.webauthnSessions.Delete(req.SessionToken)
+	a.webauthnSessions.Delete(req.sessionToken)
 
-	// Parse the credential creation response
-	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(
-		bytes.NewReader(req.Response),
-	)
+	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(bytes.NewReader(req.response))
 	if err != nil {
 		a.logger.Error("failed to parse registration response", "error", err)
 		http.Error(w, "Invalid response", http.StatusBadRequest)
@@ -282,38 +334,21 @@ func (a *Admin) handleWebAuthnRegisterFinish(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Store the credential
-	credID, err := generateSecureToken(16)
+	credID, err := a.storeWebAuthnCredential(r.Context(), user.ID, credential)
 	if err != nil {
-		http.Error(w, "Failed to generate credential ID", http.StatusInternalServerError)
-		return
-	}
-
-	transportsJSON, _ := json.Marshal(credential.Transport)
-	storeCred := &store.WebAuthnCredential{
-		ID:              credID,
-		UserID:          user.ID,
-		CredentialID:    credential.ID,
-		PublicKey:       credential.PublicKey,
-		AttestationType: credential.AttestationType,
-		Transports:      string(transportsJSON),
-		SignCount:       credential.Authenticator.SignCount,
-		CreatedAt:       time.Now(),
-	}
-
-	if err := a.store.CreateWebAuthnCredential(r.Context(), storeCred); err != nil {
 		a.logger.Error("failed to store credential", "error", err)
 		http.Error(w, "Failed to save credential", http.StatusInternalServerError)
 		return
 	}
 
 	a.logger.Info("passkey registered", "user_id", user.ID, "credential_id", credID)
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+		a.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
-// handleWebAuthnLoginBegin starts the passkey login process
+// handleWebAuthnLoginBegin starts the passkey login process.
 func (a *Admin) handleWebAuthnLoginBegin(w http.ResponseWriter, r *http.Request) {
 	if a.webauthn == nil {
 		http.Error(w, "WebAuthn not configured", http.StatusServiceUnavailable)
@@ -345,103 +380,124 @@ func (a *Admin) handleWebAuthnLoginBegin(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		a.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
-// handleWebAuthnLoginFinish completes the passkey login process
+// webAuthnLoginRequest holds parsed login request data.
+type webAuthnLoginRequest struct {
+	sessionToken string
+	response     json.RawMessage
+}
+
+// parseWebAuthnLoginRequest parses and validates the login request.
+func parseWebAuthnLoginRequest(r *http.Request) (*webAuthnLoginRequest, error) {
+	var req struct {
+		SessionToken string          `json:"sessionToken"`
+		Response     json.RawMessage `json:"response"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return nil, err
+	}
+	return &webAuthnLoginRequest{sessionToken: req.SessionToken, response: req.Response}, nil
+}
+
+// lookupCredentialUser finds the credential and user for a login attempt.
+func (a *Admin) lookupCredentialUser(ctx context.Context, credentialID []byte) (*store.WebAuthnCredential, *store.AdminUser, error) {
+	storedCred, err := a.store.GetWebAuthnCredentialByCredentialID(ctx, credentialID)
+	if err != nil {
+		return nil, nil, err
+	}
+	user, err := a.store.GetAdminUser(ctx, storedCred.UserID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return storedCred, user, nil
+}
+
+// handleLookupError writes the appropriate HTTP error for a credential lookup failure.
+func (a *Admin) handleLookupError(w http.ResponseWriter, err error) {
+	if errors.Is(err, store.ErrNotFound) {
+		http.Error(w, "Unknown credential", http.StatusUnauthorized)
+	} else {
+		a.logger.Error("failed to lookup credential", "error", err)
+		http.Error(w, "Failed to verify credential", http.StatusInternalServerError)
+	}
+}
+
+// makeCredentialFinder creates a credential finder function for WebAuthn validation.
+func makeCredentialFinder(waUser *webAuthnUser, userID string) func(rawID, userHandle []byte) (webauthn.User, error) {
+	return func(rawID, userHandle []byte) (webauthn.User, error) {
+		if len(userHandle) > 0 && string(userHandle) != userID {
+			return nil, errors.New("user handle mismatch")
+		}
+		return waUser, nil
+	}
+}
+
+// finalizeWebAuthnLogin updates sign count and creates the session.
+func (a *Admin) finalizeWebAuthnLogin(w http.ResponseWriter, r *http.Request, storedCredID string, signCount uint32, userID string) error {
+	if err := a.store.UpdateWebAuthnCredentialSignCount(r.Context(), storedCredID, signCount); err != nil {
+		a.logger.Warn("failed to update sign count", "error", err)
+	}
+	return a.createSession(w, r, userID)
+}
+
+// handleWebAuthnLoginFinish completes the passkey login process.
 func (a *Admin) handleWebAuthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 	if a.webauthn == nil {
 		http.Error(w, "WebAuthn not configured", http.StatusServiceUnavailable)
 		return
 	}
 
-	var req struct {
-		SessionToken string          `json:"sessionToken"`
-		Response     json.RawMessage `json:"response"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	req, err := parseWebAuthnLoginRequest(r)
+	if err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
 
-	// Retrieve session data
-	session, _, ok := a.webauthnSessions.Get(req.SessionToken)
+	session, _, ok := a.webauthnSessions.Get(req.sessionToken)
 	if !ok {
 		http.Error(w, "Invalid or expired session", http.StatusBadRequest)
 		return
 	}
-	a.webauthnSessions.Delete(req.SessionToken)
+	a.webauthnSessions.Delete(req.sessionToken)
 
-	// Parse the assertion response
-	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(
-		bytes.NewReader(req.Response),
-	)
+	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(bytes.NewReader(req.response))
 	if err != nil {
 		a.logger.Error("failed to parse login response", "error", err)
 		http.Error(w, "Invalid response", http.StatusBadRequest)
 		return
 	}
 
-	// Look up the credential by ID
-	credentialID := parsedResponse.RawID
-	storedCred, err := a.store.GetWebAuthnCredentialByCredentialID(r.Context(), credentialID)
+	storedCred, user, err := a.lookupCredentialUser(r.Context(), parsedResponse.RawID)
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			http.Error(w, "Unknown credential", http.StatusUnauthorized)
-			return
-		}
-		a.logger.Error("failed to get credential", "error", err)
-		http.Error(w, "Failed to verify credential", http.StatusInternalServerError)
+		a.handleLookupError(w, err)
 		return
 	}
 
-	// Get the user
-	user, err := a.store.GetAdminUser(r.Context(), storedCred.UserID)
-	if err != nil {
-		a.logger.Error("failed to get user", "error", err)
-		http.Error(w, "Failed to verify credential", http.StatusInternalServerError)
-		return
-	}
-
-	// Get all user's credentials for validation
 	allCreds, _ := a.store.GetWebAuthnCredentialsByUser(r.Context(), user.ID)
 	waUser := &webAuthnUser{user: user, creds: allCreds}
 
-	// Handler function to find credential by ID
-	credentialFinder := func(rawID, userHandle []byte) (webauthn.User, error) {
-		// If userHandle is provided, verify it matches
-		if len(userHandle) > 0 && string(userHandle) != user.ID {
-			return nil, errors.New("user handle mismatch")
-		}
-		return waUser, nil
-	}
-
-	credential, err := a.webauthn.ValidateDiscoverableLogin(credentialFinder, *session, parsedResponse)
+	credential, err := a.webauthn.ValidateDiscoverableLogin(makeCredentialFinder(waUser, user.ID), *session, parsedResponse)
 	if err != nil {
 		a.logger.Error("failed to validate login", "error", err)
 		http.Error(w, "Authentication failed", http.StatusUnauthorized)
 		return
 	}
 
-	// Update sign count
-	if err := a.store.UpdateWebAuthnCredentialSignCount(r.Context(), storedCred.ID, credential.Authenticator.SignCount); err != nil {
-		a.logger.Warn("failed to update sign count", "error", err)
-	}
-
-	// Create session
-	if err := a.createSession(w, r, user.ID); err != nil {
+	if err := a.finalizeWebAuthnLogin(w, r, storedCred.ID, credential.Authenticator.SignCount, user.ID); err != nil {
 		a.logger.Error("failed to create session", "error", err)
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
 		return
 	}
 
 	a.logger.Info("passkey login successful", "user_id", user.ID)
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "redirect": "/admin/"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok", "redirect": "/admin/"}); err != nil {
+		a.logger.Debug("failed to encode response", "error", err)
+	}
 }
 
-// formatCredentialID formats a credential ID for display
-func formatCredentialID(id []byte) string {
-	return base64.URLEncoding.EncodeToString(id)
-}
+// formatCredentialID formats a credential ID for display.

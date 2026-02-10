@@ -17,7 +17,7 @@ import (
 	"github.com/2389/coven-gateway/internal/store"
 )
 
-// mockAgentChecker is a simple mock for testing router logic
+// mockAgentChecker is a simple mock for testing router logic.
 type mockAgentChecker struct {
 	onlineAgents map[string]bool
 }
@@ -36,7 +36,7 @@ func (m *mockAgentChecker) SetOnline(agentID string, online bool) {
 	m.onlineAgents[agentID] = online
 }
 
-// mockBindingStore is a simple mock for unit testing router logic
+// mockBindingStore is a simple mock for unit testing router logic.
 type mockBindingStore struct {
 	bindings map[string]*store.Binding // key: "frontend:channelID"
 }
@@ -146,7 +146,7 @@ func setupTestStoreForRouter(t *testing.T) *store.SQLiteStore {
 	return s
 }
 
-// createTestAgentForRouter creates a principal with type="agent" for binding tests
+// createTestAgentForRouter creates a principal with type="agent" for binding tests.
 func createTestAgentForRouter(t *testing.T, s *store.SQLiteStore, id string) {
 	t.Helper()
 	fp := id

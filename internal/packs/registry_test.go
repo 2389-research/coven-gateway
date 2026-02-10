@@ -506,7 +506,7 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		var wg sync.WaitGroup
 
 		// Concurrent registrations
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
@@ -520,16 +520,14 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		}
 
 		// Concurrent list operations
-		for i := 0; i < 10; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 10 {
+			wg.Go(func() {
 				registry.ListPacks()
-			}()
+			})
 		}
 
 		// Concurrent tool lookups
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
@@ -545,7 +543,7 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		var wg sync.WaitGroup
 
 		// Pre-register some packs
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			manifest := createTestManifest(
 				fmt.Sprintf("existing-%d", i),
 				"1.0.0",
@@ -569,7 +567,7 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		}
 
 		// Concurrent unregistrations
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
@@ -584,7 +582,7 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		registry := NewRegistry(slog.Default())
 
 		// Register packs with various capabilities
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			caps := []string{}
 			if i%2 == 0 {
 				caps = append(caps, "even")
@@ -601,7 +599,7 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		}
 
 		var wg sync.WaitGroup
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()

@@ -240,7 +240,7 @@ func TestAdminAgentMessages_Pagination(t *testing.T) {
 	agentID := "paginated-agent"
 
 	// Create 3 events
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		text := fmt.Sprintf("message %d", i)
 		evt := &store.LedgerEvent{
 			ID:              fmt.Sprintf("evt-%d", i),

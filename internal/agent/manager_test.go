@@ -5,7 +5,9 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"sync"
 	"testing"
@@ -36,7 +38,7 @@ func (m *mockStream) Send(msg *pb.ServerMessage) error {
 }
 
 func (m *mockStream) Recv() (*pb.AgentMessage, error) {
-	return nil, nil
+	return nil, io.EOF
 }
 
 func (m *mockStream) getSentMessages() []*pb.ServerMessage {
@@ -190,7 +192,7 @@ func TestManagerRegister(t *testing.T) {
 		if err == nil {
 			t.Error("expected error for duplicate agent ID")
 		}
-		if err != ErrAgentAlreadyRegistered {
+		if !errors.Is(err, ErrAgentAlreadyRegistered) {
 			t.Errorf("expected ErrAgentAlreadyRegistered, got %v", err)
 		}
 	})
@@ -319,7 +321,7 @@ func TestManagerSendMessage(t *testing.T) {
 		if err == nil {
 			t.Error("expected error when agent not found")
 		}
-		if err != ErrAgentNotFound {
+		if !errors.Is(err, ErrAgentNotFound) {
 			t.Errorf("expected ErrAgentNotFound, got %v", err)
 		}
 	})
@@ -699,7 +701,7 @@ func TestConcurrentAccess(t *testing.T) {
 		var wg sync.WaitGroup
 
 		// Concurrent registrations
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
@@ -716,12 +718,10 @@ func TestConcurrentAccess(t *testing.T) {
 		}
 
 		// Concurrent list operations
-		for i := 0; i < 10; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 10 {
+			wg.Go(func() {
 				manager.ListAgents()
-			}()
+			})
 		}
 
 		wg.Wait()

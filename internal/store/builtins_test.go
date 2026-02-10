@@ -5,6 +5,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -125,7 +126,7 @@ func TestTodos(t *testing.T) {
 		t.Fatalf("DeleteTodo: %v", err)
 	}
 	_, err = s.GetTodo(ctx, todo.ID)
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
@@ -162,17 +163,17 @@ func TestTodosNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := s.GetTodo(ctx, "nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 
 	err = s.UpdateTodo(ctx, &Todo{ID: "nonexistent"})
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound for update, got %v", err)
 	}
 
 	err = s.DeleteTodo(ctx, "nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound for delete, got %v", err)
 	}
 }
@@ -228,12 +229,12 @@ func TestBBSNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := s.GetBBSPost(ctx, "nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 
 	_, err = s.GetBBSThread(ctx, "nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound for thread, got %v", err)
 	}
 }
@@ -294,12 +295,12 @@ func TestMailNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := s.GetMail(ctx, "nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 
 	err = s.MarkMailRead(ctx, "nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound for mark read, got %v", err)
 	}
 }
@@ -374,7 +375,7 @@ func TestNotes(t *testing.T) {
 		t.Fatalf("DeleteNote: %v", err)
 	}
 	_, err = s.GetNote(ctx, "agent-1", "favorite_color")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 }
@@ -384,12 +385,12 @@ func TestNotesNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := s.GetNote(ctx, "agent-1", "nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound, got %v", err)
 	}
 
 	err = s.DeleteNote(ctx, "agent-1", "nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("expected ErrNotFound for delete, got %v", err)
 	}
 }

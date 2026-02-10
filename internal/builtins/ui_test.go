@@ -14,7 +14,7 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// mockClientStreamer records sent questions for testing (thread-safe)
+// mockClientStreamer records sent questions for testing (thread-safe).
 type mockClientStreamer struct {
 	mu        sync.Mutex
 	questions []*pb.UserQuestionRequest
@@ -82,7 +82,7 @@ func TestAskUserValidation(t *testing.T) {
 	router := NewInMemoryQuestionRouter(streamer)
 	pack := UIPack(router)
 
-	handler := findUIHandler(pack, "ask_user")
+	handler := findAskUserHandler(pack)
 	if handler == nil {
 		t.Fatal("ask_user handler not found")
 	}
@@ -127,7 +127,7 @@ func TestAskUserWithAnswer(t *testing.T) {
 	router := NewInMemoryQuestionRouter(streamer)
 	pack := UIPack(router)
 
-	handler := findUIHandler(pack, "ask_user")
+	handler := findAskUserHandler(pack)
 	if handler == nil {
 		t.Fatal("ask_user handler not found")
 	}
@@ -213,7 +213,7 @@ func TestAskUserTimeout(t *testing.T) {
 	router := NewInMemoryQuestionRouter(streamer)
 	pack := UIPack(router)
 
-	handler := findUIHandler(pack, "ask_user")
+	handler := findAskUserHandler(pack)
 	if handler == nil {
 		t.Fatal("ask_user handler not found")
 	}
@@ -266,7 +266,7 @@ func TestDeliverAnswerWrongAgent(t *testing.T) {
 	router := NewInMemoryQuestionRouter(streamer)
 	pack := UIPack(router)
 
-	handler := findUIHandler(pack, "ask_user")
+	handler := findAskUserHandler(pack)
 	if handler == nil {
 		t.Fatal("ask_user handler not found")
 	}
@@ -308,9 +308,9 @@ func TestDeliverAnswerWrongAgent(t *testing.T) {
 	}
 }
 
-func findUIHandler(pack *packs.BuiltinPack, toolName string) packs.ToolHandler {
+func findAskUserHandler(pack *packs.BuiltinPack) packs.ToolHandler {
 	for _, tool := range pack.Tools {
-		if tool.Definition.GetName() == toolName {
+		if tool.Definition.GetName() == "ask_user" {
 			return tool.Handler
 		}
 	}

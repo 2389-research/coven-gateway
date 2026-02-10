@@ -12,14 +12,14 @@ import (
 	"time"
 )
 
-// Binding errors
+// Binding errors.
 var (
 	ErrBindingNotFound  = errors.New("binding not found")
 	ErrDuplicateChannel = errors.New("duplicate frontend+channel_id combination")
 	ErrAgentNotFound    = errors.New("agent not found or not of type agent")
 )
 
-// Binding represents a channel-to-agent mapping for message routing
+// Binding represents a channel-to-agent mapping for message routing.
 type Binding struct {
 	ID         string    // UUID v4
 	Frontend   string    // "matrix", "slack", "telegram" (1-50 chars, lowercase alphanumeric + underscore)
@@ -30,13 +30,13 @@ type Binding struct {
 	CreatedBy  *string   // principal_id who created it (optional)
 }
 
-// BindingFilter specifies filtering options for listing bindings
+// BindingFilter specifies filtering options for listing bindings.
 type BindingFilter struct {
 	Frontend *string // filter by frontend name
 	AgentID  *string // filter by agent ID
 }
 
-// validateAgent checks that the given ID exists in principals with type='agent'
+// validateAgent checks that the given ID exists in principals with type='agent'.
 func (s *SQLiteStore) validateAgent(ctx context.Context, agentID string) error {
 	query := `SELECT type FROM principals WHERE principal_id = ?`
 
@@ -96,7 +96,7 @@ func (s *SQLiteStore) CreateBindingV2(ctx context.Context, b *Binding) error {
 	return nil
 }
 
-// GetBindingByID retrieves a binding by its ID
+// GetBindingByID retrieves a binding by its ID.
 func (s *SQLiteStore) GetBindingByID(ctx context.Context, id string) (*Binding, error) {
 	query := `
 		SELECT binding_id, frontend, channel_id, agent_id, working_dir, created_at, created_by
@@ -107,7 +107,7 @@ func (s *SQLiteStore) GetBindingByID(ctx context.Context, id string) (*Binding, 
 	return s.scanBinding(s.db.QueryRowContext(ctx, query, id))
 }
 
-// GetBindingByChannel retrieves a binding by frontend and channel_id
+// GetBindingByChannel retrieves a binding by frontend and channel_id.
 func (s *SQLiteStore) GetBindingByChannel(ctx context.Context, frontend, channelID string) (*Binding, error) {
 	query := `
 		SELECT binding_id, frontend, channel_id, agent_id, working_dir, created_at, created_by
@@ -146,7 +146,7 @@ func (s *SQLiteStore) UpdateBinding(ctx context.Context, id, agentID string) err
 	return nil
 }
 
-// DeleteBindingByID deletes a binding by its ID
+// DeleteBindingByID deletes a binding by its ID.
 func (s *SQLiteStore) DeleteBindingByID(ctx context.Context, id string) error {
 	query := `DELETE FROM bindings WHERE binding_id = ?`
 
@@ -168,7 +168,7 @@ func (s *SQLiteStore) DeleteBindingByID(ctx context.Context, id string) error {
 	return nil
 }
 
-// DeleteBindingByChannel deletes a binding by frontend and channel_id
+// DeleteBindingByChannel deletes a binding by frontend and channel_id.
 func (s *SQLiteStore) DeleteBindingByChannel(ctx context.Context, frontend, channelID string) error {
 	query := `DELETE FROM bindings WHERE frontend = ? AND channel_id = ?`
 
@@ -216,7 +216,7 @@ func (s *SQLiteStore) ListBindingsV2(ctx context.Context, f BindingFilter) ([]Bi
 	if err != nil {
 		return nil, fmt.Errorf("querying bindings: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var bindings []Binding
 	for rows.Next() {
@@ -234,7 +234,7 @@ func (s *SQLiteStore) ListBindingsV2(ctx context.Context, f BindingFilter) ([]Bi
 	return bindings, nil
 }
 
-// scanBinding scans a single binding row from a sql.Row
+// scanBinding scans a single binding row from a sql.Row.
 func (s *SQLiteStore) scanBinding(row *sql.Row) (*Binding, error) {
 	var b Binding
 	var createdAtStr string
@@ -251,7 +251,7 @@ func (s *SQLiteStore) scanBinding(row *sql.Row) (*Binding, error) {
 		&createdBy,
 	)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrBindingNotFound
 	}
 	if err != nil {
@@ -271,7 +271,7 @@ func (s *SQLiteStore) scanBinding(row *sql.Row) (*Binding, error) {
 	return &b, nil
 }
 
-// scanBindingRow scans a binding from sql.Rows (for list queries)
+// scanBindingRow scans a binding from sql.Rows (for list queries).
 func (s *SQLiteStore) scanBindingRow(rows *sql.Rows) (*Binding, error) {
 	var b Binding
 	var createdAtStr string
@@ -305,7 +305,7 @@ func (s *SQLiteStore) scanBindingRow(rows *sql.Rows) (*Binding, error) {
 }
 
 // isDuplicateChannelError checks if the error is a unique constraint violation
-// for the frontend+channel_id combination
+// for the frontend+channel_id combination.
 func isDuplicateChannelError(err error) bool {
 	if err == nil {
 		return false

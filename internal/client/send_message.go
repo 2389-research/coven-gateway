@@ -20,13 +20,13 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// DedupeCache defines the interface for deduplication operations
+// DedupeCache defines the interface for deduplication operations.
 type DedupeCache interface {
 	Check(key string) bool
 	Mark(key string)
 }
 
-// MessageRouter defines the interface for routing messages to agents
+// MessageRouter defines the interface for routing messages to agents.
 type MessageRouter interface {
 	SendMessage(ctx context.Context, req *agent.SendRequest) (<-chan *agent.Response, error)
 }
@@ -51,7 +51,7 @@ func (s *ClientService) SendMessage(ctx context.Context, req *pb.ClientSendMessa
 	}
 
 	// Check dedupe - use "client:" prefix to avoid collisions with bridge keys
-	key := fmt.Sprintf("client:%s", req.IdempotencyKey)
+	key := "client:" + req.IdempotencyKey
 	if s.dedupe != nil && s.dedupe.Check(key) {
 		slog.Debug("duplicate client message ignored",
 			"idempotency_key", req.IdempotencyKey,
@@ -179,7 +179,7 @@ func (s *ClientService) consumeAgentResponses(
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Warn("agent response consumption cancelled",
+			slog.Warn("agent response consumption canceled",
 				"conversation_key", conversationKey,
 				"reason", ctx.Err(),
 			)

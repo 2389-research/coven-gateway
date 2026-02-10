@@ -68,6 +68,7 @@ func (s *TokenStore) GetTokenInfo(token string) *TokenInfo {
 }
 
 // GetCapabilities returns the capabilities for a token, or nil if not found.
+//
 // Deprecated: Use GetTokenInfo for full information including agent ID.
 func (s *TokenStore) GetCapabilities(token string) []string {
 	info := s.GetTokenInfo(token)

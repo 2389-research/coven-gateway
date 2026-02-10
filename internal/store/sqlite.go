@@ -6,6 +6,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -16,7 +17,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// SQLiteStore implements the Store interface using SQLite
+// SQLiteStore implements the Store interface using SQLite.
 type SQLiteStore struct {
 	db     *sql.DB
 	logger *slog.Logger
@@ -30,7 +31,7 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 
 	// Ensure parent directory exists
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return nil, fmt.Errorf("creating database directory: %w", err)
 	}
 
@@ -41,13 +42,13 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 
 	// Enable WAL mode for better concurrent performance
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("enabling WAL mode: %w", err)
 	}
 
 	// Enable foreign keys
 	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("enabling foreign keys: %w", err)
 	}
 
@@ -57,12 +58,12 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	}
 
 	if err := s.createSchema(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("creating schema: %w", err)
 	}
 
 	if err := s.runMigrations(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("running migrations: %w", err)
 	}
 
@@ -70,399 +71,162 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	return s, nil
 }
 
-// createSchema creates the database tables if they don't exist
+// Schema segments split for maintainability.
+var (
+	schemaCoreSQL = `
+CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, frontend_name TEXT NOT NULL, external_id TEXT NOT NULL, agent_id TEXT NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_frontend_external ON threads(frontend_name, external_id);
+CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, sender TEXT NOT NULL, content TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'message', tool_name TEXT, tool_id TEXT, created_at DATETIME NOT NULL, FOREIGN KEY (thread_id) REFERENCES threads(id));
+CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
+CREATE INDEX IF NOT EXISTS idx_messages_thread_created ON messages(thread_id, created_at);
+CREATE TABLE IF NOT EXISTS agent_state (agent_id TEXT PRIMARY KEY, state BLOB NOT NULL, updated_at DATETIME NOT NULL);
+CREATE TABLE IF NOT EXISTS channel_bindings (frontend TEXT NOT NULL, channel_id TEXT NOT NULL, agent_id TEXT NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, PRIMARY KEY (frontend, channel_id));
+`
+	schemaAuthSQL = `
+CREATE TABLE IF NOT EXISTS principals (principal_id TEXT PRIMARY KEY, type TEXT NOT NULL, pubkey_fingerprint TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, last_seen TEXT, metadata_json TEXT, CHECK (type IN ('client', 'agent', 'pack')), CHECK (status IN ('pending', 'approved', 'revoked', 'offline', 'online')));
+CREATE INDEX IF NOT EXISTS idx_principals_status ON principals(status);
+CREATE INDEX IF NOT EXISTS idx_principals_type ON principals(type);
+CREATE INDEX IF NOT EXISTS idx_principals_pubkey ON principals(pubkey_fingerprint);
+CREATE TABLE IF NOT EXISTS roles (subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, role TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (subject_type, subject_id, role), CHECK (subject_type IN ('principal', 'member')), CHECK (role IN ('owner', 'admin', 'member', 'leader')));
+CREATE INDEX IF NOT EXISTS idx_roles_subject ON roles(subject_type, subject_id);
+CREATE TABLE IF NOT EXISTS audit_log (audit_id TEXT PRIMARY KEY, actor_principal_id TEXT NOT NULL, actor_member_id TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, ts TEXT NOT NULL, detail_json TEXT, CHECK (action IN ('approve_principal', 'revoke_principal', 'grant_capability', 'revoke_capability', 'create_binding', 'update_binding', 'delete_binding', 'create_token')));
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_principal_id);
+CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id);
+`
+	schemaLedgerSQL = `
+CREATE TABLE IF NOT EXISTS ledger_events (event_id TEXT PRIMARY KEY, conversation_key TEXT NOT NULL, thread_id TEXT, direction TEXT NOT NULL, author TEXT NOT NULL, timestamp TEXT NOT NULL, type TEXT NOT NULL, text TEXT, raw_transport TEXT, raw_payload_ref TEXT, actor_principal_id TEXT, actor_member_id TEXT, CHECK (direction IN ('inbound_to_agent', 'outbound_from_agent')), CHECK (type IN ('message', 'tool_call', 'tool_result', 'system', 'error')));
+CREATE INDEX IF NOT EXISTS idx_ledger_conversation ON ledger_events(conversation_key, timestamp);
+CREATE INDEX IF NOT EXISTS idx_ledger_actor ON ledger_events(actor_principal_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_timestamp ON ledger_events(timestamp);
+CREATE INDEX IF NOT EXISTS idx_ledger_thread ON ledger_events(thread_id) WHERE thread_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS bindings (binding_id TEXT PRIMARY KEY, frontend TEXT NOT NULL, channel_id TEXT NOT NULL, agent_id TEXT NOT NULL, working_dir TEXT, created_at TEXT NOT NULL, created_by TEXT, UNIQUE(frontend, channel_id));
+CREATE INDEX IF NOT EXISTS idx_bindings_frontend ON bindings(frontend);
+CREATE INDEX IF NOT EXISTS idx_bindings_agent ON bindings(agent_id);
+`
+	schemaAdminSQL = `
+CREATE TABLE IF NOT EXISTS admin_users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT, display_name TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username);
+CREATE TABLE IF NOT EXISTS admin_sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE, created_at TEXT NOT NULL, expires_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_user ON admin_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);
+CREATE TABLE IF NOT EXISTS admin_invites (id TEXT PRIMARY KEY, created_by TEXT REFERENCES admin_users(id), created_at TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, used_by TEXT REFERENCES admin_users(id));
+CREATE INDEX IF NOT EXISTS idx_admin_invites_expires ON admin_invites(expires_at);
+CREATE TABLE IF NOT EXISTS link_codes (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, fingerprint TEXT NOT NULL, device_name TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'expired')), created_at TEXT NOT NULL, expires_at TEXT NOT NULL, approved_by TEXT REFERENCES admin_users(id), approved_at TEXT, principal_id TEXT REFERENCES principals(principal_id), token TEXT);
+CREATE INDEX IF NOT EXISTS idx_link_codes_code ON link_codes(code);
+CREATE INDEX IF NOT EXISTS idx_link_codes_expires ON link_codes(expires_at);
+CREATE INDEX IF NOT EXISTS idx_link_codes_status ON link_codes(status);
+CREATE TABLE IF NOT EXISTS webauthn_credentials (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE, credential_id BLOB UNIQUE NOT NULL, public_key BLOB NOT NULL, attestation_type TEXT, transports TEXT, sign_count INTEGER DEFAULT 0, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id);
+`
+	schemaToolsSQL = `
+CREATE TABLE IF NOT EXISTS log_entries (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, message TEXT NOT NULL, tags TEXT, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_log_entries_agent ON log_entries(agent_id);
+CREATE INDEX IF NOT EXISTS idx_log_entries_created ON log_entries(created_at);
+CREATE TABLE IF NOT EXISTS todos (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, description TEXT NOT NULL, status TEXT DEFAULT 'pending', priority TEXT DEFAULT 'medium', notes TEXT, due_date TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_todos_agent ON todos(agent_id);
+CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
+CREATE TABLE IF NOT EXISTS bbs_posts (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, thread_id TEXT, subject TEXT, content TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_bbs_posts_thread ON bbs_posts(thread_id);
+CREATE INDEX IF NOT EXISTS idx_bbs_posts_created ON bbs_posts(created_at);
+CREATE TABLE IF NOT EXISTS agent_mail (id TEXT PRIMARY KEY, from_agent_id TEXT NOT NULL, to_agent_id TEXT NOT NULL, subject TEXT NOT NULL, content TEXT NOT NULL, read_at TEXT, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_agent_mail_to ON agent_mail(to_agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_mail_unread ON agent_mail(to_agent_id, read_at);
+CREATE TABLE IF NOT EXISTS agent_notes (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(agent_id, key));
+CREATE INDEX IF NOT EXISTS idx_agent_notes_agent ON agent_notes(agent_id);
+`
+	schemaUsageSQL = `
+CREATE TABLE IF NOT EXISTS message_usage (id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, message_id TEXT, request_id TEXT NOT NULL, agent_id TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cache_read_tokens INTEGER NOT NULL DEFAULT 0, cache_write_tokens INTEGER NOT NULL DEFAULT 0, thinking_tokens INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, FOREIGN KEY (thread_id) REFERENCES threads(id));
+CREATE INDEX IF NOT EXISTS idx_message_usage_thread ON message_usage(thread_id);
+CREATE INDEX IF NOT EXISTS idx_message_usage_agent ON message_usage(agent_id);
+CREATE INDEX IF NOT EXISTS idx_message_usage_created ON message_usage(created_at);
+CREATE INDEX IF NOT EXISTS idx_message_usage_request ON message_usage(request_id);
+CREATE TABLE IF NOT EXISTS secrets (id TEXT PRIMARY KEY, key TEXT NOT NULL, value TEXT NOT NULL, agent_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, created_by TEXT);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_secrets_unique_global ON secrets(key) WHERE agent_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_secrets_unique_agent ON secrets(key, agent_id) WHERE agent_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_secrets_agent ON secrets(agent_id);
+`
+)
+
+// createSchema creates the database tables if they don't exist.
 func (s *SQLiteStore) createSchema() error {
-	schema := `
-		CREATE TABLE IF NOT EXISTS threads (
-			id TEXT PRIMARY KEY,
-			frontend_name TEXT NOT NULL,
-			external_id TEXT NOT NULL,
-			agent_id TEXT NOT NULL,
-			created_at DATETIME NOT NULL,
-			updated_at DATETIME NOT NULL
-		);
+	schemas := []string{schemaCoreSQL, schemaAuthSQL, schemaLedgerSQL, schemaAdminSQL, schemaToolsSQL, schemaUsageSQL}
+	for _, sql := range schemas {
+		if _, err := s.db.Exec(sql); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_frontend_external
-			ON threads(frontend_name, external_id);
+// columnMigration defines a column migration with check and apply queries.
+type columnMigration struct {
+	check  string
+	apply  string
+	column string
+	table  string
+}
 
-		CREATE TABLE IF NOT EXISTS messages (
-			id TEXT PRIMARY KEY,
-			thread_id TEXT NOT NULL,
-			sender TEXT NOT NULL,
-			content TEXT NOT NULL,
-			type TEXT NOT NULL DEFAULT 'message',
-			tool_name TEXT,
-			tool_id TEXT,
-			created_at DATETIME NOT NULL,
-			FOREIGN KEY (thread_id) REFERENCES threads(id)
-		);
+// applyColumnMigration applies a single column migration if needed.
+func (s *SQLiteStore) applyColumnMigration(m columnMigration) error {
+	var exists int
+	if err := s.db.QueryRow(m.check).Scan(&exists); err == nil {
+		return nil // Column already exists
+	}
+	if _, err := s.db.Exec(m.apply); err != nil {
+		return fmt.Errorf("adding %s column to %s: %w", m.column, m.table, err)
+	}
+	s.logger.Info("applied migration", "column", m.column, "table", m.table)
+	return nil
+}
 
-		CREATE INDEX IF NOT EXISTS idx_messages_thread_id
-			ON messages(thread_id);
-
-		CREATE INDEX IF NOT EXISTS idx_messages_thread_created
-			ON messages(thread_id, created_at);
-
-		CREATE TABLE IF NOT EXISTS agent_state (
-			agent_id TEXT PRIMARY KEY,
-			state BLOB NOT NULL,
-			updated_at DATETIME NOT NULL
-		);
-
-		CREATE TABLE IF NOT EXISTS channel_bindings (
-			frontend TEXT NOT NULL,
-			channel_id TEXT NOT NULL,
-			agent_id TEXT NOT NULL,
-			created_at DATETIME NOT NULL,
-			updated_at DATETIME NOT NULL,
-			PRIMARY KEY (frontend, channel_id)
-		);
-
-		CREATE TABLE IF NOT EXISTS principals (
-			principal_id       TEXT PRIMARY KEY,
-			type               TEXT NOT NULL,
-			pubkey_fingerprint TEXT NOT NULL UNIQUE,
-			display_name       TEXT NOT NULL,
-			status             TEXT NOT NULL,
-			created_at         TEXT NOT NULL,
-			last_seen          TEXT,
-			metadata_json      TEXT,
-
-			CHECK (type IN ('client', 'agent', 'pack')),
-			CHECK (status IN ('pending', 'approved', 'revoked', 'offline', 'online'))
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_principals_status ON principals(status);
-		CREATE INDEX IF NOT EXISTS idx_principals_type ON principals(type);
-		CREATE INDEX IF NOT EXISTS idx_principals_pubkey ON principals(pubkey_fingerprint);
-
-		CREATE TABLE IF NOT EXISTS roles (
-			subject_type TEXT NOT NULL,
-			subject_id   TEXT NOT NULL,
-			role         TEXT NOT NULL,
-			created_at   TEXT NOT NULL,
-
-			PRIMARY KEY (subject_type, subject_id, role),
-			CHECK (subject_type IN ('principal', 'member')),
-			CHECK (role IN ('owner', 'admin', 'member'))
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_roles_subject ON roles(subject_type, subject_id);
-
-		CREATE TABLE IF NOT EXISTS audit_log (
-			audit_id           TEXT PRIMARY KEY,
-			actor_principal_id TEXT NOT NULL,
-			actor_member_id    TEXT,
-			action             TEXT NOT NULL,
-			target_type        TEXT NOT NULL,
-			target_id          TEXT NOT NULL,
-			ts                 TEXT NOT NULL,
-			detail_json        TEXT,
-
-			CHECK (action IN (
-				'approve_principal',
-				'revoke_principal',
-				'grant_capability',
-				'revoke_capability',
-				'create_binding',
-				'update_binding',
-				'delete_binding',
-				'create_token'
-			))
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts DESC);
-		CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_principal_id);
-		CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id);
-
-		CREATE TABLE IF NOT EXISTS ledger_events (
-			event_id           TEXT PRIMARY KEY,
-			conversation_key   TEXT NOT NULL,
-			thread_id          TEXT,
-			direction          TEXT NOT NULL,
-			author             TEXT NOT NULL,
-			timestamp          TEXT NOT NULL,
-			type               TEXT NOT NULL,
-			text               TEXT,
-			raw_transport      TEXT,
-			raw_payload_ref    TEXT,
-			actor_principal_id TEXT,
-			actor_member_id    TEXT,
-
-			CHECK (direction IN ('inbound_to_agent', 'outbound_from_agent')),
-			CHECK (type IN ('message', 'tool_call', 'tool_result', 'system', 'error'))
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_ledger_conversation ON ledger_events(conversation_key, timestamp);
-		CREATE INDEX IF NOT EXISTS idx_ledger_actor ON ledger_events(actor_principal_id);
-		CREATE INDEX IF NOT EXISTS idx_ledger_timestamp ON ledger_events(timestamp);
-		CREATE INDEX IF NOT EXISTS idx_ledger_thread ON ledger_events(thread_id) WHERE thread_id IS NOT NULL;
-
-		CREATE TABLE IF NOT EXISTS bindings (
-			binding_id  TEXT PRIMARY KEY,
-			frontend    TEXT NOT NULL,
-			channel_id  TEXT NOT NULL,
-			agent_id    TEXT NOT NULL,
-			working_dir TEXT,
-			created_at  TEXT NOT NULL,
-			created_by  TEXT,
-
-			UNIQUE(frontend, channel_id)
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_bindings_frontend ON bindings(frontend);
-		CREATE INDEX IF NOT EXISTS idx_bindings_agent ON bindings(agent_id);
-
-		-- Admin users (humans who manage the system via web UI)
-		CREATE TABLE IF NOT EXISTS admin_users (
-			id TEXT PRIMARY KEY,
-			username TEXT UNIQUE NOT NULL,
-			password_hash TEXT,
-			display_name TEXT NOT NULL,
-			created_at TEXT NOT NULL
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username);
-
-		-- Admin sessions (cookie-based)
-		CREATE TABLE IF NOT EXISTS admin_sessions (
-			id TEXT PRIMARY KEY,
-			user_id TEXT NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
-			created_at TEXT NOT NULL,
-			expires_at TEXT NOT NULL
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_admin_sessions_user ON admin_sessions(user_id);
-		CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);
-
-		-- Admin invite links (for signup)
-		CREATE TABLE IF NOT EXISTS admin_invites (
-			id TEXT PRIMARY KEY,
-			created_by TEXT REFERENCES admin_users(id),
-			created_at TEXT NOT NULL,
-			expires_at TEXT NOT NULL,
-			used_at TEXT,
-			used_by TEXT REFERENCES admin_users(id)
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_admin_invites_expires ON admin_invites(expires_at);
-
-		-- Link codes for device linking (short-lived)
-		CREATE TABLE IF NOT EXISTS link_codes (
-			id TEXT PRIMARY KEY,
-			code TEXT UNIQUE NOT NULL,
-			fingerprint TEXT NOT NULL,
-			device_name TEXT NOT NULL,
-			status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'expired')),
-			created_at TEXT NOT NULL,
-			expires_at TEXT NOT NULL,
-			approved_by TEXT REFERENCES admin_users(id),
-			approved_at TEXT,
-			principal_id TEXT REFERENCES principals(principal_id),
-			token TEXT
-		);
-		CREATE INDEX IF NOT EXISTS idx_link_codes_code ON link_codes(code);
-		CREATE INDEX IF NOT EXISTS idx_link_codes_expires ON link_codes(expires_at);
-		CREATE INDEX IF NOT EXISTS idx_link_codes_status ON link_codes(status);
-
-		-- WebAuthn credentials for passkeys
-		CREATE TABLE IF NOT EXISTS webauthn_credentials (
-			id TEXT PRIMARY KEY,
-			user_id TEXT NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
-			credential_id BLOB UNIQUE NOT NULL,
-			public_key BLOB NOT NULL,
-			attestation_type TEXT,
-			transports TEXT,
-			sign_count INTEGER DEFAULT 0,
-			created_at TEXT NOT NULL
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id);
-
-		-- Built-in tool pack tables
-
-		-- Log entries (activity logging)
-		CREATE TABLE IF NOT EXISTS log_entries (
-			id TEXT PRIMARY KEY,
-			agent_id TEXT NOT NULL,
-			message TEXT NOT NULL,
-			tags TEXT,
-			created_at TEXT NOT NULL
-		);
-		CREATE INDEX IF NOT EXISTS idx_log_entries_agent ON log_entries(agent_id);
-		CREATE INDEX IF NOT EXISTS idx_log_entries_created ON log_entries(created_at);
-
-		-- Todos (task management)
-		CREATE TABLE IF NOT EXISTS todos (
-			id TEXT PRIMARY KEY,
-			agent_id TEXT NOT NULL,
-			description TEXT NOT NULL,
-			status TEXT DEFAULT 'pending',
-			priority TEXT DEFAULT 'medium',
-			notes TEXT,
-			due_date TEXT,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);
-		CREATE INDEX IF NOT EXISTS idx_todos_agent ON todos(agent_id);
-		CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
-
-		-- BBS posts (bulletin board)
-		CREATE TABLE IF NOT EXISTS bbs_posts (
-			id TEXT PRIMARY KEY,
-			agent_id TEXT NOT NULL,
-			thread_id TEXT,
-			subject TEXT,
-			content TEXT NOT NULL,
-			created_at TEXT NOT NULL
-		);
-		CREATE INDEX IF NOT EXISTS idx_bbs_posts_thread ON bbs_posts(thread_id);
-		CREATE INDEX IF NOT EXISTS idx_bbs_posts_created ON bbs_posts(created_at);
-
-		-- Agent mail (inter-agent messaging)
-		CREATE TABLE IF NOT EXISTS agent_mail (
-			id TEXT PRIMARY KEY,
-			from_agent_id TEXT NOT NULL,
-			to_agent_id TEXT NOT NULL,
-			subject TEXT NOT NULL,
-			content TEXT NOT NULL,
-			read_at TEXT,
-			created_at TEXT NOT NULL
-		);
-		CREATE INDEX IF NOT EXISTS idx_agent_mail_to ON agent_mail(to_agent_id);
-		CREATE INDEX IF NOT EXISTS idx_agent_mail_unread ON agent_mail(to_agent_id, read_at);
-
-		-- Agent notes (key-value storage)
-		CREATE TABLE IF NOT EXISTS agent_notes (
-			id TEXT PRIMARY KEY,
-			agent_id TEXT NOT NULL,
-			key TEXT NOT NULL,
-			value TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
-			UNIQUE(agent_id, key)
-		);
-		CREATE INDEX IF NOT EXISTS idx_agent_notes_agent ON agent_notes(agent_id);
-
-		-- Token usage tracking
-		CREATE TABLE IF NOT EXISTS message_usage (
-			id TEXT PRIMARY KEY,
-			thread_id TEXT NOT NULL,
-			message_id TEXT,
-			request_id TEXT NOT NULL,
-			agent_id TEXT NOT NULL,
-			input_tokens INTEGER NOT NULL DEFAULT 0,
-			output_tokens INTEGER NOT NULL DEFAULT 0,
-			cache_read_tokens INTEGER NOT NULL DEFAULT 0,
-			cache_write_tokens INTEGER NOT NULL DEFAULT 0,
-			thinking_tokens INTEGER NOT NULL DEFAULT 0,
-			created_at TEXT NOT NULL,
-			FOREIGN KEY (thread_id) REFERENCES threads(id)
-		);
-		CREATE INDEX IF NOT EXISTS idx_message_usage_thread ON message_usage(thread_id);
-		CREATE INDEX IF NOT EXISTS idx_message_usage_agent ON message_usage(agent_id);
-		CREATE INDEX IF NOT EXISTS idx_message_usage_created ON message_usage(created_at);
-		CREATE INDEX IF NOT EXISTS idx_message_usage_request ON message_usage(request_id);
-
-		-- Secrets (environment variables for agents)
-		-- agent_id NULL = global default, non-NULL = agent-specific override
-		CREATE TABLE IF NOT EXISTS secrets (
-			id TEXT PRIMARY KEY,
-			key TEXT NOT NULL,
-			value TEXT NOT NULL,
-			agent_id TEXT,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
-			created_by TEXT
-		);
-		-- Unique constraint: one global per key, one override per agent+key
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_secrets_unique_global
-			ON secrets(key) WHERE agent_id IS NULL;
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_secrets_unique_agent
-			ON secrets(key, agent_id) WHERE agent_id IS NOT NULL;
-		CREATE INDEX IF NOT EXISTS idx_secrets_agent ON secrets(agent_id);
-	`
-
-	_, err := s.db.Exec(schema)
-	return err
+// migrateThreadIDColumn adds thread_id to ledger_events with its index.
+func (s *SQLiteStore) migrateThreadIDColumn() error {
+	migration := columnMigration{
+		check:  `SELECT 1 FROM pragma_table_info('ledger_events') WHERE name = 'thread_id'`,
+		apply:  `ALTER TABLE ledger_events ADD COLUMN thread_id TEXT`,
+		column: "thread_id",
+		table:  "ledger_events",
+	}
+	var exists int
+	if err := s.db.QueryRow(migration.check).Scan(&exists); err == nil {
+		return nil // Column already exists
+	}
+	if err := s.applyColumnMigration(migration); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_ledger_thread ON ledger_events(thread_id) WHERE thread_id IS NOT NULL`); err != nil {
+		return fmt.Errorf("creating idx_ledger_thread index: %w", err)
+	}
+	s.logger.Info("applied migration", "index", "idx_ledger_thread", "table", "ledger_events")
+	return nil
 }
 
 // runMigrations applies schema migrations for existing databases.
 // These are idempotent - safe to run multiple times.
 func (s *SQLiteStore) runMigrations() error {
-	// Migration: Add tool-related columns to messages table (if they don't exist)
-	// SQLite doesn't support ADD COLUMN IF NOT EXISTS, so we check first
-	migrations := []struct {
-		check  string // Query to check if migration is needed
-		apply  string // Query to apply the migration
-		column string // Column name for logging
-	}{
-		{
-			check:  `SELECT 1 FROM pragma_table_info('messages') WHERE name = 'type'`,
-			apply:  `ALTER TABLE messages ADD COLUMN type TEXT NOT NULL DEFAULT 'message'`,
-			column: "type",
-		},
-		{
-			check:  `SELECT 1 FROM pragma_table_info('messages') WHERE name = 'tool_name'`,
-			apply:  `ALTER TABLE messages ADD COLUMN tool_name TEXT`,
-			column: "tool_name",
-		},
-		{
-			check:  `SELECT 1 FROM pragma_table_info('messages') WHERE name = 'tool_id'`,
-			apply:  `ALTER TABLE messages ADD COLUMN tool_id TEXT`,
-			column: "tool_id",
-		},
+	// Migration: Add tool-related columns to messages table
+	messageMigrations := []columnMigration{
+		{`SELECT 1 FROM pragma_table_info('messages') WHERE name = 'type'`, `ALTER TABLE messages ADD COLUMN type TEXT NOT NULL DEFAULT 'message'`, "type", "messages"},
+		{`SELECT 1 FROM pragma_table_info('messages') WHERE name = 'tool_name'`, `ALTER TABLE messages ADD COLUMN tool_name TEXT`, "tool_name", "messages"},
+		{`SELECT 1 FROM pragma_table_info('messages') WHERE name = 'tool_id'`, `ALTER TABLE messages ADD COLUMN tool_id TEXT`, "tool_id", "messages"},
+		{`SELECT 1 FROM pragma_table_info('bindings') WHERE name = 'working_dir'`, `ALTER TABLE bindings ADD COLUMN working_dir TEXT`, "working_dir", "bindings"},
 	}
 
-	for _, m := range migrations {
-		var exists int
-		err := s.db.QueryRow(m.check).Scan(&exists)
-		if err == nil {
-			// Column already exists, skip
-			continue
+	for _, m := range messageMigrations {
+		if err := s.applyColumnMigration(m); err != nil {
+			return err
 		}
-		// Column doesn't exist, apply migration
-		if _, err := s.db.Exec(m.apply); err != nil {
-			return fmt.Errorf("adding %s column to messages: %w", m.column, err)
-		}
-		s.logger.Info("applied migration", "column", m.column, "table", "messages")
 	}
 
-	// Migration: Add working_dir column to bindings table
-	var exists int
-	err := s.db.QueryRow(`SELECT 1 FROM pragma_table_info('bindings') WHERE name = 'working_dir'`).Scan(&exists)
-	if err != nil {
-		// Column doesn't exist, add it
-		if _, err := s.db.Exec(`ALTER TABLE bindings ADD COLUMN working_dir TEXT`); err != nil {
-			return fmt.Errorf("adding working_dir column to bindings: %w", err)
-		}
-		s.logger.Info("applied migration", "column", "working_dir", "table", "bindings")
+	if err := s.migrateThreadIDColumn(); err != nil {
+		return err
 	}
 
-	// Migration: Add thread_id column to ledger_events table for unified message storage
-	err = s.db.QueryRow(`SELECT 1 FROM pragma_table_info('ledger_events') WHERE name = 'thread_id'`).Scan(&exists)
-	if err != nil {
-		// Column doesn't exist, add it
-		if _, err := s.db.Exec(`ALTER TABLE ledger_events ADD COLUMN thread_id TEXT`); err != nil {
-			return fmt.Errorf("adding thread_id column to ledger_events: %w", err)
-		}
-		s.logger.Info("applied migration", "column", "thread_id", "table", "ledger_events")
-
-		// Add partial index for efficient thread lookups
-		if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_ledger_thread ON ledger_events(thread_id) WHERE thread_id IS NOT NULL`); err != nil {
-			return fmt.Errorf("creating idx_ledger_thread index: %w", err)
-		}
-		s.logger.Info("applied migration", "index", "idx_ledger_thread", "table", "ledger_events")
-	}
-
-	// Migration: Copy existing messages to ledger_events for unified storage
-	// This is a one-time migration that copies messages not yet in ledger_events
 	if err := s.migrateMessagesToEvents(); err != nil {
 		return fmt.Errorf("migrating messages to events: %w", err)
 	}
 
-	// Migration: Normalize conversation_key from "thread:{id}" to agent_id
-	// This enables cross-client history sync (TUI, web, mobile all query by agent_id)
 	if err := s.migrateConversationKeysToAgentID(); err != nil {
 		return fmt.Errorf("migrating conversation keys to agent_id: %w", err)
 	}
@@ -576,7 +340,7 @@ func (s *SQLiteStore) migrateConversationKeysToAgentID() error {
 	return nil
 }
 
-// Close closes the database connection
+// Close closes the database connection.
 func (s *SQLiteStore) Close() error {
 	s.logger.Info("closing SQLite store")
 	return s.db.Close()
@@ -611,7 +375,7 @@ func (s *SQLiteStore) CreateThread(ctx context.Context, thread *Thread) error {
 	return nil
 }
 
-// isConstraintViolation checks if the error is a SQLite UNIQUE constraint violation
+// isConstraintViolation checks if the error is a SQLite UNIQUE constraint violation.
 func isConstraintViolation(err error) bool {
 	if err == nil {
 		return false
@@ -642,7 +406,7 @@ func (s *SQLiteStore) GetThread(ctx context.Context, id string) (*Thread, error)
 		&updatedAtStr,
 	)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
@@ -684,7 +448,7 @@ func (s *SQLiteStore) GetThreadByFrontendID(ctx context.Context, frontendName, e
 		&updatedAtStr,
 	)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
@@ -758,7 +522,7 @@ func (s *SQLiteStore) ListThreads(ctx context.Context, limit int) ([]*Thread, er
 	if err != nil {
 		return nil, fmt.Errorf("querying threads: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var threads []*Thread
 	for rows.Next() {
@@ -796,7 +560,7 @@ func (s *SQLiteStore) ListThreads(ctx context.Context, limit int) ([]*Thread, er
 	return threads, nil
 }
 
-// SaveMessage saves a message to the database
+// SaveMessage saves a message to the database.
 func (s *SQLiteStore) SaveMessage(ctx context.Context, msg *Message) error {
 	// Default to "message" type if not specified
 	msgType := msg.Type
@@ -827,7 +591,7 @@ func (s *SQLiteStore) SaveMessage(ctx context.Context, msg *Message) error {
 	return nil
 }
 
-// nullString returns nil for empty strings, otherwise the string pointer
+// nullString returns nil for empty strings, otherwise the string pointer.
 func nullString(s string) any {
 	if s == "" {
 		return nil
@@ -871,7 +635,7 @@ func (s *SQLiteStore) GetThreadMessages(ctx context.Context, threadID string, li
 	if err != nil {
 		return nil, fmt.Errorf("querying messages: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var messages []*Message
 	for rows.Next() {
@@ -988,7 +752,7 @@ func (s *SQLiteStore) GetBinding(ctx context.Context, frontend, channelID string
 		&updatedAtStr,
 	)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
@@ -1020,7 +784,7 @@ func (s *SQLiteStore) ListBindings(ctx context.Context) ([]*ChannelBinding, erro
 	if err != nil {
 		return nil, fmt.Errorf("querying bindings: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var bindings []*ChannelBinding
 	for rows.Next() {
@@ -1071,13 +835,13 @@ func (s *SQLiteStore) DeleteBinding(ctx context.Context, frontend, channelID str
 	return nil
 }
 
-// Ensure SQLiteStore implements Store interface
+// Ensure SQLiteStore implements Store interface.
 var _ Store = (*SQLiteStore)(nil)
 
-// Ensure SQLiteStore implements LinkCodeStore interface
+// Ensure SQLiteStore implements LinkCodeStore interface.
 var _ LinkCodeStore = (*SQLiteStore)(nil)
 
-// CreateLinkCode creates a new pending link code
+// CreateLinkCode creates a new pending link code.
 func (s *SQLiteStore) CreateLinkCode(ctx context.Context, code *LinkCode) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO link_codes (id, code, fingerprint, device_name, status, created_at, expires_at)
@@ -1092,7 +856,7 @@ func (s *SQLiteStore) CreateLinkCode(ctx context.Context, code *LinkCode) error 
 	return nil
 }
 
-// GetLinkCode retrieves a link code by ID
+// GetLinkCode retrieves a link code by ID.
 func (s *SQLiteStore) GetLinkCode(ctx context.Context, id string) (*LinkCode, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, code, fingerprint, device_name, status, created_at, expires_at,
@@ -1102,7 +866,7 @@ func (s *SQLiteStore) GetLinkCode(ctx context.Context, id string) (*LinkCode, er
 	return s.scanLinkCode(row)
 }
 
-// GetLinkCodeByCode retrieves a link code by its short code
+// GetLinkCodeByCode retrieves a link code by its short code.
 func (s *SQLiteStore) GetLinkCodeByCode(ctx context.Context, code string) (*LinkCode, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, code, fingerprint, device_name, status, created_at, expires_at,
@@ -1156,7 +920,7 @@ func (s *SQLiteStore) scanLinkCode(row *sql.Row) (*LinkCode, error) {
 	return &lc, nil
 }
 
-// ApproveLinkCode marks a code as approved and stores the principal/token
+// ApproveLinkCode marks a code as approved and stores the principal/token.
 func (s *SQLiteStore) ApproveLinkCode(ctx context.Context, id string, approvedBy string, principalID string, token string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := s.db.ExecContext(ctx, `
@@ -1175,7 +939,7 @@ func (s *SQLiteStore) ApproveLinkCode(ctx context.Context, id string, approvedBy
 	return nil
 }
 
-// ListPendingLinkCodes returns all pending (non-expired) link codes
+// ListPendingLinkCodes returns all pending (non-expired) link codes.
 func (s *SQLiteStore) ListPendingLinkCodes(ctx context.Context) ([]*LinkCode, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	rows, err := s.db.QueryContext(ctx, `
@@ -1188,7 +952,7 @@ func (s *SQLiteStore) ListPendingLinkCodes(ctx context.Context) ([]*LinkCode, er
 	if err != nil {
 		return nil, fmt.Errorf("listing pending link codes: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var codes []*LinkCode
 	for rows.Next() {
@@ -1209,7 +973,7 @@ func (s *SQLiteStore) ListPendingLinkCodes(ctx context.Context) ([]*LinkCode, er
 	return codes, rows.Err()
 }
 
-// DeleteExpiredLinkCodes removes expired link codes
+// DeleteExpiredLinkCodes removes expired link codes.
 func (s *SQLiteStore) DeleteExpiredLinkCodes(ctx context.Context) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := s.db.ExecContext(ctx, `
