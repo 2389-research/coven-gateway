@@ -134,6 +134,18 @@ type Admin struct {
 	tokenGenerator   TokenGenerator
 }
 
+// getSQLiteStore returns the underlying SQLiteStore if available.
+// Returns nil and logs an error if the store is not a SQLiteStore.
+// This helper deduplicates the type assertion pattern used across secrets handlers.
+func (a *Admin) getSQLiteStore() *store.SQLiteStore {
+	sqlStore, ok := a.store.(*store.SQLiteStore)
+	if !ok {
+		a.logger.Error("store is not SQLiteStore")
+		return nil
+	}
+	return sqlStore
+}
+
 // NewConfig contains dependencies for creating Admin.
 type NewConfig struct {
 	Store          FullStore
@@ -2094,10 +2106,8 @@ func (a *Admin) handleSecretsPage(w http.ResponseWriter, r *http.Request) {
 
 // handleSecretsList returns the secrets list (htmx partial).
 func (a *Admin) handleSecretsList(w http.ResponseWriter, r *http.Request) {
-	// Type assert to SQLiteStore to access secrets methods
-	sqlStore, ok := a.store.(*store.SQLiteStore)
-	if !ok {
-		a.logger.Error("store is not SQLiteStore")
+	sqlStore := a.getSQLiteStore()
+	if sqlStore == nil {
 		http.Error(w, "Server configuration error", http.StatusInternalServerError)
 		return
 	}
@@ -2152,9 +2162,8 @@ func (a *Admin) handleSecretsGetValue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Type assert to SQLiteStore
-	sqlStore, ok := a.store.(*store.SQLiteStore)
-	if !ok {
+	sqlStore := a.getSQLiteStore()
+	if sqlStore == nil {
 		http.Error(w, "Server configuration error", http.StatusInternalServerError)
 		return
 	}
@@ -2235,8 +2244,8 @@ func (a *Admin) handleSecretsCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sqlStore, ok := a.store.(*store.SQLiteStore)
-	if !ok {
+	sqlStore := a.getSQLiteStore()
+	if sqlStore == nil {
 		http.Error(w, "Server configuration error", http.StatusInternalServerError)
 		return
 	}
@@ -2288,9 +2297,8 @@ func (a *Admin) handleSecretsUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Type assert to SQLiteStore
-	sqlStore, ok := a.store.(*store.SQLiteStore)
-	if !ok {
+	sqlStore := a.getSQLiteStore()
+	if sqlStore == nil {
 		http.Error(w, "Server configuration error", http.StatusInternalServerError)
 		return
 	}
@@ -2334,9 +2342,8 @@ func (a *Admin) handleSecretsDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Type assert to SQLiteStore
-	sqlStore, ok := a.store.(*store.SQLiteStore)
-	if !ok {
+	sqlStore := a.getSQLiteStore()
+	if sqlStore == nil {
 		http.Error(w, "Server configuration error", http.StatusInternalServerError)
 		return
 	}

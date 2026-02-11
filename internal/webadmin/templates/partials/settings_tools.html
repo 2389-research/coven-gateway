@@ -5,7 +5,7 @@
 <div class="settings-section">
     <div class="flex items-center gap-2 mb-3">
         <h3 class="settings-section-title mb-0">{{.ID}}</h3>
-        {{if .Version}}<span class="text-xs text-warm-400">v{{.Version}}</span>{{end}}
+        {{if .Version}}<span class="text-xs text-warm-400">{{if eq .Version "builtin"}}{{.Version}}{{else}}v{{.Version}}{{end}}</span>{{end}}
         <span class="text-xs text-warm-400">({{len .Tools}} tools)</span>
     </div>
     <div class="border border-warm-200 rounded-lg overflow-hidden">
