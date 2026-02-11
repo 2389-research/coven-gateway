@@ -1,22 +1,20 @@
 # ABOUTME: Build and development commands for coven-gateway
 # ABOUTME: Handles proto generation, building, and testing
 
-.PHONY: all build build-gateway build-admin build-tui proto update-proto clean test lint fmt run setup hooks
+.PHONY: all build build-gateway build-admin proto update-proto clean test lint fmt run setup hooks
 
 # Default target
 all: proto build
 
 # Build all binaries
-build: build-gateway build-admin build-tui
+# Note: coven-tui is in the Rust coven repo: https://github.com/2389-research/coven
+build: build-gateway build-admin
 
 build-gateway:
 	go build -o bin/coven-gateway ./cmd/coven-gateway
 
 build-admin:
 	go build -o bin/coven-admin ./cmd/coven-admin
-
-build-tui:
-	go build -o bin/coven-tui ./cmd/coven-tui
 
 # Generate protobuf code from shared proto submodule
 proto:
