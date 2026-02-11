@@ -11,18 +11,18 @@
 // The Gateway struct is the main entry point:
 //
 //	type Gateway struct {
-//	    config         *config.Config
-//	    agentManager   *agent.Manager
-//	    store          store.Store
-//	    conversation   *conversation.Service
-//	    grpcServer     *grpc.Server
-//	    httpServer     *http.Server
-//	    webAdmin       *webadmin.Admin
-//	    packRegistry   *packs.Registry
-//	    packRouter     *packs.Router
-//	    mcpServer      *mcp.Server
-//	    questionRouter *QuestionRouter
-//	    eventBroadcaster *EventBroadcaster
+//	    config           *config.Config
+//	    agentManager     *agent.Manager
+//	    store            store.Store
+//	    conversation     *conversation.Service
+//	    grpcServer       *grpc.Server
+//	    httpServer       *http.Server
+//	    webAdmin         *webadmin.Admin
+//	    packRegistry     *packs.Registry
+//	    packRouter       *packs.Router
+//	    mcpServer        *mcp.Server
+//	    questionRouter   *builtins.InMemoryQuestionRouter
+//	    eventBroadcaster *conversation.EventBroadcaster
 //	    // ... and more
 //	}
 //

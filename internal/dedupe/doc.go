@@ -7,10 +7,10 @@
 //
 // # How It Works
 //
-// Messages are identified by a hash of their content. The cache tracks seen
-// hashes with expiration times:
+// Messages are identified by a caller-provided key (e.g., idempotency key,
+// transport message ID). The cache tracks seen keys with expiration times:
 //
-//  1. Check if message hash exists in cache
+//  1. Check if key exists in cache
 //  2. If exists and not expired, skip (duplicate)
 //  3. If not exists or expired, process and add to cache
 //
@@ -22,7 +22,7 @@
 //
 // Check for duplicates:
 //
-//	if cache.IsDuplicate(messageHash) {
+//	if cache.IsDuplicate(messageKey) {
 //	    // Skip duplicate message
 //	    return
 //	}

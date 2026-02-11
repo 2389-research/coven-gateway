@@ -2,9 +2,9 @@
 //
 // # Overview
 //
-// The conversation package sits between the HTTP/WebSocket handlers and the
-// agent manager, providing conversation-level abstractions like thread
-// management, message routing, and response broadcasting.
+// The conversation package sits between the HTTP handlers and the agent
+// manager, providing conversation-level abstractions like thread management,
+// message routing, and response broadcasting.
 //
 // # Service
 //
@@ -62,9 +62,9 @@
 //
 // The web admin chat uses the conversation service:
 //
-//  1. User sends message via WebSocket
+//  1. User sends message via HTTP endpoint
 //  2. Service routes to agent
-//  3. Response events broadcast back
+//  3. Response events streamed back via SSE
 //  4. UI updates in real-time
 //
 // # Usage in API

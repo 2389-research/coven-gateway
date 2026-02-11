@@ -76,12 +76,13 @@
 //
 // # Validation
 //
-// Load() validates:
+// Validate() checks:
 //
-//   - JWT secret minimum length (32 bytes)
-//   - Database path writability
-//   - Duration format validity
-//   - Agent registration mode values
+//   - Server addresses required (unless Tailscale enabled)
+//   - Tailscale hostname required when enabled
+//   - Database path not empty
+//
+// Duration parsing happens during Load() and returns errors for invalid formats.
 //
 // # Usage
 //

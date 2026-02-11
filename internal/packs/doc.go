@@ -26,10 +26,9 @@
 //
 // # External Packs
 //
-// External packs connect via gRPC and register their tools:
-//
-//	pack.Register(conn, packInfo)
-//	tools := pack.ListTools()
+// External packs connect via gRPC (PackService) and register their tools.
+// The gateway calls Register with a PackManifest, and tool execution flows
+// through a bidirectional stream (ExecuteToolRequest/ExecuteToolResponse).
 //
 // External packs can be:
 //   - MCP servers (via HTTP bridge)

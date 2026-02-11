@@ -83,8 +83,8 @@ type Gateway struct {
     mcpTokens      *mcp.TokenStore     // MCP access tokens
     mcpServer      *mcp.Server         // MCP HTTP server
     mcpEndpoint    string              // MCP base URL
-    questionRouter *QuestionRouter     // User interaction routing
-    eventBroadcaster *EventBroadcaster // SSE event broadcasting
+    questionRouter   *builtins.InMemoryQuestionRouter  // User interaction routing
+    eventBroadcaster *conversation.EventBroadcaster    // SSE event broadcasting
 }
 ```
 

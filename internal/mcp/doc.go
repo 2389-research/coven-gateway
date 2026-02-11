@@ -8,11 +8,13 @@
 //
 // # Protocol
 //
-// The MCP server uses JSON-RPC 2.0 over HTTP with Server-Sent Events (SSE) for
-// streaming responses. Key endpoints:
+// The MCP server uses JSON-RPC 2.0 over Streamable HTTP transport. All requests
+// are sent via POST to a single endpoint:
 //
-//   - POST /mcp - JSON-RPC requests (tools/list, tools/call)
-//   - GET /mcp/sse - SSE stream for streaming tool results
+//   - POST /mcp - JSON-RPC requests (initialize, tools/list, tools/call, etc.)
+//
+// The server does not support server-initiated SSE streams (GET returns 405).
+// Responses are returned directly in the POST response body.
 //
 // # Authentication
 //
@@ -49,7 +51,7 @@
 //	  "id": 2
 //	}
 //
-// Results are returned inline for quick operations or via SSE for long-running tools.
+// Results are returned in the response body.
 //
 // # Architecture
 //
@@ -63,9 +65,13 @@
 //
 // Create and start the MCP server:
 //
-//	tokenStore := mcp.NewTokenStore()
-//	server := mcp.NewServer(tokenStore, packRouter, logger)
-//	http.Handle("/mcp", server)
+//	cfg := &mcp.Config{
+//	    TokenStore:   tokenStore,
+//	    PackRouter:   packRouter,
+//	    Logger:       logger,
+//	}
+//	server := mcp.NewServer(cfg)
+//	server.RegisterRoutes(router.PathPrefix("/mcp").Subrouter())
 //
 // Generate an access token:
 //

@@ -1,36 +1,33 @@
-// Package admin provides administrative API handlers for the gateway.
+// Package admin implements gRPC server handlers for the AdminService.
 //
 // # Overview
 //
-// The admin package exposes internal administrative operations as HTTP handlers,
-// used by the web admin UI and the coven-admin CLI tool.
+// This package provides the server-side implementation of the AdminService
+// gRPC service, used by the coven-admin CLI tool and web admin interface
+// for administrative operations.
 //
-// # Endpoints
+// # Service Methods
+//
+// The AdminService implements these gRPC methods:
 //
 // Principal management:
 //
-//   - GET /api/admin/principals - List all principals
-//   - GET /api/admin/principals/:id - Get a principal
-//   - PUT /api/admin/principals/:id - Update principal (status, capabilities)
-//   - DELETE /api/admin/principals/:id - Delete a principal
-//
-// Agent management:
-//
-//   - GET /api/admin/agents - List agents with connection status
-//   - POST /api/admin/agents/:id/approve - Approve pending agent
-//   - POST /api/admin/agents/:id/revoke - Revoke agent access
+//   - ListPrincipals: List all principals with optional filters
+//   - GetPrincipal: Get a single principal by ID
+//   - CreatePrincipal: Create a new principal
+//   - DeletePrincipal: Remove a principal
 //
 // Token management:
 //
-//   - GET /api/admin/tokens - List API tokens
-//   - POST /api/admin/tokens - Create a new token
-//   - DELETE /api/admin/tokens/:id - Revoke a token
+//   - ListTokens: List API tokens
+//   - CreateToken: Generate a new API token
+//   - RevokeToken: Invalidate a token
 //
 // Binding management:
 //
-//   - GET /api/admin/bindings - List channel bindings
-//   - POST /api/admin/bindings - Create a binding
-//   - DELETE /api/admin/bindings/:id - Delete a binding
+//   - ListBindings: List channel-to-agent bindings
+//   - CreateBinding: Create a new binding
+//   - DeleteBinding: Remove a binding
 //
 // # Principal Types
 //
@@ -60,15 +57,15 @@
 //
 // # Authentication
 //
-// Admin endpoints require authentication:
+// Admin methods require authentication via gRPC metadata:
 //
-//   - Web UI: Session cookie (from WebAuthn login)
-//   - CLI: API token in Authorization header
+//	md := metadata.Pairs("authorization", "Bearer <admin-token>")
+//	ctx := metadata.NewOutgoingContext(ctx, md)
 //
 // # Usage
 //
-// Create admin handlers:
+// The AdminService is typically created by the gateway:
 //
-//	adminAPI := admin.New(store, agentManager, logger)
-//	router.Mount("/api/admin", adminAPI.Handler())
+//	service := admin.NewPrincipalService(store, tokenGenerator)
+//	pb.RegisterAdminServiceServer(grpcServer, service)
 package admin

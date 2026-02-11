@@ -49,10 +49,19 @@ User=coven
 ExecStart=/usr/local/bin/coven-gateway serve --config /etc/coven/gateway.yaml
 Restart=on-failure
 RestartSec=5
-Environment=COVEN_JWT_SECRET=your-secret-here
+EnvironmentFile=/etc/coven/gateway.env
 
 [Install]
 WantedBy=multi-user.target
+```
+
+Create the environment file with restricted permissions:
+
+```bash
+sudo touch /etc/coven/gateway.env
+sudo chmod 600 /etc/coven/gateway.env
+sudo chown coven:coven /etc/coven/gateway.env
+echo "COVEN_JWT_SECRET=$(openssl rand -hex 32)" | sudo tee /etc/coven/gateway.env
 ```
 
 ```bash
@@ -271,12 +280,12 @@ Use these for container orchestration and load balancer health checks.
 ### Gateway won't start
 
 ```bash
-# Check config syntax
-./bin/coven-gateway config-check
-
 # Check port availability
 lsof -i :8080
 lsof -i :50051
+
+# Check config file syntax
+cat /etc/coven/gateway.yaml | head -20
 ```
 
 ### Database locked

@@ -1,50 +1,28 @@
-// Package client provides a Go client for interacting with coven-gateway.
+// Package client implements gRPC server handlers for the ClientService.
 //
 // # Overview
 //
-// The client package provides programmatic access to the gateway's API,
-// supporting both gRPC (agent connections) and HTTP (message sending, management).
+// This package provides the server-side implementation of the ClientService
+// gRPC service, which handles requests from frontend clients (TUI, web admin,
+// bridges). Despite the name, this is a server package - "client" refers to
+// the clients that connect to these handlers.
 //
-// # Use Cases
+// # Service Methods
 //
-// Primary uses:
+// The ClientService implements these gRPC methods:
 //
-//   - Testing: Integration tests that need to interact with the gateway
-//   - CLI tools: coven-admin uses this for gateway management
-//   - Custom clients: Building automation or custom frontends
-//
-// # HTTP Client
-//
-// For HTTP API interactions:
-//
-//	client := client.NewHTTPClient("http://localhost:8080")
-//
-//	// Send a message and stream response
-//	events, err := client.Send(ctx, &SendRequest{
-//	    AgentID: "agent-123",
-//	    Message: "Hello!",
-//	    Sender:  "user@example.com",
-//	})
-//	for event := range events {
-//	    switch event.Type {
-//	    case "text":
-//	        fmt.Print(event.Text)
-//	    case "done":
-//	        break
-//	    }
-//	}
-//
-// # gRPC Client
-//
-// For agent-like connections:
-//
-//	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
-//	client := pb.NewCovenControlClient(conn)
-//	stream, err := client.AgentStream(ctx)
+//   - ListAgents: Returns currently connected agents
+//   - SendMessage: Sends a message to an agent and streams responses
+//   - StreamEvents: Subscribes to real-time events for a thread
+//   - GetHistory: Retrieves conversation history
+//   - AnswerQuestion: Responds to agent questions (tool approval, prompts)
+//   - ApproveTool: Approves a pending tool execution
+//   - Me: Returns the authenticated principal's info
+//   - RegisterAgent: Handles agent registration
 //
 // # Event Types
 //
-// The client handles all SSE event types:
+// StreamEvents delivers these event types:
 //
 //   - started: Response started
 //   - thinking: Agent is processing
@@ -60,29 +38,15 @@
 //
 // # Authentication
 //
-// HTTP requests can include authentication:
+// Requests include authentication via gRPC metadata:
 //
-//	client.SetToken("jwt-token-here")
+//	md := metadata.Pairs("authorization", "Bearer <token>")
+//	ctx := metadata.NewOutgoingContext(ctx, md)
 //
-// Or per-request:
+// # Usage
 //
-//	client.Send(ctx, req, WithAuth("Bearer token"))
+// The ClientService is typically created by the gateway:
 //
-// # Error Handling
-//
-// The client distinguishes between:
-//
-//   - Network errors (connection refused, timeout)
-//   - API errors (400 bad request, 401 unauthorized)
-//   - Stream errors (unexpected disconnect)
-//
-// Example:
-//
-//	events, err := client.Send(ctx, req)
-//	if err != nil {
-//	    if client.IsNetworkError(err) {
-//	        // Retry logic
-//	    }
-//	    return err
-//	}
+//	service := client.NewClientService(agentManager, store, logger)
+//	pb.RegisterClientServiceServer(grpcServer, service)
 package client
