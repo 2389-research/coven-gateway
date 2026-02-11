@@ -403,12 +403,25 @@ func (s *Service) persistResponses(ctx context.Context, threadID, agentID string
 			requestID: uuid.New().String(),
 		}
 
+		// Use a reusable timer to avoid memory leaks from time.After in loops
+		sendTimer := time.NewTimer(5 * time.Second)
+		defer sendTimer.Stop()
+
 		for resp := range in {
 			p.handleResponse(resp)
 
+			// Reset timer for each send attempt
+			if !sendTimer.Stop() {
+				select {
+				case <-sendTimer.C:
+				default:
+				}
+			}
+			sendTimer.Reset(5 * time.Second)
+
 			select {
 			case out <- resp:
-			case <-time.After(5 * time.Second):
+			case <-sendTimer.C:
 				s.logger.Warn("response channel full, dropping message", "thread_id", threadID, "event", resp.Event)
 			case <-ctx.Done():
 				s.logger.Debug("context canceled during response streaming", "thread_id", threadID)

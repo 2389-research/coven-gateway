@@ -55,7 +55,7 @@ func (m *MockStore) CreateThread(ctx context.Context, thread *Thread) error {
 	// Empty strings are valid values (not NULL), so duplicates with empty fields are rejected.
 	key := t.FrontendName + "\x00" + t.ExternalID // Use null byte as delimiter to avoid key collisions
 	if _, exists := m.threadIndex[key]; exists {
-		return ErrDuplicateThread
+		return fmt.Errorf("create thread: %w", ErrDuplicateThread)
 	}
 	m.threadIndex[key] = t.ID
 

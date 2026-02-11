@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"regexp"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -119,6 +120,10 @@ func hasSufficientRole(roles []string) bool {
 func validateDisplayName(name string) error {
 	if name == "" {
 		return status.Error(codes.InvalidArgument, "display_name required")
+	}
+	// Reject whitespace-only names
+	if strings.TrimSpace(name) == "" {
+		return status.Error(codes.InvalidArgument, "display_name cannot be only whitespace")
 	}
 	if len(name) > maxDisplayNameLength {
 		return status.Errorf(codes.InvalidArgument, "display_name exceeds %d characters", maxDisplayNameLength)

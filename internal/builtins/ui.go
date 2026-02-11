@@ -204,6 +204,7 @@ type pendingQuestion struct {
 	agentID    string
 	answerChan chan *pb.AnswerQuestionRequest
 	done       chan struct{} // signals when answer delivered or context canceled
+	closeOnce  sync.Once     // ensures answerChan is closed exactly once
 }
 
 // InMemoryQuestionRouter is a simple in-memory implementation of QuestionRouter.
@@ -261,7 +262,7 @@ func (r *InMemoryQuestionRouter) SendQuestion(ctx context.Context, agentID strin
 			r.mu.Lock()
 			if pq, ok := r.pending[req.QuestionId]; ok {
 				delete(r.pending, req.QuestionId)
-				close(pq.answerChan)
+				pq.closeOnce.Do(func() { close(pq.answerChan) })
 			}
 			r.mu.Unlock()
 		case <-done:
@@ -289,16 +290,19 @@ func (r *InMemoryQuestionRouter) DeliverAnswer(agentID, questionID string, answe
 		return fmt.Errorf("answer agent_id %q does not match question agent_id %q", agentID, pq.agentID)
 	}
 
+	// Signal cleanup goroutine to exit
+	close(pq.done)
+
 	// Non-blocking send (channel has buffer of 1)
 	select {
 	case pq.answerChan <- answer:
 	default:
 		// Channel full - should not happen with buffer of 1
 	}
-	close(pq.answerChan)
 
-	// Signal that answer was delivered so cleanup goroutine can exit
-	close(pq.done)
+	// Use sync.Once to ensure answerChan is closed exactly once, preventing
+	// double-close panic if context cancellation races with answer delivery.
+	pq.closeOnce.Do(func() { close(pq.answerChan) })
 
 	return nil
 }

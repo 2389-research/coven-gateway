@@ -122,6 +122,12 @@ type baseHandlers struct {
 	store store.BuiltinStore
 }
 
+// Valid todo priority and status values (must match JSON schema enums).
+var (
+	validPriorities = map[string]bool{"low": true, "medium": true, "high": true, "": true}
+	validStatuses   = map[string]bool{"pending": true, "in_progress": true, "completed": true, "": true}
+)
+
 // Log handlers
 
 type logEntryInput struct {
@@ -195,6 +201,11 @@ func (b *baseHandlers) TodoAdd(ctx context.Context, agentID string, input json.R
 		return nil, fmt.Errorf("invalid input: %w", err)
 	}
 
+	// Validate priority if provided
+	if !validPriorities[in.Priority] {
+		return nil, fmt.Errorf("invalid priority %q: must be low, medium, or high", in.Priority)
+	}
+
 	todo := &store.Todo{
 		AgentID:     agentID,
 		Description: in.Description,
@@ -227,6 +238,14 @@ func (b *baseHandlers) TodoList(ctx context.Context, agentID string, input json.
 		return nil, fmt.Errorf("invalid input: %w", err)
 	}
 
+	// Validate filter values if provided
+	if !validStatuses[in.Status] {
+		return nil, fmt.Errorf("invalid status %q: must be pending, in_progress, or completed", in.Status)
+	}
+	if !validPriorities[in.Priority] {
+		return nil, fmt.Errorf("invalid priority %q: must be low, medium, or high", in.Priority)
+	}
+
 	todos, err := b.store.ListTodos(ctx, agentID, in.Status, in.Priority)
 	if err != nil {
 		return nil, err
@@ -241,6 +260,33 @@ type todoUpdateInput struct {
 	Priority string `json:"priority"`
 	Notes    string `json:"notes"`
 	DueDate  string `json:"due_date"`
+}
+
+// applyTodoUpdates validates and applies update fields to a todo.
+func applyTodoUpdates(todo *store.Todo, in *todoUpdateInput) error {
+	if in.Status != "" {
+		if !validStatuses[in.Status] {
+			return fmt.Errorf("invalid status %q: must be pending, in_progress, or completed", in.Status)
+		}
+		todo.Status = in.Status
+	}
+	if in.Priority != "" {
+		if !validPriorities[in.Priority] {
+			return fmt.Errorf("invalid priority %q: must be low, medium, or high", in.Priority)
+		}
+		todo.Priority = in.Priority
+	}
+	if in.Notes != "" {
+		todo.Notes = in.Notes
+	}
+	if in.DueDate != "" {
+		t, err := time.Parse(time.RFC3339, in.DueDate)
+		if err != nil {
+			return fmt.Errorf("invalid due_date: %w", err)
+		}
+		todo.DueDate = &t
+	}
+	return nil
 }
 
 func (b *baseHandlers) TodoUpdate(ctx context.Context, agentID string, input json.RawMessage) (json.RawMessage, error) {
@@ -259,22 +305,8 @@ func (b *baseHandlers) TodoUpdate(ctx context.Context, agentID string, input jso
 		return nil, errors.New("todo not found")
 	}
 
-	// Only update fields that were provided
-	if in.Status != "" {
-		todo.Status = in.Status
-	}
-	if in.Priority != "" {
-		todo.Priority = in.Priority
-	}
-	if in.Notes != "" {
-		todo.Notes = in.Notes
-	}
-	if in.DueDate != "" {
-		t, err := time.Parse(time.RFC3339, in.DueDate)
-		if err != nil {
-			return nil, fmt.Errorf("invalid due_date: %w", err)
-		}
-		todo.DueDate = &t
+	if err := applyTodoUpdates(todo, &in); err != nil {
+		return nil, fmt.Errorf("apply todo updates: %w", err)
 	}
 
 	if err := b.store.UpdateTodo(ctx, todo); err != nil {
