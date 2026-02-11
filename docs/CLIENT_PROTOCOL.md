@@ -6,7 +6,7 @@ This document describes the HTTP API for clients (TUIs, web apps, bots) to inter
 
 Clients communicate with the gateway via HTTP. Messages are sent via POST and responses stream back via Server-Sent Events (SSE).
 
-```
+```text
 Client                                   Gateway                    Agent
   │                                         │                         │
   │──── GET /api/agents ───────────────────>│                         │
@@ -15,11 +15,13 @@ Client                                   Gateway                    Agent
   │──── POST /api/send ────────────────────>│                         │
   │     {content: "hello"}                  │──── SendMessage ───────>│
   │                                         │                         │
+  │<─── SSE: event: started ────────────────│                         │
   │<─── SSE: event: thinking ───────────────│<─── thinking ───────────│
   │<─── SSE: event: text ───────────────────│<─── text ───────────────│
   │<─── SSE: event: tool_use ───────────────│<─── tool_use ───────────│
+  │<─── SSE: event: tool_state ─────────────│<─── tool_state ─────────│
   │<─── SSE: event: tool_result ────────────│<─── tool_result ────────│
-  │<─── SSE: event: text ───────────────────│<─── text ───────────────│
+  │<─── SSE: event: usage ──────────────────│<─── usage ──────────────│
   │<─── SSE: event: done ───────────────────│<─── done ───────────────│
   │                                         │                         │
   └─────────────────────────────────────────┴─────────────────────────┘
@@ -36,7 +38,7 @@ Default: `http://localhost:8080`
 Liveness check. Returns 200 if gateway is running.
 
 **Response:**
-```
+```http
 HTTP/1.1 200 OK
 Content-Type: text/plain
 
@@ -48,7 +50,7 @@ OK
 Readiness check. Returns 200 if at least one agent is connected.
 
 **Response (ready):**
-```
+```http
 HTTP/1.1 200 OK
 Content-Type: text/plain
 
@@ -56,7 +58,7 @@ ready (2 agents)
 ```
 
 **Response (not ready):**
-```
+```http
 HTTP/1.1 503 Service Unavailable
 Content-Type: text/plain
 
@@ -67,18 +69,20 @@ no agents connected
 
 List all connected agents.
 
+**Query Parameters:**
+- `workspace` (optional): Filter by workspace tag
+
 **Response:**
 ```json
 [
   {
     "id": "550e8400-e29b-41d4-a716-446655440000",
+    "instance_id": "abc123",
     "name": "mux-agent-1",
-    "capabilities": ["chat"]
-  },
-  {
-    "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-    "name": "code-agent",
-    "capabilities": ["chat", "code"]
+    "capabilities": ["chat", "base"],
+    "workspaces": ["dev", "personal"],
+    "working_dir": "/home/user/project",
+    "backend": "mux"
   }
 ]
 ```
@@ -109,7 +113,7 @@ Content-Type: application/json
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `content` | string | **Yes** | Message content |
-| `sender` | string | No | Sender identifier |
+| `sender` | string | **Yes** | Sender identifier |
 | `thread_id` | string | No | Conversation thread ID |
 | `agent_id` | string | No | Target specific agent directly |
 | `frontend` | string | No | Frontend name (e.g., "slack", "matrix") for binding lookup |
@@ -126,6 +130,9 @@ Content-Type: text/event-stream
 Cache-Control: no-cache
 Connection: keep-alive
 
+event: started
+data: {"thread_id":"550e8400-e29b-41d4-a716-446655440000"}
+
 event: thinking
 data: {"text":"thinking..."}
 
@@ -133,16 +140,22 @@ event: text
 data: {"text":"Hello! I'm an AI assistant. "}
 
 event: text
-data: {"text":"I can help you with various tasks including:"}
+data: {"text":"I can help you with various tasks."}
 
 event: tool_use
 data: {"id":"tool_1","name":"list_files","input_json":"{\"path\":\"..\"}"}
 
+event: tool_state
+data: {"id":"tool_1","state":"running"}
+
 event: tool_result
 data: {"id":"tool_1","output":"file1.txt\nfile2.txt","is_error":false}
 
-event: text
-data: {"text":"\n\nI found some files in your directory."}
+event: tool_state
+data: {"id":"tool_1","state":"completed"}
+
+event: usage
+data: {"input_tokens":150,"output_tokens":75,"cache_read_tokens":0,"cache_write_tokens":50,"thinking_tokens":25}
 
 event: done
 data: {"full_response":"Hello! I'm an AI assistant..."}
@@ -150,7 +163,7 @@ data: {"full_response":"Hello! I'm an AI assistant..."}
 
 **Status Codes:**
 - `200`: Success (SSE stream)
-- `400`: Bad request (invalid JSON, missing content)
+- `400`: Bad request (invalid JSON, missing content/sender)
 - `404`: Agent not found (when `agent_id` specified but doesn't exist)
 - `405`: Method not allowed (not POST)
 - `503`: No agents available
@@ -162,20 +175,83 @@ data: {"full_response":"Hello! I'm an AI assistant..."}
 }
 ```
 
+### POST /api/agents/{id}/send
+
+Send a message directly to a specific agent by ID (alternative to POST /api/send).
+
+**Request:**
+```http
+POST /api/agents/550e8400-e29b-41d4-a716-446655440000/send HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Hello!"
+}
+```
+
+**Response:** Same SSE stream as POST /api/send.
+
+### GET /api/agents/{id}/history
+
+Get conversation history for a specific agent.
+
+**Query Parameters:**
+- `limit` (optional): Maximum events to return (default: 50, max: 500)
+- `cursor` (optional): Pagination cursor from previous response
+
+**Response:**
+```json
+{
+  "agent_id": "550e8400-e29b-41d4-a716-446655440000",
+  "events": [
+    {
+      "id": "event-uuid-1",
+      "direction": "inbound_to_agent",
+      "author": "user@example.com",
+      "type": "message",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "thread_id": "thread-uuid",
+      "text": "Hello!"
+    }
+  ],
+  "count": 1,
+  "has_more": false,
+  "next_cursor": "",
+  "usage": {
+    "total_input": 1500,
+    "total_output": 750,
+    "total_cache_read": 100,
+    "total_cache_write": 200,
+    "total_thinking": 50,
+    "total_tokens": 2600,
+    "request_count": 10
+  }
+}
+```
+
 ## SSE Event Types
 
 All SSE events have the format:
-```
+```text
 event: <event_type>
 data: <json_payload>
 
+```
+
+### started
+
+Stream started, thread ID assigned.
+
+```text
+event: started
+data: {"thread_id":"550e8400-e29b-41d4-a716-446655440000"}
 ```
 
 ### thinking
 
 Agent is processing (status indicator).
 
-```
+```text
 event: thinking
 data: {"text":"thinking..."}
 ```
@@ -184,7 +260,7 @@ data: {"text":"thinking..."}
 
 Text chunk from the agent's response. May arrive in multiple chunks.
 
-```
+```text
 event: text
 data: {"text":"Here is part of the response..."}
 ```
@@ -193,7 +269,7 @@ data: {"text":"Here is part of the response..."}
 
 Agent is invoking a tool.
 
-```
+```text
 event: tool_use
 data: {"id":"tool_123","name":"read_file","input_json":"{\"path\":\"config.yaml\"}"}
 ```
@@ -203,11 +279,30 @@ data: {"id":"tool_123","name":"read_file","input_json":"{\"path\":\"config.yaml\
 - `name`: Tool name
 - `input_json`: Tool input as JSON string
 
+### tool_state
+
+Tool state transition.
+
+```text
+event: tool_state
+data: {"id":"tool_123","state":"running"}
+```
+
+**States:**
+- `pending`: Tool identified, not yet started
+- `awaiting_approval`: Waiting for human approval
+- `running`: Actively executing
+- `completed`: Finished successfully
+- `failed`: Execution error
+- `denied`: Approval denied
+- `timeout`: Execution timed out
+- `canceled`: Canceled by user/system
+
 ### tool_result
 
 Result of a tool invocation.
 
-```
+```text
 event: tool_result
 data: {"id":"tool_123","output":"file contents here...","is_error":false}
 ```
@@ -217,22 +312,66 @@ data: {"id":"tool_123","output":"file contents here...","is_error":false}
 - `output`: Tool output
 - `is_error`: Whether the tool failed
 
+### tool_approval
+
+Tool requires human approval before execution.
+
+```text
+event: tool_approval
+data: {"id":"tool_123","name":"run_command","input_json":"{\"command\":\"rm -rf /tmp/test\"}","request_id":"req_456"}
+```
+
+**Fields:**
+- `id`: Tool invocation ID
+- `name`: Tool name
+- `input_json`: Tool input as JSON string
+- `request_id`: Request ID for correlation
+
+Use POST /api/tools/approve to approve or deny.
+
 ### file
 
 File output from the agent.
 
-```
+```text
 event: file
 data: {"filename":"output.png","mime_type":"image/png"}
 ```
 
 **Note:** File data is not included in SSE (too large). Future versions may provide a download URL.
 
+### session_init
+
+Backend session initialized (for stateful backends).
+
+```text
+event: session_init
+data: {"session_id":"backend-session-id"}
+```
+
+### session_orphaned
+
+Backend session was lost (need to restart).
+
+```text
+event: session_orphaned
+data: {"reason":"session expired"}
+```
+
+### usage
+
+Token usage statistics from the LLM provider.
+
+```text
+event: usage
+data: {"input_tokens":150,"output_tokens":75,"cache_read_tokens":0,"cache_write_tokens":50,"thinking_tokens":25}
+```
+
 ### done
 
 Request completed successfully. **Terminates the stream.**
 
-```
+```text
 event: done
 data: {"full_response":"Complete response text here..."}
 ```
@@ -241,9 +380,258 @@ data: {"full_response":"Complete response text here..."}
 
 Request failed. **Terminates the stream.**
 
-```
+```text
 event: error
 data: {"error":"Agent disconnected during processing"}
+```
+
+### canceled
+
+Request was canceled. **Terminates the stream.**
+
+```text
+event: canceled
+data: {"reason":"user_requested"}
+```
+
+## Tool Approval API
+
+### POST /api/tools/approve
+
+Approve or deny a pending tool execution.
+
+**Request:**
+```json
+{
+  "agent_id": "550e8400-e29b-41d4-a716-446655440000",
+  "tool_id": "tool_123",
+  "approved": true,
+  "approve_all": false
+}
+```
+
+**Request Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `agent_id` | string | **Yes** | Agent requesting approval |
+| `tool_id` | string | **Yes** | Tool invocation ID |
+| `approved` | boolean | **Yes** | True = execute, False = skip |
+| `approve_all` | boolean | No | Auto-approve remaining tools this request |
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+## User Question API
+
+### POST /api/questions/answer
+
+Respond to a user question from the ask_user tool.
+
+**Request:**
+```json
+{
+  "agent_id": "550e8400-e29b-41d4-a716-446655440000",
+  "question_id": "question_123",
+  "selected": ["option1"],
+  "custom_text": ""
+}
+```
+
+**Request Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `agent_id` | string | **Yes** | Agent asking the question |
+| `question_id` | string | **Yes** | Question ID from SSE event |
+| `selected` | []string | **Yes** | Selected option label(s) |
+| `custom_text` | string | No | Custom "Other" response text |
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+## Channel Bindings API
+
+Channel bindings associate frontend channels with specific agents for sticky routing.
+
+### GET /api/bindings
+
+List all channel bindings.
+
+**Response:**
+```json
+{
+  "bindings": [
+    {
+      "frontend": "slack",
+      "channel_id": "C0123456789",
+      "agent_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "agent_name": "mux-agent-1",
+      "agent_online": true,
+      "working_dir": "/home/user/project",
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+### GET /api/bindings?frontend=X&channel_id=Y
+
+Get a single binding.
+
+**Response:**
+```json
+{
+  "binding_id": "550e8400-e29b-41d4-a716-446655440000",
+  "agent_name": "mux-agent-1",
+  "working_dir": "/home/user/project",
+  "online": true
+}
+```
+
+### POST /api/bindings
+
+Create a new channel binding. Uses `instance_id` (short code) to identify the agent.
+
+**Request:**
+```json
+{
+  "frontend": "slack",
+  "channel_id": "C0123456789",
+  "instance_id": "abc123"
+}
+```
+
+**Response:**
+```json
+{
+  "binding_id": "550e8400-e29b-41d4-a716-446655440000",
+  "agent_name": "mux-agent-1",
+  "working_dir": "/home/user/project",
+  "rebound_from": null
+}
+```
+
+**Status Codes:**
+- `200`: Created successfully (or rebound existing)
+- `400`: Bad request (missing fields, invalid JSON)
+- `404`: Agent not found
+- `405`: Method not allowed
+
+### DELETE /api/bindings
+
+Delete a channel binding.
+
+**Request:**
+```http
+DELETE /api/bindings?frontend=slack&channel_id=C0123456789
+```
+
+**Response:**
+```http
+HTTP/1.1 204 No Content
+```
+
+## Thread History API
+
+### GET /api/threads/{id}/messages
+
+Get message history for a specific thread.
+
+**Query Parameters:**
+- `limit` (optional): Maximum messages to return (default: 100)
+
+**Response:**
+```json
+{
+  "thread_id": "550e8400-e29b-41d4-a716-446655440000",
+  "messages": [
+    {
+      "id": "msg-uuid-1",
+      "thread_id": "550e8400-e29b-41d4-a716-446655440000",
+      "sender": "user@example.com",
+      "content": "Hello!",
+      "type": "message",
+      "created_at": "2024-01-15T10:30:00Z"
+    },
+    {
+      "id": "msg-uuid-2",
+      "thread_id": "550e8400-e29b-41d4-a716-446655440000",
+      "sender": "agent",
+      "content": "Hello! How can I help you?",
+      "type": "message",
+      "created_at": "2024-01-15T10:30:05Z"
+    }
+  ]
+}
+```
+
+### GET /api/threads/{id}/usage
+
+Get token usage statistics for a specific thread.
+
+**Response:**
+```json
+{
+  "thread_id": "550e8400-e29b-41d4-a716-446655440000",
+  "usage": [
+    {
+      "id": "usage_123",
+      "message_id": "msg_456",
+      "request_id": "req_789",
+      "agent_id": "agent_001",
+      "input_tokens": 150,
+      "output_tokens": 75,
+      "cache_read_tokens": 10,
+      "cache_write_tokens": 20,
+      "thinking_tokens": 5,
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+**Usage Record Fields:**
+- `id`: Usage record ID
+- `message_id`: Associated message ID (if available)
+- `request_id`: Request ID
+- `agent_id`: Agent that processed the request
+- `input_tokens`, `output_tokens`: Token counts
+- `cache_read_tokens`, `cache_write_tokens`: Cache token counts
+- `thinking_tokens`: Thinking/reasoning tokens
+- `created_at`: Timestamp
+
+## Usage Statistics API
+
+### GET /api/stats/usage
+
+Get aggregated token usage statistics.
+
+**Query Parameters:**
+- `agent_id` (optional): Filter by agent
+- `thread_id` (optional): Filter by thread
+- `since` (optional): ISO-8601 start time
+- `until` (optional): ISO-8601 end time
+
+**Response:**
+```json
+{
+  "total_input": 15000,
+  "total_output": 7500,
+  "total_cache_read": 1000,
+  "total_cache_write": 2000,
+  "total_thinking": 500,
+  "total_tokens": 26000,
+  "request_count": 100
+}
 ```
 
 ## Implementation Examples
@@ -258,6 +646,11 @@ curl http://localhost:8080/api/agents
 curl -N -X POST http://localhost:8080/api/send \
   -H "Content-Type: application/json" \
   -d '{"content": "Hello!", "sender": "test"}'
+
+# Approve a tool
+curl -X POST http://localhost:8080/api/tools/approve \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":"<agent-id>","tool_id":"<tool-id>","approved":true}'
 ```
 
 ### JavaScript (Browser)
@@ -274,7 +667,7 @@ const response = await fetch('/api/send', {
   body: JSON.stringify({
     content: 'Hello!',
     sender: 'web-user',
-    agent_id: agents[0]?.id  // Optional: target specific agent
+    agent_id: agents[0]?.id
   })
 });
 
@@ -306,11 +699,20 @@ while (true) {
 
 function handleEvent(event, data) {
   switch (event) {
+    case 'started':
+      console.log('Thread:', data.thread_id);
+      break;
     case 'text':
       process.stdout.write(data.text);
       break;
     case 'tool_use':
       console.log(`\n[Tool: ${data.name}]`);
+      break;
+    case 'tool_approval':
+      // Show approval UI, then POST /api/tools/approve
+      break;
+    case 'usage':
+      console.log(`\nTokens: ${data.input_tokens} in, ${data.output_tokens} out`);
       break;
     case 'done':
       console.log('\n--- Done ---');
@@ -319,59 +721,6 @@ function handleEvent(event, data) {
       console.error('Error:', data.error);
       break;
   }
-}
-```
-
-### Go
-
-```go
-import (
-    "bufio"
-    "bytes"
-    "encoding/json"
-    "net/http"
-    "strings"
-)
-
-// Send message
-body, _ := json.Marshal(map[string]string{
-    "content": "Hello!",
-    "sender":  "go-client",
-})
-
-resp, _ := http.Post(
-    "http://localhost:8080/api/send",
-    "application/json",
-    bytes.NewReader(body),
-)
-defer resp.Body.Close()
-
-// Parse SSE
-scanner := bufio.NewScanner(resp.Body)
-var eventType string
-
-for scanner.Scan() {
-    line := scanner.Text()
-
-    if strings.HasPrefix(line, "event: ") {
-        eventType = strings.TrimPrefix(line, "event: ")
-    } else if strings.HasPrefix(line, "data: ") && eventType != "" {
-        data := strings.TrimPrefix(line, "data: ")
-
-        switch eventType {
-        case "text":
-            var payload struct{ Text string `json:"text"` }
-            json.Unmarshal([]byte(data), &payload)
-            fmt.Print(payload.Text)
-        case "done":
-            fmt.Println("\n--- Done ---")
-        case "error":
-            var payload struct{ Error string `json:"error"` }
-            json.Unmarshal([]byte(data), &payload)
-            fmt.Println("Error:", payload.Error)
-        }
-        eventType = ""
-    }
 }
 ```
 
@@ -399,10 +748,14 @@ for line in response.iter_lines(decode_unicode=True):
     elif line.startswith('data: ') and event_type:
         data = json.loads(line[6:])
 
-        if event_type == 'text':
+        if event_type == 'started':
+            print(f"Thread: {data['thread_id']}")
+        elif event_type == 'text':
             print(data['text'], end='', flush=True)
         elif event_type == 'tool_use':
             print(f"\n[Tool: {data['name']}]")
+        elif event_type == 'usage':
+            print(f"\nTokens: {data['input_tokens']} in, {data['output_tokens']} out")
         elif event_type == 'done':
             print("\n--- Done ---")
         elif event_type == 'error':
@@ -422,14 +775,14 @@ for line in response.iter_lines(decode_unicode=True):
 ### Agent Selection
 
 - If `agent_id` is specified, the message goes directly to that agent
-- If `frontend` and `channel_id` are specified, the gateway looks up the channel binding to find the assigned agent
+- If `frontend` and `channel_id` are specified, the gateway looks up the channel binding
 - If no agent can be determined, an error is returned
 - Use `GET /api/agents` to discover available agents
-- Use channel bindings for sticky routing (same channel always routes to same agent)
+- Use channel bindings for sticky routing
 
 ### Connection Handling
 
-- SSE connections stay open until `done` or `error` event
+- SSE connections stay open until `done`, `error`, or `canceled` event
 - Client should handle connection drops gracefully
 - Consider implementing retry logic for network failures
 
@@ -439,168 +792,18 @@ for line in response.iter_lines(decode_unicode=True):
 - SSE Response: `text/event-stream`
 - Error Response: `application/json`
 
-## Channel Bindings API
+## gRPC Client Service
 
-Channel bindings associate frontend channels with specific agents for sticky routing.
+For more advanced client integrations, a gRPC `ClientService` is also available. See the proto definitions for:
 
-### GET /api/bindings
+- `GetEvents`: Get conversation history with pagination
+- `GetMe`: Get authenticated principal info
+- `SendMessage`: Send message with idempotency support
+- `StreamEvents`: Real-time streaming of all events
+- `ListAgents`: List available agents
+- `RegisterAgent`: Self-register an agent
+- `RegisterClient`: Self-register a client
+- `ApproveTool`: Approve/deny tool execution
+- `AnswerQuestion`: Answer user questions from ask_user tool
 
-List all channel bindings.
-
-**Response:**
-```json
-[
-  {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "frontend": "slack",
-    "channel_id": "C0123456789",
-    "agent_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-    "created_at": "2024-01-15T10:30:00Z"
-  }
-]
-```
-
-**Status Codes:**
-- `200`: Success (may be empty array)
-- `405`: Method not allowed
-
-### POST /api/bindings
-
-Create a new channel binding.
-
-**Request:**
-```json
-{
-  "frontend": "slack",
-  "channel_id": "C0123456789",
-  "agent_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
-}
-```
-
-**Request Fields:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `frontend` | string | **Yes** | Frontend name (e.g., "slack", "matrix") |
-| `channel_id` | string | **Yes** | Channel ID within the frontend |
-| `agent_id` | string | **Yes** | UUID of the agent to bind to |
-
-**Response:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "frontend": "slack",
-  "channel_id": "C0123456789",
-  "agent_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-  "created_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Status Codes:**
-- `201`: Created successfully
-- `400`: Bad request (missing fields, invalid JSON)
-- `409`: Conflict (binding already exists for this frontend/channel)
-- `405`: Method not allowed
-
-### DELETE /api/bindings
-
-Delete a channel binding.
-
-**Request:**
-```
-DELETE /api/bindings?frontend=slack&channel_id=C0123456789
-```
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `frontend` | string | **Yes** | Frontend name |
-| `channel_id` | string | **Yes** | Channel ID within the frontend |
-
-**Response:**
-```
-HTTP/1.1 204 No Content
-```
-
-**Status Codes:**
-- `204`: Deleted successfully
-- `400`: Bad request (missing parameters)
-- `404`: Binding not found
-- `405`: Method not allowed
-
-### Binding Examples
-
-```bash
-# Create a binding (Slack channel → agent)
-curl -X POST http://localhost:8080/api/bindings \
-  -H "Content-Type: application/json" \
-  -d '{"frontend":"slack","channel_id":"C0123456789","agent_id":"agent-uuid"}'
-
-# Create a binding (Matrix room → agent)
-curl -X POST http://localhost:8080/api/bindings \
-  -H "Content-Type: application/json" \
-  -d '{"frontend":"matrix","channel_id":"!room:matrix.org","agent_id":"agent-uuid"}'
-
-# List all bindings
-curl http://localhost:8080/api/bindings
-
-# Delete a binding
-curl -X DELETE "http://localhost:8080/api/bindings?frontend=slack&channel_id=C0123456789"
-
-# Send message using binding (looks up agent from binding)
-curl -N -X POST http://localhost:8080/api/send \
-  -H "Content-Type: application/json" \
-  -d '{"content":"Hello!","frontend":"slack","channel_id":"C0123456789"}'
-```
-
-## Thread History API
-
-### GET /api/threads/{id}/messages
-
-Get message history for a specific thread.
-
-**Request:**
-```http
-GET /api/threads/{thread-id}/messages?limit=50 HTTP/1.1
-```
-
-**Query Parameters:**
-- `limit` (optional): Maximum messages to return (default: 100)
-
-**Response:**
-```json
-{
-  "thread_id": "550e8400-e29b-41d4-a716-446655440000",
-  "messages": [
-    {
-      "id": "msg-uuid-1",
-      "thread_id": "550e8400-e29b-41d4-a716-446655440000",
-      "sender": "user@example.com",
-      "content": "Hello!",
-      "created_at": "2024-01-15T10:30:00Z"
-    },
-    {
-      "id": "msg-uuid-2",
-      "thread_id": "550e8400-e29b-41d4-a716-446655440000",
-      "sender": "agent",
-      "content": "Hello! How can I help you?",
-      "created_at": "2024-01-15T10:30:05Z"
-    }
-  ]
-}
-```
-
-**Status Codes:**
-- `200`: Success
-- `404`: Thread not found
-- `405`: Method not allowed
-
-**Example:**
-```bash
-# Get thread messages
-curl http://localhost:8080/api/threads/550e8400-e29b-41d4-a716-446655440000/messages
-
-# Get last 10 messages
-curl "http://localhost:8080/api/threads/550e8400-e29b-41d4-a716-446655440000/messages?limit=10"
-```
+See `proto/coven-proto/coven.proto` for full message definitions.

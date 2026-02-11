@@ -43,9 +43,10 @@ auth:
 
 ### JWT Secret
 
-- Minimum 32 bytes, base64 encoded
+- Minimum 32 bytes (256 bits) for HS256 security
 - Generate with: `openssl rand -base64 32`
 - **Never commit to version control** - use environment variables
+- **Optional**: If not configured, authentication is disabled and all requests are granted admin access (useful for local development)
 
 ### Agent Auto-Registration
 
@@ -105,7 +106,7 @@ metrics:
   path: "/metrics"
 ```
 
-Prometheus-compatible metrics endpoint.
+**Note**: Prometheus metrics are planned but not yet implemented. This configuration is parsed but currently has no effect.
 
 ## Web Admin
 

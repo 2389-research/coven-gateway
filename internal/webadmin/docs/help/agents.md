@@ -4,10 +4,10 @@ Agents are the AI backends that process your messages and generate responses.
 
 ## Connecting an Agent
 
-To connect an agent to the gateway, run:
+Agents are provided by the [coven](https://github.com/2389-research/coven) Rust project. After installing from there, run:
 
 ```bash
-coven agent
+coven agent --server <your-gateway-address>
 ```
 
 The agent will automatically register with the gateway and appear in your Agents list.
@@ -16,9 +16,11 @@ The agent will automatically register with the gateway and appear in your Agents
 
 Agents can have the following statuses:
 
-- **Connected**: Agent is online and ready to receive messages
-- **Idle**: Agent is connected but not currently processing requests
-- **Busy**: Agent is actively processing a request
+- **pending**: Agent registered but awaiting admin approval
+- **approved**: Agent is approved and can connect
+- **revoked**: Agent access has been revoked
+- **online**: Agent is currently connected to the gateway
+- **offline**: Agent is approved but not currently connected
 
 ## Multiple Agents
 

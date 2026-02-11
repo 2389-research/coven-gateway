@@ -6,8 +6,6 @@ Speed up your workflow with these keyboard shortcuts.
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl/Cmd + N` | New Chat |
-| `Ctrl/Cmd + K` | Search conversations |
 | `Enter` | Send message |
 | `Shift + Enter` | New line in message |
 
@@ -15,7 +13,8 @@ Speed up your workflow with these keyboard shortcuts.
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl/Cmd + ,` | Open Settings |
+| `Ctrl/Cmd + K` | Open search |
+| `Ctrl/Cmd + Shift + S` | Toggle sidebar |
 | `Escape` | Close modal/dialog |
 
 ## Tips

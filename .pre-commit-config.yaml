@@ -63,3 +63,13 @@ repos:
       - id: check-merge-conflict
         name: check merge conflicts
         description: Check for merge conflict markers
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.42.0
+    hooks:
+      - id: markdownlint
+        name: markdownlint
+        description: Lint Markdown files
+        args: ["--config", ".markdownlint.yaml"]
+        exclude: ^(docs/archive/|docs/plans/|proto/)

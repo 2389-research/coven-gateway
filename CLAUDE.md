@@ -83,7 +83,7 @@ For the interactive TUI client, install from the [coven](https://github.com/2389
 
 ## Architecture
 
-```
+```text
                       ┌─────────────────────────────────────────┐
                       │              coven-gateway               │
                       │                                         │

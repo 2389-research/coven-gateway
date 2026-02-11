@@ -8,13 +8,13 @@ Coven is a control plane for AI agents. It connects your agents to various front
 
 ## Quick Start
 
-1. **Launch an agent**: Run `coven agent` in your terminal to start an agent
-2. **Start chatting**: Once connected, click "New Chat" to begin a conversation
-3. **Manage agents**: Use the Agents tab in Settings to see connected agents
+1. **Launch an agent**: Install from [coven](https://github.com/2389-research/coven), then run `coven agent --server <your-gateway-address>`
+2. **Start chatting**: Once an agent is connected, click on it in the sidebar to begin a conversation
+3. **Manage agents**: Connected agents appear in the sidebar; settings are in the top-right menu
 
 ## Architecture Overview
 
-```
+```text
 Frontends (Web, Matrix, Telegram)
             │
             ▼

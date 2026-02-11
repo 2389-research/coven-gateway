@@ -1,0 +1,47 @@
+# Markdownlint configuration
+# See https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+# Default state for all rules
+default: true
+
+# MD013 - Line length (disabled - too strict for docs)
+MD013: false
+
+# MD022 - Blanks around headings (disabled for now - many existing violations)
+MD022: false
+
+# MD024 - Multiple headings with the same content
+MD024:
+  siblings_only: true
+
+# MD026 - No trailing punctuation in headings (disabled for now)
+MD026: false
+
+# MD029 - Ordered list item prefix (disabled - we use actual numbers)
+MD029: false
+
+# MD031 - Blank lines around fenced code blocks (disabled for now)
+MD031: false
+
+# MD032 - Blank lines around lists (disabled for now)
+MD032: false
+
+# MD033 - Inline HTML (allow for badges, details, etc.)
+MD033: false
+
+# MD034 - Bare URLs (disabled - URLs in docs are fine)
+MD034: false
+
+# MD040 - Fenced code blocks should have a language specified
+MD040: true
+
+# MD041 - First line should be a top-level heading
+MD041: false
+
+# MD046 - Code block style (consistent fenced)
+MD046:
+  style: fenced
+
+# MD048 - Code fence style (backticks)
+MD048:
+  style: backtick

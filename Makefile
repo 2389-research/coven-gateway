@@ -1,7 +1,7 @@
 # ABOUTME: Build and development commands for coven-gateway
 # ABOUTME: Handles proto generation, building, and testing
 
-.PHONY: all build build-gateway build-admin proto update-proto clean test lint fmt run setup hooks
+.PHONY: all build build-gateway build-admin proto update-proto clean test lint lint-go lint-md fmt run setup hooks
 
 # Default target
 all: proto build
@@ -48,9 +48,17 @@ run: build
 test:
 	go test -v ./...
 
-# Run linter
-lint:
+# Run linters
+lint: lint-go lint-md
+
+# Run Go linter
+lint-go:
 	golangci-lint run
+
+# Run Markdown linter
+lint-md:
+	@command -v markdownlint >/dev/null 2>&1 || { echo "markdownlint not found. Install: npm install -g markdownlint-cli"; exit 1; }
+	markdownlint --config .markdownlint.yaml '**/*.md' --ignore 'docs/archive/' --ignore 'docs/plans/' --ignore 'node_modules/' --ignore 'proto/'
 
 # Format code
 fmt:
