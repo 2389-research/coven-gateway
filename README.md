@@ -14,7 +14,7 @@ coven-gateway is part of the Coven ecosystem:
 
 To connect agents to this gateway, install from the [coven](https://github.com/2389-research/coven) project.
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         coven-gateway                            │
 │                                                                 │
@@ -309,7 +309,7 @@ tailscale:
 
 ## Architecture
 
-```
+```text
 coven-gateway/
 ├── cmd/
 │   ├── coven-gateway/     # Gateway server binary

@@ -58,7 +58,7 @@ message MessageResponse {
 
 Agent sends `usage` event after each LLM call (can be multiple per request if tools involved):
 
-```
+```text
 Agent → Gateway: MessageResponse { request_id: "abc", usage: { input: 1500, output: 200 } }
 Agent → Gateway: MessageResponse { request_id: "abc", text: "Here's what I found..." }
 Agent → Gateway: MessageResponse { request_id: "abc", tool_use: { ... } }
@@ -121,7 +121,7 @@ message MessageResponse {
 
 Full tool lifecycle:
 
-```
+```text
 Agent → Gateway: tool_use { id: "t1", name: "read_file", input: "..." }
 Agent → Gateway: tool_state { id: "t1", state: AWAITING_APPROVAL }
 Gateway → Agent: tool_approval { id: "t1", approved: true }
@@ -132,7 +132,7 @@ Agent → Gateway: tool_result { id: "t1", output: "...", is_error: false }
 
 Or for denied:
 
-```
+```text
 Agent → Gateway: tool_use { id: "t2", name: "delete_file", input: "..." }
 Agent → Gateway: tool_state { id: "t2", state: AWAITING_APPROVAL }
 Gateway → Agent: tool_approval { id: "t2", approved: false }
@@ -209,7 +209,7 @@ message AgentMessage {
 ### Usage Pattern
 
 System alert:
-```
+```text
 Gateway → Agent: inject_context {
   injection_id: "inj1",
   content: "SYSTEM: Budget is 80% consumed. 2000 tokens remaining.",
@@ -220,7 +220,7 @@ Agent → Gateway: injection_ack { injection_id: "inj1", accepted: true }
 ```
 
 Pack result arriving async:
-```
+```text
 Gateway → Agent: inject_context {
   injection_id: "inj2",
   content: "Tool result from pack:weather - Current temp: 72F, Clear skies",
@@ -273,7 +273,7 @@ message MessageResponse {
 
 ### Usage Pattern
 
-```
+```text
 Gateway → Agent: send_message { request_id: "req1", content: "..." }
 Agent → Gateway: text { request_id: "req1", text: "Let me..." }
 Agent → Gateway: text { request_id: "req1", text: " think about..." }

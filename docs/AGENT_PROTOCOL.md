@@ -6,7 +6,7 @@ This document describes the gRPC protocol for coven-agents connecting to coven-g
 
 Agents connect to the gateway via a bidirectional gRPC stream. The connection lifecycle:
 
-```
+```text
 Agent                                    Gateway
   │                                         │
   │──────── TCP + HTTP/2 Connect ──────────>│

@@ -57,7 +57,7 @@ This:
 
 You'll see a startup banner with connection details:
 
-```
+```text
    ___  _____  _  _  ___  _  _
   / __)/  _  \| || || __|| \| |
  ( (__ | |_| || || || _| | \\ |

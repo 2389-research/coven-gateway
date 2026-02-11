@@ -14,7 +14,7 @@ Coven is a control plane for AI agents. It connects your agents to various front
 
 ## Architecture Overview
 
-```
+```text
 Frontends (Web, Matrix, Telegram)
             │
             ▼

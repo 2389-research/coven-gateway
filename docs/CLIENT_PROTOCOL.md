@@ -6,7 +6,7 @@ This document describes the HTTP API for clients (TUIs, web apps, bots) to inter
 
 Clients communicate with the gateway via HTTP. Messages are sent via POST and responses stream back via Server-Sent Events (SSE).
 
-```
+```text
 Client                                   Gateway                    Agent
   │                                         │                         │
   │──── GET /api/agents ───────────────────>│                         │
@@ -38,7 +38,7 @@ Default: `http://localhost:8080`
 Liveness check. Returns 200 if gateway is running.
 
 **Response:**
-```
+```http
 HTTP/1.1 200 OK
 Content-Type: text/plain
 
@@ -50,7 +50,7 @@ OK
 Readiness check. Returns 200 if at least one agent is connected.
 
 **Response (ready):**
-```
+```http
 HTTP/1.1 200 OK
 Content-Type: text/plain
 
@@ -58,7 +58,7 @@ ready (2 agents)
 ```
 
 **Response (not ready):**
-```
+```http
 HTTP/1.1 503 Service Unavailable
 Content-Type: text/plain
 
@@ -232,7 +232,7 @@ Get conversation history for a specific agent.
 ## SSE Event Types
 
 All SSE events have the format:
-```
+```text
 event: <event_type>
 data: <json_payload>
 
@@ -242,7 +242,7 @@ data: <json_payload>
 
 Stream started, thread ID assigned.
 
-```
+```text
 event: started
 data: {"thread_id":"550e8400-e29b-41d4-a716-446655440000"}
 ```
@@ -251,7 +251,7 @@ data: {"thread_id":"550e8400-e29b-41d4-a716-446655440000"}
 
 Agent is processing (status indicator).
 
-```
+```text
 event: thinking
 data: {"text":"thinking..."}
 ```
@@ -260,7 +260,7 @@ data: {"text":"thinking..."}
 
 Text chunk from the agent's response. May arrive in multiple chunks.
 
-```
+```text
 event: text
 data: {"text":"Here is part of the response..."}
 ```
@@ -269,7 +269,7 @@ data: {"text":"Here is part of the response..."}
 
 Agent is invoking a tool.
 
-```
+```text
 event: tool_use
 data: {"id":"tool_123","name":"read_file","input_json":"{\"path\":\"config.yaml\"}"}
 ```
@@ -283,7 +283,7 @@ data: {"id":"tool_123","name":"read_file","input_json":"{\"path\":\"config.yaml\
 
 Tool state transition.
 
-```
+```text
 event: tool_state
 data: {"id":"tool_123","state":"running"}
 ```
@@ -302,7 +302,7 @@ data: {"id":"tool_123","state":"running"}
 
 Result of a tool invocation.
 
-```
+```text
 event: tool_result
 data: {"id":"tool_123","output":"file contents here...","is_error":false}
 ```
@@ -316,7 +316,7 @@ data: {"id":"tool_123","output":"file contents here...","is_error":false}
 
 Tool requires human approval before execution.
 
-```
+```text
 event: tool_approval
 data: {"id":"tool_123","name":"run_command","input_json":"{\"command\":\"rm -rf /tmp/test\"}","request_id":"req_456"}
 ```
@@ -333,7 +333,7 @@ Use POST /api/tools/approve to approve or deny.
 
 File output from the agent.
 
-```
+```text
 event: file
 data: {"filename":"output.png","mime_type":"image/png"}
 ```
@@ -344,7 +344,7 @@ data: {"filename":"output.png","mime_type":"image/png"}
 
 Backend session initialized (for stateful backends).
 
-```
+```text
 event: session_init
 data: {"session_id":"backend-session-id"}
 ```
@@ -353,7 +353,7 @@ data: {"session_id":"backend-session-id"}
 
 Backend session was lost (need to restart).
 
-```
+```text
 event: session_orphaned
 data: {"reason":"session expired"}
 ```
@@ -362,7 +362,7 @@ data: {"reason":"session expired"}
 
 Token usage statistics from the LLM provider.
 
-```
+```text
 event: usage
 data: {"input_tokens":150,"output_tokens":75,"cache_read_tokens":0,"cache_write_tokens":50,"thinking_tokens":25}
 ```
@@ -371,7 +371,7 @@ data: {"input_tokens":150,"output_tokens":75,"cache_read_tokens":0,"cache_write_
 
 Request completed successfully. **Terminates the stream.**
 
-```
+```text
 event: done
 data: {"full_response":"Complete response text here..."}
 ```
@@ -380,7 +380,7 @@ data: {"full_response":"Complete response text here..."}
 
 Request failed. **Terminates the stream.**
 
-```
+```text
 event: error
 data: {"error":"Agent disconnected during processing"}
 ```
@@ -389,7 +389,7 @@ data: {"error":"Agent disconnected during processing"}
 
 Request was canceled. **Terminates the stream.**
 
-```
+```text
 event: canceled
 data: {"reason":"user_requested"}
 ```
@@ -531,12 +531,12 @@ Create a new channel binding. Uses `instance_id` (short code) to identify the ag
 Delete a channel binding.
 
 **Request:**
-```
+```http
 DELETE /api/bindings?frontend=slack&channel_id=C0123456789
 ```
 
 **Response:**
-```
+```http
 HTTP/1.1 204 No Content
 ```
 
