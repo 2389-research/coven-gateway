@@ -167,7 +167,6 @@ WebAuthn requires a secure context (HTTPS).
 **Diagnostics**:
 - Check agent status in Settings > Agents
 - Enable debug logging: `logging.level: "debug"`
-- Monitor metrics endpoint: `/metrics`
 
 ### High memory usage
 
@@ -177,9 +176,8 @@ WebAuthn requires a secure context (HTTPS).
 3. Large message history
 
 **Solutions**:
-1. Archive old threads
-2. Restart gateway (if memory leak suspected)
-3. Check for updates
+1. Restart gateway (if memory leak suspected)
+2. Check for updates
 
 ## Logging
 

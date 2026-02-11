@@ -1,6 +1,18 @@
 # coven-gateway
 
-Production control plane for [coven](https://github.com/2389-research/coven-agent) agents. Manages agent connections via gRPC, routes messages from frontends to agents, and streams responses back in real-time.
+Production control plane for coven agents. Manages agent connections via gRPC, routes messages from frontends to agents, and streams responses back in real-time.
+
+## Related Projects
+
+coven-gateway is part of the Coven ecosystem:
+
+| Repository | Language | Purpose |
+|------------|----------|---------|
+| **coven-gateway** (this repo) | Go | Control plane server (`coven-gateway`, `coven-admin`) |
+| [coven](https://github.com/2389-research/coven) | Rust | Agent platform (`coven-agent`, `coven-tui`, `coven-swarm`) |
+| [coven-proto](https://github.com/2389-research/coven-proto) | Protobuf | Shared protocol definitions |
+
+To connect agents to this gateway, install from the [coven](https://github.com/2389-research/coven) project.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -97,24 +109,30 @@ cargo run -p coven-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 ### Gateway Commands
 
 ```bash
+# Create config file interactively (first-time setup)
+./bin/coven-gateway init
+
+# Create initial owner principal and get a JWT token (first-time setup)
+./bin/coven-gateway bootstrap --name "Your Name"
+
 # Start the gateway server
 ./bin/coven-gateway serve
 # Config via: COVEN_CONFIG=path/to/config.yaml or ~/.config/coven/gateway.yaml
 
 # Check gateway health
 ./bin/coven-gateway health
-# Uses config file for gateway address
 
 # List connected agents
 ./bin/coven-gateway agents
-# Uses config file for gateway address
 ```
 
 ### TUI Client
 
+The TUI client (`coven-tui`) is part of the companion [coven](https://github.com/2389-research/coven) Rust project. Install it from there, then:
+
 ```bash
 # Connect to gateway
-./bin/coven-tui [-server http://localhost:8080]
+coven-tui [-server http://localhost:8080]
 
 # Inside TUI:
 #   Type message + Enter  → Send to agent
@@ -127,20 +145,41 @@ cargo run -p coven-agent -- --server http://127.0.0.1:50051 --name "my-agent"
 ### Admin CLI
 
 ```bash
-# Monitor gateway status
-./bin/coven-admin [-gateway http://localhost:8080]
+# Set up authentication
+export COVEN_TOKEN="<your-jwt-token>"
+export COVEN_GATEWAY_HOST="localhost"  # or your-gateway.tailnet.ts.net
 
-# Watch mode (continuous updates)
-./bin/coven-admin -watch
+# Show your identity
+./bin/coven-admin me
 
-# Set refresh interval
-./bin/coven-admin -watch -interval 5s
+# Show gateway status
+./bin/coven-admin status
+
+# List channel bindings
+./bin/coven-admin bindings
+
+# List registered agents
+./bin/coven-admin agents
+
+# Create a binding
+./bin/coven-admin bindings create --frontend matrix --channel '!room:example.org' --agent <agent-id>
+
+# Create a JWT token for a principal
+./bin/coven-admin token create --principal <id>
+
+# Create an admin invite link
+./bin/coven-admin invite create
+
+# Chat with an agent (one-shot)
+./bin/coven-admin chat <agent-id> "Hello!"
+
+# Chat with an agent (interactive REPL)
+./bin/coven-admin chat <agent-id>
 ```
 
-The admin CLI displays:
-- Connected agents with capabilities
-- Channel bindings and their status
-- Agent online/offline state
+**Environment variables:**
+- `COVEN_TOKEN` - JWT authentication token (required for most commands)
+- `COVEN_GATEWAY_HOST` - Gateway hostname (derives gRPC :50051 URL)
 
 ### Matrix Bridge
 
