@@ -7,7 +7,7 @@ Agents are the AI backends that process your messages and generate responses.
 Agents are provided by the [coven](https://github.com/2389-research/coven) Rust project. After installing from there, run:
 
 ```bash
-coven agent --gateway <your-gateway-address>
+coven agent --server <your-gateway-address>
 ```
 
 The agent will automatically register with the gateway and appear in your Agents list.

@@ -140,7 +140,7 @@ Browser-based admin interface (`internal/webadmin/`):
 ### HTTP Client sends message:
 
 ```
-1. POST /api/send with JSON {agent_id, message, sender, ...}
+1. POST /api/send with JSON {agent_id, content, sender, ...}
 2. api.go validates and looks up agent (direct ID or binding)
 3. Manager.SendMessage creates request, sends via Connection's gRPC stream
 4. Connection correlates responses by request_id

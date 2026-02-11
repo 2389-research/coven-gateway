@@ -155,7 +155,7 @@ database:
 Agents can connect using the Tailscale hostname:
 
 ```bash
-coven agent --gateway coven-gateway.your-tailnet.ts.net:443
+coven agent --server coven-gateway.your-tailnet.ts.net:443
 ```
 
 Or configure in the agent's config file.

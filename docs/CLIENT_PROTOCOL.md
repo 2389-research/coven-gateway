@@ -143,7 +143,7 @@ event: text
 data: {"text":"I can help you with various tasks."}
 
 event: tool_use
-data: {"id":"tool_1","name":"list_files","input":"{\"path\":\"..\"}"}
+data: {"id":"tool_1","name":"list_files","input_json":"{\"path\":\"..\"}"}
 
 event: tool_state
 data: {"id":"tool_1","state":"running"}
@@ -155,7 +155,7 @@ event: tool_state
 data: {"id":"tool_1","state":"completed"}
 
 event: usage
-data: {"input_tokens":150,"output_tokens":75,"cache_read_tokens":0,"cache_write_tokens":50}
+data: {"input_tokens":150,"output_tokens":75,"cache_read_tokens":0,"cache_write_tokens":50,"thinking_tokens":25}
 
 event: done
 data: {"full_response":"Hello! I'm an AI assistant..."}
@@ -271,13 +271,13 @@ Agent is invoking a tool.
 
 ```
 event: tool_use
-data: {"id":"tool_123","name":"read_file","input":"{\"path\":\"config.yaml\"}"}
+data: {"id":"tool_123","name":"read_file","input_json":"{\"path\":\"config.yaml\"}"}
 ```
 
 **Fields:**
 - `id`: Unique tool invocation ID
 - `name`: Tool name
-- `input`: Tool input as JSON string
+- `input_json`: Tool input as JSON string
 
 ### tool_state
 
@@ -296,7 +296,7 @@ data: {"id":"tool_123","state":"running"}
 - `failed`: Execution error
 - `denied`: Approval denied
 - `timeout`: Execution timed out
-- `cancelled`: Cancelled by user/system
+- `canceled`: Canceled by user/system
 
 ### tool_result
 
@@ -318,8 +318,14 @@ Tool requires human approval before execution.
 
 ```
 event: tool_approval
-data: {"tool_id":"tool_123","tool_name":"run_command","input":"{\"command\":\"rm -rf /tmp/test\"}"}
+data: {"id":"tool_123","name":"run_command","input_json":"{\"command\":\"rm -rf /tmp/test\"}","request_id":"req_456"}
 ```
+
+**Fields:**
+- `id`: Tool invocation ID
+- `name`: Tool name
+- `input_json`: Tool input as JSON string
+- `request_id`: Request ID for correlation
 
 Use POST /api/tools/approve to approve or deny.
 
@@ -576,15 +582,32 @@ Get token usage statistics for a specific thread.
 ```json
 {
   "thread_id": "550e8400-e29b-41d4-a716-446655440000",
-  "total_input": 1500,
-  "total_output": 750,
-  "total_cache_read": 100,
-  "total_cache_write": 200,
-  "total_thinking": 50,
-  "total_tokens": 2600,
-  "request_count": 10
+  "usage": [
+    {
+      "id": "usage_123",
+      "message_id": "msg_456",
+      "request_id": "req_789",
+      "agent_id": "agent_001",
+      "input_tokens": 150,
+      "output_tokens": 75,
+      "cache_read_tokens": 10,
+      "cache_write_tokens": 20,
+      "thinking_tokens": 5,
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  ]
 }
 ```
+
+**Usage Record Fields:**
+- `id`: Usage record ID
+- `message_id`: Associated message ID (if available)
+- `request_id`: Request ID
+- `agent_id`: Agent that processed the request
+- `input_tokens`, `output_tokens`: Token counts
+- `cache_read_tokens`, `cache_write_tokens`: Cache token counts
+- `thinking_tokens`: Thinking/reasoning tokens
+- `created_at`: Timestamp
 
 ## Usage Statistics API
 

@@ -43,7 +43,7 @@ To connect agents to this gateway, install from the [coven](https://github.com/2
 
 - Go 1.22+
 - Protocol Buffers compiler (`protoc`)
-- A running [coven-agent](https://github.com/2389-research/coven-agent)
+- A running agent from [coven](https://github.com/2389-research/coven)
 
 ### Build
 
@@ -57,7 +57,6 @@ make
 
 # Or build individual binaries without proto regeneration
 go build -o bin/coven-gateway ./cmd/coven-gateway
-go build -o bin/coven-tui ./cmd/coven-tui
 go build -o bin/coven-admin ./cmd/coven-admin
 ```
 
