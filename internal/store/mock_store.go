@@ -16,7 +16,7 @@ import (
 type MockStore struct {
 	mu          sync.RWMutex
 	threads     map[string]*Thread         // keyed by thread ID
-	threadIndex map[string]string          // keyed by "frontendName:externalID" -> thread ID
+	threadIndex map[string]string          // keyed by "frontendName\x00externalID" -> thread ID
 	messages    map[string][]*Message      // keyed by threadID
 	bindings    map[string]*ChannelBinding // keyed by "frontend:channelID" (legacy)
 	bindingsV2  map[string]*Binding        // keyed by "frontend:channelID" (V2)
@@ -42,18 +42,24 @@ func NewMockStore() *MockStore {
 }
 
 // CreateThread stores a new thread.
+// Returns ErrDuplicateThread if a thread with the same (FrontendName, ExternalID) exists.
+// This matches SQLiteStore's UNIQUE constraint on (frontend_name, external_id).
 func (m *MockStore) CreateThread(ctx context.Context, thread *Thread) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// Make a copy to avoid external modification
 	t := *thread
-	m.threads[t.ID] = &t
 
-	// Index by frontend name and external ID
-	key := t.FrontendName + ":" + t.ExternalID
+	// Check for duplicate (frontend_name, external_id) - matches SQLite UNIQUE index behavior.
+	// Empty strings are valid values (not NULL), so duplicates with empty fields are rejected.
+	key := t.FrontendName + "\x00" + t.ExternalID // Use null byte as delimiter to avoid key collisions
+	if _, exists := m.threadIndex[key]; exists {
+		return ErrDuplicateThread
+	}
 	m.threadIndex[key] = t.ID
 
+	m.threads[t.ID] = &t
 	return nil
 }
 
@@ -77,7 +83,7 @@ func (m *MockStore) GetThreadByFrontendID(ctx context.Context, frontendName, ext
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	key := frontendName + ":" + externalID
+	key := frontendName + "\x00" + externalID
 	threadID, ok := m.threadIndex[key]
 	if !ok {
 		return nil, ErrNotFound

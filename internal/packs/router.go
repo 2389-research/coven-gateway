@@ -289,11 +289,14 @@ func (r *Router) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Capture count before clearing for accurate logging
+	pendingCount := len(r.pending)
+
 	// Close all pending response channels to unblock waiters
 	for requestID, ch := range r.pending {
 		close(ch)
 		delete(r.pending, requestID)
 	}
 
-	r.logger.Info("router closed", "pending_canceled", len(r.pending))
+	r.logger.Info("router closed", "pending_canceled", pendingCount)
 }

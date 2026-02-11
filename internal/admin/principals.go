@@ -5,6 +5,8 @@ package admin
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"time"
 
@@ -250,10 +252,25 @@ func (s *PrincipalService) DeletePrincipal(ctx context.Context, req *pb.DeletePr
 }
 
 // generatePrincipalID creates a new unique principal ID.
+// Format: {type}-{timestamp_base36}-{random_hex}
+// Uses a delimiter between timestamp and random suffix for unambiguous parsing.
 func generatePrincipalID(pType store.PrincipalType) string {
-	// Use type prefix + timestamp + random suffix
 	timestamp := time.Now().UnixMilli()
-	return string(pType) + "-" + formatBase36(timestamp)
+	random := generateRandomSuffix()
+	// Use 4-char hex for the random suffix (fixed width, easy to parse)
+	return string(pType) + "-" + formatBase36(timestamp) + "-" + formatHex4(random)
+}
+
+// generateRandomSuffix returns a cryptographically random 16-bit value.
+// Falls back to timestamp-based entropy if crypto/rand fails.
+func generateRandomSuffix() uint16 {
+	var b [2]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// Fallback: use nanosecond timestamp truncated to 16 bits
+		nanos := time.Now().UnixNano()
+		return uint16(nanos & 0xFFFF) //nolint:gosec // intentional truncation for fallback
+	}
+	return binary.BigEndian.Uint16(b[:])
 }
 
 // formatBase36 converts an int64 to base36 string.
@@ -268,4 +285,15 @@ func formatBase36(n int64) string {
 		n /= 36
 	}
 	return result
+}
+
+// formatHex4 formats a uint16 as a 4-character lowercase hex string.
+func formatHex4(n uint16) string {
+	const digits = "0123456789abcdef"
+	return string([]byte{
+		digits[(n>>12)&0xf],
+		digits[(n>>8)&0xf],
+		digits[(n>>4)&0xf],
+		digits[n&0xf],
+	})
 }

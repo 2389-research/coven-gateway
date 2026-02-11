@@ -6,6 +6,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +14,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+// envVarPattern matches ${VAR_NAME} patterns for environment variable expansion.
+// Compiled once at package level for efficiency (Issue #7).
+var envVarPattern = regexp.MustCompile(`\$\{([^}]+)\}`)
 
 // Config represents the complete coven-gateway configuration.
 type Config struct {
@@ -141,15 +146,16 @@ func Load(path string) (*Config, error) {
 }
 
 // expandEnvVars replaces ${VAR_NAME} patterns with the corresponding environment variable values.
-// If the environment variable is not set, it is replaced with an empty string.
+// If the environment variable is not set, it logs a warning and replaces with empty string.
 func expandEnvVars(s string) string {
-	// Match ${VAR_NAME} pattern
-	re := regexp.MustCompile(`\$\{([^}]+)\}`)
-
-	return re.ReplaceAllStringFunc(s, func(match string) string {
+	return envVarPattern.ReplaceAllStringFunc(s, func(match string) string {
 		// Extract variable name from ${VAR_NAME}
-		varName := re.FindStringSubmatch(match)[1]
-		return os.Getenv(varName)
+		varName := envVarPattern.FindStringSubmatch(match)[1]
+		val := os.Getenv(varName)
+		if val == "" {
+			slog.Warn("environment variable not set in config", "var", varName)
+		}
+		return val
 	})
 }
 

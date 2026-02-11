@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +17,16 @@ import (
 
 // Ensure SQLiteStore implements BuiltinStore.
 var _ BuiltinStore = (*SQLiteStore)(nil)
+
+// parseTimeWithWarning parses a time string, logging a warning on failure.
+// Returns zero time on parse error (callers should handle appropriately).
+func parseTimeWithWarning(s, entityType, entityID, field string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		slog.Warn("failed to parse timestamp", "entity_type", entityType, "entity_id", entityID, "field", field, "error", err)
+	}
+	return t
+}
 
 // CreateLogEntry creates a new log entry.
 func (s *SQLiteStore) CreateLogEntry(ctx context.Context, entry *LogEntry) error {
@@ -84,9 +95,11 @@ func (s *SQLiteStore) SearchLogEntries(ctx context.Context, agentID string, quer
 		if err := rows.Scan(&e.ID, &e.AgentID, &e.Message, &tagsJSON, &createdAt); err != nil {
 			return nil, err
 		}
-		e.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		e.CreatedAt = parseTimeWithWarning(createdAt, "log_entry", e.ID, "created_at")
 		if tagsJSON.Valid {
-			_ = json.Unmarshal([]byte(tagsJSON.String), &e.Tags) // Best effort: invalid JSON leaves tags empty
+			if err := json.Unmarshal([]byte(tagsJSON.String), &e.Tags); err != nil {
+				slog.Warn("failed to parse log entry tags", "id", e.ID, "error", err)
+			}
 		}
 		entries = append(entries, &e)
 	}
@@ -143,12 +156,14 @@ func (s *SQLiteStore) GetTodo(ctx context.Context, id string) (*Todo, error) {
 		return nil, err
 	}
 
-	t.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-	t.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	t.CreatedAt = parseTimeWithWarning(createdAt, "todo", t.ID, "created_at")
+	t.UpdatedAt = parseTimeWithWarning(updatedAt, "todo", t.ID, "updated_at")
 	t.Notes = notes.String
 	if dueDate.Valid {
-		d, _ := time.Parse(time.RFC3339, dueDate.String)
-		t.DueDate = &d
+		parsed := parseTimeWithWarning(dueDate.String, "todo", t.ID, "due_date")
+		if !parsed.IsZero() {
+			t.DueDate = &parsed
+		}
 	}
 
 	return &t, nil
@@ -184,12 +199,14 @@ func (s *SQLiteStore) ListTodos(ctx context.Context, agentID string, status, pri
 		if err := rows.Scan(&t.ID, &t.AgentID, &t.Description, &t.Status, &t.Priority, &notes, &dueDate, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
-		t.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-		t.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+		t.CreatedAt = parseTimeWithWarning(createdAt, "todo", t.ID, "created_at")
+		t.UpdatedAt = parseTimeWithWarning(updatedAt, "todo", t.ID, "updated_at")
 		t.Notes = notes.String
 		if dueDate.Valid {
-			d, _ := time.Parse(time.RFC3339, dueDate.String)
-			t.DueDate = &d
+			parsed := parseTimeWithWarning(dueDate.String, "todo", t.ID, "due_date")
+			if !parsed.IsZero() {
+				t.DueDate = &parsed
+			}
 		}
 		todos = append(todos, &t)
 	}
@@ -219,12 +236,14 @@ func (s *SQLiteStore) ListAllTodos(ctx context.Context, limit int) ([]*Todo, err
 		if err := rows.Scan(&t.ID, &t.AgentID, &t.Description, &t.Status, &t.Priority, &notes, &dueDate, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
-		t.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-		t.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+		t.CreatedAt = parseTimeWithWarning(createdAt, "todo", t.ID, "created_at")
+		t.UpdatedAt = parseTimeWithWarning(updatedAt, "todo", t.ID, "updated_at")
 		t.Notes = notes.String
 		if dueDate.Valid {
-			d, _ := time.Parse(time.RFC3339, dueDate.String)
-			t.DueDate = &d
+			parsed := parseTimeWithWarning(dueDate.String, "todo", t.ID, "due_date")
+			if !parsed.IsZero() {
+				t.DueDate = &parsed
+			}
 		}
 		todos = append(todos, &t)
 	}
@@ -315,7 +334,7 @@ func (s *SQLiteStore) GetBBSPost(ctx context.Context, id string) (*BBSPost, erro
 
 	p.ThreadID = threadID.String
 	p.Subject = subject.String
-	p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	p.CreatedAt = parseTimeWithWarning(createdAt, "bbs_post", p.ID, "created_at")
 
 	return &p, nil
 }
@@ -346,7 +365,7 @@ func (s *SQLiteStore) ListBBSThreads(ctx context.Context, limit int) ([]*BBSPost
 		}
 		p.ThreadID = threadID.String
 		p.Subject = subject.String
-		p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		p.CreatedAt = parseTimeWithWarning(createdAt, "bbs_post", p.ID, "created_at")
 		posts = append(posts, &p)
 	}
 	return posts, rows.Err()
@@ -381,7 +400,7 @@ func (s *SQLiteStore) GetBBSThread(ctx context.Context, threadID string) (*BBSTh
 		}
 		p.ThreadID = tid.String
 		p.Subject = subject.String
-		p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		p.CreatedAt = parseTimeWithWarning(createdAt, "bbs_post", p.ID, "created_at")
 		replies = append(replies, &p)
 	}
 
@@ -423,10 +442,12 @@ func (s *SQLiteStore) GetMail(ctx context.Context, id string) (*AgentMail, error
 		return nil, err
 	}
 
-	m.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	m.CreatedAt = parseTimeWithWarning(createdAt, "mail", m.ID, "created_at")
 	if readAt.Valid {
-		t, _ := time.Parse(time.RFC3339, readAt.String)
-		m.ReadAt = &t
+		parsed := parseTimeWithWarning(readAt.String, "mail", m.ID, "read_at")
+		if !parsed.IsZero() {
+			m.ReadAt = &parsed
+		}
 	}
 
 	return &m, nil
@@ -462,10 +483,12 @@ func (s *SQLiteStore) ListInbox(ctx context.Context, agentID string, unreadOnly 
 		if err := rows.Scan(&m.ID, &m.FromAgentID, &m.ToAgentID, &m.Subject, &m.Content, &readAt, &createdAt); err != nil {
 			return nil, err
 		}
-		m.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		m.CreatedAt = parseTimeWithWarning(createdAt, "mail", m.ID, "created_at")
 		if readAt.Valid {
-			t, _ := time.Parse(time.RFC3339, readAt.String)
-			m.ReadAt = &t
+			parsed := parseTimeWithWarning(readAt.String, "mail", m.ID, "read_at")
+			if !parsed.IsZero() {
+				m.ReadAt = &parsed
+			}
 		}
 		messages = append(messages, &m)
 	}
@@ -532,8 +555,8 @@ func (s *SQLiteStore) GetNote(ctx context.Context, agentID, key string) (*AgentN
 		return nil, err
 	}
 
-	n.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-	n.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	n.CreatedAt = parseTimeWithWarning(createdAt, "note", n.ID, "created_at")
+	n.UpdatedAt = parseTimeWithWarning(updatedAt, "note", n.ID, "updated_at")
 
 	return &n, nil
 }
@@ -557,8 +580,8 @@ func (s *SQLiteStore) ListNotes(ctx context.Context, agentID string) ([]*AgentNo
 		if err := rows.Scan(&n.ID, &n.AgentID, &n.Key, &n.Value, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
-		n.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-		n.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+		n.CreatedAt = parseTimeWithWarning(createdAt, "note", n.ID, "created_at")
+		n.UpdatedAt = parseTimeWithWarning(updatedAt, "note", n.ID, "updated_at")
 		notes = append(notes, &n)
 	}
 	return notes, rows.Err()

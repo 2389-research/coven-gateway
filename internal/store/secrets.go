@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -102,8 +103,16 @@ func (s *SQLiteStore) GetSecret(ctx context.Context, id string) (*Secret, error)
 		return nil, fmt.Errorf("querying secret: %w", err)
 	}
 
-	secret.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-	secret.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	if parsed, err := time.Parse(time.RFC3339, createdAt); err != nil {
+		slog.Warn("failed to parse secret created_at", "id", secret.ID, "error", err)
+	} else {
+		secret.CreatedAt = parsed
+	}
+	if parsed, err := time.Parse(time.RFC3339, updatedAt); err != nil {
+		slog.Warn("failed to parse secret updated_at", "id", secret.ID, "error", err)
+	} else {
+		secret.UpdatedAt = parsed
+	}
 	if agentID.Valid {
 		secret.AgentID = &agentID.String
 	}
@@ -201,8 +210,16 @@ func (s *SQLiteStore) ListAllSecrets(ctx context.Context) ([]*Secret, error) {
 			return nil, fmt.Errorf("scanning secret row: %w", err)
 		}
 
-		secret.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-		secret.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+		if parsed, err := time.Parse(time.RFC3339, createdAt); err != nil {
+			slog.Warn("failed to parse secret created_at", "id", secret.ID, "error", err)
+		} else {
+			secret.CreatedAt = parsed
+		}
+		if parsed, err := time.Parse(time.RFC3339, updatedAt); err != nil {
+			slog.Warn("failed to parse secret updated_at", "id", secret.ID, "error", err)
+		} else {
+			secret.UpdatedAt = parsed
+		}
 		if agentID.Valid {
 			secret.AgentID = &agentID.String
 		}
