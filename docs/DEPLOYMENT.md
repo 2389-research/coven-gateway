@@ -17,8 +17,9 @@ coven-gateway is a single binary with an embedded SQLite database. It can run:
 # Download or build the binary
 make build
 
-# Create data directory
+# Create directories
 mkdir -p /var/lib/coven-gateway
+mkdir -p /etc/coven
 
 # Copy config
 cp config.example.yaml /etc/coven/gateway.yaml

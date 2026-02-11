@@ -28,7 +28,7 @@ cp config.example.yaml config.yaml
 
 ## Project Structure
 
-```
+```text
 coven-gateway/
 ├── cmd/                      # Binary entry points
 │   ├── coven-gateway/        # Main server

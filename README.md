@@ -430,8 +430,3 @@ tx.send(AgentMessage {
 ## License
 
 MIT
-
-## Related Projects
-
-- [coven-agent](https://github.com/2389-research/coven-agent) - The coven agent framework (Rust)
-- [mux](https://github.com/2389-research/mux-rs) - Claude API streaming library

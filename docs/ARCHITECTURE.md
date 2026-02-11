@@ -6,7 +6,7 @@ This document describes the actual implemented architecture of coven-gateway, th
 
 coven-gateway manages coven-agent connections via gRPC, routes messages from clients (HTTP API, web admin) to agents, and streams responses back in real-time.
 
-```
+```text
                     ┌─────────────────────────────────────────────────────────┐
                     │                    coven-gateway                         │
                     │                                                         │
@@ -34,7 +34,7 @@ Web Admin ─────────►│  ┌──────▼───�
 
 ## Package Structure
 
-```
+```text
 coven-gateway/
 ├── cmd/
 │   ├── coven-gateway/        # Main server binary
@@ -139,7 +139,7 @@ Browser-based admin interface (`internal/webadmin/`):
 
 ### HTTP Client sends message:
 
-```
+```text
 1. POST /api/send with JSON {agent_id, content, sender, ...}
 2. api.go validates and looks up agent (direct ID or binding)
 3. Manager.SendMessage creates request, sends via Connection's gRPC stream
@@ -151,7 +151,7 @@ Browser-based admin interface (`internal/webadmin/`):
 
 ### Web Admin chat:
 
-```
+```text
 1. User types message in chat UI
 2. WebSocket/SSE endpoint receives message
 3. Conversation service manages thread context
