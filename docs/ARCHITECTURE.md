@@ -52,7 +52,7 @@ coven-gateway/
 │   ├── config/               # Configuration loading
 │   ├── dedupe/               # Message deduplication
 │   ├── contract/             # Protocol contract tests
-│   ├── client/               # gRPC client (for testing/admin)
+│   ├── client/               # gRPC server handlers for ClientService
 │   └── admin/                # Admin operations
 ├── proto/
 │   └── coven-proto/          # Protobuf definitions (git submodule)
