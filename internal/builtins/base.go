@@ -306,7 +306,7 @@ func (b *baseHandlers) TodoUpdate(ctx context.Context, agentID string, input jso
 	}
 
 	if err := applyTodoUpdates(todo, &in); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("apply todo updates: %w", err)
 	}
 
 	if err := b.store.UpdateTodo(ctx, todo); err != nil {
