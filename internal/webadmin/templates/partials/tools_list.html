@@ -19,7 +19,7 @@
                     <p class="text-xs text-warm-400">{{len .Tools}} tool{{if ne (len .Tools) 1}}s{{end}} registered</p>
                 </div>
             </div>
-            {{if .Version}}<span class="px-2 py-0.5 text-xs rounded-full bg-forest/10 text-forest">v{{.Version}}</span>{{end}}
+            {{if .Version}}<span class="px-2 py-0.5 text-xs rounded-full bg-forest/10 text-forest">{{if eq .Version "builtin"}}{{.Version}}{{else}}v{{.Version}}{{end}}</span>{{end}}
         </div>
         {{if .Tools}}
         <div class="mt-3 space-y-2">
