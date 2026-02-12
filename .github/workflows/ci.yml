@@ -43,8 +43,46 @@ jobs:
           # Ignore protoc version comment differences (only metadata, not functional)
           git diff --ignore-matching-lines='protoc.*v[0-9]' --exit-code proto/ || (echo "Proto files out of sync. Run 'make proto' and commit." && exit 1)
 
-      - name: Run tests
-        run: go test -race -v ./...
+      - name: Run tests with coverage
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Check security-critical package coverage
+        run: |
+          echo "Checking coverage thresholds for security-critical packages..."
+
+          # Extract coverage for security-critical packages
+          ADMIN_COV=$(go tool cover -func=coverage.out | grep "internal/admin/" | grep "total:" | awk '{print $3}' | tr -d '%')
+          AUTH_COV=$(go tool cover -func=coverage.out | grep "internal/auth/" | grep "total:" | awk '{print $3}' | tr -d '%')
+
+          # If package totals aren't available, calculate from statements
+          if [ -z "$ADMIN_COV" ]; then
+            ADMIN_COV=$(go tool cover -func=coverage.out | grep "internal/admin/" | awk '{sum+=$3; count++} END {if(count>0) printf "%.1f", sum/count; else print "0"}')
+          fi
+          if [ -z "$AUTH_COV" ]; then
+            AUTH_COV=$(go tool cover -func=coverage.out | grep "internal/auth/" | awk '{sum+=$3; count++} END {if(count>0) printf "%.1f", sum/count; else print "0"}')
+          fi
+
+          echo "internal/admin coverage: ${ADMIN_COV}%"
+          echo "internal/auth coverage: ${AUTH_COV}%"
+
+          # Thresholds (can be adjusted)
+          MIN_ADMIN=70
+          MIN_AUTH=60
+
+          FAILED=0
+          if [ "$(echo "$ADMIN_COV < $MIN_ADMIN" | bc -l)" -eq 1 ]; then
+            echo "ERROR: internal/admin coverage ${ADMIN_COV}% is below minimum ${MIN_ADMIN}%"
+            FAILED=1
+          fi
+          if [ "$(echo "$AUTH_COV < $MIN_AUTH" | bc -l)" -eq 1 ]; then
+            echo "ERROR: internal/auth coverage ${AUTH_COV}% is below minimum ${MIN_AUTH}%"
+            FAILED=1
+          fi
+
+          if [ $FAILED -eq 1 ]; then
+            exit 1
+          fi
+          echo "All security-critical package coverage thresholds met!"
 
       - name: Contract tests
         run: go test -v ./internal/contract/...

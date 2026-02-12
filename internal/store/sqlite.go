@@ -89,7 +89,7 @@ CREATE INDEX IF NOT EXISTS idx_principals_type ON principals(type);
 CREATE INDEX IF NOT EXISTS idx_principals_pubkey ON principals(pubkey_fingerprint);
 CREATE TABLE IF NOT EXISTS roles (subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, role TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (subject_type, subject_id, role), CHECK (subject_type IN ('principal', 'member')), CHECK (role IN ('owner', 'admin', 'member', 'leader')));
 CREATE INDEX IF NOT EXISTS idx_roles_subject ON roles(subject_type, subject_id);
-CREATE TABLE IF NOT EXISTS audit_log (audit_id TEXT PRIMARY KEY, actor_principal_id TEXT NOT NULL, actor_member_id TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, ts TEXT NOT NULL, detail_json TEXT, CHECK (action IN ('approve_principal', 'revoke_principal', 'grant_capability', 'revoke_capability', 'create_binding', 'update_binding', 'delete_binding', 'create_token')));
+CREATE TABLE IF NOT EXISTS audit_log (audit_id TEXT PRIMARY KEY, actor_principal_id TEXT NOT NULL, actor_member_id TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, ts TEXT NOT NULL, detail_json TEXT, CHECK (action IN ('approve_principal', 'revoke_principal', 'grant_capability', 'revoke_capability', 'create_binding', 'update_binding', 'delete_binding', 'create_token', 'create_principal', 'delete_principal')));
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_principal_id);
 CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id);
