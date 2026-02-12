@@ -374,7 +374,7 @@ func (h *httpTestLogHandler) Enabled(_ context.Context, _ slog.Level) bool { ret
 func (h *httpTestLogHandler) WithAttrs(_ []slog.Attr) slog.Handler         { return h }
 func (h *httpTestLogHandler) WithGroup(_ string) slog.Handler              { return h }
 func (h *httpTestLogHandler) Handle(_ context.Context, r slog.Record) error {
-	h.records = append(h.records, r)
+	h.records = append(h.records, r.Clone())
 	return nil
 }
 

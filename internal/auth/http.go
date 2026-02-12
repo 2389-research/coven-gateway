@@ -15,7 +15,7 @@ import (
 // logHTTPAuthFailure logs an HTTP authentication failure with structured context.
 func logHTTPAuthFailure(logger *slog.Logger, r *http.Request, reason string, attrs ...any) {
 	if logger == nil {
-		return
+		logger = slog.Default()
 	}
 	baseAttrs := make([]any, 0, 8+len(attrs))
 	baseAttrs = append(baseAttrs,
@@ -105,7 +105,7 @@ func HTTPAuthMiddleware(principals PrincipalStore, roles RoleStore, verifier Tok
 
 			principalID, err := verifier.Verify(token)
 			if err != nil {
-				logHTTPAuthFailure(logger, r, "token_verification_failed")
+				logHTTPAuthFailure(logger, r, "token_verification_failed", "error", err.Error())
 				jsonError(w, "invalid token", http.StatusUnauthorized)
 				return
 			}

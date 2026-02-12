@@ -51,7 +51,7 @@ func TestScenario_AdminGateFullFlow(t *testing.T) {
 
 	// 4. Chain auth interceptor -> admin gate interceptor
 	authInterceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil, nil)
-	adminGateInterceptor := RequireAdmin()
+	adminGateInterceptor := RequireAdmin(nil)
 
 	reqCtx := scenarioContextWithAuth(token)
 
@@ -136,7 +136,7 @@ func TestScenario_NonAdminBlockedByGate(t *testing.T) {
 
 	// 4. Chain auth interceptor -> admin gate interceptor
 	authInterceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil, nil)
-	adminGateInterceptor := RequireAdmin()
+	adminGateInterceptor := RequireAdmin(nil)
 
 	reqCtx := scenarioContextWithAuth(token)
 
@@ -221,7 +221,7 @@ func TestScenario_OwnerPassesAdminGate(t *testing.T) {
 
 	// 4. Chain auth interceptor -> admin gate interceptor
 	authInterceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil, nil)
-	adminGateInterceptor := RequireAdmin()
+	adminGateInterceptor := RequireAdmin(nil)
 
 	reqCtx := scenarioContextWithAuth(token)
 
@@ -306,7 +306,7 @@ func TestScenario_NonAdminServiceBypassesGate(t *testing.T) {
 
 	// 4. Chain auth interceptor -> admin gate interceptor
 	authInterceptor := UnaryInterceptor(s, s, verifier, nil, nil, nil, nil)
-	adminGateInterceptor := RequireAdmin()
+	adminGateInterceptor := RequireAdmin(nil)
 
 	reqCtx := scenarioContextWithAuth(token)
 
@@ -382,7 +382,7 @@ func TestScenario_StreamAdminGateFullFlow(t *testing.T) {
 
 	// 4. Chain stream auth interceptor -> admin gate stream interceptor
 	authInterceptor := StreamInterceptor(s, s, verifier, nil, nil, nil, nil)
-	adminGateInterceptor := RequireAdminStream()
+	adminGateInterceptor := RequireAdminStream(nil)
 
 	reqCtx := scenarioContextWithAuth(token)
 	stream := &mockServerStream{ctx: reqCtx}

@@ -43,7 +43,7 @@ type AuthConfig struct {
 // logAuthFailure logs an authentication failure with structured context.
 func logAuthFailure(logger *slog.Logger, ctx context.Context, reason string, attrs ...any) {
 	if logger == nil {
-		return
+		logger = slog.Default()
 	}
 	// Extract peer address if available
 	baseAttrs := []any{"reason", reason}

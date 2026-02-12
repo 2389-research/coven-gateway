@@ -158,11 +158,11 @@ func createAuthenticatedGRPCServer(cfg *config.Config, sqlStore *store.SQLiteSto
 		}),
 		grpc.ChainUnaryInterceptor(
 			auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore, logger),
-			auth.RequireAdmin(),
+			auth.RequireAdmin(logger),
 		),
 		grpc.ChainStreamInterceptor(
 			auth.StreamInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore, logger),
-			auth.RequireAdminStream(),
+			auth.RequireAdminStream(logger),
 		),
 	)
 	logger.Info("auth interceptors enabled (JWT + SSH)")

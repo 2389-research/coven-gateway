@@ -910,7 +910,7 @@ func (h *testLogHandler) Enabled(_ context.Context, _ slog.Level) bool { return 
 func (h *testLogHandler) WithAttrs(_ []slog.Attr) slog.Handler         { return h }
 func (h *testLogHandler) WithGroup(_ string) slog.Handler              { return h }
 func (h *testLogHandler) Handle(_ context.Context, r slog.Record) error {
-	h.records = append(h.records, r)
+	h.records = append(h.records, r.Clone())
 	return nil
 }
 
