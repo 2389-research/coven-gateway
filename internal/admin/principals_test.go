@@ -48,6 +48,7 @@ func TestListPrincipals_Success(t *testing.T) {
 		{
 			ID:          "client-001",
 			Type:        store.PrincipalTypeClient,
+			PubkeyFP:    testFingerprint("client001"),
 			DisplayName: "Test Client 1",
 			Status:      store.PrincipalStatusApproved,
 			CreatedAt:   time.Now().UTC(),
@@ -171,6 +172,7 @@ func TestListPrincipals_IncludesRoles(t *testing.T) {
 	require.NoError(t, s.CreatePrincipal(context.Background(), &store.Principal{
 		ID:          "client-001",
 		Type:        store.PrincipalTypeClient,
+		PubkeyFP:    testFingerprint("clientroles"),
 		DisplayName: "Client With Roles",
 		Status:      store.PrincipalStatusApproved,
 		CreatedAt:   time.Now().UTC(),
@@ -413,6 +415,7 @@ func TestDeletePrincipal_Success(t *testing.T) {
 	require.NoError(t, s.CreatePrincipal(context.Background(), &store.Principal{
 		ID:          "to-delete",
 		Type:        store.PrincipalTypeClient,
+		PubkeyFP:    testFingerprint("todelete"),
 		DisplayName: "Delete Me",
 		Status:      store.PrincipalStatusApproved,
 		CreatedAt:   time.Now().UTC(),
@@ -464,6 +467,7 @@ func TestDeletePrincipal_WritesAuditLog(t *testing.T) {
 	require.NoError(t, s.CreatePrincipal(context.Background(), &store.Principal{
 		ID:          principalID,
 		Type:        store.PrincipalTypeClient,
+		PubkeyFP:    testFingerprint("auditdelete"),
 		DisplayName: "Delete Audit Test",
 		Status:      store.PrincipalStatusApproved,
 		CreatedAt:   time.Now().UTC(),
@@ -615,4 +619,99 @@ func TestParsePrincipalType(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResolveAgentFingerprint_WithPubkey(t *testing.T) {
+	// Valid SSH public key (ed25519)
+	validPubkey := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGvMD0YhM8XQ5S/4t6GVXdU5YJ5d+/9/Sd3TThQwEqbP test@example.com"
+
+	req := &pb.CreatePrincipalRequest{
+		Pubkey: &validPubkey,
+	}
+
+	fp, err := resolveAgentFingerprint(req)
+	require.NoError(t, err)
+	assert.NotEmpty(t, fp)
+	// Fingerprint should be a 64-character hex string (SHA256)
+	assert.Len(t, fp, 64)
+	// Verify it's all hex characters
+	for _, c := range fp {
+		assert.True(t, (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'),
+			"fingerprint should be lowercase hex, got char: %c", c)
+	}
+}
+
+func TestResolveAgentFingerprint_InvalidPubkey(t *testing.T) {
+	invalidPubkey := "not-a-valid-pubkey"
+
+	req := &pb.CreatePrincipalRequest{
+		Pubkey: &invalidPubkey,
+	}
+
+	_, err := resolveAgentFingerprint(req)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid pubkey")
+}
+
+func TestResolveAgentFingerprint_PrefersPubkeyOverPubkeyFp(t *testing.T) {
+	// When both pubkey and pubkey_fp are provided, pubkey takes precedence
+	validPubkey := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGvMD0YhM8XQ5S/4t6GVXdU5YJ5d+/9/Sd3TThQwEqbP test@example.com"
+	manualFp := testFingerprint("manual")
+
+	req := &pb.CreatePrincipalRequest{
+		Pubkey:   &validPubkey,
+		PubkeyFp: &manualFp,
+	}
+
+	fp, err := resolveAgentFingerprint(req)
+	require.NoError(t, err)
+	// Should use derived fingerprint, not the manual one
+	assert.NotEqual(t, manualFp, fp)
+	assert.Len(t, fp, 64)
+}
+
+func TestAssignRoles_InvalidRoleNames(t *testing.T) {
+	s := createTestStore(t)
+	svc := createPrincipalService(t, s)
+	ctx := createAdminContext("admin-1")
+
+	// Create a principal first
+	resp, err := svc.CreatePrincipal(ctx, &pb.CreatePrincipalRequest{
+		Type:        "client",
+		DisplayName: "Test Client",
+		Roles:       []string{"invalid_role", "also_invalid"},
+	})
+	require.NoError(t, err) // Principal creation succeeds
+
+	// But invalid roles should not be assigned (assignRoles skips on error)
+	roles, err := s.ListRoles(context.Background(), store.RoleSubjectPrincipal, resp.Id)
+	require.NoError(t, err)
+	assert.Empty(t, roles, "invalid roles should not be assigned")
+}
+
+func TestAssignRoles_MixedValidAndInvalidRoles(t *testing.T) {
+	s := createTestStore(t)
+	svc := createPrincipalService(t, s)
+	ctx := createAdminContext("admin-1")
+
+	// Create a principal with mixed valid and invalid roles
+	resp, err := svc.CreatePrincipal(ctx, &pb.CreatePrincipalRequest{
+		Type:        "client",
+		DisplayName: "Test Client",
+		Roles:       []string{"admin", "invalid_role", "member"},
+	})
+	require.NoError(t, err)
+
+	// Only valid roles should be assigned
+	roles, err := s.ListRoles(context.Background(), store.RoleSubjectPrincipal, resp.Id)
+	require.NoError(t, err)
+	assert.Len(t, roles, 2)
+
+	roleStrings := make([]string, len(roles))
+	for i, r := range roles {
+		roleStrings[i] = string(r)
+	}
+	assert.Contains(t, roleStrings, "admin")
+	assert.Contains(t, roleStrings, "member")
+	assert.NotContains(t, roleStrings, "invalid_role")
 }

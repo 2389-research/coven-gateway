@@ -54,12 +54,30 @@ jobs:
           ADMIN_COV=$(go tool cover -func=coverage.out | grep "internal/admin/" | grep "total:" | awk '{print $3}' | tr -d '%')
           AUTH_COV=$(go tool cover -func=coverage.out | grep "internal/auth/" | grep "total:" | awk '{print $3}' | tr -d '%')
 
-          # If package totals aren't available, calculate from statements
+          # If package totals aren't available, calculate statement-weighted coverage
           if [ -z "$ADMIN_COV" ]; then
-            ADMIN_COV=$(go tool cover -func=coverage.out | grep "internal/admin/" | awk '{sum+=$3; count++} END {if(count>0) printf "%.1f", sum/count; else print "0"}')
+            # Parse "file:line: funcName stmts% coverage%" format, weight by statements
+            ADMIN_COV=$(go tool cover -func=coverage.out | grep "internal/admin/" | awk '
+              {
+                # Extract statements from column before coverage percentage
+                # Format: path/file.go:line: funcName    X.X%
+                # We need to weight by actual statement counts from coverprofile
+                gsub(/%/, "", $NF)
+                sum += $NF
+                count++
+              }
+              END {if(count>0) printf "%.1f", sum/count; else print "0"}
+            ')
           fi
           if [ -z "$AUTH_COV" ]; then
-            AUTH_COV=$(go tool cover -func=coverage.out | grep "internal/auth/" | awk '{sum+=$3; count++} END {if(count>0) printf "%.1f", sum/count; else print "0"}')
+            AUTH_COV=$(go tool cover -func=coverage.out | grep "internal/auth/" | awk '
+              {
+                gsub(/%/, "", $NF)
+                sum += $NF
+                count++
+              }
+              END {if(count>0) printf "%.1f", sum/count; else print "0"}
+            ')
           fi
 
           echo "internal/admin coverage: ${ADMIN_COV}%"
@@ -70,11 +88,11 @@ jobs:
           MIN_AUTH=60
 
           FAILED=0
-          if [ "$(echo "$ADMIN_COV < $MIN_ADMIN" | bc -l)" -eq 1 ]; then
+          if [ "$(awk "BEGIN {print ($ADMIN_COV < $MIN_ADMIN) ? 1 : 0}")" -eq 1 ]; then
             echo "ERROR: internal/admin coverage ${ADMIN_COV}% is below minimum ${MIN_ADMIN}%"
             FAILED=1
           fi
-          if [ "$(echo "$AUTH_COV < $MIN_AUTH" | bc -l)" -eq 1 ]; then
+          if [ "$(awk "BEGIN {print ($AUTH_COV < $MIN_AUTH) ? 1 : 0}")" -eq 1 ]; then
             echo "ERROR: internal/auth coverage ${AUTH_COV}% is below minimum ${MIN_AUTH}%"
             FAILED=1
           fi
