@@ -157,11 +157,11 @@ func createAuthenticatedGRPCServer(cfg *config.Config, sqlStore *store.SQLiteSto
 			PermitWithoutStream: true,
 		}),
 		grpc.ChainUnaryInterceptor(
-			auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore),
+			auth.UnaryInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore, logger),
 			auth.RequireAdmin(),
 		),
 		grpc.ChainStreamInterceptor(
-			auth.StreamInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore),
+			auth.StreamInterceptor(sqlStore, sqlStore, jwtVerifier, sshVerifier, authConfig, sqlStore, logger),
 			auth.RequireAdminStream(),
 		),
 	)
@@ -267,8 +267,8 @@ func (g *Gateway) registerHTTPAPIRoutes(mux *http.ServeMux, cfg *config.Config, 
 		if err != nil {
 			return fmt.Errorf("creating HTTP JWT verifier: %w", err)
 		}
-		authMiddleware := auth.HTTPAuthMiddleware(sqlStore, sqlStore, httpVerifier)
-		adminMiddleware := auth.RequireAdminHTTP()
+		authMiddleware := auth.HTTPAuthMiddleware(sqlStore, sqlStore, httpVerifier, logger)
+		adminMiddleware := auth.RequireAdminHTTP(logger)
 		mux.Handle("/api/agents", authMiddleware(http.HandlerFunc(g.handleListAgents)))
 		mux.Handle("/api/agents/", authMiddleware(http.HandlerFunc(g.handleAgentHistory)))
 		mux.Handle("/api/send", authMiddleware(http.HandlerFunc(g.handleSendMessage)))

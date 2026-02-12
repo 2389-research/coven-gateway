@@ -10,7 +10,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,7 +95,7 @@ func TestAuthInterceptor_ValidToken(t *testing.T) {
 		roles: []store.RoleName{store.RoleAdmin},
 	}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, nil)
 
 	ctx := contextWithAuth(token)
 	handlerCalled := false
@@ -146,7 +148,7 @@ func TestAuthInterceptor_MissingHeader(t *testing.T) {
 	principals := &mockPrincipalStore{}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, nil)
 
 	// Context without authorization header
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.New(map[string]string{}))
@@ -180,7 +182,7 @@ func TestAuthInterceptor_InvalidToken(t *testing.T) {
 	principals := &mockPrincipalStore{}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, nil)
 
 	ctx := contextWithAuth("invalid-token")
 
@@ -217,7 +219,7 @@ func TestAuthInterceptor_PrincipalNotFound(t *testing.T) {
 	}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, nil)
 
 	ctx := contextWithAuth(token)
 
@@ -259,7 +261,7 @@ func TestAuthInterceptor_PrincipalRevoked(t *testing.T) {
 	}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, nil)
 
 	ctx := contextWithAuth(token)
 
@@ -301,7 +303,7 @@ func TestAuthInterceptor_PrincipalPending(t *testing.T) {
 	}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, nil)
 
 	ctx := contextWithAuth(token)
 
@@ -353,7 +355,7 @@ func TestAuthInterceptor_AllowedStatuses(t *testing.T) {
 				roles: []store.RoleName{store.RoleMember},
 			}
 
-			interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil)
+			interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, nil)
 			ctx := contextWithAuth(token)
 
 			handlerCalled := false
@@ -388,7 +390,7 @@ func TestAuthInterceptor_StoreError(t *testing.T) {
 	}
 	roles := &mockRoleStore{}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, nil)
 
 	ctx := contextWithAuth(token)
 
@@ -432,7 +434,7 @@ func TestAuthInterceptor_RoleStoreError(t *testing.T) {
 		err: errors.New("failed to list roles"),
 	}
 
-	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil)
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, nil)
 
 	ctx := contextWithAuth(token)
 
@@ -487,7 +489,7 @@ func TestStreamInterceptor_ValidToken(t *testing.T) {
 		roles: []store.RoleName{store.RoleAdmin},
 	}
 
-	interceptor := StreamInterceptor(principals, roles, verifier, nil, nil, nil)
+	interceptor := StreamInterceptor(principals, roles, verifier, nil, nil, nil, nil)
 
 	ctx := contextWithAuth(token)
 	stream := &mockServerStream{ctx: ctx}
@@ -538,7 +540,7 @@ func TestStreamInterceptor_MissingHeader(t *testing.T) {
 	principals := &mockPrincipalStore{}
 	roles := &mockRoleStore{}
 
-	interceptor := StreamInterceptor(principals, roles, verifier, nil, nil, nil)
+	interceptor := StreamInterceptor(principals, roles, verifier, nil, nil, nil, nil)
 
 	// Context without authorization header
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.New(map[string]string{}))
@@ -678,7 +680,7 @@ func TestExtractAuth_AutoCreatesPrincipalApproved(t *testing.T) {
 
 	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp)
 
-	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, config, principals)
+	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, config, principals, nil)
 
 	handlerCalled := false
 	var capturedCtx context.Context
@@ -768,7 +770,7 @@ func TestExtractAuth_AutoCreatesPrincipalPending(t *testing.T) {
 
 	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp)
 
-	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, config, principals)
+	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, config, principals, nil)
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called for pending principal")
@@ -834,7 +836,7 @@ func TestExtractAuth_RejectsUnknownWhenDisabled(t *testing.T) {
 
 	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp)
 
-	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, config, principals)
+	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, config, principals, nil)
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called")
@@ -877,7 +879,7 @@ func TestExtractAuth_RejectsUnknownWhenConfigNil(t *testing.T) {
 	ctx := contextWithSSHAuth(pubkeyStr, signature, timestamp)
 
 	// config is nil, so auto-registration should be disabled
-	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, nil, nil)
+	interceptor := UnaryInterceptor(principals, roles, jwtVerifier, sshVerifier, nil, nil, nil)
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called")
@@ -896,5 +898,175 @@ func TestExtractAuth_RejectsUnknownWhenConfigNil(t *testing.T) {
 
 	if st.Code() != codes.Unauthenticated {
 		t.Errorf("status code = %v, want %v", st.Code(), codes.Unauthenticated)
+	}
+}
+
+// testLogHandler captures log records for testing.
+type testLogHandler struct {
+	records []slog.Record
+}
+
+func (h *testLogHandler) Enabled(_ context.Context, _ slog.Level) bool { return true }
+func (h *testLogHandler) WithAttrs(_ []slog.Attr) slog.Handler         { return h }
+func (h *testLogHandler) WithGroup(_ string) slog.Handler              { return h }
+func (h *testLogHandler) Handle(_ context.Context, r slog.Record) error {
+	h.records = append(h.records, r)
+	return nil
+}
+
+func (h *testLogHandler) hasRecordWithReason(reason string) bool {
+	for _, r := range h.records {
+		var foundReason string
+		r.Attrs(func(a slog.Attr) bool {
+			if a.Key == "reason" {
+				foundReason = a.Value.String()
+				return false
+			}
+			return true
+		})
+		if foundReason == reason {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *testLogHandler) lastRecordMessage() string {
+	if len(h.records) == 0 {
+		return ""
+	}
+	return h.records[len(h.records)-1].Message
+}
+
+func TestAuthInterceptor_LogsFailure_MissingMetadata(t *testing.T) {
+	verifier, _ := NewJWTVerifier(interceptorTestSecret)
+	principals := &mockPrincipalStore{}
+	roles := &mockRoleStore{}
+
+	handler := &testLogHandler{}
+	logger := slog.New(handler)
+
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, logger)
+
+	// Context without any metadata
+	ctx := context.Background()
+
+	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
+		t.Error("handler should not be called")
+		return nil, errors.New("unexpected handler call")
+	})
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	// Verify log was written with correct message and reason
+	if len(handler.records) == 0 {
+		t.Fatal("expected log record, got none")
+	}
+
+	if !strings.Contains(handler.lastRecordMessage(), "auth failure") {
+		t.Errorf("expected 'auth failure' in message, got %q", handler.lastRecordMessage())
+	}
+
+	if !handler.hasRecordWithReason("missing_metadata") {
+		t.Error("expected log record with reason 'missing_metadata'")
+	}
+}
+
+func TestAuthInterceptor_LogsFailure_InvalidToken(t *testing.T) {
+	verifier, _ := NewJWTVerifier(interceptorTestSecret)
+	principals := &mockPrincipalStore{}
+	roles := &mockRoleStore{}
+
+	handler := &testLogHandler{}
+	logger := slog.New(handler)
+
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, logger)
+
+	ctx := contextWithAuth("invalid-token")
+
+	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
+		t.Error("handler should not be called")
+		return nil, errors.New("unexpected handler call")
+	})
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	if !handler.hasRecordWithReason("jwt_auth_failed") {
+		t.Error("expected log record with reason 'jwt_auth_failed'")
+	}
+}
+
+func TestAuthInterceptor_LogsFailure_PrincipalRevoked(t *testing.T) {
+	verifier, _ := NewJWTVerifier(interceptorTestSecret)
+	principalID := "revoked-principal"
+	token, _ := verifier.Generate(principalID, time.Hour)
+
+	principals := &mockPrincipalStore{
+		principal: &store.Principal{
+			ID:     principalID,
+			Type:   store.PrincipalTypeClient,
+			Status: store.PrincipalStatusRevoked,
+		},
+	}
+	roles := &mockRoleStore{}
+
+	handler := &testLogHandler{}
+	logger := slog.New(handler)
+
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, logger)
+
+	ctx := contextWithAuth(token)
+
+	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
+		t.Error("handler should not be called")
+		return nil, errors.New("unexpected handler call")
+	})
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	if !handler.hasRecordWithReason("principal_status_invalid") {
+		t.Error("expected log record with reason 'principal_status_invalid'")
+	}
+
+	// Verify principal_id is logged
+	var foundPrincipalID bool
+	for _, r := range handler.records {
+		r.Attrs(func(a slog.Attr) bool {
+			if a.Key == "principal_id" && a.Value.String() == principalID {
+				foundPrincipalID = true
+				return false
+			}
+			return true
+		})
+	}
+	if !foundPrincipalID {
+		t.Errorf("expected principal_id %q in log attributes", principalID)
+	}
+}
+
+func TestAuthInterceptor_NoLoggerNoError(t *testing.T) {
+	// Verify that passing nil logger doesn't cause a panic
+	verifier, _ := NewJWTVerifier(interceptorTestSecret)
+	principals := &mockPrincipalStore{}
+	roles := &mockRoleStore{}
+
+	interceptor := UnaryInterceptor(principals, roles, verifier, nil, nil, nil, nil)
+
+	ctx := context.Background()
+
+	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
+		t.Error("handler should not be called")
+		return nil, errors.New("unexpected handler call")
+	})
+
+	// Should fail but not panic
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

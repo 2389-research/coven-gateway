@@ -6,6 +6,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -38,16 +40,31 @@ type AuthConfig struct {
 	AgentAutoRegistration string // "approved", "pending", or "disabled"
 }
 
+// logAuthFailure logs an authentication failure with structured context.
+func logAuthFailure(logger *slog.Logger, ctx context.Context, reason string, attrs ...any) {
+	if logger == nil {
+		return
+	}
+	// Extract peer address if available
+	baseAttrs := []any{"reason", reason}
+	if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
+		baseAttrs = append(baseAttrs, "peer_addr", p.Addr.String())
+	}
+	baseAttrs = append(baseAttrs, attrs...)
+	logger.Warn("auth failure", baseAttrs...)
+}
+
 // UnaryInterceptor returns a gRPC unary interceptor that authenticates requests.
 // The optional config and creator parameters enable agent auto-registration.
-func UnaryInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator) grpc.UnaryServerInterceptor {
+// The optional logger enables auth failure logging for security monitoring.
+func UnaryInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator, logger *slog.Logger) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req any,
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (any, error) {
-		authCtx, err := extractAuth(ctx, principals, roles, tokens, sshVerifier, config, creator)
+		authCtx, err := extractAuth(ctx, principals, roles, tokens, sshVerifier, config, creator, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -59,14 +76,15 @@ func UnaryInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVe
 
 // StreamInterceptor returns a gRPC stream interceptor that authenticates requests.
 // The optional config and creator parameters enable agent auto-registration.
-func StreamInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator) grpc.StreamServerInterceptor {
+// The optional logger enables auth failure logging for security monitoring.
+func StreamInterceptor(principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator, logger *slog.Logger) grpc.StreamServerInterceptor {
 	return func(
 		srv any,
 		ss grpc.ServerStream,
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		authCtx, err := extractAuth(ss.Context(), principals, roles, tokens, sshVerifier, config, creator)
+		authCtx, err := extractAuth(ss.Context(), principals, roles, tokens, sshVerifier, config, creator, logger)
 		if err != nil {
 			return err
 		}
@@ -292,9 +310,11 @@ func buildAuthContextGRPC(ctx context.Context, p *store.Principal, roles RoleSto
 
 // extractAuth extracts authentication context from gRPC metadata.
 // Supports SSH auth for agents and JWT auth for clients.
-func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator) (*AuthContext, error) {
+// The optional logger enables auth failure logging for security monitoring.
+func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore, tokens TokenVerifier, sshVerifier *SSHVerifier, config *AuthConfig, creator PrincipalCreator, logger *slog.Logger) (*AuthContext, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
+		logAuthFailure(logger, ctx, "missing_metadata")
 		return nil, status.Error(codes.Unauthenticated, "missing metadata")
 	}
 
@@ -305,6 +325,7 @@ func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore
 	if sshReq := ExtractSSHAuthFromMetadata(md); sshReq != nil {
 		result, err := authenticateWithSSH(ctx, sshReq, sshVerifier, principals, config, creator)
 		if err != nil {
+			logAuthFailure(logger, ctx, "ssh_auth_failed", "error", err.Error())
 			return nil, err
 		}
 		principal = result.principal
@@ -312,12 +333,14 @@ func extractAuth(ctx context.Context, principals PrincipalStore, roles RoleStore
 	} else {
 		p, err := authenticateWithJWT(ctx, md, tokens, principals)
 		if err != nil {
+			logAuthFailure(logger, ctx, "jwt_auth_failed", "error", err.Error())
 			return nil, err
 		}
 		principal = p
 	}
 
 	if err := validatePrincipalStatusGRPC(principal, autoRegistered); err != nil {
+		logAuthFailure(logger, ctx, "principal_status_invalid", "principal_id", principal.ID, "status", string(principal.Status))
 		return nil, err
 	}
 
