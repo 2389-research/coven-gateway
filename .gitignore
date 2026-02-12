@@ -14,3 +14,6 @@ config.yaml
 *.db-shm
 *.db-wal
 .scratch/
+
+# Git worktrees for parallel development
+.worktrees/
