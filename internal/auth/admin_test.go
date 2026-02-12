@@ -14,7 +14,7 @@ import (
 )
 
 func TestAdminGate_AdminCan(t *testing.T) {
-	interceptor := RequireAdmin()
+	interceptor := RequireAdmin(nil)
 
 	// Create context with admin auth
 	authCtx := &AuthContext{
@@ -47,7 +47,7 @@ func TestAdminGate_AdminCan(t *testing.T) {
 }
 
 func TestAdminGate_NonAdminCannot(t *testing.T) {
-	interceptor := RequireAdmin()
+	interceptor := RequireAdmin(nil)
 
 	// Create context with member (non-admin) auth
 	authCtx := &AuthContext{
@@ -84,7 +84,7 @@ func TestAdminGate_NonAdminCannot(t *testing.T) {
 }
 
 func TestAdminGate_OwnerCan(t *testing.T) {
-	interceptor := RequireAdmin()
+	interceptor := RequireAdmin(nil)
 
 	// Create context with owner auth (owner is also considered admin)
 	authCtx := &AuthContext{
@@ -117,7 +117,7 @@ func TestAdminGate_OwnerCan(t *testing.T) {
 }
 
 func TestAdminGate_ClientServiceOpen(t *testing.T) {
-	interceptor := RequireAdmin()
+	interceptor := RequireAdmin(nil)
 
 	// Create context with member (non-admin) auth
 	authCtx := &AuthContext{
@@ -151,7 +151,7 @@ func TestAdminGate_ClientServiceOpen(t *testing.T) {
 }
 
 func TestAdminGate_AgentServiceOpen(t *testing.T) {
-	interceptor := RequireAdmin()
+	interceptor := RequireAdmin(nil)
 
 	// Create context with member (non-admin) auth
 	authCtx := &AuthContext{
@@ -185,7 +185,7 @@ func TestAdminGate_AgentServiceOpen(t *testing.T) {
 }
 
 func TestAdminGate_NoAuthContext(t *testing.T) {
-	interceptor := RequireAdmin()
+	interceptor := RequireAdmin(nil)
 
 	// Create context without any auth
 	ctx := context.Background()
@@ -217,7 +217,7 @@ func TestAdminGate_NoAuthContext(t *testing.T) {
 }
 
 func TestAdminGateStream_AdminCan(t *testing.T) {
-	interceptor := RequireAdminStream()
+	interceptor := RequireAdminStream(nil)
 
 	// Create context with admin auth
 	authCtx := &AuthContext{
@@ -248,7 +248,7 @@ func TestAdminGateStream_AdminCan(t *testing.T) {
 }
 
 func TestAdminGateStream_NonAdminCannot(t *testing.T) {
-	interceptor := RequireAdminStream()
+	interceptor := RequireAdminStream(nil)
 
 	// Create context with member (non-admin) auth
 	authCtx := &AuthContext{
@@ -283,7 +283,7 @@ func TestAdminGateStream_NonAdminCannot(t *testing.T) {
 }
 
 func TestAdminGateStream_NonAdminServicePassThrough(t *testing.T) {
-	interceptor := RequireAdminStream()
+	interceptor := RequireAdminStream(nil)
 
 	// Create context with member (non-admin) auth
 	authCtx := &AuthContext{
@@ -315,7 +315,7 @@ func TestAdminGateStream_NonAdminServicePassThrough(t *testing.T) {
 }
 
 func TestAdminGateStream_NoAuthContext(t *testing.T) {
-	interceptor := RequireAdminStream()
+	interceptor := RequireAdminStream(nil)
 
 	// Create context without any auth
 	ctx := context.Background()
@@ -345,7 +345,7 @@ func TestAdminGateStream_NoAuthContext(t *testing.T) {
 }
 
 func TestAdminGate_EmptyRoles(t *testing.T) {
-	interceptor := RequireAdmin()
+	interceptor := RequireAdmin(nil)
 
 	// Create context with auth but no roles
 	authCtx := &AuthContext{
@@ -378,7 +378,7 @@ func TestAdminGate_EmptyRoles(t *testing.T) {
 }
 
 func TestAdminGate_MultipleRolesIncludingAdmin(t *testing.T) {
-	interceptor := RequireAdmin()
+	interceptor := RequireAdmin(nil)
 
 	// Create context with multiple roles including admin
 	authCtx := &AuthContext{
