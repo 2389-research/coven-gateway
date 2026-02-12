@@ -363,16 +363,22 @@ func (s *SQLiteStore) migrateAuditLogCheckConstraint() error {
 		return fmt.Errorf("checking audit_log table definition: %w", err)
 	}
 
-	// If the constraint already includes create_principal, no migration needed
-	if strings.Contains(tableDef, "create_principal") {
+	// If the constraint already includes both create_principal and delete_principal, no migration needed
+	if strings.Contains(tableDef, "create_principal") && strings.Contains(tableDef, "delete_principal") {
 		return nil
 	}
 
 	s.logger.Info("migrating audit_log check constraint to add create_principal and delete_principal")
 
 	// SQLite doesn't support ALTER TABLE to modify CHECK constraints,
-	// so we need to recreate the table
-	_, err = s.db.Exec(`
+	// so we need to recreate the table. We wrap this in a transaction
+	// to avoid leaving the database in a broken state if any step fails.
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin audit_log migration: %w", err)
+	}
+
+	_, err = tx.Exec(`
 		-- Create new table with updated constraint
 		CREATE TABLE audit_log_new (
 			audit_id TEXT PRIMARY KEY,
@@ -401,7 +407,12 @@ func (s *SQLiteStore) migrateAuditLogCheckConstraint() error {
 		CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id);
 	`)
 	if err != nil {
+		_ = tx.Rollback()
 		return fmt.Errorf("recreating audit_log table with updated constraint: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing audit_log migration: %w", err)
 	}
 
 	s.logger.Info("migrated audit_log check constraint")
