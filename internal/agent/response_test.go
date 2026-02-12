@@ -185,6 +185,24 @@ func TestBuildToolStateResponse(t *testing.T) {
 	assert.Equal(t, "Processing...", resp.ToolState.Detail)
 }
 
+func TestBuildToolStateResponse_NilDetail(t *testing.T) {
+	// The detail field is optional in protobuf - test with nil
+	event := &pb.MessageResponse_ToolState{
+		ToolState: &pb.ToolStateUpdate{
+			Id:     "tool-999",
+			State:  pb.ToolState_TOOL_STATE_COMPLETED,
+			Detail: nil, // optional field not set
+		},
+	}
+	resp := buildToolStateResponse(event)
+
+	assert.Equal(t, EventToolState, resp.Event)
+	require.NotNil(t, resp.ToolState)
+	assert.Equal(t, "tool-999", resp.ToolState.ID)
+	assert.Equal(t, "completed", resp.ToolState.State)
+	assert.Equal(t, "", resp.ToolState.Detail) // GetDetail returns empty string for nil
+}
+
 func TestBuildCancelledResponse(t *testing.T) {
 	event := &pb.MessageResponse_Cancelled{
 		Cancelled: &pb.Cancelled{
@@ -225,6 +243,7 @@ func TestToolStateToString(t *testing.T) {
 		state    pb.ToolState
 		expected string
 	}{
+		{pb.ToolState_TOOL_STATE_UNSPECIFIED, "unknown"}, // UNSPECIFIED (value 0) falls through to default
 		{pb.ToolState_TOOL_STATE_PENDING, "pending"},
 		{pb.ToolState_TOOL_STATE_AWAITING_APPROVAL, "awaiting_approval"},
 		{pb.ToolState_TOOL_STATE_RUNNING, "running"},
@@ -439,13 +458,14 @@ func TestManagerConvertResponse(t *testing.T) {
 		assert.Equal(t, "req-3", resp.ToolApprovalRequest.RequestID)
 	})
 
-	t.Run("returns empty response for unknown event", func(t *testing.T) {
+	t.Run("returns zero-value event for missing event", func(t *testing.T) {
 		pbResp := &pb.MessageResponse{
 			RequestId: "req-4",
 			// No event set
 		}
 		resp := m.convertResponse(pbResp)
 		// Should return empty Response, not nil
+		// Note: zero-value for ResponseEvent is EventThinking (0)
 		assert.Equal(t, ResponseEvent(0), resp.Event)
 	})
 }
@@ -489,5 +509,56 @@ func TestBuildResponsesWithNilFields(t *testing.T) {
 		resp := buildUsageResponse(event)
 		require.NotNil(t, resp)
 		assert.Equal(t, int32(0), resp.Usage.InputTokens)
+	})
+
+	t.Run("file with nil inner", func(t *testing.T) {
+		event := &pb.MessageResponse_File{File: nil}
+		resp := buildFileResponse(event)
+		require.NotNil(t, resp)
+		assert.Equal(t, EventFile, resp.Event)
+		require.NotNil(t, resp.File)
+		assert.Equal(t, "", resp.File.Filename)
+		assert.Equal(t, "", resp.File.MimeType)
+		assert.Nil(t, resp.File.Data)
+	})
+
+	t.Run("session orphaned with nil inner", func(t *testing.T) {
+		event := &pb.MessageResponse_SessionOrphaned{SessionOrphaned: nil}
+		resp := buildSessionOrphanedResponse(event)
+		require.NotNil(t, resp)
+		assert.Equal(t, EventSessionOrphaned, resp.Event)
+		assert.Equal(t, "", resp.Error)
+	})
+
+	t.Run("tool state with nil inner", func(t *testing.T) {
+		event := &pb.MessageResponse_ToolState{ToolState: nil}
+		resp := buildToolStateResponse(event)
+		require.NotNil(t, resp)
+		assert.Equal(t, EventToolState, resp.Event)
+		require.NotNil(t, resp.ToolState)
+		assert.Equal(t, "", resp.ToolState.ID)
+		assert.Equal(t, "unknown", resp.ToolState.State) // TOOL_STATE_UNSPECIFIED (0) maps to "unknown"
+		assert.Equal(t, "", resp.ToolState.Detail)
+	})
+
+	t.Run("cancelled with nil inner", func(t *testing.T) {
+		event := &pb.MessageResponse_Cancelled{Cancelled: nil}
+		resp := buildCancelledResponse(event)
+		require.NotNil(t, resp)
+		assert.Equal(t, EventCanceled, resp.Event)
+		assert.Equal(t, "", resp.Error)
+		assert.True(t, resp.Done)
+	})
+
+	t.Run("tool approval request with nil inner", func(t *testing.T) {
+		event := &pb.MessageResponse_ToolApprovalRequest{ToolApprovalRequest: nil}
+		resp := buildToolApprovalRequestResponse(event, "req-test")
+		require.NotNil(t, resp)
+		assert.Equal(t, EventToolApprovalRequest, resp.Event)
+		require.NotNil(t, resp.ToolApprovalRequest)
+		assert.Equal(t, "", resp.ToolApprovalRequest.ID)
+		assert.Equal(t, "", resp.ToolApprovalRequest.Name)
+		assert.Equal(t, "", resp.ToolApprovalRequest.InputJSON)
+		assert.Equal(t, "req-test", resp.ToolApprovalRequest.RequestID)
 	})
 }
