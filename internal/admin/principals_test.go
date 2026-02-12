@@ -100,9 +100,11 @@ func TestListPrincipals_FilterByType(t *testing.T) {
 	ctx := createAdminContext("admin-1")
 
 	// Create mixed principals
+	// Note: pubkey_fingerprint is NOT NULL UNIQUE, so even clients need unique values
 	require.NoError(t, s.CreatePrincipal(context.Background(), &store.Principal{
 		ID:          "client-001",
 		Type:        store.PrincipalTypeClient,
+		PubkeyFP:    testFingerprint("filterclient"),
 		DisplayName: "Client",
 		Status:      store.PrincipalStatusApproved,
 		CreatedAt:   time.Now().UTC(),

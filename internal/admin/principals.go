@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"log/slog"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -136,11 +137,17 @@ func resolveAgentFingerprint(req *pb.CreatePrincipalRequest) (string, error) {
 }
 
 // assignRoles attempts to add roles to principal, returning successfully added roles.
+// Invalid or duplicate roles are logged and skipped (best-effort assignment).
 func (s *PrincipalService) assignRoles(ctx context.Context, principalID string, roles []string) []string {
 	var added []string
 	for _, roleStr := range roles {
 		role := store.RoleName(roleStr)
 		if err := s.principalStore.AddRole(ctx, store.RoleSubjectPrincipal, principalID, role); err != nil {
+			slog.Warn("failed to assign role to principal",
+				"principal_id", principalID,
+				"role", roleStr,
+				"error", err,
+			)
 			continue // Best effort - skip on error
 		}
 		added = append(added, roleStr)
