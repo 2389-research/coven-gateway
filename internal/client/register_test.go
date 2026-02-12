@@ -5,6 +5,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -400,11 +401,11 @@ func TestRegisterAgent_Success(t *testing.T) {
 	assert.Equal(t, fingerprint, principal.PubkeyFP)
 }
 
-func TestRegisterAgent_PermissionDenied_NoRoles(t *testing.T) {
+func TestRegisterAgent_PermissionDenied_InsufficientRoles(t *testing.T) {
 	s := createTestStore(t)
 	member := seedPrincipal(t, s, "viewer-001", "Viewer User")
 
-	// Create auth context with no sufficient roles
+	// Create auth context with insufficient roles (viewer cannot register agents)
 	authCtx := &auth.AuthContext{
 		PrincipalID:   member.ID,
 		PrincipalType: string(member.Type),
@@ -668,6 +669,12 @@ func TestRegisterClient_DuplicateFingerprint(t *testing.T) {
 // =============================================================================
 
 func TestRegisterAgent_RateLimitExceeded(t *testing.T) {
+	// Save original rate limiter and restore after test
+	originalLimiter := regRateLimiter
+	t.Cleanup(func() {
+		regRateLimiter = originalLimiter
+	})
+
 	// Reset global rate limiter for clean test
 	regRateLimiter = &registrationRateLimiter{
 		records:     make(map[string][]time.Time),
@@ -688,7 +695,8 @@ func TestRegisterAgent_RateLimitExceeded(t *testing.T) {
 
 	// Register up to the limit
 	for i := range maxRegistrationsPerWindow {
-		fingerprint := strings.Repeat("a", 62) + strings.Repeat(string(rune('0'+i)), 2)
+		// Use hex formatting for robustness if maxRegistrationsPerWindow > 10
+		fingerprint := strings.Repeat("a", 60) + fmt.Sprintf("%04x", i)
 		req := &pb.RegisterAgentRequest{
 			DisplayName: "Agent",
 			Fingerprint: fingerprint,
@@ -710,6 +718,12 @@ func TestRegisterAgent_RateLimitExceeded(t *testing.T) {
 }
 
 func TestRegisterClient_RateLimitExceeded(t *testing.T) {
+	// Save original rate limiter and restore after test
+	originalLimiter := regRateLimiter
+	t.Cleanup(func() {
+		regRateLimiter = originalLimiter
+	})
+
 	// Reset global rate limiter for clean test
 	regRateLimiter = &registrationRateLimiter{
 		records:     make(map[string][]time.Time),
@@ -730,7 +744,8 @@ func TestRegisterClient_RateLimitExceeded(t *testing.T) {
 
 	// Register up to the limit
 	for i := range maxRegistrationsPerWindow {
-		fingerprint := strings.Repeat("c", 62) + strings.Repeat(string(rune('0'+i)), 2)
+		// Use hex formatting for robustness if maxRegistrationsPerWindow > 10
+		fingerprint := strings.Repeat("c", 60) + fmt.Sprintf("%04x", i)
 		req := &pb.RegisterClientRequest{
 			DisplayName: "Client",
 			Fingerprint: fingerprint,
