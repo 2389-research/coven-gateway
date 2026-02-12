@@ -15,17 +15,17 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// seedPrincipal creates a test principal in the store.
-func seedPrincipal(t *testing.T, s *store.SQLiteStore, id, displayName string, principalType store.PrincipalType, status store.PrincipalStatus) *store.Principal {
+// seedPrincipal creates an approved test client principal in the store.
+func seedPrincipal(t *testing.T, s *store.SQLiteStore, id, displayName string) *store.Principal {
 	t.Helper()
 	ctx := context.Background()
 
 	p := &store.Principal{
 		ID:          id,
-		Type:        principalType,
+		Type:        store.PrincipalTypeClient,
 		PubkeyFP:    "fp-" + id,
 		DisplayName: displayName,
-		Status:      status,
+		Status:      store.PrincipalStatusApproved,
 		CreatedAt:   time.Now().UTC(),
 	}
 	require.NoError(t, s.CreatePrincipal(ctx, p))
@@ -36,7 +36,7 @@ func TestGetMe_Success(t *testing.T) {
 	s := createTestStore(t)
 
 	// Seed a principal
-	principal := seedPrincipal(t, s, "client-001", "Test Client", store.PrincipalTypeClient, store.PrincipalStatusApproved)
+	principal := seedPrincipal(t, s, "client-001", "Test Client")
 
 	// Create context with auth
 	authCtx := &auth.AuthContext{
@@ -70,7 +70,7 @@ func TestGetMe_IncludesRoles(t *testing.T) {
 	s := createTestStore(t)
 
 	// Seed a principal with admin role
-	principal := seedPrincipal(t, s, "admin-001", "Admin User", store.PrincipalTypeClient, store.PrincipalStatusApproved)
+	principal := seedPrincipal(t, s, "admin-001", "Admin User")
 
 	// Create context with multiple roles
 	authCtx := &auth.AuthContext{
