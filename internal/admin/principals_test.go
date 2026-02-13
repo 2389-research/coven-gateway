@@ -238,6 +238,28 @@ func TestCreatePrincipal_ClientSuccess(t *testing.T) {
 	assert.Contains(t, resp.Roles, "member")
 }
 
+func TestCreatePrincipal_AgentWithPubkey(t *testing.T) {
+	s := createTestStore(t)
+	svc := createPrincipalService(t, s)
+	ctx := createAdminContext("admin-1")
+
+	// Use a valid SSH public key format
+	pubkey := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example.com"
+
+	resp, err := svc.CreatePrincipal(ctx, &pb.CreatePrincipalRequest{
+		Type:        "agent",
+		DisplayName: "New Agent",
+		Pubkey:      &pubkey,
+		Roles:       []string{"member"},
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp.Id)
+	assert.True(t, strings.HasPrefix(resp.Id, "agent-"), "ID should start with type prefix")
+	assert.Equal(t, "agent", resp.Type)
+	assert.NotNil(t, resp.PubkeyFp)
+	assert.Len(t, *resp.PubkeyFp, 64) // SHA256 hex is 64 chars
+}
+
 func TestCreatePrincipal_AgentWithFingerprint(t *testing.T) {
 	s := createTestStore(t)
 	svc := createPrincipalService(t, s)
@@ -324,6 +346,24 @@ func TestCreatePrincipal_AgentMissingPubkey(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, codes.InvalidArgument, st.Code())
 	assert.Contains(t, st.Message(), "pubkey")
+}
+
+func TestCreatePrincipal_InvalidPubkey(t *testing.T) {
+	s := createTestStore(t)
+	svc := createPrincipalService(t, s)
+	ctx := createAdminContext("admin-1")
+
+	invalidPubkey := "not-a-valid-pubkey"
+
+	_, err := svc.CreatePrincipal(ctx, &pb.CreatePrincipalRequest{
+		Type:        "agent",
+		DisplayName: "Invalid Key Agent",
+		Pubkey:      &invalidPubkey,
+	})
+	require.Error(t, err)
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+	assert.Contains(t, err.Error(), "invalid pubkey")
 }
 
 func TestCreatePrincipal_DuplicatePubkey(t *testing.T) {
@@ -530,8 +570,10 @@ func TestFormatBase36(t *testing.T) {
 		expected string
 	}{
 		{0, "0"},
+		{10, "a"},
 		{35, "z"},
 		{36, "10"},
+		{100, "2s"},
 		{1000, "rs"},
 	}
 
@@ -547,9 +589,11 @@ func TestFormatHex4(t *testing.T) {
 		expected string
 	}{
 		{0, "0000"},
+		{1, "0001"},
 		{15, "000f"},
 		{255, "00ff"},
 		{4095, "0fff"},
+		{4096, "1000"},
 		{65535, "ffff"},
 	}
 
@@ -607,6 +651,7 @@ func TestParsePrincipalType(t *testing.T) {
 		{"client", store.PrincipalTypeClient, false},
 		{"agent", store.PrincipalTypeAgent, false},
 		{"invalid", "", true},
+		{"", "", true},
 		{"CLIENT", "", true}, // case sensitive
 	}
 
@@ -670,6 +715,12 @@ func TestResolveAgentFingerprint_PrefersPubkeyOverPubkeyFp(t *testing.T) {
 	// Should use derived fingerprint, not the manual one
 	assert.NotEqual(t, manualFp, fp)
 	assert.Len(t, fp, 64)
+}
+
+func TestResolveAgentFingerprint_MissingBoth(t *testing.T) {
+	_, err := resolveAgentFingerprint(&pb.CreatePrincipalRequest{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "pubkey")
 }
 
 func TestAssignRoles_InvalidRoleNames(t *testing.T) {
