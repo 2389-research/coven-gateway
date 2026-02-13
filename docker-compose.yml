@@ -3,9 +3,7 @@
 
 services:
   coven-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/2389-research/coven-gateway:latest
     container_name: coven-gateway
     environment:
       - TS_AUTHKEY=${TS_AUTHKEY:-}
