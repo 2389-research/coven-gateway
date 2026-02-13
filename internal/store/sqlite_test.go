@@ -5,6 +5,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -579,4 +580,113 @@ func newTestStore(t *testing.T) *SQLiteStore {
 	}
 
 	return store
+}
+
+func TestMigrateAuditLogCheckConstraint(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Create a database with the OLD schema (without create_principal/delete_principal)
+	db, err := openRawSQLDB(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open raw db: %v", err)
+	}
+
+	// Create old audit_log table WITHOUT create_principal and delete_principal in CHECK
+	oldSchema := `
+		CREATE TABLE audit_log (
+			audit_id TEXT PRIMARY KEY,
+			actor_principal_id TEXT NOT NULL,
+			actor_member_id TEXT,
+			action TEXT NOT NULL,
+			target_type TEXT NOT NULL,
+			target_id TEXT NOT NULL,
+			ts TEXT NOT NULL,
+			detail_json TEXT,
+			CHECK (action IN ('approve_principal', 'revoke_principal', 'grant_capability', 'revoke_capability', 'create_binding', 'update_binding', 'delete_binding', 'create_token'))
+		);
+		CREATE INDEX idx_audit_ts ON audit_log(ts DESC);
+		CREATE INDEX idx_audit_actor ON audit_log(actor_principal_id);
+		CREATE INDEX idx_audit_target ON audit_log(target_type, target_id);
+	`
+	if _, err := db.Exec(oldSchema); err != nil {
+		t.Fatalf("failed to create old schema: %v", err)
+	}
+
+	// Insert a test record with an old action type
+	_, err = db.Exec(`
+		INSERT INTO audit_log (audit_id, actor_principal_id, action, target_type, target_id, ts)
+		VALUES ('audit-1', 'principal-1', 'approve_principal', 'principal', 'principal-2', '2024-01-01T00:00:00Z')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test record: %v", err)
+	}
+
+	// Verify that insert with new action type FAILS before migration
+	_, err = db.Exec(`
+		INSERT INTO audit_log (audit_id, actor_principal_id, action, target_type, target_id, ts)
+		VALUES ('audit-2', 'principal-1', 'create_principal', 'principal', 'principal-3', '2024-01-01T00:00:00Z')
+	`)
+	if err == nil {
+		t.Fatal("expected insert with 'create_principal' to fail before migration, but it succeeded")
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close raw db: %v", err)
+	}
+
+	// Now open with NewSQLiteStore which should run migrations
+	store, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Verify the migration preserved existing data
+	var count int
+	err = store.db.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE audit_id = 'audit-1'`).Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to query for existing record: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("existing record not preserved, expected count 1, got %d", count)
+	}
+
+	// Verify that insert with new action types now SUCCEEDS after migration
+	ctx := context.Background()
+	entry := &AuditEntry{
+		ActorPrincipalID: "principal-1",
+		Action:           AuditCreatePrincipal,
+		TargetType:       "principal",
+		TargetID:         "principal-4",
+	}
+	if err := store.AppendAuditLog(ctx, entry); err != nil {
+		t.Fatalf("AppendAuditLog with create_principal failed after migration: %v", err)
+	}
+
+	entry2 := &AuditEntry{
+		ActorPrincipalID: "principal-1",
+		Action:           AuditDeletePrincipal,
+		TargetType:       "principal",
+		TargetID:         "principal-5",
+	}
+	if err := store.AppendAuditLog(ctx, entry2); err != nil {
+		t.Fatalf("AppendAuditLog with delete_principal failed after migration: %v", err)
+	}
+}
+
+// openRawSQLDB opens a raw sql.DB connection for test setup.
+func openRawSQLDB(path string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, fmt.Errorf("opening database: %w", err)
+	}
+
+	// Enable WAL mode
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("enabling WAL mode: %w", err)
+	}
+
+	return db, nil
 }

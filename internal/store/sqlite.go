@@ -89,7 +89,7 @@ CREATE INDEX IF NOT EXISTS idx_principals_type ON principals(type);
 CREATE INDEX IF NOT EXISTS idx_principals_pubkey ON principals(pubkey_fingerprint);
 CREATE TABLE IF NOT EXISTS roles (subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, role TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (subject_type, subject_id, role), CHECK (subject_type IN ('principal', 'member')), CHECK (role IN ('owner', 'admin', 'member', 'leader')));
 CREATE INDEX IF NOT EXISTS idx_roles_subject ON roles(subject_type, subject_id);
-CREATE TABLE IF NOT EXISTS audit_log (audit_id TEXT PRIMARY KEY, actor_principal_id TEXT NOT NULL, actor_member_id TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, ts TEXT NOT NULL, detail_json TEXT, CHECK (action IN ('approve_principal', 'revoke_principal', 'grant_capability', 'revoke_capability', 'create_binding', 'update_binding', 'delete_binding', 'create_token')));
+CREATE TABLE IF NOT EXISTS audit_log (audit_id TEXT PRIMARY KEY, actor_principal_id TEXT NOT NULL, actor_member_id TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, ts TEXT NOT NULL, detail_json TEXT, CHECK (action IN ('approve_principal', 'revoke_principal', 'grant_capability', 'revoke_capability', 'create_binding', 'update_binding', 'delete_binding', 'create_token', 'create_principal', 'delete_principal')));
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_principal_id);
 CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id);
@@ -231,6 +231,10 @@ func (s *SQLiteStore) runMigrations() error {
 		return fmt.Errorf("migrating conversation keys to agent_id: %w", err)
 	}
 
+	if err := s.migrateAuditLogCheckConstraint(); err != nil {
+		return fmt.Errorf("migrating audit_log check constraint: %w", err)
+	}
+
 	return nil
 }
 
@@ -337,6 +341,81 @@ func (s *SQLiteStore) migrateConversationKeysToAgentID() error {
 	rowsAffected, _ := result.RowsAffected()
 	s.logger.Info("migrated conversation keys to agent_id", "count", rowsAffected)
 
+	return nil
+}
+
+// migrateAuditLogCheckConstraint updates the audit_log table's CHECK constraint
+// to include 'create_principal' and 'delete_principal' actions.
+// This is needed because CREATE TABLE IF NOT EXISTS doesn't update constraints
+// on existing tables.
+func (s *SQLiteStore) migrateAuditLogCheckConstraint() error {
+	// Check if the table exists and if the constraint already includes the new actions
+	var tableDef string
+	err := s.db.QueryRow(`
+		SELECT sql FROM sqlite_master
+		WHERE type = 'table' AND name = 'audit_log'
+	`).Scan(&tableDef)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Table doesn't exist yet, schema creation will handle it
+			return nil
+		}
+		return fmt.Errorf("checking audit_log table definition: %w", err)
+	}
+
+	// If the constraint already includes both create_principal and delete_principal, no migration needed
+	if strings.Contains(tableDef, "create_principal") && strings.Contains(tableDef, "delete_principal") {
+		return nil
+	}
+
+	s.logger.Info("migrating audit_log check constraint to add create_principal and delete_principal")
+
+	// SQLite doesn't support ALTER TABLE to modify CHECK constraints,
+	// so we need to recreate the table. We wrap this in a transaction
+	// to avoid leaving the database in a broken state if any step fails.
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin audit_log migration: %w", err)
+	}
+
+	_, err = tx.Exec(`
+		-- Create new table with updated constraint
+		CREATE TABLE audit_log_new (
+			audit_id TEXT PRIMARY KEY,
+			actor_principal_id TEXT NOT NULL,
+			actor_member_id TEXT,
+			action TEXT NOT NULL,
+			target_type TEXT NOT NULL,
+			target_id TEXT NOT NULL,
+			ts TEXT NOT NULL,
+			detail_json TEXT,
+			CHECK (action IN ('approve_principal', 'revoke_principal', 'grant_capability', 'revoke_capability', 'create_binding', 'update_binding', 'delete_binding', 'create_token', 'create_principal', 'delete_principal'))
+		);
+
+		-- Copy data from old table
+		INSERT INTO audit_log_new SELECT * FROM audit_log;
+
+		-- Drop old table
+		DROP TABLE audit_log;
+
+		-- Rename new table
+		ALTER TABLE audit_log_new RENAME TO audit_log;
+
+		-- Recreate indexes
+		CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts DESC);
+		CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_principal_id);
+		CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id);
+	`)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("recreating audit_log table with updated constraint: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing audit_log migration: %w", err)
+	}
+
+	s.logger.Info("migrated audit_log check constraint")
 	return nil
 }
 

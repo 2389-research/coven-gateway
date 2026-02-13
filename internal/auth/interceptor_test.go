@@ -901,6 +901,134 @@ func TestExtractAuth_RejectsUnknownWhenConfigNil(t *testing.T) {
 	}
 }
 
+// ============================================================================
+// NoAuth Interceptor Tests
+// ============================================================================
+
+func TestNoAuthUnaryInterceptor_InjectsAnonymousContext(t *testing.T) {
+	interceptor := NoAuthUnaryInterceptor()
+
+	ctx := context.Background()
+	var capturedCtx context.Context
+
+	handler := func(ctx context.Context, req any) (any, error) {
+		capturedCtx = ctx
+		return "success", nil
+	}
+
+	resp, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if resp != "success" {
+		t.Errorf("expected response 'success', got %v", resp)
+	}
+
+	authCtx := FromContext(capturedCtx)
+	if authCtx == nil {
+		t.Fatal("expected AuthContext in context")
+	}
+
+	if authCtx.PrincipalID != "anonymous" {
+		t.Errorf("PrincipalID = %q, want %q", authCtx.PrincipalID, "anonymous")
+	}
+
+	if authCtx.PrincipalType != "anonymous" {
+		t.Errorf("PrincipalType = %q, want %q", authCtx.PrincipalType, "anonymous")
+	}
+
+	if authCtx.MemberID != nil {
+		t.Errorf("MemberID = %v, want nil", authCtx.MemberID)
+	}
+
+	// Should have admin role when auth is disabled
+	if !authCtx.IsAdmin() {
+		t.Error("expected admin role when auth is disabled")
+	}
+}
+
+func TestNoAuthUnaryInterceptor_MustFromContextDoesNotPanic(t *testing.T) {
+	interceptor := NoAuthUnaryInterceptor()
+
+	ctx := context.Background()
+
+	handler := func(ctx context.Context, req any) (any, error) {
+		// This should not panic
+		authCtx := MustFromContext(ctx)
+		if authCtx.PrincipalID != "anonymous" {
+			t.Errorf("PrincipalID = %q, want %q", authCtx.PrincipalID, "anonymous")
+		}
+		return "ok", nil
+	}
+
+	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNoAuthStreamInterceptor_InjectsAnonymousContext(t *testing.T) {
+	interceptor := NoAuthStreamInterceptor()
+
+	ctx := context.Background()
+	stream := &mockServerStream{ctx: ctx}
+	var capturedStream grpc.ServerStream
+
+	handler := func(srv any, ss grpc.ServerStream) error {
+		capturedStream = ss
+		return nil
+	}
+
+	err := interceptor(nil, stream, &grpc.StreamServerInfo{}, handler)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	authCtx := FromContext(capturedStream.Context())
+	if authCtx == nil {
+		t.Fatal("expected AuthContext in stream context")
+	}
+
+	if authCtx.PrincipalID != "anonymous" {
+		t.Errorf("PrincipalID = %q, want %q", authCtx.PrincipalID, "anonymous")
+	}
+
+	if authCtx.PrincipalType != "anonymous" {
+		t.Errorf("PrincipalType = %q, want %q", authCtx.PrincipalType, "anonymous")
+	}
+
+	// Should have admin role when auth is disabled
+	if !authCtx.IsAdmin() {
+		t.Error("expected admin role when auth is disabled")
+	}
+}
+
+func TestNoAuthStreamInterceptor_MustFromContextDoesNotPanic(t *testing.T) {
+	interceptor := NoAuthStreamInterceptor()
+
+	ctx := context.Background()
+	stream := &mockServerStream{ctx: ctx}
+
+	handler := func(srv any, ss grpc.ServerStream) error {
+		// This should not panic
+		authCtx := MustFromContext(ss.Context())
+		if authCtx.PrincipalID != "anonymous" {
+			return errors.New("wrong principal ID")
+		}
+		return nil
+	}
+
+	err := interceptor(nil, stream, &grpc.StreamServerInfo{}, handler)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// ============================================================================
+// Auth Logging Tests
+// ============================================================================
+
 // testLogHandler captures log records for testing.
 type testLogHandler struct {
 	records []slog.Record

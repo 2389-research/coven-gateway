@@ -16,8 +16,7 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
-// testSecret is a 32-byte secret that meets MinSecretLength requirement.
-var testSecret = []byte("admin-token-test-secret-32bytes!")
+// testSecret is defined in test_helpers_test.go to ensure consistent test execution
 
 func TestCreateToken_Success(t *testing.T) {
 	s := createTestStore(t)
