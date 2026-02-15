@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/2389/coven-gateway/internal/agent"
+	"github.com/2389/coven-gateway/internal/conversation"
 	"github.com/2389/coven-gateway/internal/dedupe"
 	"github.com/2389/coven-gateway/internal/store"
 	pb "github.com/2389/coven-gateway/proto/coven"
@@ -462,6 +463,81 @@ func TestProcessClientMessage_AgentError(t *testing.T) {
 	}
 	require.NotNil(t, errorEvent, "expected error event to be stored")
 	assert.Equal(t, "something went wrong", *errorEvent.Text)
+}
+
+func TestConsumeAgentResponses_BroadcastsEvents(t *testing.T) {
+	eventStore := &mockEventStore{}
+	finalContent := "Broadcasted response!"
+	router := &mockRouter{
+		agentOnline: true,
+		responses: []*agent.Response{
+			{Event: agent.EventText, Text: "Broadcasted"},            // skipped (not persisted)
+			{Event: agent.EventThinking, Text: "thinking..."},        // skipped (not persisted)
+			{Event: agent.EventDone, Text: finalContent, Done: true}, // persisted + broadcast
+		},
+	}
+	svc := newTestClientServiceWithRouting(t, eventStore, router)
+
+	// Set up broadcaster and subscribe before sending
+	broadcaster := conversation.NewEventBroadcaster(nil)
+	t.Cleanup(func() { broadcaster.Close() })
+	svc.SetBroadcaster(broadcaster)
+
+	subCtx, subCancel := context.WithCancel(context.Background())
+	defer subCancel()
+	eventCh, _ := broadcaster.Subscribe(subCtx, "agent-broadcast")
+
+	req := &pb.ClientSendMessageRequest{
+		ConversationKey: "agent-broadcast",
+		Content:         "Trigger broadcast",
+		IdempotencyKey:  "broadcast-key-1",
+	}
+
+	resp, err := svc.SendMessage(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", resp.Status)
+
+	// Wait for broadcast event with a reasonable timeout
+	select {
+	case event := <-eventCh:
+		require.NotNil(t, event, "expected a non-nil broadcast event")
+		assert.Equal(t, store.EventTypeMessage, event.Type)
+		assert.Equal(t, finalContent, *event.Text)
+		assert.Equal(t, "agent-broadcast", event.ConversationKey)
+		assert.Equal(t, store.EventDirectionOutbound, event.Direction)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for broadcast event")
+	}
+}
+
+func TestConsumeAgentResponses_NoBroadcasterNoPanic(t *testing.T) {
+	// Verify that consumeAgentResponses works without a broadcaster (nil-safe)
+	eventStore := &mockEventStore{}
+	router := &mockRouter{
+		agentOnline: true,
+		responses: []*agent.Response{
+			{Event: agent.EventDone, Text: "No broadcaster set", Done: true},
+		},
+	}
+	svc := newTestClientServiceWithRouting(t, eventStore, router)
+	// Intentionally do NOT set a broadcaster
+
+	req := &pb.ClientSendMessageRequest{
+		ConversationKey: "agent-no-broadcaster",
+		Content:         "Should not panic",
+		IdempotencyKey:  "no-broadcaster-key",
+	}
+
+	resp, err := svc.SendMessage(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", resp.Status)
+
+	// Give async processing time
+	time.Sleep(100 * time.Millisecond)
+
+	// Events should still be stored even without broadcaster
+	events := eventStore.getEvents()
+	require.GreaterOrEqual(t, len(events), 2, "expected inbound + outbound events stored")
 }
 
 func TestProcessClientMessage_NoRouterConfigured(t *testing.T) {

@@ -196,6 +196,8 @@ func (s *ClientService) consumeAgentResponses(
 						"conversation_key", conversationKey,
 						"event_type", resp.Event,
 					)
+				} else if s.broadcaster != nil {
+					s.broadcaster.Publish(conversationKey, event, "")
 				}
 			}
 		}
