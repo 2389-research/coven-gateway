@@ -193,8 +193,11 @@ func (s *ClientService) consumeAgentResponses(
 			// EventDone carries the final accumulated text for persistence.
 			if resp.Event == agent.EventText && s.broadcaster != nil && resp.Text != "" {
 				chunk := &store.LedgerEvent{
+					ID:              uuid.New().String(),
 					ConversationKey: conversationKey,
+					ThreadID:        &threadID,
 					Direction:       store.EventDirectionOutbound,
+					Author:          "agent",
 					Type:            store.EventTypeTextChunk,
 					Text:            &resp.Text,
 					Timestamp:       time.Now(),

@@ -518,6 +518,9 @@ collected:
 	assert.Equal(t, store.EventTypeTextChunk, broadcasts[0].Type)
 	assert.Equal(t, "Broadcasted", *broadcasts[0].Text)
 	assert.Equal(t, "agent-broadcast", broadcasts[0].ConversationKey)
+	assert.NotEmpty(t, broadcasts[0].ID, "text chunk should have ID for observability")
+	assert.Equal(t, "agent", broadcasts[0].Author, "text chunk should have author")
+	assert.Equal(t, store.EventDirectionOutbound, broadcasts[0].Direction)
 
 	// Last broadcast: final message (persisted + broadcast)
 	last := broadcasts[len(broadcasts)-1]
