@@ -483,9 +483,7 @@ func TestConsumeAgentResponses_BroadcastsEvents(t *testing.T) {
 	t.Cleanup(func() { broadcaster.Close() })
 	svc.SetBroadcaster(broadcaster)
 
-	subCtx, subCancel := context.WithCancel(context.Background())
-	defer subCancel()
-	eventCh, _ := broadcaster.Subscribe(subCtx, "agent-broadcast")
+	eventCh, _ := broadcaster.Subscribe(t.Context(), "agent-broadcast")
 
 	req := &pb.ClientSendMessageRequest{
 		ConversationKey: "agent-broadcast",
