@@ -258,15 +258,26 @@ func (s *ClientService) pollAndSendNewEvents(ctx context.Context, stream pb.Clie
 // decodeCursor parses an opaque cursor string (unused but kept for reference).
 
 // eventToClientStreamEvent converts a ledger event to a ClientStreamEvent proto.
+// Text chunks are sent as TextChunk payloads for real-time streaming;
+// all other events are wrapped in the Event payload.
 func eventToClientStreamEvent(e *store.LedgerEvent) *pb.ClientStreamEvent {
 	streamEvent := &pb.ClientStreamEvent{
 		ConversationKey: e.ConversationKey,
 		Timestamp:       e.Timestamp.Format(time.RFC3339),
 	}
 
-	// Wrap the full event in the Event payload
-	streamEvent.Payload = &pb.ClientStreamEvent_Event{
-		Event: toProtoEvent(e),
+	if e.Type == store.EventTypeTextChunk {
+		content := ""
+		if e.Text != nil {
+			content = *e.Text
+		}
+		streamEvent.Payload = &pb.ClientStreamEvent_Text{
+			Text: &pb.TextChunk{Content: content},
+		}
+	} else {
+		streamEvent.Payload = &pb.ClientStreamEvent_Event{
+			Event: toProtoEvent(e),
+		}
 	}
 
 	return streamEvent

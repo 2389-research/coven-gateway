@@ -188,6 +188,21 @@ func (s *ClientService) consumeAgentResponses(
 			if !ok {
 				return
 			}
+
+			// Broadcast text chunks directly without saving to ledger.
+			// EventDone carries the final accumulated text for persistence.
+			if resp.Event == agent.EventText && s.broadcaster != nil && resp.Text != "" {
+				chunk := &store.LedgerEvent{
+					ConversationKey: conversationKey,
+					Direction:       store.EventDirectionOutbound,
+					Type:            store.EventTypeTextChunk,
+					Text:            &resp.Text,
+					Timestamp:       time.Now(),
+				}
+				s.broadcaster.Publish(conversationKey, chunk, "")
+				continue
+			}
+
 			event := s.responseToLedgerEvent(conversationKey, threadID, resp)
 			if event != nil && s.store != nil {
 				if err := s.store.SaveEvent(ctx, event); err != nil {

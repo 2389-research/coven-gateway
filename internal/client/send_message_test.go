@@ -495,17 +495,35 @@ func TestConsumeAgentResponses_BroadcastsEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "accepted", resp.Status)
 
-	// Wait for broadcast event with a reasonable timeout
-	select {
-	case event := <-eventCh:
-		require.NotNil(t, event, "expected a non-nil broadcast event")
-		assert.Equal(t, store.EventTypeMessage, event.Type)
-		assert.Equal(t, finalContent, *event.Text)
-		assert.Equal(t, "agent-broadcast", event.ConversationKey)
-		assert.Equal(t, store.EventDirectionOutbound, event.Direction)
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for broadcast event")
+	// Collect broadcast events — expect text_chunk first, then final message
+	var broadcasts []*store.LedgerEvent
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case event := <-eventCh:
+			require.NotNil(t, event, "expected a non-nil broadcast event")
+			broadcasts = append(broadcasts, event)
+			// Stop collecting after we get the final message
+			if event.Type == store.EventTypeMessage {
+				goto collected
+			}
+		case <-timeout:
+			t.Fatalf("timed out waiting for broadcast events (got %d)", len(broadcasts))
+		}
 	}
+collected:
+
+	// First broadcast: text chunk (streamed live, not persisted)
+	require.GreaterOrEqual(t, len(broadcasts), 2, "expected text_chunk + message broadcasts")
+	assert.Equal(t, store.EventTypeTextChunk, broadcasts[0].Type)
+	assert.Equal(t, "Broadcasted", *broadcasts[0].Text)
+	assert.Equal(t, "agent-broadcast", broadcasts[0].ConversationKey)
+
+	// Last broadcast: final message (persisted + broadcast)
+	last := broadcasts[len(broadcasts)-1]
+	assert.Equal(t, store.EventTypeMessage, last.Type)
+	assert.Equal(t, finalContent, *last.Text)
+	assert.Equal(t, store.EventDirectionOutbound, last.Direction)
 }
 
 func TestConsumeAgentResponses_NoBroadcasterNoPanic(t *testing.T) {
