@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Stack from './Stack.svelte';
+import { htmlSnippet } from './_storyHelpers';
 
 const meta = {
   title: 'Layout/Stack',
@@ -29,11 +30,17 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const stackItems = htmlSnippet(
+  '<div style="background:#e2e8f0;padding:8px 16px;border-radius:6px">Item 1</div>' +
+  '<div style="background:#e2e8f0;padding:8px 16px;border-radius:6px">Item 2</div>' +
+  '<div style="background:#e2e8f0;padding:8px 16px;border-radius:6px">Item 3</div>',
+);
+
 export const Vertical: Story = {
   args: {
     direction: 'vertical',
     gap: '4',
-    children: 'Stack items go here',
+    children: stackItems,
   },
 };
 
@@ -41,7 +48,7 @@ export const Horizontal: Story = {
   args: {
     direction: 'horizontal',
     gap: '4',
-    children: 'Horizontal stack items',
+    children: stackItems,
   },
 };
 
@@ -51,7 +58,7 @@ export const Centered: Story = {
     gap: '4',
     align: 'center',
     justify: 'center',
-    children: 'Centered content',
+    children: stackItems,
   },
 };
 
@@ -59,6 +66,6 @@ export const SpaceBetween: Story = {
   args: {
     direction: 'horizontal',
     justify: 'between',
-    children: 'Space between items',
+    children: stackItems,
   },
 };

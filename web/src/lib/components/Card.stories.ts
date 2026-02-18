@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Card from './Card.svelte';
+import { textSnippet } from './_storyHelpers';
 
 const meta = {
   title: 'Layout/Card',
@@ -18,27 +19,27 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   args: {
-    children: 'Card content goes here. This is a basic surface container.',
+    children: textSnippet('Card content goes here. This is a basic surface container.'),
   },
 };
 
 export const SmallPadding: Story = {
   args: {
     padding: 'sm',
-    children: 'Compact card with small padding.',
+    children: textSnippet('Compact card with small padding.'),
   },
 };
 
 export const LargePadding: Story = {
   args: {
     padding: 'lg',
-    children: 'Spacious card with large padding.',
+    children: textSnippet('Spacious card with large padding.'),
   },
 };
 
 export const NoPadding: Story = {
   args: {
     padding: 'none',
-    children: 'Card with no padding — useful for full-bleed content.',
+    children: textSnippet('Card with no padding — useful for full-bleed content.'),
   },
 };

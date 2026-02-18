@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Alert from './Alert.svelte';
+import { textSnippet } from './_storyHelpers';
 
 const meta = {
   title: 'Feedback/Alert',
@@ -19,26 +20,26 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Info: Story = {
-  args: { variant: 'info', children: 'This is an informational message.' },
+  args: { variant: 'info', children: textSnippet('This is an informational message.') },
 };
 
 export const Success: Story = {
-  args: { variant: 'success', children: 'Agent connected successfully.' },
+  args: { variant: 'success', children: textSnippet('Agent connected successfully.') },
 };
 
 export const Warning: Story = {
-  args: { variant: 'warning', children: 'Connection may be unstable.' },
+  args: { variant: 'warning', children: textSnippet('Connection may be unstable.') },
 };
 
 export const Danger: Story = {
-  args: { variant: 'danger', children: 'Failed to connect to agent.' },
+  args: { variant: 'danger', children: textSnippet('Failed to connect to agent.') },
 };
 
 export const WithTitle: Story = {
   args: {
     variant: 'danger',
     title: 'Connection Error',
-    children: 'Could not reach the gateway server. Please check your network connection and try again.',
+    children: textSnippet('Could not reach the gateway server. Please check your network connection and try again.'),
   },
 };
 
@@ -46,7 +47,7 @@ export const Dismissible: Story = {
   args: {
     variant: 'info',
     dismissible: true,
-    children: 'You can dismiss this alert by clicking the X button.',
+    children: textSnippet('You can dismiss this alert by clicking the X button.'),
   },
 };
 
@@ -54,6 +55,6 @@ export const LongContent: Story = {
   args: {
     variant: 'warning',
     title: 'Rate Limit Warning',
-    children: 'You are approaching your API rate limit. Current usage: 950/1000 requests per minute. Consider reducing request frequency or upgrading your plan.',
+    children: textSnippet('You are approaching your API rate limit. Current usage: 950/1000 requests per minute. Consider reducing request frequency or upgrading your plan.'),
   },
 };

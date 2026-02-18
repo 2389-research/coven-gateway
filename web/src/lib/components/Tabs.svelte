@@ -82,7 +82,7 @@
         role="tab"
         id="tab-{tab.id}"
         aria-selected={activeTab === tab.id}
-        aria-controls="tabpanel-{tab.id}"
+        aria-controls={panel ? `tabpanel-${tab.id}` : undefined}
         tabindex={activeTab === tab.id ? 0 : -1}
         disabled={tab.disabled}
         onclick={() => selectTab(tab.id)}
