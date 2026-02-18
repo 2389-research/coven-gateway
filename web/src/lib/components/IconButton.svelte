@@ -24,17 +24,17 @@
   }: Props = $props();
 
   const baseClasses =
-    'inline-flex items-center justify-center rounded-[var(--border-radius-md)] transition-colors duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(var(--color-ring))] disabled:opacity-50 disabled:cursor-not-allowed';
+    'inline-flex items-center justify-center rounded-[var(--border-radius-md)] transition-colors duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50 disabled:cursor-not-allowed';
 
   const variantClasses: Record<Variant, string> = {
     primary:
-      'bg-[hsl(var(--color-accent))] text-[hsl(var(--color-fgOnAccent))] hover:bg-[hsl(var(--color-accentHover))]',
+      'bg-accent text-fgOnAccent hover:bg-accentHover',
     secondary:
-      'border border-[hsl(var(--color-border))] bg-[hsl(var(--color-surface))] text-[hsl(var(--color-fg))] hover:bg-[hsl(var(--color-surfaceHover))]',
+      'border border-border bg-surface text-fg hover:bg-surfaceHover',
     ghost:
-      'text-[hsl(var(--color-fgMuted))] hover:bg-[hsl(var(--color-surfaceHover))] hover:text-[hsl(var(--color-fg))]',
+      'text-fgMuted hover:bg-surfaceHover hover:text-fg',
     danger:
-      'bg-[hsl(var(--color-danger-solidBg))] text-[hsl(var(--color-fgOnAccent))] hover:bg-[hsl(var(--color-danger-subtleFg))]',
+      'bg-danger-solidBg text-fgOnAccent hover:bg-danger-subtleFg',
   };
 
   const sizeClasses: Record<Size, string> = {

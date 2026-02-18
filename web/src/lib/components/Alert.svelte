@@ -29,10 +29,10 @@
   }
 
   const variantClasses: Record<Variant, string> = {
-    info: 'bg-[hsl(var(--color-info-subtleBg))] text-[hsl(var(--color-info-subtleFg))] border-[hsl(var(--color-info-subtleBorder))]',
-    success: 'bg-[hsl(var(--color-success-subtleBg))] text-[hsl(var(--color-success-subtleFg))] border-[hsl(var(--color-success-subtleBorder))]',
-    warning: 'bg-[hsl(var(--color-warning-subtleBg))] text-[hsl(var(--color-warning-subtleFg))] border-[hsl(var(--color-warning-subtleBorder))]',
-    danger: 'bg-[hsl(var(--color-danger-subtleBg))] text-[hsl(var(--color-danger-subtleFg))] border-[hsl(var(--color-danger-subtleBorder))]',
+    info: 'bg-info-subtleBg text-info-subtleFg border-info-subtleBorder',
+    success: 'bg-success-subtleBg text-success-subtleFg border-success-subtleBorder',
+    warning: 'bg-warning-subtleBg text-warning-subtleFg border-warning-subtleBorder',
+    danger: 'bg-danger-subtleBg text-danger-subtleFg border-danger-subtleBorder',
   };
 </script>
 
@@ -52,7 +52,7 @@
     {#if dismissible}
       <button
         onclick={dismiss}
-        class="flex-shrink-0 self-start p-0.5 rounded-[var(--border-radius-sm)] opacity-60 hover:opacity-100 transition-opacity duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(var(--color-ring))]"
+        class="flex-shrink-0 self-start p-0.5 rounded-[var(--border-radius-sm)] opacity-60 hover:opacity-100 transition-opacity duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         aria-label="Dismiss"
         data-testid="alert-dismiss"
       >

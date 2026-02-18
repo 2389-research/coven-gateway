@@ -17,12 +17,12 @@
 </script>
 
 <div
-  class="flex h-screen bg-[hsl(var(--color-bg))] text-[hsl(var(--color-fg))] {className}"
+  class="flex h-screen bg-bg text-fg {className}"
   data-testid="app-shell"
 >
   {#if sidebar}
     <aside
-      class="flex w-[var(--sizing-sidebar)] flex-shrink-0 flex-col border-r border-[hsl(var(--color-border))] bg-[hsl(var(--color-surface))]"
+      class="flex w-[var(--sizing-sidebar)] flex-shrink-0 flex-col border-r border-border bg-surface"
       data-testid="app-shell-sidebar"
     >
       {@render sidebar()}
@@ -32,7 +32,7 @@
   <div class="flex flex-1 flex-col overflow-hidden">
     {#if header}
       <header
-        class="flex h-14 flex-shrink-0 items-center border-b border-[hsl(var(--color-border))] bg-[hsl(var(--color-surface))] px-4"
+        class="flex h-14 flex-shrink-0 items-center border-b border-border bg-surface px-4"
         data-testid="app-shell-header"
       >
         {@render header()}

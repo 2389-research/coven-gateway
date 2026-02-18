@@ -75,7 +75,7 @@
 <div class={className} data-testid="tabs">
   <div
     role="tablist"
-    class="flex border-b border-[hsl(var(--color-border))]"
+    class="flex border-b border-border"
   >
     {#each tabs as tab (tab.id)}
       <button
@@ -87,16 +87,16 @@
         disabled={tab.disabled}
         onclick={() => selectTab(tab.id)}
         onkeydown={handleKeydown}
-        class="relative px-4 py-2 text-[length:var(--typography-fontSize-sm)] font-[var(--typography-fontWeight-medium)] transition-colors duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[hsl(var(--color-ring))]
+        class="relative px-4 py-2 text-[length:var(--typography-fontSize-sm)] font-[var(--typography-fontWeight-medium)] transition-colors duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring
           {activeTab === tab.id
-            ? 'text-[hsl(var(--color-accent))]'
-            : 'text-[hsl(var(--color-fgMuted))] hover:text-[hsl(var(--color-fg))]'}
+            ? 'text-accent'
+            : 'text-fgMuted hover:text-fg'}
           disabled:opacity-50 disabled:cursor-not-allowed"
         data-testid="tab-{tab.id}"
       >
         {tab.label}
         {#if activeTab === tab.id}
-          <span class="absolute bottom-0 left-0 right-0 h-0.5 bg-[hsl(var(--color-accent))]"></span>
+          <span class="absolute bottom-0 left-0 right-0 h-0.5 bg-accent"></span>
         {/if}
       </button>
     {/each}

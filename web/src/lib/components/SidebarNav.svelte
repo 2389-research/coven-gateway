@@ -41,8 +41,8 @@
     href={item.href ?? '#'}
     class="flex items-center gap-2 rounded-[var(--border-radius-md)] px-3 py-2 text-[length:var(--typography-fontSize-sm)] transition-colors duration-[var(--motion-duration-fast)]
       {item.active
-        ? 'bg-[hsl(var(--color-accentMuted))] text-[hsl(var(--color-accent))] font-[var(--typography-fontWeight-medium)]'
-        : 'text-[hsl(var(--color-fgMuted))] hover:bg-[hsl(var(--color-surfaceHover))] hover:text-[hsl(var(--color-fg))]'}"
+        ? 'bg-accentMuted text-accent font-[var(--typography-fontWeight-medium)]'
+        : 'text-fgMuted hover:bg-surfaceHover hover:text-fg'}"
     aria-current={item.active ? 'page' : undefined}
     onclick={(e) => handleClick(item, e)}
     data-testid="nav-item-{item.id}"
@@ -65,7 +65,7 @@
 
   {#each groups as group}
     <div class="mt-2 first:mt-0">
-      <h3 class="mb-1 px-3 text-[length:var(--typography-fontSize-xs)] font-[var(--typography-fontWeight-semibold)] uppercase tracking-wider text-[hsl(var(--color-fgMuted))]">
+      <h3 class="mb-1 px-3 text-[length:var(--typography-fontSize-xs)] font-[var(--typography-fontWeight-semibold)] uppercase tracking-wider text-fgMuted">
         {group.label}
       </h3>
       {#each group.items as item (item.id)}

@@ -30,28 +30,28 @@
   {#if label}
     <label
       for={inputId}
-      class="text-[length:var(--typography-fontSize-sm)] font-[var(--typography-fontWeight-medium)] text-[hsl(var(--color-fg))]"
+      class="text-[length:var(--typography-fontSize-sm)] font-[var(--typography-fontWeight-medium)] text-fg"
     >
       {label}
     </label>
   {/if}
 
   <div
-    class="flex items-center h-[var(--sizing-control-md)] rounded-[var(--border-radius-md)] border bg-[hsl(var(--color-surface))] transition-colors duration-[var(--motion-duration-fast)]
+    class="flex items-center h-[var(--sizing-control-md)] rounded-[var(--border-radius-md)] border bg-surface transition-colors duration-[var(--motion-duration-fast)]
       {error
-        ? 'border-[hsl(var(--color-danger-solidBg))]'
-        : 'border-[hsl(var(--color-border))] focus-within:border-[hsl(var(--color-ring))]'}
+        ? 'border-danger-solidBg'
+        : 'border-border focus-within:border-ring'}
       {disabled ? 'opacity-50 cursor-not-allowed' : ''}"
   >
     {#if leading}
-      <span class="flex items-center pl-3 text-[hsl(var(--color-fgMuted))]">
+      <span class="flex items-center pl-3 text-fgMuted">
         {@render leading()}
       </span>
     {/if}
 
     <input
       id={inputId}
-      class="h-full w-full bg-transparent px-3 text-[length:var(--typography-fontSize-sm)] text-[hsl(var(--color-fg))] placeholder:text-[hsl(var(--color-fgMuted))] focus:outline-none disabled:cursor-not-allowed
+      class="h-full w-full bg-transparent px-3 text-[length:var(--typography-fontSize-sm)] text-fg placeholder:text-fgMuted focus:outline-none disabled:cursor-not-allowed
         {leading ? 'pl-0' : ''}
         {trailing ? 'pr-0' : ''}"
       {disabled}
@@ -61,14 +61,14 @@
     />
 
     {#if trailing}
-      <span class="flex items-center pr-3 text-[hsl(var(--color-fgMuted))]">
+      <span class="flex items-center pr-3 text-fgMuted">
         {@render trailing()}
       </span>
     {/if}
   </div>
 
   {#if error}
-    <p id={errorId} class="text-[length:var(--typography-fontSize-sm)] text-[hsl(var(--color-danger-subtleFg))]" role="alert">
+    <p id={errorId} class="text-[length:var(--typography-fontSize-sm)] text-danger-subtleFg" role="alert">
       {error}
     </p>
   {/if}

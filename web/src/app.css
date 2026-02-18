@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './styles/generated/variables.css';
+@import './styles/generated/theme.css';
 
 /* Self-hosted Inter variable font — eliminates Google Fonts CDN dependency. */
 @font-face {

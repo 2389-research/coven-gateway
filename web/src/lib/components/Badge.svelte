@@ -19,11 +19,11 @@
   }: Props = $props();
 
   const variantClasses: Record<Variant, string> = {
-    default: 'bg-[hsl(var(--color-surfaceAlt))] text-[hsl(var(--color-fgMuted))]',
-    accent: 'bg-[hsl(var(--color-accentMuted))] text-[hsl(var(--color-accent))]',
-    success: 'bg-[hsl(var(--color-success-subtleBg))] text-[hsl(var(--color-success-subtleFg))]',
-    warning: 'bg-[hsl(var(--color-warning-subtleBg))] text-[hsl(var(--color-warning-subtleFg))]',
-    danger: 'bg-[hsl(var(--color-danger-subtleBg))] text-[hsl(var(--color-danger-subtleFg))]',
+    default: 'bg-surfaceAlt text-fgMuted',
+    accent: 'bg-accentMuted text-accent',
+    success: 'bg-success-subtleBg text-success-subtleFg',
+    warning: 'bg-warning-subtleBg text-warning-subtleFg',
+    danger: 'bg-danger-subtleBg text-danger-subtleFg',
   };
 
   const sizeClasses: Record<Size, string> = {

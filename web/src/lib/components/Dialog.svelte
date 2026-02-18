@@ -49,17 +49,17 @@
   bind:this={dialogEl}
   onclose={handleClose}
   onclick={handleBackdropClick}
-  class="m-auto max-h-[85vh] w-full max-w-[var(--sizing-container-narrow)] rounded-[var(--border-radius-xl)] border border-[hsl(var(--color-border))] bg-[hsl(var(--color-surface))] p-0 shadow-[var(--shadow-lg)] text-[hsl(var(--color-fg))] backdrop:bg-black/50 backdrop:animate-[fadeIn_var(--motion-duration-fast)_var(--motion-easing)] open:animate-[slideIn_var(--motion-duration-normal)_var(--motion-easing)] {className}"
+  class="m-auto max-h-[85vh] w-full max-w-[var(--sizing-container-narrow)] rounded-[var(--border-radius-xl)] border border-border bg-surface p-0 shadow-[var(--shadow-lg)] text-fg backdrop:bg-black/50 backdrop:animate-[fadeIn_var(--motion-duration-fast)_var(--motion-easing)] open:animate-[slideIn_var(--motion-duration-normal)_var(--motion-easing)] {className}"
   data-testid="dialog"
 >
   {#if header}
-    <div class="flex items-center justify-between border-b border-[hsl(var(--color-border))] px-6 py-4">
+    <div class="flex items-center justify-between border-b border-border px-6 py-4">
       <div class="text-[length:var(--typography-fontSize-lg)] font-[var(--typography-fontWeight-semibold)]">
         {@render header()}
       </div>
       <button
         onclick={handleClose}
-        class="rounded-[var(--border-radius-md)] p-1.5 text-[hsl(var(--color-fgMuted))] hover:bg-[hsl(var(--color-surfaceHover))] hover:text-[hsl(var(--color-fg))] transition-colors duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(var(--color-ring))]"
+        class="rounded-[var(--border-radius-md)] p-1.5 text-fgMuted hover:bg-surfaceHover hover:text-fg transition-colors duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         aria-label="Close dialog"
         data-testid="dialog-close"
       >
@@ -75,7 +75,7 @@
   </div>
 
   {#if footer}
-    <div class="flex items-center justify-end gap-3 border-t border-[hsl(var(--color-border))] px-6 py-4">
+    <div class="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
       {@render footer()}
     </div>
   {/if}

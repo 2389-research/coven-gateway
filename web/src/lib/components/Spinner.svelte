@@ -21,7 +21,7 @@
 </script>
 
 <span
-  class="inline-block animate-spin rounded-full border-[hsl(var(--color-accent))] border-t-transparent {sizeClasses[size]} {className}"
+  class="inline-block animate-spin rounded-full border-accent border-t-transparent {sizeClasses[size]} {className}"
   role="status"
   aria-label={label}
   data-testid="spinner"

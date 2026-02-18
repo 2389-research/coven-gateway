@@ -17,11 +17,11 @@
     class: className = '',
   }: Props = $props();
 
-  const statusConfig: Record<Status, { color: string; defaultLabel: string }> = {
-    online: { color: 'var(--color-success-solidBg)', defaultLabel: 'Online' },
-    offline: { color: 'var(--color-primitives-neutral-400)', defaultLabel: 'Offline' },
-    error: { color: 'var(--color-danger-solidBg)', defaultLabel: 'Error' },
-    busy: { color: 'var(--color-warning-solidBg)', defaultLabel: 'Busy' },
+  const statusConfig: Record<Status, { colorClass: string; defaultLabel: string }> = {
+    online: { colorClass: 'bg-success-solidBg', defaultLabel: 'Online' },
+    offline: { colorClass: 'bg-[var(--cg-primitives-neutral-400)]', defaultLabel: 'Offline' },
+    error: { colorClass: 'bg-danger-solidBg', defaultLabel: 'Error' },
+    busy: { colorClass: 'bg-warning-solidBg', defaultLabel: 'Busy' },
   };
 
   let config = $derived(statusConfig[status]);
@@ -35,12 +35,11 @@
   data-testid="status-dot"
 >
   <span
-    class="inline-block h-2 w-2 rounded-full flex-shrink-0 {pulse ? 'animate-pulse' : ''}"
-    style:background-color="hsl({config.color})"
+    class="inline-block h-2 w-2 rounded-full flex-shrink-0 {pulse ? 'animate-pulse' : ''} {config.colorClass}"
     aria-hidden="true"
   ></span>
   {#if showLabel}
-    <span class="text-[length:var(--typography-fontSize-xs)] text-[hsl(var(--color-fgMuted))] leading-[var(--typography-lineHeight-tight)]">
+    <span class="text-[length:var(--typography-fontSize-xs)] text-fgMuted leading-[var(--typography-lineHeight-tight)]">
       {displayLabel}
     </span>
   {/if}

@@ -26,11 +26,11 @@
 </script>
 
 <div
-  class="rounded-[var(--border-radius-lg)] border border-[hsl(var(--color-border))] bg-[hsl(var(--color-surface))] shadow-[var(--shadow-xs)] {className}"
+  class="rounded-[var(--border-radius-lg)] border border-border bg-surface shadow-[var(--shadow-xs)] {className}"
   data-testid="card"
 >
   {#if header}
-    <div class="border-b border-[hsl(var(--color-border))] px-4 py-3">
+    <div class="border-b border-border px-4 py-3">
       {@render header()}
     </div>
   {/if}
@@ -40,7 +40,7 @@
   </div>
 
   {#if footer}
-    <div class="border-t border-[hsl(var(--color-border))] px-4 py-3">
+    <div class="border-t border-border px-4 py-3">
       {@render footer()}
     </div>
   {/if}

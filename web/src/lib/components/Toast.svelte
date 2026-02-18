@@ -10,10 +10,10 @@
   let toasts = $derived(getToasts());
 
   const variantClasses: Record<ToastVariant, string> = {
-    info: 'bg-[hsl(var(--color-info-subtleBg))] text-[hsl(var(--color-info-subtleFg))] border-[hsl(var(--color-info-subtleBorder))]',
-    success: 'bg-[hsl(var(--color-success-subtleBg))] text-[hsl(var(--color-success-subtleFg))] border-[hsl(var(--color-success-subtleBorder))]',
-    warning: 'bg-[hsl(var(--color-warning-subtleBg))] text-[hsl(var(--color-warning-subtleFg))] border-[hsl(var(--color-warning-subtleBorder))]',
-    danger: 'bg-[hsl(var(--color-danger-subtleBg))] text-[hsl(var(--color-danger-subtleFg))] border-[hsl(var(--color-danger-subtleBorder))]',
+    info: 'bg-info-subtleBg text-info-subtleFg border-info-subtleBorder',
+    success: 'bg-success-subtleBg text-success-subtleFg border-success-subtleBorder',
+    warning: 'bg-warning-subtleBg text-warning-subtleFg border-warning-subtleBorder',
+    danger: 'bg-danger-subtleBg text-danger-subtleFg border-danger-subtleBorder',
   };
 </script>
 
