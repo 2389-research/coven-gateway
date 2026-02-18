@@ -1,0 +1,28 @@
+import type { Meta, StoryObj } from '@storybook/svelte';
+import AppShell from './AppShell.svelte';
+import { htmlSnippet } from './_storyHelpers';
+
+const meta = {
+  title: 'Layout/AppShell',
+  component: AppShell,
+  tags: ['autodocs'],
+  parameters: {
+    layout: 'fullscreen',
+  },
+} satisfies Meta<AppShell>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {
+  args: {
+    children: htmlSnippet('<div style="padding:24px"><h1 style="font-size:1.5rem;font-weight:600;margin-bottom:8px">Main Content</h1><p style="color:#64748b">This is the main content area of the AppShell.</p></div>'),
+  },
+};
+
+export const WithSidebar: Story = {
+  args: {
+    sidebar: htmlSnippet('<div style="padding:16px;border-right:1px solid #e2e8f0;height:100%"><p style="font-weight:600;margin-bottom:8px">Sidebar</p><ul style="list-style:none;padding:0"><li style="padding:4px 0">Nav Item 1</li><li style="padding:4px 0">Nav Item 2</li><li style="padding:4px 0">Nav Item 3</li></ul></div>'),
+    children: htmlSnippet('<div style="padding:24px"><h1 style="font-size:1.5rem;font-weight:600;margin-bottom:8px">Dashboard</h1><p style="color:#64748b">Content with sidebar navigation.</p></div>'),
+  },
+};

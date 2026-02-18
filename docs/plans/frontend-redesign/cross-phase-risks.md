@@ -29,7 +29,7 @@ Every phase gate includes a **drift assessment** — a 30-minute review asking:
 
 | Phase | JS Budget (gzipped) | CSS Budget (gzipped) | Enforced By |
 |-------|---------------------|----------------------|-------------|
-| Phase 1 | 10KB (auto-loader + ConnectionBadge) | 5KB (tokens only) | CI check |
+| Phase 1 | 15KB (auto-loader + ConnectionBadge + Svelte runtime) | 5KB (tokens only) | CI check |
 | Phase 2 | 50KB (components) | 15KB (tokens + utilities) | CI check |
 | Phase 3 | 100KB (chat + marked + DOMPurify) | 25KB | CI check |
 | Phase 4 | 150KB (all pages) | 30KB | CI check + nightly Lighthouse |
@@ -67,15 +67,15 @@ If a budget is exceeded, the phase cannot exit until the bundle is optimized (tr
 | 1 | **Dev server strategy** | Vite proxy to Go (dev default). Go serves templates, Vite proxies `/api` and `/health`. When manifest absent, `ScriptTags()` injects Vite HMR client directly. | Phase 1 implementation |
 | 2 | **Pre-compression** | Defer to Phase 4 optimization. Start with runtime serving. Binary size matters more than compression savings until bundle exceeds 200KB. | Expert consensus |
 | 3 | **Font hosting** | Self-host. Embed `Inter.var.woff2` (~300KB) via `go:embed`. Eliminates Google Fonts CDN. | Single-binary constraint |
-| 4 | **Bundle budget** | Progressive budgets per phase (see table above). Phase 1: 10KB, Phase 3: 100KB, Phase 4: 150KB. Enforced by CI. | Expert consensus |
+| 4 | **Bundle budget** | Progressive budgets per phase (see table above). Phase 1: 15KB (revised — Svelte runtime alone is ~8KB gzip), Phase 3: 100KB, Phase 4: 150KB. Enforced by CI. | Expert consensus + Phase 1 implementation |
 | 5 | **Dark theme timing** | Light-only through Phase 3. Dark theme validated in Storybook during Phase 2. Ships when all pages are on token system (Phase 5 at latest). | Risk of contrast issues |
 
 ## Remaining Open Questions
 
 To be resolved during implementation:
 
-1. **Tailwind v4 compatibility**: Does Svelte 5 + Tailwind v4 `@theme` directive work smoothly? Phase 1 will validate. Fallback: Tailwind v3 + `tailwind.config.ts`.
-2. **HTMX version upgrade**: Current HTMX 1.9.10 is CDN-loaded. Should it be bundled or upgraded to 2.x? Evaluate during Phase 1 based on lifecycle event coverage.
+1. ~~**Tailwind v4 compatibility**~~: **RESOLVED in Phase 1.** Svelte 5 + Tailwind v4 works via `@tailwindcss/vite` plugin + `@import 'tailwindcss'`. No `@theme` directive or `tailwind.config.js` needed. Token integration via `@import './styles/generated/variables.css'`.
+2. ~~**HTMX version upgrade**~~: **DEFERRED.** HTMX 1.9.10 lifecycle events (`beforeSwap`, `beforeCleanupElement`, `afterSwap`, `load`) cover all mount/unmount cases. No upgrade needed for Phase 2. Re-evaluate if we need features from 2.x.
 3. **Shared state between islands**: If two islands on the same page need shared state (e.g., agent list sidebar + chat thread), use a shared Svelte store module imported by both. If this proves insufficient, consider promoting to a single bigger island.
 4. **WebAuthn library**: Current implementation is hand-rolled. Consider `@simplewebauthn/browser` for more robust browser support. Evaluate during Phase 5.
 

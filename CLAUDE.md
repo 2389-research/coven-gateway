@@ -223,7 +223,7 @@ IMPORTANT: When working on anything in `web/`, any frontend redesign deliverable
 
 **Plans directory:** `docs/plans/frontend-redesign/`
 **Design doc:** `docs/plans/2026-02-17-frontend-redesign-design.md` (reference for tokens, component APIs, build pipeline)
-**Current phase:** 1 (Foundation — Prove the Pipeline)
+**Current phase:** 2 (Design System Core — Build What Chat Needs)
 **Runbook:** `docs/plans/frontend-redesign/RUNBOOK.md`
 
 ### Frontend Build Commands (from `web/` directory)
@@ -250,4 +250,17 @@ npm run storybook                   # Component stories
 - After completing a batch, stop and report. Do not continue to the next batch.
 
 ### Phase Learnings
-<!-- Updated at each phase gate with what actually happened vs plan -->
+
+**Phase 1 (Foundation)** — Completed 2026-02-18, PR #47
+
+- Tailwind v4 works via `@tailwindcss/vite` plugin + `@import 'tailwindcss'`. No `@theme` directive or `tailwind.config.js` needed.
+- Vite uses base64url hashes (not hex). Hash regex: `[a-zA-Z0-9_-]{8,}`.
+- HTMX events `beforeSwap`, `beforeCleanupElement`, `afterSwap`, `load` cover all mount/unmount cases. `beforeCleanupElement` (not `beforeCleanup`) catches individual element removals.
+- WeakSet concurrent mount guard needed — `afterSwap` and `load` can fire for the same mutation.
+- Bundle budget: 15KB realistic floor (Svelte runtime ~8KB gzip). 10KB was unrealistic.
+- Storybook 10.x is current stable with native Svelte 5 support. Upgraded from 8.6 during Phase 2 due to Snippet compatibility issues.
+- Inter variable font: 352KB woff2. Fixed cost in binary.
+- Makefile `web-deps` target ensures `npx tsx` uses pinned deps, not globally-installed versions.
+- `X-Accel-Buffering: no` required on SSE endpoints for reverse proxy compatibility.
+- CSS `@import` must come before any other rules (including `@font-face`) per spec, or imports are silently ignored.
+- golangci-lint version drift (local vs CI) resolved via global gosec excludes in `.golangci.yml`.

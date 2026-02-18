@@ -1,0 +1,39 @@
+/* Legacy theme: maps CDN Tailwind custom config values to Tailwind v4 @theme.
+ * These values power the Go HTML templates (internal/webadmin/templates/).
+ * Remove this file when those templates are fully migrated to the design system.
+ */
+@theme {
+  /* Warm palette */
+  --color-cream: #FAF8F5;
+  --color-sand: #F5F1EC;
+  --color-stone: #E8E2DA;
+  --color-warm-50: #FAF8F5;
+  --color-warm-100: #F5F1EC;
+  --color-warm-200: #E8E2DA;
+  --color-warm-300: #D4C9BC;
+  --color-warm-400: #B8A896;
+  --color-warm-500: #9A8A78;
+  --color-warm-600: #7A6A58;
+  --color-warm-700: #5A4A38;
+  --color-warm-800: #3D3228;
+  --color-warm-900: #252018;
+
+  /* Brand */
+  --color-forest: #2D5A47;
+  --color-forest-light: #3D7A5F;
+  --color-ink: #1C1917;
+
+  /* Status (legacy names — design system uses success-solidBg etc.) */
+  --color-success: #2D5A47;
+  --color-warning: #B8860B;
+  --color-danger: #A94442;
+  --color-info: #4A6A8C;
+
+  /* Shadows */
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06);
+
+  /* Legacy font: serif (not in design system tokens) */
+  --font-family-serif: 'Instrument Serif', Georgia, serif;
+}
