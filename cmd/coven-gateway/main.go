@@ -604,7 +604,7 @@ func runInit() error {
 	defaultDBPath := filepath.Join(defaultDataPath, "gateway.db")
 
 	// Output filename
-	outputFile := prompt(reader, "Config file path", defaultConfigPath)
+	outputFile := filepath.Clean(prompt(reader, "Config file path", defaultConfigPath))
 
 	// Check if file exists
 	if _, err := os.Stat(outputFile); err == nil {
@@ -622,7 +622,7 @@ func runInit() error {
 
 	// Database
 	fmt.Println("\n--- Database Configuration ---")
-	dbPath := prompt(reader, "SQLite database path", defaultDBPath)
+	dbPath := filepath.Clean(prompt(reader, "SQLite database path", defaultDBPath))
 
 	// Tailscale
 	fmt.Println("\n--- Tailscale Configuration ---")
