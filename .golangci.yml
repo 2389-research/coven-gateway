@@ -74,6 +74,7 @@ linters:
       min-complexity: 10
     gosec:
       excludes:
+        - G115  # integer overflow — only used with bitmask-safe conversions
         - G117  # struct field names (JWTSecret, AuthKey, etc.) — not secret exposure
         - G203  # template.HTML only used for trusted embedded content
         - G404

@@ -275,7 +275,7 @@ func generateRandomSuffix() uint16 {
 	if _, err := rand.Read(b[:]); err != nil {
 		// Fallback: use nanosecond timestamp truncated to 16 bits
 		nanos := time.Now().UnixNano()
-		return uint16(nanos & 0xFFFF) //nolint:gosec // intentional truncation for fallback
+		return uint16(nanos & 0xFFFF)
 	}
 	return binary.BigEndian.Uint16(b[:])
 }
