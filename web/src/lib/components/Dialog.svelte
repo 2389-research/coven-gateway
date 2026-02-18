@@ -31,15 +31,22 @@
     }
   });
 
-  function handleClose() {
+  /** Called by the native dialog close event (Escape key, or dialogEl.close()). */
+  function handleNativeClose() {
     open = false;
     onclose?.();
   }
 
+  /** Called by close button / backdrop click — only sets open=false.
+   *  The $effect will call dialogEl.close() which fires the native onclose,
+   *  and handleNativeClose will invoke the onclose callback exactly once. */
+  function requestClose() {
+    open = false;
+  }
+
   function handleBackdropClick(e: MouseEvent) {
-    // Close on backdrop click (click on the dialog element itself, not its children)
     if (e.target === dialogEl) {
-      handleClose();
+      requestClose();
     }
   }
 </script>
@@ -47,10 +54,10 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <dialog
   bind:this={dialogEl}
-  onclose={handleClose}
+  onclose={handleNativeClose}
   onclick={handleBackdropClick}
   aria-labelledby={header ? 'dialog-title' : undefined}
-  class="m-auto max-h-[85vh] w-full max-w-[var(--sizing-container-narrow)] rounded-[var(--border-radius-xl)] border border-border bg-surface p-0 shadow-[var(--shadow-lg)] text-fg backdrop:bg-black/50 backdrop:animate-[fadeIn_var(--motion-duration-fast)_var(--motion-easing)] open:animate-[slideIn_var(--motion-duration-normal)_var(--motion-easing)] {className}"
+  class="m-auto max-h-[85vh] w-full max-w-[var(--sizing-container-narrow)] rounded-[var(--border-radius-xl)] border border-border bg-surface p-0 shadow-[var(--shadow-lg)] text-fg backdrop:bg-black/50 backdrop:animate-[fade-in_var(--motion-duration-fast)_var(--motion-easing)] open:animate-[slide-in_var(--motion-duration-normal)_var(--motion-easing)] {className}"
   data-testid="dialog"
 >
   {#if header}
@@ -59,7 +66,8 @@
         {@render header()}
       </div>
       <button
-        onclick={handleClose}
+        type="button"
+        onclick={requestClose}
         class="rounded-[var(--border-radius-md)] p-1.5 text-fgMuted hover:bg-surfaceHover hover:text-fg transition-colors duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         aria-label="Close dialog"
         data-testid="dialog-close"

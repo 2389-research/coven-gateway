@@ -26,13 +26,14 @@
   >
     {#each toasts as toast (toast.id)}
       <div
-        class="flex items-center gap-3 rounded-[var(--border-radius-md)] border p-3 shadow-[var(--shadow-md)] text-[length:var(--typography-fontSize-sm)] min-w-[16rem] max-w-[24rem] animate-[slideIn_var(--motion-duration-normal)_var(--motion-easing)] {variantClasses[toast.variant]}"
+        class="flex items-center gap-3 rounded-[var(--border-radius-md)] border p-3 shadow-[var(--shadow-md)] text-[length:var(--typography-fontSize-sm)] min-w-[16rem] max-w-[24rem] animate-[slide-in_var(--motion-duration-normal)_var(--motion-easing)] {variantClasses[toast.variant]}"
         role="status"
         aria-live="polite"
         data-testid="toast"
       >
         <span class="flex-1">{toast.message}</span>
         <button
+          type="button"
           onclick={() => removeToast(toast.id)}
           class="flex-shrink-0 p-0.5 rounded-[var(--border-radius-sm)] opacity-60 hover:opacity-100 transition-opacity duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:opacity-100"
           aria-label="Dismiss"

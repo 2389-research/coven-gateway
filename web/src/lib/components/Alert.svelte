@@ -51,6 +51,7 @@
 
     {#if dismissible}
       <button
+        type="button"
         onclick={dismiss}
         class="flex-shrink-0 self-start p-0.5 rounded-[var(--border-radius-sm)] opacity-60 hover:opacity-100 transition-opacity duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         aria-label="Dismiss"

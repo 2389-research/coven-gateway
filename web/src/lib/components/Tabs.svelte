@@ -23,11 +23,12 @@
     class: className = '',
   }: Props = $props();
 
-  // Default to first non-disabled tab
+  // Default to first non-disabled tab, or re-select if current tab is invalid/disabled
   $effect(() => {
-    if (!activeTab) {
-      const first = tabs.find((t) => !t.disabled);
-      if (first) activeTab = first.id;
+    const enabledTabs = tabs.filter((t) => !t.disabled);
+    const isValid = activeTab && enabledTabs.some((t) => t.id === activeTab);
+    if (!isValid && enabledTabs.length > 0) {
+      activeTab = enabledTabs[0].id;
     }
   });
 
@@ -38,6 +39,7 @@
 
   function handleKeydown(e: KeyboardEvent) {
     const enabledTabs = tabs.filter((t) => !t.disabled);
+    if (enabledTabs.length === 0) return;
     const currentIndex = enabledTabs.findIndex((t) => t.id === activeTab);
     let nextIndex = currentIndex;
 
@@ -79,6 +81,7 @@
   >
     {#each tabs as tab (tab.id)}
       <button
+        type="button"
         role="tab"
         id="tab-{tab.id}"
         aria-selected={activeTab === tab.id}

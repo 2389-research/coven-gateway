@@ -25,10 +25,14 @@
 
   let textareaEl: HTMLTextAreaElement | undefined = $state();
 
-  function handleInput() {
+  function handleInput(e: Event) {
     if (autoResize && textareaEl) {
       textareaEl.style.height = 'auto';
       textareaEl.style.height = `${textareaEl.scrollHeight}px`;
+    }
+    // Forward to consumer's oninput if provided via ...rest
+    if (typeof rest.oninput === 'function') {
+      (rest.oninput as (e: Event) => void)(e);
     }
   }
 </script>
@@ -48,6 +52,7 @@
     id={textareaId}
     {rows}
     {disabled}
+    {...rest}
     oninput={handleInput}
     aria-invalid={error ? 'true' : undefined}
     aria-describedby={error ? errorId : undefined}
@@ -56,7 +61,6 @@
         ? 'border-danger-solidBg'
         : 'border-border focus:border-ring'}
       {autoResize ? 'resize-none overflow-hidden' : 'resize-y'}"
-    {...rest}
   ></textarea>
 
   {#if error}

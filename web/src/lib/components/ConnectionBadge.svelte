@@ -13,9 +13,13 @@
   let stream = $state<ReturnType<typeof createSSEStream> | null>(null);
 
   $effect(() => {
-    if (!url) return;
-    stream = createSSEStream(url);
-    return () => stream?.close();
+    if (!url) {
+      stream = null;
+      return;
+    }
+    const s = createSSEStream(url);
+    stream = s;
+    return () => s.close();
   });
 
   let sseStatus = $derived<SSEStatus>(stream ? stream.status : propStatus);
