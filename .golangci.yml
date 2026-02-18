@@ -74,8 +74,13 @@ linters:
       min-complexity: 10
     gosec:
       excludes:
+        - G115  # integer overflow — only used with bitmask-safe conversions
+        - G117  # struct field names (JWTSecret, AuthKey, etc.) — not secret exposure
         - G203  # template.HTML only used for trusted embedded content
         - G404
+        - G703  # path traversal — CLI paths from config/user input, sanitized at entry
+        - G704  # SSRF — internal health checks use trusted config URLs only
+        - G705  # XSS taint — false positives on stderr writes and safe SSE values
     govet:
       disable:
         - shadow

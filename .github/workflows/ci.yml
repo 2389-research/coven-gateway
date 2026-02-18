@@ -27,6 +27,13 @@ jobs:
           go-version: '1.25'
           cache: true
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
       - name: Install protoc
         uses: arduino/setup-protoc@v3
         with:
@@ -42,6 +49,15 @@ jobs:
           make proto
           # Ignore protoc version comment differences (only metadata, not functional)
           git diff --ignore-matching-lines='protoc.*v[0-9]' --exit-code proto/ || (echo "Proto files out of sync. Run 'make proto' and commit." && exit 1)
+
+      - name: Token freshness check
+        run: |
+          cd web && npx tsx scripts/build-tokens.ts
+          cd ..
+          git diff --exit-code web/src/styles/generated/variables.css || (echo "Token CSS is stale. Run 'make web-tokens' and commit." && exit 1)
+
+      - name: Build frontend
+        run: make web
 
       - name: Run tests with coverage
         run: go test -race -coverprofile=coverage.out ./...
@@ -145,5 +161,15 @@ jobs:
           go-version: '1.25'
           cache: true
 
-      - name: Build
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend
+        run: make web
+
+      - name: Build binary
         run: go build -o bin/coven-gateway ./cmd/coven-gateway

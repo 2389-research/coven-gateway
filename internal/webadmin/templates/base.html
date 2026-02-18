@@ -6,10 +6,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}} | Coven</title>
+    {{/* TODO(Phase 2): Remove CDN Tailwind once templates use token CSS vars */}}
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    {{/* TODO(Phase 2): Remove Google Fonts CDN once old templates migrate to token font stack.
+         Inter is already self-hosted via Vite (web/src/fonts/InterVariable.woff2).
+         These CDN fonts (DM Sans, Instrument Serif, IBM Plex Mono) are only for legacy templates. */}}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -164,10 +168,16 @@
             font-size: 0.875rem;
         }
     </style>
+    {{ scriptTags "src/islands/auto.ts" }}
 </head>
 <body class="bg-cream text-ink font-sans antialiased">
     <div class="min-h-screen">
         {{template "content" .}}
+    </div>
+    <div style="position:fixed;bottom:0.75rem;right:0.75rem;z-index:50;">
+        <div data-island="connection-badge">
+            <script type="application/json">{"url":"/api/health/stream"}</script>
+        </div>
     </div>
 </body>
 </html>

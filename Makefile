@@ -1,10 +1,10 @@
 # ABOUTME: Build and development commands for coven-gateway
 # ABOUTME: Handles proto generation, building, and testing
 
-.PHONY: all build build-gateway build-admin proto update-proto clean test lint lint-go lint-md fmt run setup hooks
+.PHONY: all build build-gateway build-admin proto update-proto clean test lint lint-go lint-md fmt run setup hooks web web-deps web-tokens web-dev web-clean
 
 # Default target
-all: proto build
+all: proto web build
 
 # Build all binaries
 # Note: coven-tui is in the Rust coven repo: https://github.com/2389-research/coven
@@ -64,8 +64,34 @@ lint-md:
 fmt:
 	go fmt ./...
 
+# Frontend: install dependencies (idempotent via lockfile check)
+web-deps:
+	cd web && npm ci --silent
+
+# Frontend: generate CSS from design tokens
+web-tokens: web-deps
+	cd web && npx tsx scripts/build-tokens.ts
+
+# Frontend: production build (tokens → Vite → copy to embed dir)
+web: web-tokens
+	cd web && npm run build
+	rm -rf internal/assets/dist
+	cp -r web/dist internal/assets/dist
+	touch internal/assets/dist/.gitkeep
+
+# Frontend: Vite dev server with HMR
+web-dev:
+	cd web && npm run dev
+
+# Frontend: clean built assets
+web-clean:
+	rm -rf web/dist
+	rm -rf internal/assets/dist
+	mkdir -p internal/assets/dist
+	touch internal/assets/dist/.gitkeep
+
 # Clean build artifacts
-clean:
+clean: web-clean
 	rm -rf bin/
 	rm -rf proto/coven/*.pb.go
 
