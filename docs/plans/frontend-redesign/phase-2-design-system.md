@@ -17,8 +17,8 @@
 | 5 | **Overlays:** `Dialog` | Settings modal and confirmation dialogs. Focus trap + escape close. |
 | 6 | **Data Display:** `Badge`, `StatusDot` | Agent status indicators in sidebar. |
 | 7 | **Real-time:** `SSEStream` (headless), `ConnectionBadge` (upgrade) | Headless `SSEStream` wraps EventSource with reconnection. `ConnectionBadge` refactored to use it. |
-| 8 | Generate Tailwind theme extension | Now that token pipeline is proven, add `tailwind.ts` output to `build-tokens.ts`. Components use Tailwind utilities backed by tokens. |
-| 9 | Storybook stories for all Phase 2 components | Every component: all variants, all sizes, light theme, interactive states, edge cases (long text, empty, error). |
+| 8 | Generate Tailwind theme extension | Now that token pipeline is proven, extend `build-tokens.ts` to output a `@theme` block that maps token CSS variables to Tailwind utilities (e.g., `--color-accent: var(--cg-accent-500)`). This integrates with Tailwind v4's CSS-first config via the existing `@import 'tailwindcss'` pipeline — no `tailwind.config.js` needed. Components use Tailwind utilities backed by tokens. |
+| 9 | Storybook stories for all Phase 2 components | Storybook 8.6 (current stable with Svelte 5 support). Every component: all variants, all sizes, light theme, interactive states, edge cases (long text, empty, error). |
 | 10 | Replace CDN Tailwind with local build | Remove `cdn.tailwindcss.com` from `base.html`. Tailwind now runs via Vite build. Tokens generate the theme. |
 | 11 | Accessibility audit | All P0 components pass axe-core automated checks. Keyboard navigation verified for Dialog, SidebarNav, Tabs. |
 
@@ -48,8 +48,8 @@ Codify these patterns now so Phase 3+ components are consistent:
 
 | If this happens... | Then adjust... |
 |--------------------|---------------|
-| Tailwind v4 `@theme` + generated `tailwind.ts` conflict | Use CSS custom properties directly in components instead of Tailwind utilities for token-dependent values. Keep Tailwind for spacing/layout only. |
-| Storybook 9 setup is painful with Svelte 5 | Replace with a lightweight HTML harness (`web/dev/preview.html`) that mounts components directly. Defer Storybook to Phase 4. Visual regression still via Playwright screenshots. |
+| Tailwind v4 `@theme` integration doesn't work as expected | Phase 1 showed `@import 'tailwindcss'` via Vite plugin is the primary integration path. If `@theme` block injection fails, define token-to-utility mappings directly in `app.css` after the `@import`. Keep Tailwind for spacing/layout and use CSS custom properties directly for colors. |
+| Storybook 8.6 setup is painful with Svelte 5 | Replace with a lightweight HTML harness (`web/dev/preview.html`) that mounts components directly. Defer Storybook to Phase 4. Visual regression still via Playwright screenshots. |
 | Component count creeps above 12 | Stop. If a Phase 3 component needs a primitive not on this list, build the simplest version inline in the consumer first. Extract to component library only if reused. |
 | Dark theme has contrast issues | Ship light-only through Phase 4. Dark theme becomes a Phase 5 deliverable after more tokens are battle-tested. |
 | Removing CDN Tailwind breaks existing Go templates | Run old and new Tailwind in parallel temporarily: CDN for unrewritten templates, Vite-built for islands. Remove CDN only when the consuming template is migrated. |
