@@ -49,7 +49,7 @@ If a budget is exceeded, the phase cannot exit until the bundle is optimized (tr
 | 6 | **`/static/` prefix** | Clear separation from API routes. Standard convention | `/assets/` (potential API conflict) |
 | 7 | **npm** | Zero config, widest CI support. Not a monorepo | pnpm (adds complexity), yarn (no advantage) |
 | 8 | **Custom token script** | Simple: one input, two outputs. Style Dictionary is overkill | Style Dictionary (heavyweight), manual (drift risk) |
-| 9 | **Storybook 9** (with fallback) | Visual testing, theme switching, a11y, Chromatic integration. Falls back to Playwright screenshots if setup is painful. | HTML harness (no visual regression), Histoire (smaller ecosystem) |
+| 9 | **Storybook 10.x** | Visual testing, theme switching, a11y, Chromatic integration. Upgraded from 8.6 → 10.x during Phase 2 (8.6 couldn't handle Svelte 5 Snippet props). Uses `_storyHelpers.ts` for CSF3 → Snippet bridging. | HTML harness (no visual regression), Histoire (smaller ecosystem) |
 | 10 | **Playwright** | Cross-browser, native WebAuthn via CDP | Cypress (no WebAuthn), Testing Library only (no E2E) |
 | 11 | **`data-theme` attribute** | CSS-only, no JS runtime. Server-settable via cookie | Class toggle, media query only (no override), JS-managed vars |
 | 12 | **WeakMap** for instances | Auto-GC on DOM removal. Clean HTMX integration | Map (leak risk), globals (same), data-attr (no object ref) |

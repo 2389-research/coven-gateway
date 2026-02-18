@@ -13,10 +13,10 @@
 | 3 | `ChatInput` component | Multi-line textarea with auto-resize. Cmd/Ctrl+Enter to send. Character count. Disabled state during send. |
 | 4 | `ToolCallView` component | Expandable/collapsible tool call display. Name, arguments (JSON), result. |
 | 5 | `ThinkingIndicator` component | Animated dots with optional thinking text from agent. |
-| 6 | `createSSEStore` integration | Wire chat to `createSSEStore`. Handle event types: `text`, `thinking`, `tool_use`, `tool_result`, `done`, `error`. Configurable backoff (1s → 30s exponential, max 5 retries). |
-| 7 | SSE cleanup enforcement | Every component consuming an SSE store must call `close()` on unmount. Add an `autoCleanupSSE()` helper that registers cleanup with Svelte's `$effect` teardown. |
+| 6 | `createChatStream` integration | Wire chat to a chat-specific SSE adapter built on `createSSEStream` (from Phase 2 `web/src/lib/stores/sse.svelte.ts`). Handle event types: `text`, `thinking`, `tool_use`, `tool_result`, `done`, `error`. Configurable backoff (1s → 30s exponential, max 5 retries). |
+| 7 | SSE cleanup enforcement + Vitest setup | Every component consuming an SSE store must call `close()` on unmount. Add an `autoCleanupSSE()` helper that registers cleanup with Svelte's `$effect` teardown. **Phase 2 gap:** Vitest is not yet configured for Svelte component tests — set up `vitest` + `@testing-library/svelte` as part of this deliverable. |
 | 8 | `chat.ts` island entry point | Named Vite entry. Eagerly loaded (not lazy via auto-loader). Mounts full chat experience into `<div data-island="chat-app">`. |
-| 9 | Go template shell | New `chat_app_v2.html` — minimal HTML that loads the chat island. Feature-flagged: `COVEN_NEW_CHAT=1` env var switches between old and new chat. |
+| 9 | Go template shell | New `chat_app_v2.html` — minimal HTML that loads the chat island. Feature-flagged: `COVEN_NEW_CHAT=1` env var switches between old and new chat. Stories use `_storyHelpers.ts` pattern (`htmlSnippet`/`textSnippet`) for Snippet props. |
 | 10 | Agent list sidebar | Migrate sidebar agent list to Svelte (`AgentList` component). Live-updating via SSE. |
 | 11 | Settings modal | Migrate search (Cmd+K) and settings modal to Svelte `Dialog` components. |
 | 12 | Marked.js + DOMPurify bundling | Remove CDN scripts. Bundle via npm as Vite dependencies. Tree-shake unused marked extensions. |
@@ -57,7 +57,7 @@ Both old and new chat must be functional simultaneously until this phase's gate 
 | If this happens... | Then adjust... |
 |--------------------|---------------|
 | Phase 2 components don't fit chat needs exactly | Extend components inline in chat code first. Extract improvements back to library after chat stabilizes. Don't block chat on library perfection. |
-| SSE store pattern doesn't work for chat's multi-event-type streams | Replace generic `createSSEStore` with a chat-specific `createChatStream` that handles typed events (text/thinking/tool). Keep generic store for simpler use cases (ConnectionBadge). |
+| `createSSEStream` doesn't work for chat's multi-event-type streams | Build a chat-specific `createChatStream` adapter on top of `createSSEStream` (from `web/src/lib/stores/sse.svelte.ts`) that handles typed events (text/thinking/tool). Keep generic stream for simpler use cases (ConnectionBadge). |
 | marked.js bundle is too large | Switch to `markdown-it` (smaller, modular) or a minimal custom parser for the limited markdown subset agents actually produce. |
 | Chat island needs more state than expected (agent list, settings, chat thread all interconnected) | Promote the chat page to a single "app island" rather than multiple small islands. One mount point, internal component routing. This is fine — it's still an island, just a bigger one. |
 | Go template shell is harder than expected to keep minimal | Accept a thicker shell. The shell can include sidebar chrome and header in Go HTML; only the chat content area is a Svelte island. Migrate sidebar to Svelte in Phase 4 if needed. |

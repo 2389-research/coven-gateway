@@ -1,5 +1,6 @@
 # Phase 2: Design System Core — Build What Chat Needs
 
+**Status:** COMPLETE — Merged to main 2026-02-18, PR #50
 **Weeks:** 3–4
 **Depends on:** [Phase 1 gate](phase-1-foundation.md#exit-gate)
 **Goal:** Build the minimum component library required to implement the chat migration in Phase 3. Not the full inventory — only components that the chat interface and dashboard will consume.
@@ -18,7 +19,7 @@
 | 6 | **Data Display:** `Badge`, `StatusDot` | Agent status indicators in sidebar. |
 | 7 | **Real-time:** `SSEStream` (headless), `ConnectionBadge` (upgrade) | Headless `SSEStream` wraps EventSource with reconnection. `ConnectionBadge` refactored to use it. |
 | 8 | Generate Tailwind theme extension | Now that token pipeline is proven, extend `build-tokens.ts` to output a `@theme` block that maps token CSS variables to Tailwind utilities (e.g., `--color-accent: var(--cg-accent-500)`). This integrates with Tailwind v4's CSS-first config via the existing `@import 'tailwindcss'` pipeline — no `tailwind.config.js` needed. Components use Tailwind utilities backed by tokens. |
-| 9 | Storybook stories for all Phase 2 components | Storybook 8.6 (current stable with Svelte 5 support). Every component: all variants, all sizes, light theme, interactive states, edge cases (long text, empty, error). |
+| 9 | Storybook stories for all Phase 2 components | Storybook 10.x (upgraded from 8.6 due to Svelte 5 Snippet incompatibility). Every component: all variants, all sizes, light theme, interactive states, edge cases. Uses `_storyHelpers.ts` for CSF3 → Snippet bridging. |
 | 10 | Replace CDN Tailwind with local build | Remove `cdn.tailwindcss.com` from `base.html`. Tailwind now runs via Vite build. Tokens generate the theme. |
 | 11 | Accessibility audit | All P0 components pass axe-core automated checks. Keyboard navigation verified for Dialog, SidebarNav, Tabs. |
 

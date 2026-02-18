@@ -223,7 +223,7 @@ IMPORTANT: When working on anything in `web/`, any frontend redesign deliverable
 
 **Plans directory:** `docs/plans/frontend-redesign/`
 **Design doc:** `docs/plans/2026-02-17-frontend-redesign-design.md` (reference for tokens, component APIs, build pipeline)
-**Current phase:** 2 (Design System Core — Build What Chat Needs)
+**Current phase:** 3 (Chat Migration — Highest User Value)
 **Runbook:** `docs/plans/frontend-redesign/RUNBOOK.md`
 
 ### Frontend Build Commands (from `web/` directory)
@@ -258,9 +258,20 @@ npm run storybook                   # Component stories
 - HTMX events `beforeSwap`, `beforeCleanupElement`, `afterSwap`, `load` cover all mount/unmount cases. `beforeCleanupElement` (not `beforeCleanup`) catches individual element removals.
 - WeakSet concurrent mount guard needed — `afterSwap` and `load` can fire for the same mutation.
 - Bundle budget: 15KB realistic floor (Svelte runtime ~8KB gzip). 10KB was unrealistic.
-- Storybook 10.x is current stable with native Svelte 5 support. Upgraded from 8.6 during Phase 2 due to Snippet compatibility issues.
 - Inter variable font: 352KB woff2. Fixed cost in binary.
 - Makefile `web-deps` target ensures `npx tsx` uses pinned deps, not globally-installed versions.
 - `X-Accel-Buffering: no` required on SSE endpoints for reverse proxy compatibility.
 - CSS `@import` must come before any other rules (including `@font-face`) per spec, or imports are silently ignored.
 - golangci-lint version drift (local vs CI) resolved via global gosec excludes in `.golangci.yml`.
+
+**Phase 2 (Design System Core)** — Completed 2026-02-18, PR #50
+
+- Storybook 10.x is current stable with native Svelte 5 support. Upgraded from 8.6 during Phase 2 (8.6 couldn't handle Snippet props).
+- `_storyHelpers.ts` provides `htmlSnippet()` and `textSnippet()` to bridge CSF3 args → Svelte 5 Snippets. All Phase 3+ stories should use this pattern.
+- `legacy-theme.css` bridges old Go template classes to token CSS variables. Enables gradual migration.
+- `@source "../../internal/webadmin/templates"` in app.css scans Go templates so Vite-built Tailwind covers old and new pages.
+- SSE headless store is named `createSSEStream` (not `createSSEStore` from the design doc). Returns `{ status, close }`.
+- axe-core miscomputes color contrast for `<dialog>` elements shown via `showModal()` (top-layer bug). Workaround: disable `color-contrast` rule for Dialog stories only.
+- `type="button"` must be explicit on all `<button>` elements — HTML default is `submit`.
+- Dialog onclose requires split handlers: `requestClose()` for manual actions (sets state), `handleNativeClose()` for the native event (fires callback). Prevents double-firing.
+- Bundle at Phase 2 exit: JS 12.5KB gzip, CSS 10.3KB gzip — well under 50KB/15KB budget.
