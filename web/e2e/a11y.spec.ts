@@ -41,6 +41,9 @@ const stories: { name: string; id: string; disableRules?: string[] }[] = [
   // Verified via getComputedStyle: actual contrast is ~14:1 (rgb(29,34,42) on #fff).
   { name: 'Dialog / Default', id: 'overlays-dialog--default', disableRules: ['color-contrast'] },
   { name: 'AppShell / Default', id: 'layout-appshell--default' },
+  { name: 'Toast / Default', id: 'feedback-toast--default' },
+  { name: 'ConnectionBadge / Connected', id: 'real-time-connectionbadge--connected' },
+  { name: 'ConnectionBadge / Error', id: 'real-time-connectionbadge--error' },
 ];
 
 /** Wait for storybook-root to have actual component content. */

@@ -1,6 +1,6 @@
 /**
  * Toast notification store. Any component or island can import addToast()
- * to show ephemeral notifications. The Toaster component renders them.
+ * to show ephemeral notifications. The Toast component renders them.
  */
 
 export type ToastVariant = 'info' | 'success' | 'warning' | 'danger';
