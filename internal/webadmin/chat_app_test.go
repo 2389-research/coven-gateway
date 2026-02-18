@@ -9,8 +9,8 @@ import (
 )
 
 func TestChatAppTemplatesParse(t *testing.T) {
-	// Test that the chat app template parses correctly
-	_, err := template.ParseFS(templateFS,
+	// Test that the chat app template parses correctly (must include templateFuncs for scriptTags)
+	_, err := template.New("base.html").Funcs(templateFuncs).ParseFS(templateFS,
 		"templates/base.html",
 		"templates/chat_app.html",
 	)

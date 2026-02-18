@@ -747,50 +747,24 @@ export default defineConfig({
 
 ---
 
-## 5. Migration Plan
+## 5. Implementation Plan
 
-### Phase 1: Foundation (Weeks 1-2)
+Detailed, phased implementation plans with gating criteria and drift adaptation live in separate files:
 
-1. Initialize `web/` with Vite, Svelte 5, Tailwind, TypeScript
-2. Create `tokens.json` and token build script
-3. Set up `internal/assets/embed.go` with manifest-based asset serving
-4. Wire `/static/` route in gateway HTTP server
-5. Create `auto.ts` island loader with HTMX lifecycle hooks
-6. Set up Vitest, Storybook, Playwright configs
-7. **First island: `ConnectionBadge`** — proves the full pipeline
+**[`frontend-redesign/`](frontend-redesign/)** — Implementation plan directory
 
-### Phase 2: Design System Core (Weeks 3-4)
+| Phase | Plan | Weeks |
+|-------|------|-------|
+| 1 | [Foundation — Prove the Pipeline](frontend-redesign/phase-1-foundation.md) | 1–2 |
+| 2 | [Design System Core — Build What Chat Needs](frontend-redesign/phase-2-design-system.md) | 3–4 |
+| 3 | [Chat Migration — Highest User Value](frontend-redesign/phase-3-chat-migration.md) | 5–7 |
+| 4 | [Dashboard & Admin Pages](frontend-redesign/phase-4-dashboard-admin.md) | 8–10 |
+| 5 | [Login & Auth](frontend-redesign/phase-5-login-auth.md) | 11 |
+| 6 | [Evaluate SPA Transition](frontend-redesign/phase-6-spa-evaluation.md) | 12+ |
 
-1. Build P0 components: Button, TextField, Card, Stack, Badge, Alert, Spinner, Dialog, Toast
-2. Storybook stories for all P0 components
-3. Update `base.html` to load Vite assets alongside existing templates
-4. Replace inline Tailwind config in `base.html` with generated tokens
+Cross-cutting concerns: [Cross-Phase Risks & Budgets](frontend-redesign/cross-phase-risks.md)
 
-### Phase 3: Chat Migration (Weeks 5-7)
-
-1. Build chat components: ChatThread, ChatMessage, ChatInput, ToolCallView, ThinkingIndicator
-2. Create `chat.ts` island entry point
-3. Replace monolithic `chat_app.html` with Go shell + Svelte chat island
-4. SSE streaming wired through `createSSEStore`
-
-### Phase 4: Dashboard & Admin (Weeks 8-10)
-
-1. Build data display components: Table, MetricCard, CodeBlock, JSONViewer
-2. Migrate dashboard stats, agent list, remaining admin pages
-
-### Phase 5: Login & Auth (Week 11)
-
-1. Unify login page with the new design system
-2. WebAuthn flows migrated to Svelte components
-
-### Phase 6: SPA Transition (Weeks 12+)
-
-1. Introduce SvelteKit or client-side router
-2. Convert Go template shells to SvelteKit pages
-3. Go server becomes pure JSON API + static asset server
-4. Remove Go templates, HTMX, and island auto-loader
-
-**Phase 6 gate:** All pages are 90%+ Svelte. Go templates serve only thin HTML shells. JSON API covers all data needs.
+Each phase file includes: deliverable tables, concrete exit gates, drift adaptation tables (what to do when earlier phases were implemented differently than planned), and bundle budgets.
 
 ---
 
@@ -799,28 +773,57 @@ export default defineConfig({
 | # | Decision | Rationale | Alternatives |
 |---|----------|-----------|-------------|
 | 1 | **Svelte 5** over React/Vue | Smallest runtime (~3KB), runes are clean, compiles to vanilla JS | React (heavy), Vue (larger), Lit (too low-level) |
-| 2 | **Islands then SPA** | Avoids big-bang rewrite. Design system built SPA-ready from day one | Pure islands (state sharing gets messy), immediate SPA (too risky) |
+| 2 | **Islands first, SPA optional** | Avoids big-bang rewrite. Islands may be the permanent end-state for an internal control plane with 1-2 devs. SPA evaluated at Phase 6 against concrete criteria. | Immediate SPA (too risky), commit to SPA upfront (unjustified) |
 | 3 | **Inter** font family | Purpose-built for screens, variable font, excellent at 12-16px | DM Sans (current), system UI stack (no consistency) |
 | 4 | **HSL channel format** | Enables Tailwind `bg-accent/50` alpha composition | Hex (no alpha), full HSL (no Tailwind alpha support) |
 | 5 | **Named island entries** | Heavy islands eager, light ones lazy. Vite deduplicates chunks | Single bundle (penalizes light pages), per-page (fragile) |
 | 6 | **`/static/` prefix** | Clear separation from API routes. Standard convention | `/assets/` (potential API conflict) |
 | 7 | **npm** | Zero config, widest CI support. Not a monorepo | pnpm (adds complexity), yarn (no advantage) |
 | 8 | **Custom token script** | Simple: one input, two outputs. Style Dictionary is overkill | Style Dictionary (heavyweight), manual (drift risk) |
-| 9 | **Storybook 9** | Visual testing, theme switching, a11y, Chromatic integration | HTML harness (no visual regression), Histoire (smaller ecosystem) |
+| 9 | **Storybook 9** (with fallback) | Visual testing, theme switching, a11y, Chromatic integration. Falls back to Playwright screenshots if setup is painful. | HTML harness (no visual regression), Histoire (smaller ecosystem) |
 | 10 | **Playwright** | Cross-browser, native WebAuthn via CDP | Cypress (no WebAuthn), Testing Library only (no E2E) |
 | 11 | **`data-theme` attribute** | CSS-only, no JS runtime. Server-settable via cookie | Class toggle, media query only (no override), JS-managed vars |
 | 12 | **WeakMap** for instances | Auto-GC on DOM removal. Clean HTMX integration | Map (leak risk), globals (same), data-attr (no object ref) |
 | 13 | **16px base font** | Web standard, zoomable via browser. Addresses "too small" complaint | 14px (too small), 18px (wastes space) |
 | 14 | **4px spacing grid** | Matches Tailwind, consistent rhythm | 8px (too coarse), arbitrary (inconsistent) |
+| 15 | **Props via `<script type="application/json">`** | Avoids data-attribute quoting/size limits. Supports complex nested objects. | `data-props` (size limited), URL params (fragile) |
+| 16 | **Feature flags per phase** | Safe rollback during migration. Both old and new UI functional simultaneously. | Big-bang cutover (risky), branch-based (merge conflicts) |
+| 17 | **Self-hosted Inter font** | Single-binary constraint requires no external CDN dependency. Variable font = one file, all weights. | Google Fonts CDN (external dependency), system fonts (inconsistent) |
+| 18 | **Tailwind v4 CSS-first config** | `@theme` directive replaces `tailwind.config.js`. Tokens defined in CSS, not JS. Better alignment with CSS custom properties pipeline. | Tailwind v3 JS config (additional build step), pure CSS (loses utility classes) |
 
 ---
 
-## 7. Open Questions
+## 7. Open Questions — Resolved
 
-To be resolved during Phase 1:
+| # | Question | Resolution | Resolved By |
+|---|----------|------------|-------------|
+| 1 | **Dev server strategy** | Vite proxy to Go (dev default). Go serves templates, Vite proxies `/api` and `/health`. When manifest absent, `ScriptTags()` injects Vite HMR client directly. | Phase 1 implementation |
+| 2 | **Pre-compression** | Defer to Phase 4 optimization. Start with runtime serving. Binary size matters more than compression savings until bundle exceeds 200KB. | Expert consensus |
+| 3 | **Font hosting** | Self-host. Embed `Inter.var.woff2` (~300KB) via `go:embed`. Eliminates Google Fonts CDN. | Single-binary constraint |
+| 4 | **Bundle budget** | Progressive budgets per phase (see [Cross-Phase Risks](frontend-redesign/cross-phase-risks.md#bundle-budget-enforcement)). Phase 1: 10KB, Phase 3: 100KB, Phase 4: 150KB. Enforced by CI. | Expert consensus |
+| 5 | **Dark theme timing** | Light-only through Phase 3. Dark theme validated in Storybook during Phase 2. Ships when all pages are on token system (Phase 5 at latest). | Risk of contrast issues |
 
-1. **Dev server strategy**: Vite proxy to Go, or Go reverse-proxy to Vite? (Leaning: Vite proxy)
-2. **Pre-compression**: Build-time gzip/brotli or runtime? (Leaning: Build-time for prod)
-3. **Font hosting**: Self-host Inter or CDN? (Leaning: Self-host for single-binary)
-4. **Bundle budget**: Max JS/CSS per page? (Suggestion: 150KB JS gzipped, 30KB CSS gzipped)
-5. **Dark theme timing**: Ship light-only in Phase 2, add dark in Phase 4? (Leaning: Yes)
+---
+
+## 8. Remaining Open Questions
+
+To be resolved during implementation:
+
+1. **Tailwind v4 compatibility**: Does Svelte 5 + Tailwind v4 `@theme` directive work smoothly? Phase 1 will validate. Fallback: Tailwind v3 + `tailwind.config.ts`.
+2. **HTMX version upgrade**: Current HTMX 1.9.10 is CDN-loaded. Should it be bundled or upgraded to 2.x? Evaluate during Phase 1 based on lifecycle event coverage.
+3. **Shared state between islands**: If two islands on the same page need shared state (e.g., agent list sidebar + chat thread), use a shared Svelte store module imported by both. If this proves insufficient, consider promoting to a single bigger island.
+4. **WebAuthn library**: Current implementation is hand-rolled. Consider `@simplewebauthn/browser` for more robust browser support. Evaluate during Phase 5.
+
+---
+
+## 9. References
+
+Industry patterns and expert sources consulted during plan development:
+
+- [Frontend Migration Guide (Frontend Mastery)](https://frontendmastery.com/posts/frontend-migration-guide/) — phased migration strategies, drift prevention, failure modes
+- [Islands Architecture (patterns.dev)](https://www.patterns.dev/vanilla/islands-architecture/) — canonical pattern definition
+- [Embed Vite App in Go Binary](https://www.tushar.ch/writing/embed-vite-app-in-go-binary/) — Go embed.FS + Vite manifest pattern
+- [Tailwind CSS v4 Migration Guide](https://tailwindcss.com/docs/theme) — @theme directive, CSS-first configuration
+- [SvelteKit State Management](https://svelte.dev/docs/kit/state-management) — shared store patterns for SSE across components
+- [Integrating Design Tokens with Tailwind CSS](https://medium.com/@nicolalazzari_79244/integrating-design-tokens-with-tailwind-css-79a088b06297) — token pipeline best practices
+- Multi-model expert consensus: GPT-5-Codex (advocate), GPT-5 (critic), O3 (neutral) — all validated architecture with 7-8/10 confidence

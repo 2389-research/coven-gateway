@@ -6,10 +6,31 @@ package webadmin
 import (
 	"html/template"
 	"net/http"
+	"path"
 	"time"
 
+	"github.com/2389/coven-gateway/internal/assets"
 	"github.com/2389/coven-gateway/internal/store"
 )
+
+// templateFuncs provides functions available in all Go templates.
+var templateFuncs = template.FuncMap{
+	// scriptTags emits <script> and <link> tags for a Vite entry point.
+	// Safe to use template.HTML because entry is a build-time constant
+	// from template authors, not user input.
+	"scriptTags": func(entry string) template.HTML {
+		return template.HTML(assets.ScriptTags(entry))
+	},
+}
+
+// parseTemplate creates a template with the standard FuncMap registered.
+// The first file's basename becomes the template name for Execute().
+func parseTemplate(files ...string) *template.Template {
+	name := path.Base(files[0])
+	return template.Must(
+		template.New(name).Funcs(templateFuncs).ParseFS(templateFS, files...),
+	)
+}
 
 // Template data types.
 type loginData struct {
@@ -146,7 +167,7 @@ type linkPageData struct {
 
 // renderLoginPage renders the login page.
 func (a *Admin) renderLoginPage(w http.ResponseWriter, errorMsg, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/login.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/login.html")
 
 	data := loginData{
 		Title:     "Login",
@@ -162,7 +183,7 @@ func (a *Admin) renderLoginPage(w http.ResponseWriter, errorMsg, csrfToken strin
 
 // renderInvitePage renders the invite/signup page.
 func (a *Admin) renderInvitePage(w http.ResponseWriter, token, errorMsg, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/invite.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/invite.html")
 
 	data := inviteData{
 		Title:     "Create Account",
@@ -179,7 +200,7 @@ func (a *Admin) renderInvitePage(w http.ResponseWriter, token, errorMsg, csrfTok
 
 // renderDashboard renders the main dashboard.
 func (a *Admin) renderDashboard(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/dashboard.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/dashboard.html")
 
 	data := dashboardData{
 		Title:     "Dashboard",
@@ -195,7 +216,7 @@ func (a *Admin) renderDashboard(w http.ResponseWriter, user *store.AdminUser, cs
 
 // renderAgentsList renders the agents list partial.
 func (a *Admin) renderAgentsList(w http.ResponseWriter) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/agents_list.html"))
+	tmpl := parseTemplate("templates/partials/agents_list.html")
 
 	// Get connected agents from manager
 	var agents []agentItem
@@ -221,7 +242,7 @@ func (a *Admin) renderAgentsList(w http.ResponseWriter) {
 
 // renderInviteCreated renders the invite created partial (htmx response).
 func (a *Admin) renderInviteCreated(w http.ResponseWriter, inviteURL string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/invite_created.html"))
+	tmpl := parseTemplate("templates/partials/invite_created.html")
 
 	data := inviteCreatedData{
 		URL: inviteURL,
@@ -235,7 +256,7 @@ func (a *Admin) renderInviteCreated(w http.ResponseWriter, inviteURL string) {
 
 // renderPrincipalsPage renders the principals management page.
 func (a *Admin) renderPrincipalsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/principals.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/principals.html")
 
 	data := principalsPageData{
 		Title:     "Principals",
@@ -251,7 +272,7 @@ func (a *Admin) renderPrincipalsPage(w http.ResponseWriter, user *store.AdminUse
 
 // renderPrincipalsList renders the principals list partial.
 func (a *Admin) renderPrincipalsList(w http.ResponseWriter, principals []store.Principal, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/principals_list.html"))
+	tmpl := parseTemplate("templates/partials/principals_list.html")
 
 	data := principalsListData{
 		Principals: principals,
@@ -268,7 +289,7 @@ func (a *Admin) renderPrincipalsList(w http.ResponseWriter, principals []store.P
 
 // renderThreadsPageWithData renders the threads list page with preloaded threads.
 func (a *Admin) renderThreadsPageWithData(w http.ResponseWriter, user *store.AdminUser, threads []*store.Thread, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/threads.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/threads.html")
 	data := threadsPageData{
 		Title:     "Threads",
 		User:      user,
@@ -283,7 +304,7 @@ func (a *Admin) renderThreadsPageWithData(w http.ResponseWriter, user *store.Adm
 
 // renderThreadDetail renders a single thread with its messages.
 func (a *Admin) renderThreadDetail(w http.ResponseWriter, user *store.AdminUser, thread *store.Thread, messages []*store.Message, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/thread_detail.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/thread_detail.html")
 
 	data := threadDetailData{
 		Title:     "Thread Detail",
@@ -301,7 +322,7 @@ func (a *Admin) renderThreadDetail(w http.ResponseWriter, user *store.AdminUser,
 
 // renderMessagesList renders the messages list partial.
 func (a *Admin) renderMessagesList(w http.ResponseWriter, messages []*store.Message) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/messages_list.html"))
+	tmpl := parseTemplate("templates/partials/messages_list.html")
 
 	data := messagesListData{
 		Messages: messages,
@@ -315,7 +336,7 @@ func (a *Admin) renderMessagesList(w http.ResponseWriter, messages []*store.Mess
 
 // renderToolsPage renders the tools management page.
 func (a *Admin) renderToolsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/tools.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/tools.html")
 
 	data := toolsPageData{
 		Title:     "Tools",
@@ -331,7 +352,7 @@ func (a *Admin) renderToolsPage(w http.ResponseWriter, user *store.AdminUser, cs
 
 // renderToolsList renders the tools list partial grouped by pack.
 func (a *Admin) renderToolsList(w http.ResponseWriter, packItems []packItem) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/tools_list.html"))
+	tmpl := parseTemplate("templates/partials/tools_list.html")
 
 	data := toolsListData{
 		Packs: packItems,
@@ -345,7 +366,7 @@ func (a *Admin) renderToolsList(w http.ResponseWriter, packItems []packItem) {
 
 // renderAgentsPage renders the agents management page.
 func (a *Admin) renderAgentsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/agents.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/agents.html")
 
 	data := agentsPageData{
 		Title:     "Agents",
@@ -361,7 +382,7 @@ func (a *Admin) renderAgentsPage(w http.ResponseWriter, user *store.AdminUser, c
 
 // renderAgentDetail renders the agent detail page.
 func (a *Admin) renderAgentDetail(w http.ResponseWriter, user *store.AdminUser, agent agentDetailItem, threads []*store.Thread, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/agent_detail.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/agent_detail.html")
 
 	data := agentDetailData{
 		Title:     agent.Name + " - Agent Details",
@@ -379,7 +400,7 @@ func (a *Admin) renderAgentDetail(w http.ResponseWriter, user *store.AdminUser, 
 
 // renderSetupPage renders the initial setup wizard page.
 func (a *Admin) renderSetupPage(w http.ResponseWriter, errorMsg, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/setup.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/setup.html")
 
 	data := setupData{
 		Title:     "Initial Setup",
@@ -395,7 +416,7 @@ func (a *Admin) renderSetupPage(w http.ResponseWriter, errorMsg, csrfToken strin
 
 // renderSetupComplete renders the setup completion page with optional API token.
 func (a *Admin) renderSetupComplete(w http.ResponseWriter, displayName, apiToken, grpcAddress string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/setup_complete.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/setup_complete.html")
 
 	data := setupCompleteData{
 		Title:       "Setup Complete",
@@ -413,7 +434,7 @@ func (a *Admin) renderSetupComplete(w http.ResponseWriter, displayName, apiToken
 
 // renderLinkPage renders the device linking approval page.
 func (a *Admin) renderLinkPage(w http.ResponseWriter, user *store.AdminUser, codes []*store.LinkCode, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/link.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/link.html")
 
 	data := linkPageData{
 		Title:     "Device Linking",
@@ -444,7 +465,7 @@ type logsListData struct {
 
 // renderLogsPage renders the activity logs page.
 func (a *Admin) renderLogsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/logs.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/logs.html")
 
 	data := logsPageData{
 		Title:     "Activity Logs",
@@ -460,7 +481,7 @@ func (a *Admin) renderLogsPage(w http.ResponseWriter, user *store.AdminUser, csr
 
 // renderLogsList renders the logs list partial.
 func (a *Admin) renderLogsList(w http.ResponseWriter, entries []*store.LogEntry) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/logs_list.html"))
+	tmpl := parseTemplate("templates/partials/logs_list.html")
 
 	data := logsListData{
 		Entries: entries,
@@ -488,7 +509,7 @@ type todosListData struct {
 
 // renderTodosPage renders the todos page.
 func (a *Admin) renderTodosPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/todos.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/todos.html")
 
 	data := todosPageData{
 		Title:     "Todos",
@@ -504,7 +525,7 @@ func (a *Admin) renderTodosPage(w http.ResponseWriter, user *store.AdminUser, cs
 
 // renderTodosList renders the todos list partial.
 func (a *Admin) renderTodosList(w http.ResponseWriter, todos []*store.Todo) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/todos_list.html"))
+	tmpl := parseTemplate("templates/partials/todos_list.html")
 
 	data := todosListData{
 		Todos: todos,
@@ -536,7 +557,7 @@ type boardThreadData struct {
 
 // renderBoardPage renders the BBS board page.
 func (a *Admin) renderBoardPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/board.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/board.html")
 
 	data := boardPageData{
 		Title:     "Discussion Board",
@@ -552,7 +573,7 @@ func (a *Admin) renderBoardPage(w http.ResponseWriter, user *store.AdminUser, cs
 
 // renderBoardList renders the board threads list partial.
 func (a *Admin) renderBoardList(w http.ResponseWriter, threads []*store.BBSPost) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/board_list.html"))
+	tmpl := parseTemplate("templates/partials/board_list.html")
 
 	data := boardListData{
 		Threads: threads,
@@ -566,7 +587,7 @@ func (a *Admin) renderBoardList(w http.ResponseWriter, threads []*store.BBSPost)
 
 // renderBoardThread renders a single thread with replies.
 func (a *Admin) renderBoardThread(w http.ResponseWriter, thread *store.BBSThread) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/board_thread.html"))
+	tmpl := parseTemplate("templates/partials/board_thread.html")
 
 	data := boardThreadData{
 		Thread: thread,
@@ -600,7 +621,7 @@ type usageStatsData struct {
 
 // renderUsagePage renders the token usage analytics page.
 func (a *Admin) renderUsagePage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/usage.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/usage.html")
 
 	data := usagePageData{
 		Title:     "Token Usage",
@@ -616,7 +637,7 @@ func (a *Admin) renderUsagePage(w http.ResponseWriter, user *store.AdminUser, cs
 
 // renderUsageStats renders the usage stats partial (for dashboard and usage page).
 func (a *Admin) renderUsageStats(w http.ResponseWriter, stats *store.UsageStats) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/stats_tokens.html"))
+	tmpl := parseTemplate("templates/partials/stats_tokens.html")
 
 	data := usageStatsData{
 		TotalInput:      stats.TotalInput,
@@ -663,7 +684,7 @@ type secretsListData struct {
 
 // renderSecretsPage renders the secrets management page.
 func (a *Admin) renderSecretsPage(w http.ResponseWriter, user *store.AdminUser, agents []agentItem, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/base.html", "templates/secrets.html"))
+	tmpl := parseTemplate("templates/base.html", "templates/secrets.html")
 
 	data := secretsPageData{
 		Title:     "Secrets",
@@ -680,7 +701,7 @@ func (a *Admin) renderSecretsPage(w http.ResponseWriter, user *store.AdminUser, 
 
 // renderSecretsList renders the secrets list partial.
 func (a *Admin) renderSecretsList(w http.ResponseWriter, secrets []secretItem, csrfToken string) {
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/secrets_list.html"))
+	tmpl := parseTemplate("templates/partials/secrets_list.html")
 
 	data := secretsListData{
 		Secrets:   secrets,

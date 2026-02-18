@@ -22,6 +22,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/2389/coven-gateway/internal/agent"
+	"github.com/2389/coven-gateway/internal/assets"
 	"github.com/2389/coven-gateway/internal/conversation"
 	"github.com/2389/coven-gateway/internal/packs"
 	"github.com/2389/coven-gateway/internal/store"
@@ -357,9 +358,43 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 
 // RegisterRoutes registers all admin routes on the given mux.
 func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
+	mux.Handle("GET /static/", http.StripPrefix("/static/", assets.FileServer()))
+	mux.HandleFunc("GET /api/health/stream", a.handleHealthStream)
 	a.registerRootRoutes(mux)
 	a.registerAdminRoutes(mux)
-	a.logger.Info("routes registered", "root_chat", "/", "admin", "/admin/")
+	a.logger.Info("routes registered", "root_chat", "/", "admin", "/admin/", "static", "/static/")
+}
+
+// handleHealthStream is a minimal SSE endpoint that keeps the connection open
+// with periodic heartbeats. The ConnectionBadge island uses this to show
+// gateway connectivity status — it only cares about connection state, not data.
+func (a *Admin) handleHealthStream(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	// Send initial event so the client knows we're alive.
+	_, _ = fmt.Fprintf(w, "data: ok\n\n")
+	flusher.Flush()
+
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			_, _ = fmt.Fprintf(w, ": heartbeat\n\n")
+			flusher.Flush()
+		}
+	}
 }
 
 // requireAuth wraps a handler to require authentication.

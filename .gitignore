@@ -17,3 +17,7 @@ config.yaml
 
 # Git worktrees for parallel development
 .worktrees/
+
+# Frontend build output (embedded via internal/assets/embed.go)
+internal/assets/dist/*
+!internal/assets/dist/.gitkeep

@@ -62,10 +62,10 @@ func (a *Admin) handleChatApp(w http.ResponseWriter, r *http.Request) {
 		AgentCount: agentCount,
 	}
 
-	tmpl := template.Must(template.ParseFS(templateFS,
+	tmpl := parseTemplate(
 		"templates/base.html",
 		"templates/chat_app.html",
-	))
+	)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
@@ -113,7 +113,7 @@ func (a *Admin) handleAgentList(w http.ResponseWriter, r *http.Request) {
 		ActiveAgentID: activeAgentID,
 	}
 
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/agent_list.html"))
+	tmpl := parseTemplate("templates/partials/agent_list.html")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
@@ -227,7 +227,7 @@ func (a *Admin) handleEmptyState(w http.ResponseWriter, r *http.Request) {
 		AgentCount: agentCount,
 	}
 
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/chat_app.html"))
+	tmpl := parseTemplate("templates/chat_app.html")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "empty_state", data); err != nil {
@@ -262,7 +262,7 @@ func (a *Admin) renderChatView(w http.ResponseWriter, threadID, agentID, agentNa
 	}
 
 	// Parse the chat_view define from chat_app.html
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/chat_app.html"))
+	tmpl := parseTemplate("templates/chat_app.html")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "chat_view", data); err != nil {
@@ -299,7 +299,7 @@ func (a *Admin) handleSettingsAgents(w http.ResponseWriter, r *http.Request) {
 		CSRFToken: csrfToken,
 	}
 
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/settings_agents.html"))
+	tmpl := parseTemplate("templates/partials/settings_agents.html")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
@@ -375,7 +375,7 @@ func (a *Admin) handleSettingsTools(w http.ResponseWriter, r *http.Request) {
 		Packs: packList,
 	}
 
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/settings_tools.html"))
+	tmpl := parseTemplate("templates/partials/settings_tools.html")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
@@ -411,7 +411,7 @@ func (a *Admin) handleSettingsSecurity(w http.ResponseWriter, r *http.Request) {
 		CSRFToken:  csrfToken,
 	}
 
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/settings_security.html"))
+	tmpl := parseTemplate("templates/partials/settings_security.html")
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
@@ -519,7 +519,7 @@ func (a *Admin) handleSettingsHelp(w http.ResponseWriter, r *http.Request) {
 		Content: a.loadHelpContent(selectedTopic),
 	}
 
-	tmpl := template.Must(template.ParseFS(templateFS, "templates/partials/settings_help.html"))
+	tmpl := parseTemplate("templates/partials/settings_help.html")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render settings help", "error", err)

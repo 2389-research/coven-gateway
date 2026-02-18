@@ -200,3 +200,38 @@ func TestSomething(t *testing.T) {
 - Principal IDs: Use `generatePrincipalID()` in `internal/admin/principals.go`
 - General UUIDs: Use `uuid.New().String()` from `github.com/google/uuid`
 - Never create timestamp-only IDs (collision risk under concurrent load)
+
+## Frontend Redesign (Active Migration)
+
+IMPORTANT: When working on anything in `web/`, any frontend redesign deliverable, any phase file, or any task referencing the frontend migration — you MUST first read `docs/plans/frontend-redesign/RUNBOOK.md` and follow its session patterns. The runbook defines how to manage context across sessions to prevent smearing. Do not freestyle.
+
+**Plans directory:** `docs/plans/frontend-redesign/`
+**Design doc:** `docs/plans/2026-02-17-frontend-redesign-design.md` (reference for tokens, component APIs, build pipeline)
+**Current phase:** 1 (Foundation — Prove the Pipeline)
+**Runbook:** `docs/plans/frontend-redesign/RUNBOOK.md`
+
+### Frontend Build Commands (from `web/` directory)
+```bash
+npm ci                              # Install deps
+npm run dev                         # Vite dev server with HMR
+npm run build                       # Production build to web/dist/
+npx tsx scripts/build-tokens.ts     # Regenerate variables.css from tokens.json
+make web                            # Build frontend (from repo root)
+make web-dev                        # Start Vite dev server (from repo root)
+```
+
+### Frontend Testing (from `web/` directory)
+```bash
+npm test                            # Vitest unit tests
+npx playwright test                 # E2E tests
+npm run storybook                   # Component stories
+```
+
+### Session Rules
+- One batch of deliverables (1-3) per session. Do not combine unrelated work.
+- Use subagents for codebase investigation — preserve main context for implementation.
+- Always read the phase file at the start of a session — it IS your context.
+- After completing a batch, stop and report. Do not continue to the next batch.
+
+### Phase Learnings
+<!-- Updated at each phase gate with what actually happened vs plan -->
