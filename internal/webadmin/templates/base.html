@@ -1,13 +1,12 @@
 {{/* ABOUTME: Base layout template with professional business theme */}}
-{{/* ABOUTME: Provides HTML shell, Tailwind config, fonts, and executive dashboard styling */}}
+{{/* ABOUTME: Provides HTML shell, fonts, and executive dashboard styling */}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}} | Coven</title>
-    {{/* TODO(Phase 2): Remove CDN Tailwind once templates use token CSS vars */}}
-    <script src="https://cdn.tailwindcss.com"></script>
+    {{/* Tailwind CSS is now served via Vite build (web/src/app.css). */}}
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
@@ -17,53 +16,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        // Warm professional palette
-                        cream: '#FAF8F5',
-                        sand: '#F5F1EC',
-                        stone: '#E8E2DA',
-                        warm: {
-                            50: '#FAF8F5',
-                            100: '#F5F1EC',
-                            200: '#E8E2DA',
-                            300: '#D4C9BC',
-                            400: '#B8A896',
-                            500: '#9A8A78',
-                            600: '#7A6A58',
-                            700: '#5A4A38',
-                            800: '#3D3228',
-                            900: '#252018',
-                        },
-                        // Accent colors
-                        forest: '#2D5A47',
-                        'forest-light': '#3D7A5F',
-                        ink: '#1C1917',
-                        // Status colors
-                        success: '#2D5A47',
-                        warning: '#B8860B',
-                        danger: '#A94442',
-                        info: '#4A6A8C',
-                    },
-                    fontFamily: {
-                        serif: ['Instrument Serif', 'Georgia', 'serif'],
-                        sans: ['DM Sans', 'system-ui', 'sans-serif'],
-                        mono: ['IBM Plex Mono', 'monospace'],
-                    },
-                    boxShadow: {
-                        'soft': '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
-                        'card': '0 4px 12px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.08)',
-                        'elevated': '0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06)',
-                    },
-                }
-            }
-        }
-    </script>
     <style>
         body {
+            font-family: 'DM Sans', system-ui, sans-serif;
             background: linear-gradient(180deg, #FAF8F5 0%, #F5F1EC 100%);
             min-height: 100vh;
         }

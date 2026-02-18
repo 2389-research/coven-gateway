@@ -49,12 +49,13 @@
   bind:this={dialogEl}
   onclose={handleClose}
   onclick={handleBackdropClick}
+  aria-labelledby={header ? 'dialog-title' : undefined}
   class="m-auto max-h-[85vh] w-full max-w-[var(--sizing-container-narrow)] rounded-[var(--border-radius-xl)] border border-border bg-surface p-0 shadow-[var(--shadow-lg)] text-fg backdrop:bg-black/50 backdrop:animate-[fadeIn_var(--motion-duration-fast)_var(--motion-easing)] open:animate-[slideIn_var(--motion-duration-normal)_var(--motion-easing)] {className}"
   data-testid="dialog"
 >
   {#if header}
     <div class="flex items-center justify-between border-b border-border px-6 py-4">
-      <div class="text-[length:var(--typography-fontSize-lg)] font-[var(--typography-fontWeight-semibold)]">
+      <div id="dialog-title" class="text-[length:var(--typography-fontSize-lg)] font-[var(--typography-fontWeight-semibold)]">
         {@render header()}
       </div>
       <button

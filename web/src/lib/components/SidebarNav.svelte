@@ -43,6 +43,7 @@
       {item.active
         ? 'bg-accentMuted text-accent font-[var(--typography-fontWeight-medium)]'
         : 'text-fgMuted hover:bg-surfaceHover hover:text-fg'}"
+    role={item.href ? undefined : 'button'}
     aria-current={item.active ? 'page' : undefined}
     onclick={(e) => handleClick(item, e)}
     data-testid="nav-item-{item.id}"
@@ -63,9 +64,9 @@
     {/each}
   {/if}
 
-  {#each groups as group}
-    <div class="mt-2 first:mt-0">
-      <h3 class="mb-1 px-3 text-[length:var(--typography-fontSize-xs)] font-[var(--typography-fontWeight-semibold)] uppercase tracking-wider text-fgMuted">
+  {#each groups as group, i}
+    <div class="mt-2 first:mt-0" role="group" aria-labelledby="nav-group-{i}">
+      <h3 id="nav-group-{i}" class="mb-1 px-3 text-[length:var(--typography-fontSize-xs)] font-[var(--typography-fontWeight-semibold)] uppercase tracking-wider text-fgMuted">
         {group.label}
       </h3>
       {#each group.items as item (item.id)}

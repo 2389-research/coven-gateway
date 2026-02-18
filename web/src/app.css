@@ -1,6 +1,11 @@
 @import 'tailwindcss';
 @import './styles/generated/variables.css';
 @import './styles/generated/theme.css';
+@import './styles/legacy-theme.css';
+
+/* Scan Go HTML templates so Tailwind generates their utility classes.
+ * Remove this @source when legacy templates are fully migrated. */
+@source "../../internal/webadmin/templates";
 
 /* Self-hosted Inter variable font — eliminates Google Fonts CDN dependency. */
 @font-face {

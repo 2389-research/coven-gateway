@@ -34,7 +34,7 @@
         <span class="flex-1">{toast.message}</span>
         <button
           onclick={() => removeToast(toast.id)}
-          class="flex-shrink-0 p-0.5 rounded-[var(--border-radius-sm)] opacity-60 hover:opacity-100 transition-opacity duration-[var(--motion-duration-fast)]"
+          class="flex-shrink-0 p-0.5 rounded-[var(--border-radius-sm)] opacity-60 hover:opacity-100 transition-opacity duration-[var(--motion-duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:opacity-100"
           aria-label="Dismiss"
           data-testid="toast-dismiss"
         >
