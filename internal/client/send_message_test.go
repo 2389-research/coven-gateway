@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/2389/coven-gateway/internal/agent"
+	"github.com/2389/coven-gateway/internal/conversation"
 	"github.com/2389/coven-gateway/internal/dedupe"
 	"github.com/2389/coven-gateway/internal/store"
 	pb "github.com/2389/coven-gateway/proto/coven"
@@ -462,6 +463,100 @@ func TestProcessClientMessage_AgentError(t *testing.T) {
 	}
 	require.NotNil(t, errorEvent, "expected error event to be stored")
 	assert.Equal(t, "something went wrong", *errorEvent.Text)
+}
+
+func TestConsumeAgentResponses_BroadcastsEvents(t *testing.T) {
+	eventStore := &mockEventStore{}
+	finalContent := "Broadcasted response!"
+	router := &mockRouter{
+		agentOnline: true,
+		responses: []*agent.Response{
+			{Event: agent.EventText, Text: "Broadcasted"},            // skipped (not persisted)
+			{Event: agent.EventThinking, Text: "thinking..."},        // skipped (not persisted)
+			{Event: agent.EventDone, Text: finalContent, Done: true}, // persisted + broadcast
+		},
+	}
+	svc := newTestClientServiceWithRouting(t, eventStore, router)
+
+	// Set up broadcaster and subscribe before sending
+	broadcaster := conversation.NewEventBroadcaster(nil)
+	t.Cleanup(func() { broadcaster.Close() })
+	svc.SetBroadcaster(broadcaster)
+
+	eventCh, _ := broadcaster.Subscribe(t.Context(), "agent-broadcast")
+
+	req := &pb.ClientSendMessageRequest{
+		ConversationKey: "agent-broadcast",
+		Content:         "Trigger broadcast",
+		IdempotencyKey:  "broadcast-key-1",
+	}
+
+	resp, err := svc.SendMessage(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", resp.Status)
+
+	// Collect broadcast events — expect text_chunk first, then final message
+	var broadcasts []*store.LedgerEvent
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case event := <-eventCh:
+			require.NotNil(t, event, "expected a non-nil broadcast event")
+			broadcasts = append(broadcasts, event)
+			// Stop collecting after we get the final message
+			if event.Type == store.EventTypeMessage {
+				goto collected
+			}
+		case <-timeout:
+			t.Fatalf("timed out waiting for broadcast events (got %d)", len(broadcasts))
+		}
+	}
+collected:
+
+	// First broadcast: text chunk (streamed live, not persisted)
+	require.GreaterOrEqual(t, len(broadcasts), 2, "expected text_chunk + message broadcasts")
+	assert.Equal(t, store.EventTypeTextChunk, broadcasts[0].Type)
+	assert.Equal(t, "Broadcasted", *broadcasts[0].Text)
+	assert.Equal(t, "agent-broadcast", broadcasts[0].ConversationKey)
+	assert.NotEmpty(t, broadcasts[0].ID, "text chunk should have ID for observability")
+	assert.Equal(t, "agent", broadcasts[0].Author, "text chunk should have author")
+	assert.Equal(t, store.EventDirectionOutbound, broadcasts[0].Direction)
+
+	// Last broadcast: final message (persisted + broadcast)
+	last := broadcasts[len(broadcasts)-1]
+	assert.Equal(t, store.EventTypeMessage, last.Type)
+	assert.Equal(t, finalContent, *last.Text)
+	assert.Equal(t, store.EventDirectionOutbound, last.Direction)
+}
+
+func TestConsumeAgentResponses_NoBroadcasterNoPanic(t *testing.T) {
+	// Verify that consumeAgentResponses works without a broadcaster (nil-safe)
+	eventStore := &mockEventStore{}
+	router := &mockRouter{
+		agentOnline: true,
+		responses: []*agent.Response{
+			{Event: agent.EventDone, Text: "No broadcaster set", Done: true},
+		},
+	}
+	svc := newTestClientServiceWithRouting(t, eventStore, router)
+	// Intentionally do NOT set a broadcaster
+
+	req := &pb.ClientSendMessageRequest{
+		ConversationKey: "agent-no-broadcaster",
+		Content:         "Should not panic",
+		IdempotencyKey:  "no-broadcaster-key",
+	}
+
+	resp, err := svc.SendMessage(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", resp.Status)
+
+	// Give async processing time
+	time.Sleep(100 * time.Millisecond)
+
+	// Events should still be stored even without broadcaster
+	events := eventStore.getEvents()
+	require.GreaterOrEqual(t, len(events), 2, "expected inbound + outbound events stored")
 }
 
 func TestProcessClientMessage_NoRouterConfigured(t *testing.T) {

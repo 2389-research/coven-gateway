@@ -201,6 +201,22 @@ func TestSomething(t *testing.T) {
 - General UUIDs: Use `uuid.New().String()` from `github.com/google/uuid`
 - Never create timestamp-only IDs (collision risk under concurrent load)
 
+## Security-Critical Packages
+
+The following packages handle authentication, authorization, and identity management.
+They have **mandatory test coverage requirements** enforced by CI:
+
+| Package | Min Coverage | Purpose |
+|---------|--------------|---------|
+| `internal/admin` | 70% | Principal CRUD, bindings, tokens |
+| `internal/auth` | 60% | Authentication, JWT, SSH verification |
+
+**When modifying these packages:**
+- All new exported functions must have corresponding tests
+- Test both success paths and error/validation paths
+- Include audit log verification where applicable
+- PR reviewers should verify test coverage before approving
+
 ## Frontend Redesign (Active Migration)
 
 IMPORTANT: When working on anything in `web/`, any frontend redesign deliverable, any phase file, or any task referencing the frontend migration — you MUST first read `docs/plans/frontend-redesign/RUNBOOK.md` and follow its session patterns. The runbook defines how to manage context across sessions to prevent smearing. Do not freestyle.

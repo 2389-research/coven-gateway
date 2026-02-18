@@ -30,6 +30,7 @@ type EventType string
 
 const (
 	EventTypeMessage    EventType = "message"
+	EventTypeTextChunk  EventType = "text_chunk"
 	EventTypeToolCall   EventType = "tool_call"
 	EventTypeToolResult EventType = "tool_result"
 	EventTypeSystem     EventType = "system"

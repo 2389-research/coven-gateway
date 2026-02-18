@@ -61,8 +61,62 @@ jobs:
       - name: Build frontend
         run: make web
 
-      - name: Run tests
-        run: go test -race -v ./...
+      - name: Run tests with coverage
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Check security-critical package coverage
+        run: |
+          echo "Checking coverage thresholds for security-critical packages..."
+
+          # Extract package-level coverage from go test output (most accurate)
+          # Format: "ok  github.com/2389/coven-gateway/internal/admin  0.743s  coverage: 88.8% of statements"
+          ADMIN_COV=$(go test -cover ./internal/admin/... 2>&1 | grep 'coverage:' | sed 's/.*coverage: \([0-9.]*\)%.*/\1/' | head -1)
+          AUTH_COV=$(go test -cover ./internal/auth/... 2>&1 | grep 'coverage:' | sed 's/.*coverage: \([0-9.]*\)%.*/\1/' | head -1)
+
+          # Fallback: calculate from go tool cover -func output (averaging per-function)
+          # Note: This is an approximation since go tool cover -func doesn't provide statement counts
+          if [ -z "$ADMIN_COV" ]; then
+            ADMIN_COV=$(go tool cover -func=coverage.out | grep "internal/admin/" | awk '
+              {
+                gsub(/%/, "", $NF)
+                sum += $NF
+                count++
+              }
+              END {if(count>0) printf "%.1f", sum/count; else print "0"}
+            ')
+          fi
+          if [ -z "$AUTH_COV" ]; then
+            AUTH_COV=$(go tool cover -func=coverage.out | grep "internal/auth/" | awk '
+              {
+                gsub(/%/, "", $NF)
+                sum += $NF
+                count++
+              }
+              END {if(count>0) printf "%.1f", sum/count; else print "0"}
+            ')
+          fi
+
+          echo "internal/admin coverage: ${ADMIN_COV}%"
+          echo "internal/auth coverage: ${AUTH_COV}%"
+
+          # Thresholds (can be adjusted)
+          MIN_ADMIN=70
+          MIN_AUTH=60
+
+          FAILED=0
+          if awk -v cov="$ADMIN_COV" -v min="$MIN_ADMIN" 'BEGIN {exit !(cov < min)}'; then
+            echo "ERROR: internal/admin coverage ${ADMIN_COV}% is below minimum ${MIN_ADMIN}%"
+            FAILED=1
+          fi
+          if awk -v cov="$AUTH_COV" -v min="$MIN_AUTH" 'BEGIN {exit !(cov < min)}'; then
+            echo "ERROR: internal/auth coverage ${AUTH_COV}% is below minimum ${MIN_AUTH}%"
+            FAILED=1
+          fi
+
+          if [ $FAILED -eq 1 ]; then
+            exit 1
+          fi
+          echo "All security-critical package coverage thresholds met!"
 
       - name: Contract tests
         run: go test -v ./internal/contract/...
@@ -119,7 +173,7 @@ jobs:
       - name: Build frontend
         run: |
           cd web && npm ci
-          make web
+          cd .. && make web
 
       - name: Build binary
         run: go build -o bin/coven-gateway ./cmd/coven-gateway

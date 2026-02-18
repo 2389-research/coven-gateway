@@ -199,6 +199,49 @@ func TestStreamEvents_EventConversion(t *testing.T) {
 	assert.Equal(t, actorMemberID, *protoEvent.ActorMemberId)
 }
 
+func TestEventToClientStreamEvent_TextChunk(t *testing.T) {
+	content := "Hello "
+	threadID := "thread-1"
+	event := &store.LedgerEvent{
+		ID:              "chunk-001",
+		ConversationKey: "agent-1",
+		ThreadID:        &threadID,
+		Direction:       store.EventDirectionOutbound,
+		Author:          "agent",
+		Type:            store.EventTypeTextChunk,
+		Text:            &content,
+		Timestamp:       time.Now(),
+	}
+
+	streamEvent := eventToClientStreamEvent(event)
+
+	// Should be wrapped as TextChunk payload, not Event payload
+	assert.Equal(t, "agent-1", streamEvent.ConversationKey)
+	assert.NotEmpty(t, streamEvent.Timestamp)
+
+	textPayload, ok := streamEvent.Payload.(*pb.ClientStreamEvent_Text)
+	require.True(t, ok, "expected Text payload, got %T", streamEvent.Payload)
+	require.NotNil(t, textPayload.Text)
+	assert.Equal(t, "Hello ", textPayload.Text.Content)
+}
+
+func TestEventToClientStreamEvent_TextChunkNilText(t *testing.T) {
+	event := &store.LedgerEvent{
+		ID:              "chunk-002",
+		ConversationKey: "agent-1",
+		Direction:       store.EventDirectionOutbound,
+		Type:            store.EventTypeTextChunk,
+		Text:            nil,
+		Timestamp:       time.Now(),
+	}
+
+	streamEvent := eventToClientStreamEvent(event)
+
+	textPayload, ok := streamEvent.Payload.(*pb.ClientStreamEvent_Text)
+	require.True(t, ok, "expected Text payload for nil text")
+	assert.Equal(t, "", textPayload.Text.Content)
+}
+
 func TestStreamEvents_ContextCancellation(t *testing.T) {
 	s := createTestStore(t)
 	svc := createClientService(t, s)

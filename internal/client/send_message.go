@@ -188,16 +188,41 @@ func (s *ClientService) consumeAgentResponses(
 			if !ok {
 				return
 			}
-			event := s.responseToLedgerEvent(conversationKey, threadID, resp)
-			if event != nil && s.store != nil {
-				if err := s.store.SaveEvent(ctx, event); err != nil {
-					slog.Error("failed to store agent response",
-						"error", err,
-						"conversation_key", conversationKey,
-						"event_type", resp.Event,
-					)
-				}
-			}
+			s.handleAgentResponse(ctx, conversationKey, threadID, resp)
+		}
+	}
+}
+
+// handleAgentResponse processes a single agent response: broadcasts text chunks
+// for real-time streaming, and saves other event types to the ledger.
+func (s *ClientService) handleAgentResponse(ctx context.Context, conversationKey, threadID string, resp *agent.Response) {
+	// Broadcast text chunks directly without saving to ledger.
+	// EventDone carries the final accumulated text for persistence.
+	if resp.Event == agent.EventText && s.broadcaster != nil && resp.Text != "" {
+		chunk := &store.LedgerEvent{
+			ID:              uuid.New().String(),
+			ConversationKey: conversationKey,
+			ThreadID:        &threadID,
+			Direction:       store.EventDirectionOutbound,
+			Author:          "agent",
+			Type:            store.EventTypeTextChunk,
+			Text:            &resp.Text,
+			Timestamp:       time.Now(),
+		}
+		s.broadcaster.Publish(conversationKey, chunk, "")
+		return
+	}
+
+	event := s.responseToLedgerEvent(conversationKey, threadID, resp)
+	if event != nil && s.store != nil {
+		if err := s.store.SaveEvent(ctx, event); err != nil {
+			slog.Error("failed to store agent response",
+				"error", err,
+				"conversation_key", conversationKey,
+				"event_type", resp.Event,
+			)
+		} else if s.broadcaster != nil {
+			s.broadcaster.Publish(conversationKey, event, "")
 		}
 	}
 }
