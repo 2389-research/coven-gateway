@@ -56,6 +56,7 @@ jobs:
       - name: Token freshness check
         run: |
           cd web && npx tsx scripts/build-tokens.ts
+          cd ..
           git diff --exit-code web/src/styles/generated/variables.css || (echo "Token CSS is stale. Run 'make web-tokens' and commit." && exit 1)
 
       - name: Build frontend
