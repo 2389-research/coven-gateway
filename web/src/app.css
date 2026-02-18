@@ -9,3 +9,14 @@
   font-display: swap;
   src: url('./fonts/InterVariable.woff2') format('woff2');
 }
+
+/* Shared animation keyframes for components (Toast slide-in, Dialog backdrop). */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(0.5rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
