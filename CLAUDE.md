@@ -258,7 +258,7 @@ npm run storybook                   # Component stories
 - HTMX events `beforeSwap`, `beforeCleanupElement`, `afterSwap`, `load` cover all mount/unmount cases. `beforeCleanupElement` (not `beforeCleanup`) catches individual element removals.
 - WeakSet concurrent mount guard needed — `afterSwap` and `load` can fire for the same mutation.
 - Bundle budget: 15KB realistic floor (Svelte runtime ~8KB gzip). 10KB was unrealistic.
-- Storybook 8.6 is current stable with Svelte 5 support (not 9).
+- Storybook 10.x is current stable with native Svelte 5 support. Upgraded from 8.6 during Phase 2 due to Snippet compatibility issues.
 - Inter variable font: 352KB woff2. Fixed cost in binary.
 - Makefile `web-deps` target ensures `npx tsx` uses pinned deps, not globally-installed versions.
 - `X-Accel-Buffering: no` required on SSE endpoints for reverse proxy compatibility.
