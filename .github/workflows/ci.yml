@@ -50,9 +50,6 @@ jobs:
           # Ignore protoc version comment differences (only metadata, not functional)
           git diff --ignore-matching-lines='protoc.*v[0-9]' --exit-code proto/ || (echo "Proto files out of sync. Run 'make proto' and commit." && exit 1)
 
-      - name: Install frontend deps
-        run: cd web && npm ci
-
       - name: Token freshness check
         run: |
           cd web && npx tsx scripts/build-tokens.ts
@@ -172,9 +169,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Build frontend
-        run: |
-          cd web && npm ci
-          cd .. && make web
+        run: make web
 
       - name: Build binary
         run: go build -o bin/coven-gateway ./cmd/coven-gateway

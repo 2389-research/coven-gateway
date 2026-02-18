@@ -14,6 +14,8 @@ const registry: Record<string, () => Promise<{ default: any }>> = {
 
 // Track mounted instances for clean unmounting.
 const instances = new WeakMap<Element, ReturnType<typeof mount>>();
+// Guard against concurrent mount calls from overlapping HTMX events.
+const mounting = new WeakSet<Element>();
 
 /**
  * Read props from a child <script type="application/json"> element.
@@ -32,14 +34,19 @@ function readProps(el: Element): Record<string, any> {
 
 /** Mount a Svelte component into a [data-island] container. */
 async function mountIsland(el: Element): Promise<void> {
-  if (instances.has(el)) return; // already mounted
+  if (instances.has(el) || mounting.has(el)) return; // already mounted or in-flight
+  mounting.add(el);
 
   const name = el.getAttribute('data-island');
-  if (!name) return;
+  if (!name) {
+    mounting.delete(el);
+    return;
+  }
 
   const loader = registry[name];
   if (!loader) {
     console.warn(`[islands] unknown island: "${name}"`);
+    mounting.delete(el);
     return;
   }
 
@@ -50,6 +57,8 @@ async function mountIsland(el: Element): Promise<void> {
     instances.set(el, instance);
   } catch (e) {
     console.error(`[islands] failed to mount "${name}"`, e);
+  } finally {
+    mounting.delete(el);
   }
 }
 

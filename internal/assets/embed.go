@@ -59,7 +59,7 @@ func init() {
 }
 
 // containsHash reports whether the given path contains a content hash
-// (8+ hex characters between dots, e.g. "auto.a1b2c3d4.js").
+// (8+ base64url-style characters between dots, e.g. "auto.CU4W1PlC.js").
 func containsHash(p string) bool {
 	return hashPattern.MatchString(p)
 }
