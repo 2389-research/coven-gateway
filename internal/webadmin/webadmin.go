@@ -267,6 +267,7 @@ func (a *Admin) registerRootRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /chatview/agent/{id}", a.requireAuth(a.handleAgentChatView))
 	mux.HandleFunc("GET /chatview/empty", a.requireAuth(a.handleEmptyState))
 	mux.HandleFunc("GET /agents/count", a.requireAuth(a.handleAgentCount))
+	mux.HandleFunc("GET /api/agents", a.requireAuth(a.handleAgentsJSON))
 	mux.HandleFunc("GET /chat/{id}/send", a.requireAuth(a.handleChatSend))
 	mux.HandleFunc("POST /chat/{id}/send", a.requireAuth(a.handleChatSend))
 	mux.HandleFunc("GET /chat/{id}/stream", a.requireAuth(a.handleChatStream))

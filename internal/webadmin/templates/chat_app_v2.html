@@ -1,0 +1,20 @@
+{{/* ABOUTME: Svelte-powered chat app shell (v2, feature-flagged via COVEN_NEW_CHAT=1) */}}
+{{/* ABOUTME: Minimal Go template that mounts the chat island entry point */}}
+{{define "content"}}
+<div data-island="chat-app" class="h-screen">
+    <script type="application/json">
+    {
+        {{if .ActiveThread}}
+        "agentId": "{{.ActiveThread.AgentID}}",
+        "agentName": "{{.ActiveThread.AgentName}}",
+        {{end}}
+        "csrfToken": "{{.CSRFToken}}"
+    }
+    </script>
+    <!-- Fallback content shown before JS loads -->
+    <div class="flex h-full items-center justify-center text-[var(--cg-fgMuted)]">
+        Loading chat...
+    </div>
+</div>
+{{ scriptTags "src/islands/chat.ts" }}
+{{end}}

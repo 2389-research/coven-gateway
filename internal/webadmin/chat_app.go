@@ -7,10 +7,12 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -62,9 +64,14 @@ func (a *Admin) handleChatApp(w http.ResponseWriter, r *http.Request) {
 		AgentCount: agentCount,
 	}
 
+	chatTemplate := "templates/chat_app.html"
+	if os.Getenv("COVEN_NEW_CHAT") == "1" {
+		chatTemplate = "templates/chat_app_v2.html"
+	}
+
 	tmpl := parseTemplate(
 		"templates/base.html",
-		"templates/chat_app.html",
+		chatTemplate,
 	)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -243,6 +250,38 @@ func (a *Admin) handleAgentCount(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	_, _ = fmt.Fprintf(w, "%d", agentCount)
+}
+
+// handleAgentsJSON returns the connected agents as JSON for the Svelte sidebar.
+func (a *Admin) handleAgentsJSON(w http.ResponseWriter, r *http.Request) {
+	type agentJSON struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		Connected bool   `json:"connected"`
+	}
+
+	var agents []agentJSON
+	if a.manager != nil {
+		for _, info := range a.manager.ListAgents() {
+			agents = append(agents, agentJSON{
+				ID:        info.ID,
+				Name:      info.Name,
+				Connected: true,
+			})
+		}
+	}
+	if agents == nil {
+		agents = []agentJSON{}
+	}
+
+	sort.Slice(agents, func(i, j int) bool {
+		return agents[i].Name < agents[j].Name
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(agents); err != nil {
+		a.logger.Error("failed to encode agents JSON", "error", err)
+	}
 }
 
 // renderChatView renders the chat view partial.

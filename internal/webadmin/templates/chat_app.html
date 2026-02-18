@@ -1,6 +1,9 @@
 {{/* ABOUTME: Main chat application shell with sidebar and content area */}}
 {{/* ABOUTME: Chat-centric redesign inspired by ChatGPT/Claude.ai UX */}}
 {{define "content"}}
+{{/* Legacy chat loads marked + DOMPurify from CDN (new Svelte chat bundles via Vite) */}}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 <div class="chat-app" hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
     <!-- Header -->
     <header class="chat-header">
