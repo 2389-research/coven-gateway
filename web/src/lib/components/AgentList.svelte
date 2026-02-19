@@ -1,5 +1,7 @@
 <script lang="ts">
   import Spinner from './Spinner.svelte';
+  import StatusDot from './StatusDot.svelte';
+  import Button from './Button.svelte';
 
   interface Agent {
     id: string;
@@ -67,29 +69,33 @@
     <ul class="flex flex-col gap-0.5 px-1.5">
       {#each agents as agent (agent.id)}
         <li>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onclick={() => onSelect?.(agent)}
-            class="flex w-full items-center gap-3 rounded-[var(--border-radius-md)] px-2.5 py-2 text-left transition-colors duration-[var(--motion-duration-fast)]
-              {agent.id === activeAgentId
-                ? 'bg-accent/10 text-accent'
-                : 'text-fg hover:bg-surfaceHover'}"
+            class="w-full justify-start gap-3 {agent.id === activeAgentId
+              ? 'bg-accent/10 text-accent'
+              : 'text-fg'}"
             data-testid="agent-list-item"
             data-agent-id={agent.id}
             aria-current={agent.id === activeAgentId ? 'true' : undefined}
           >
-            <div class="relative shrink-0">
-              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-              </svg>
-              {#if agent.connected}
-                <span class="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-success-solidBg ring-2 ring-surface"></span>
-              {/if}
-            </div>
-            <span class="truncate text-[length:var(--typography-fontSize-sm)] font-[var(--typography-fontWeight-medium)]">
-              {agent.name}
-            </span>
-          </button>
+            {#snippet children()}
+              <div class="relative shrink-0">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+                {#if agent.connected}
+                  <span class="absolute -bottom-0.5 -right-0.5">
+                    <StatusDot status="online" />
+                  </span>
+                {/if}
+              </div>
+              <span class="truncate text-[length:var(--typography-fontSize-sm)] font-[var(--typography-fontWeight-medium)]">
+                {agent.name}
+              </span>
+            {/snippet}
+          </Button>
         </li>
       {/each}
     </ul>

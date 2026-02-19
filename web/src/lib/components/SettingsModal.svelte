@@ -1,6 +1,7 @@
 <script lang="ts">
   import Dialog from './Dialog.svelte';
   import Tabs from './Tabs.svelte';
+  import Spinner from './Spinner.svelte';
 
   interface Props {
     open: boolean;
@@ -88,7 +89,7 @@
         <div bind:this={panelEl} class="py-4">
           {#if loading[currentTab]}
             <div class="flex items-center justify-center py-8">
-              <span class="text-[length:var(--typography-fontSize-sm)] text-fgMuted">Loading...</span>
+              <Spinner size="sm" label="Loading settings" />
             </div>
           {:else if tabContent[currentTab]}
             {@html tabContent[currentTab]}

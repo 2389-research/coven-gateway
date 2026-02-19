@@ -4,6 +4,7 @@
   import ThinkingIndicator from './ThinkingIndicator.svelte';
   import AgentList from './AgentList.svelte';
   import SettingsModal from './SettingsModal.svelte';
+  import Button from './Button.svelte';
   import IconButton from './IconButton.svelte';
   import StatusDot from './StatusDot.svelte';
   import { createChatStream, type ChatStream } from '../stores/chat.svelte';
@@ -96,21 +97,24 @@
       class="flex-1 overflow-y-auto py-2"
     />
     <div class="border-t border-border px-3 py-2">
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         onclick={() => settingsOpen = true}
-        class="flex w-full items-center gap-2 rounded-[var(--border-radius-md)] px-2.5 py-2 text-fgMuted transition-colors duration-[var(--motion-duration-fast)] hover:bg-surfaceHover hover:text-fg"
         aria-label="Settings"
+        class="w-full justify-start text-fgMuted hover:text-fg"
       >
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
-        <span class="text-[length:var(--typography-fontSize-sm)]">Settings</span>
-        <kbd class="ml-auto rounded-[var(--border-radius-xs)] border border-border bg-surfaceAlt px-1 py-0.5 text-[length:0.625rem] font-[family-name:var(--typography-fontFamily-mono)] text-fgMuted">
-          ⌘K
-        </kbd>
-      </button>
+        {#snippet children()}
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span class="text-[length:var(--typography-fontSize-sm)]">Settings</span>
+          <kbd class="ml-auto rounded-[var(--border-radius-xs)] border border-border bg-surfaceAlt px-1 py-0.5 text-[length:0.625rem] font-[family-name:var(--typography-fontFamily-mono)] text-fgMuted">
+            ⌘K
+          </kbd>
+        {/snippet}
+      </Button>
     </div>
   </aside>
 

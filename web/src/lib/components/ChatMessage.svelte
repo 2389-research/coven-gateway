@@ -5,6 +5,7 @@
   import { getMessageSender } from '../types/chat';
   import ToolCallView from './ToolCallView.svelte';
   import ThinkingIndicator from './ThinkingIndicator.svelte';
+  import Alert from './Alert.svelte';
 
   interface Props {
     message: ChatMessage;
@@ -70,11 +71,13 @@
     data-testid="chat-message"
     data-message-type="error"
   >
-    <div class="max-w-[80%] rounded-[var(--border-radius-lg)] border border-danger-subtleBorder bg-danger-subtleBg px-4 py-3">
-      <p class="text-[length:var(--typography-fontSize-sm)] text-danger-subtleFg">
-        {message.content}
-      </p>
-    </div>
+    <Alert variant="danger" class="max-w-[80%]">
+      {#snippet children()}
+        <p class="text-[length:var(--typography-fontSize-sm)]">
+          {message.content}
+        </p>
+      {/snippet}
+    </Alert>
   </div>
 
 {:else if message.type === 'canceled'}

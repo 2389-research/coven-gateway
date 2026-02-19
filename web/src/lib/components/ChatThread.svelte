@@ -2,6 +2,7 @@
   import type { ChatMessage as ChatMessageType } from '../types/chat';
   import { isDisplayableMessage } from '../types/chat';
   import ChatMessage from './ChatMessage.svelte';
+  import Button from './Button.svelte';
 
   interface Props {
     messages: ChatMessageType[];
@@ -121,21 +122,24 @@
   <!-- Scroll to bottom button -->
   {#if !isAtBottom}
     <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="sm"
         onclick={scrollToBottom}
-        class="flex items-center gap-1.5 rounded-[var(--border-radius-pill)] border border-border bg-surface px-3 py-1.5 shadow-[var(--shadow-md)] transition-colors duration-[var(--motion-duration-fast)] hover:bg-surfaceHover"
+        class="shadow-[var(--shadow-md)]"
         data-testid="scroll-to-bottom"
       >
-        <svg class="h-4 w-4 text-fgMuted" viewBox="0 0 16 16" fill="currentColor">
-          <path fill-rule="evenodd" d="M8 1a.75.75 0 0 1 .75.75v10.19l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 1 1 1.06-1.06l2.72 2.72V1.75A.75.75 0 0 1 8 1Z" clip-rule="evenodd"/>
-        </svg>
-        {#if hasNewMessages}
-          <span class="text-[length:var(--typography-fontSize-xs)] font-[var(--typography-fontWeight-medium)] text-accent">
-            New messages
-          </span>
-        {/if}
-      </button>
+        {#snippet children()}
+          <svg class="h-4 w-4 text-fgMuted" viewBox="0 0 16 16" fill="currentColor">
+            <path fill-rule="evenodd" d="M8 1a.75.75 0 0 1 .75.75v10.19l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 1 1 1.06-1.06l2.72 2.72V1.75A.75.75 0 0 1 8 1Z" clip-rule="evenodd"/>
+          </svg>
+          {#if hasNewMessages}
+            <span class="text-[length:var(--typography-fontSize-xs)] font-[var(--typography-fontWeight-medium)] text-accent">
+              New messages
+            </span>
+          {/if}
+        {/snippet}
+      </Button>
     </div>
   {/if}
 </div>
