@@ -27,11 +27,6 @@ function mountChat() {
   if (!target || instance) return;
 
   const props = readProps(target);
-  if (!props.agentId) {
-    console.warn('[chat] missing agentId prop');
-    return;
-  }
-
   instance = mount(ChatApp, { target, props });
 }
 
