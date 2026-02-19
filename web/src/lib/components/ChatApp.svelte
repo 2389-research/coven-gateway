@@ -4,6 +4,8 @@
   import ThinkingIndicator from './ThinkingIndicator.svelte';
   import AgentList from './AgentList.svelte';
   import SettingsModal from './SettingsModal.svelte';
+  import IconButton from './IconButton.svelte';
+  import StatusDot from './StatusDot.svelte';
   import { createChatStream, type ChatStream } from '../stores/chat.svelte';
 
   interface Props {
@@ -117,18 +119,21 @@
     {#if activeAgentId && chat}
       <!-- Chat header -->
       <div class="flex items-center gap-3 border-b border-border bg-surface px-4 py-3">
-        <button
-          type="button"
-          onclick={() => sidebarOpen = !sidebarOpen}
-          class="rounded-[var(--border-radius-md)] p-1.5 text-fgMuted hover:bg-surfaceHover hover:text-fg lg:hidden"
-          aria-label="Toggle sidebar"
-        >
+        {#snippet sidebarToggleIcon()}
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16"/>
           </svg>
-        </button>
+        {/snippet}
+        <IconButton
+          variant="ghost"
+          size="sm"
+          icon={sidebarToggleIcon}
+          aria-label="Toggle sidebar"
+          onclick={() => sidebarOpen = !sidebarOpen}
+          class="lg:hidden"
+        />
         <div class="flex items-center gap-2">
-          <div class="h-2 w-2 shrink-0 rounded-full {chat.status === 'connected' ? 'bg-success-solidBg' : 'bg-fgMuted'}"></div>
+          <StatusDot status={chat.status === 'connected' ? 'online' : 'offline'} />
           <h2 class="text-[length:var(--typography-fontSize-base)] font-[var(--typography-fontWeight-semibold)] text-fg">
             {activeAgentName}
           </h2>

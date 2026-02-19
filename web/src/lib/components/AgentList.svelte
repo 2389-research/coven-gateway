@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Spinner from './Spinner.svelte';
+
   interface Agent {
     id: string;
     name: string;
@@ -50,8 +52,8 @@
   </div>
 
   {#if loading}
-    <div class="px-3 py-4 text-center">
-      <span class="text-[length:var(--typography-fontSize-sm)] text-fgMuted">Loading...</span>
+    <div class="flex justify-center px-3 py-4">
+      <Spinner size="sm" label="Loading agents" />
     </div>
   {:else if agents.length === 0}
     <div class="flex flex-col items-center px-3 py-6 text-center" data-testid="agent-list-empty">

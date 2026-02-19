@@ -7,6 +7,8 @@
     class?: string;
   }
 
+  import IconButton from './IconButton.svelte';
+
   let {
     onSend,
     disabled = false,
@@ -76,18 +78,21 @@
       ></textarea>
     </div>
 
-    <button
-      type="button"
-      onclick={send}
-      disabled={!canSend}
-      class="flex h-[var(--sizing-control-md)] w-[var(--sizing-control-md)] shrink-0 items-center justify-center rounded-[var(--border-radius-lg)] bg-accent text-fgOnAccent transition-colors duration-[var(--motion-duration-fast)] hover:bg-accentHover disabled:opacity-40 disabled:cursor-not-allowed"
-      data-testid="chat-input-send"
-      aria-label="Send message"
-    >
+    {#snippet sendIcon()}
       <svg class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor">
         <path d="M.2 1.065a.625.625 0 0 1 .88-.585l14 6.5a.625.625 0 0 1 0 1.14l-14 6.5a.625.625 0 0 1-.862-.733L1.94 8 .218 2.213A.625.625 0 0 1 .2 1.065ZM3.169 8.75l-1.2 4.015L13.006 8.5H3.169Zm-.032-1.5h9.87L1.968 3.235 3.137 7.25Z"/>
       </svg>
-    </button>
+    {/snippet}
+    <IconButton
+      variant="primary"
+      size="md"
+      icon={sendIcon}
+      aria-label="Send message"
+      onclick={send}
+      disabled={!canSend}
+      class="shrink-0"
+      data-testid="chat-input-send"
+    />
   </div>
 
   <div class="mt-1.5 flex items-center justify-between px-1">
