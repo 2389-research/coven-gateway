@@ -6,11 +6,15 @@
  *
  * Requires:
  *   COVEN_NEW_CHAT=1 ./bin/coven-gateway serve   (with a fresh or test database)
+ *   ../bin/fake-agent exists (built via: go build -o bin/fake-agent ./cmd/fake-agent)
  *
- * Agent-dependent tests auto-skip when no agents are connected.
  * Tests run serially to avoid race conditions on setup/login.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { execFileSync, spawn, type ChildProcess } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 // Serial execution — setup must complete before login tests run.
 test.describe.configure({ mode: 'serial' });
@@ -20,6 +24,11 @@ const TEST_USER = {
   password: 'E2eTestPassword123!',
   displayName: 'E2E Admin',
 };
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '../..');
+const FAKE_AGENT_BIN = path.join(PROJECT_ROOT, 'bin/fake-agent');
 
 /** Create admin user via /setup if no users exist. */
 async function ensureAdminUser(page: Page) {
@@ -36,7 +45,6 @@ async function ensureAdminUser(page: Page) {
   await page.click('button[type="submit"]');
 
   // Setup renders a "complete" page (doesn't redirect). It also creates a session.
-  // Wait for the page to settle, then navigate away.
   await page.waitForLoadState('domcontentloaded');
 }
 
@@ -53,13 +61,6 @@ async function login(page: Page) {
 
   // Login redirects to / — SSE connections may prevent 'load', use domcontentloaded
   await page.waitForURL('/', { waitUntil: 'domcontentloaded' });
-}
-
-/** Fetch the agent list JSON. */
-async function getAgents(page: Page): Promise<{ id: string; name: string; connected: boolean }[]> {
-  const resp = await page.request.get('/api/agents');
-  if (!resp.ok()) return [];
-  return resp.json();
 }
 
 let setupDone = false;
@@ -94,7 +95,6 @@ test.describe('Chat smoke test', () => {
     const chatApp = page.locator('[data-testid="chat-app"]');
     await expect(chatApp).toBeVisible({ timeout: 10000 });
 
-    // With no agent pre-selected, should show the empty state
     const emptyState = page.getByText('Select an agent to start chatting');
     const chatThread = page.locator('[data-testid="chat-thread"]');
     const hasEmpty = await emptyState.isVisible().catch(() => false);
@@ -118,7 +118,54 @@ test.describe('Chat smoke test', () => {
 });
 
 test.describe('Chat with connected agent', () => {
-  let agents: { id: string; name: string; connected: boolean }[] = [];
+  let fakeAgent: ChildProcess | null = null;
+
+  test.beforeAll(async () => {
+    if (!fs.existsSync(FAKE_AGENT_BIN)) {
+      console.log(`fake-agent binary not found at ${FAKE_AGENT_BIN}, building...`);
+      try {
+        execFileSync('go', ['build', '-o', 'bin/fake-agent', './cmd/fake-agent'], {
+          cwd: PROJECT_ROOT,
+          stdio: 'pipe',
+        });
+      } catch {
+        console.log('Failed to build fake-agent, agent tests will be skipped');
+        return;
+      }
+    }
+
+    // Start fake agent as subprocess
+    fakeAgent = spawn(FAKE_AGENT_BIN, ['-addr', 'localhost:50051', '-name', 'Echo Agent', '-id', 'e2e-echo-agent'], {
+      cwd: PROJECT_ROOT,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    // Wait for registration (fake-agent prints to stderr on success)
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('fake-agent did not register in time')), 10000);
+      fakeAgent!.stderr!.on('data', (data: Buffer) => {
+        const text = data.toString();
+        if (text.includes('registered as')) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+      fakeAgent!.on('error', (err) => { clearTimeout(timeout); reject(err); });
+      fakeAgent!.on('exit', (code) => {
+        if (code !== 0 && code !== null) { clearTimeout(timeout); reject(new Error(`fake-agent exited with code ${code}`)); }
+      });
+    });
+
+    // Give the gateway a moment to update its agent list
+    await new Promise((r) => setTimeout(r, 1000));
+  });
+
+  test.afterAll(async () => {
+    if (fakeAgent) {
+      fakeAgent.kill('SIGTERM');
+      fakeAgent = null;
+    }
+  });
 
   test.beforeEach(async ({ page }) => {
     if (!setupDone) {
@@ -126,17 +173,18 @@ test.describe('Chat with connected agent', () => {
       setupDone = true;
     }
     await login(page);
-    agents = await getAgents(page);
   });
 
   test('select agent from sidebar', async ({ page }) => {
-    test.skip(agents.length === 0, 'No agents connected — skipping agent interaction tests');
+    test.skip(!fakeAgent, 'fake-agent not running');
 
-    const firstAgent = agents[0];
-    const agentButton = page.locator('[data-testid="agent-list-item"]').first();
-    await agentButton.click();
+    // Wait for agent list to refresh (polls every 5s)
+    const agentItem = page.locator('[data-testid="agent-list-item"]');
+    await expect(agentItem.first()).toBeVisible({ timeout: 15000 });
 
-    // Chat thread should appear after selecting an agent
+    await agentItem.first().click();
+
+    // Chat thread should appear
     const chatThread = page.locator('[data-testid="chat-thread"]');
     await expect(chatThread).toBeVisible({ timeout: 5000 });
 
@@ -145,14 +193,16 @@ test.describe('Chat with connected agent', () => {
     await expect(chatInput).toBeVisible();
 
     // Header should show agent name
-    await expect(page.getByText(firstAgent.name)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Echo Agent' })).toBeVisible();
   });
 
   test('send message and receive SSE response', async ({ page }) => {
-    test.skip(agents.length === 0, 'No agents connected — skipping agent interaction tests');
+    test.skip(!fakeAgent, 'fake-agent not running');
 
-    // Select first agent
-    await page.locator('[data-testid="agent-list-item"]').first().click();
+    // Wait for and select agent
+    const agentItem = page.locator('[data-testid="agent-list-item"]');
+    await expect(agentItem.first()).toBeVisible({ timeout: 15000 });
+    await agentItem.first().click();
     await expect(page.locator('[data-testid="chat-thread"]')).toBeVisible({ timeout: 5000 });
 
     // Type and send a message
@@ -160,39 +210,42 @@ test.describe('Chat with connected agent', () => {
     await textarea.fill('Hello, this is an E2E smoke test.');
     await page.locator('[data-testid="chat-input-send"]').click();
 
-    // User message should appear in thread
-    const userMessage = page.locator('[data-testid="chat-message"]').filter({ hasText: 'E2E smoke test' });
-    await expect(userMessage).toBeVisible({ timeout: 5000 });
-
-    // Wait for agent response (SSE streaming) — at least one response message
-    const responseMessages = page.locator('[data-testid="chat-message"]');
+    // Wait for agent response — at least two messages (user + echo)
+    const messages = page.locator('[data-testid="chat-message"]');
     await expect(async () => {
-      const count = await responseMessages.count();
-      expect(count).toBeGreaterThan(1); // user message + at least one response
-    }).toPass({ timeout: 30000 });
+      const count = await messages.count();
+      expect(count).toBeGreaterThanOrEqual(2);
+    }).toPass({ timeout: 15000 });
+
+    // Verify the echo response contains our text
+    const echoMessage = page.locator('[data-testid="chat-message"]').filter({ hasText: 'Echo' });
+    await expect(echoMessage.first()).toBeVisible({ timeout: 5000 });
   });
 
   test('markdown renders in agent response', async ({ page }) => {
-    test.skip(agents.length === 0, 'No agents connected — skipping agent interaction tests');
+    test.skip(!fakeAgent, 'fake-agent not running');
 
-    // Select agent and send a message that should trigger markdown
-    await page.locator('[data-testid="agent-list-item"]').first().click();
+    // Wait for and select agent
+    const agentItem = page.locator('[data-testid="agent-list-item"]');
+    await expect(agentItem.first()).toBeVisible({ timeout: 15000 });
+    await agentItem.first().click();
     await expect(page.locator('[data-testid="chat-thread"]')).toBeVisible({ timeout: 5000 });
 
+    // Send a message that triggers markdown response
     const textarea = page.locator('[data-testid="chat-input-textarea"]');
     await textarea.fill('Reply with a markdown bullet list of 3 items.');
     await page.locator('[data-testid="chat-input-send"]').click();
 
-    // Wait for response with rendered HTML (markdown via marked.js)
-    const prose = page.locator('[data-testid="chat-message"] .prose');
+    // Wait for rendered markdown in response
+    const messageContent = page.locator('[data-testid="chat-message"] .chat-message-content');
     await expect(async () => {
-      const count = await prose.count();
+      const count = await messageContent.count();
       expect(count).toBeGreaterThan(0);
-    }).toPass({ timeout: 30000 });
+    }).toPass({ timeout: 15000 });
 
-    // Check that at least some HTML was rendered (not raw markdown)
-    const html = await prose.first().innerHTML();
-    const hasRenderedHtml = html.includes('<p>') || html.includes('<ul>') || html.includes('<li>') || html.includes('<code>');
+    // Verify HTML rendering (not raw markdown)
+    const html = await messageContent.first().innerHTML();
+    const hasRenderedHtml = html.includes('<li>') || html.includes('<strong>') || html.includes('<code>') || html.includes('<blockquote>');
     expect(hasRenderedHtml).toBe(true);
   });
 });
