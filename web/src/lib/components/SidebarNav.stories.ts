@@ -5,6 +5,10 @@ const meta = {
   title: 'Navigation/SidebarNav',
   component: SidebarNav,
   tags: ['autodocs'],
+  argTypes: {
+    items: { control: 'object' },
+    groups: { control: 'object' },
+  },
 } satisfies Meta<SidebarNav>;
 
 export default meta;

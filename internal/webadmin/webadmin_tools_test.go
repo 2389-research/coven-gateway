@@ -1,4 +1,4 @@
-// ABOUTME: Tests for the webadmin tools page handlers (handleToolsPage, handleToolsList, handleStatsPacks).
+// ABOUTME: Tests for the webadmin tools page handlers (handleToolsPage, handleToolsList).
 // ABOUTME: Verifies nil-safety, pack grouping, sort ordering, and correct HTTP responses.
 
 package webadmin
@@ -34,73 +34,6 @@ func requestWithUser(r *http.Request) *http.Request {
 	}
 	ctx := context.WithValue(r.Context(), userContextKey, user)
 	return r.WithContext(ctx)
-}
-
-// --- handleStatsPacks tests ---
-
-func TestHandleStatsPacks_NilRegistry(t *testing.T) {
-	admin := newTestAdmin(nil)
-
-	req := httptest.NewRequest(http.MethodGet, "/admin/stats/packs", nil)
-	rec := httptest.NewRecorder()
-
-	admin.handleStatsPacks(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
-	}
-
-	body := rec.Body.String()
-	if body != "0" {
-		t.Fatalf("expected body %q, got %q", "0", body)
-	}
-}
-
-func TestHandleStatsPacks_WithPacks(t *testing.T) {
-	registry := packs.NewRegistry(slog.Default())
-
-	// Register three packs
-	for _, id := range []string{"pack-a", "pack-b", "pack-c"} {
-		manifest := &pb.PackManifest{
-			PackId:  id,
-			Version: "1.0.0",
-			Tools: []*pb.ToolDefinition{
-				{Name: id + "-tool", Description: "A tool", TimeoutSeconds: 10},
-			},
-		}
-		if err := registry.RegisterPack(id, manifest); err != nil {
-			t.Fatalf("failed to register pack %s: %v", id, err)
-		}
-	}
-
-	admin := newTestAdmin(registry)
-	req := httptest.NewRequest(http.MethodGet, "/admin/stats/packs", nil)
-	rec := httptest.NewRecorder()
-
-	admin.handleStatsPacks(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
-	}
-
-	body := rec.Body.String()
-	if body != "3" {
-		t.Fatalf("expected body %q, got %q", "3", body)
-	}
-}
-
-func TestHandleStatsPacks_ContentType(t *testing.T) {
-	admin := newTestAdmin(nil)
-
-	req := httptest.NewRequest(http.MethodGet, "/admin/stats/packs", nil)
-	rec := httptest.NewRecorder()
-
-	admin.handleStatsPacks(rec, req)
-
-	ct := rec.Header().Get("Content-Type")
-	if ct != "text/html; charset=utf-8" {
-		t.Fatalf("expected Content-Type %q, got %q", "text/html; charset=utf-8", ct)
-	}
 }
 
 // --- handleToolsList tests ---

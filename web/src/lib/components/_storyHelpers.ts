@@ -14,9 +14,13 @@ export function textSnippet(text: string) {
   }));
 }
 
-/** Create a Snippet that renders raw HTML (for icons, rich content). */
+/**
+ * Create a Snippet that renders raw HTML (for icons, rich content).
+ * The HTML must be a single root element (e.g. an <svg>).
+ * No wrapper is added, preserving DOM structure for CSS child selectors.
+ */
 export function htmlSnippet(html: string) {
   return createRawSnippet(() => ({
-    render: () => `<span>${html}</span>`,
+    render: () => html,
   }));
 }

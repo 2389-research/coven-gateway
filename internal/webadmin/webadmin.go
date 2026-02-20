@@ -262,25 +262,11 @@ func (a *Admin) registerRootRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/link/request", a.handleLinkRequest)
 	mux.HandleFunc("GET /api/link/status/{code}", a.handleLinkStatus)
 
-	// Chat HTMX partials and SSE
-	mux.HandleFunc("GET /agents/list", a.requireAuth(a.handleAgentList))
-	mux.HandleFunc("GET /chatview/agent/{id}", a.requireAuth(a.handleAgentChatView))
-	mux.HandleFunc("GET /chatview/empty", a.requireAuth(a.handleEmptyState))
-	mux.HandleFunc("GET /agents/count", a.requireAuth(a.handleAgentCount))
+	// Chat API and SSE
+	mux.HandleFunc("GET /api/agents", a.requireAuth(a.handleAgentsJSON))
 	mux.HandleFunc("GET /chat/{id}/send", a.requireAuth(a.handleChatSend))
 	mux.HandleFunc("POST /chat/{id}/send", a.requireAuth(a.handleChatSend))
 	mux.HandleFunc("GET /chat/{id}/stream", a.requireAuth(a.handleChatStream))
-
-	// Settings modal tabs (htmx partials)
-	mux.HandleFunc("GET /settings/agents", a.requireAuth(a.handleSettingsAgents))
-	mux.HandleFunc("GET /settings/tools", a.requireAuth(a.handleSettingsTools))
-	mux.HandleFunc("GET /settings/security", a.requireAuth(a.handleSettingsSecurity))
-	mux.HandleFunc("GET /settings/help", a.requireAuth(a.handleSettingsHelp))
-
-	// Stats (htmx partials for chat app)
-	mux.HandleFunc("GET /stats/agents", a.requireAuth(a.handleStatsAgents))
-	mux.HandleFunc("GET /stats/packs", a.requireAuth(a.handleStatsPacks))
-	mux.HandleFunc("GET /stats/tokens", a.requireAuth(a.handleStatsTokens))
 
 	// WebAuthn/Passkey routes
 	mux.HandleFunc("POST /webauthn/register/begin", a.requireAuth(a.handleWebAuthnRegisterBegin))
@@ -294,45 +280,56 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 	// Admin dashboard
 	mux.HandleFunc("GET /admin/{$}", a.requireAuth(a.handleDashboard))
 	mux.HandleFunc("GET /admin/dashboard", a.requireAuth(a.handleDashboard))
+	mux.HandleFunc("GET /api/admin/dashboard", a.requireAuth(a.handleDashboardJSON))
 
 	// Device linking UI (authenticated)
 	mux.HandleFunc("GET /admin/link", a.requireAuth(a.handleLinkPage))
+	mux.HandleFunc("GET /api/admin/link", a.requireAuth(a.handleLinkJSON))
 	mux.HandleFunc("POST /admin/link/{id}/approve", a.requireAuth(a.handleLinkApprove))
 
 	// Agent management
 	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsPage))
 	mux.HandleFunc("GET /admin/agents/list", a.requireAuth(a.handleAgentsList))
 	mux.HandleFunc("GET /admin/agents/{id}", a.requireAuth(a.handleAgentDetail))
+	mux.HandleFunc("GET /api/admin/agents/{id}", a.requireAuth(a.handleAgentDetailJSON))
 	mux.HandleFunc("POST /admin/agents/{id}/approve", a.requireAuth(a.handleAgentApprove))
 	mux.HandleFunc("POST /admin/agents/{id}/revoke", a.requireAuth(a.handleAgentRevoke))
 
 	// Tools management
 	mux.HandleFunc("GET /admin/tools", a.requireAuth(a.handleToolsPage))
 	mux.HandleFunc("GET /admin/tools/list", a.requireAuth(a.handleToolsList))
+	mux.HandleFunc("GET /api/admin/tools", a.requireAuth(a.handleToolsJSON))
 
 	// Activity logs (builtin pack data)
 	mux.HandleFunc("GET /admin/logs", a.requireAuth(a.handleLogsPage))
 	mux.HandleFunc("GET /admin/logs/list", a.requireAuth(a.handleLogsList))
+	mux.HandleFunc("GET /api/admin/logs", a.requireAuth(a.handleLogsJSON))
 
 	// Todos (builtin pack data)
 	mux.HandleFunc("GET /admin/todos", a.requireAuth(a.handleTodosPage))
 	mux.HandleFunc("GET /admin/todos/list", a.requireAuth(a.handleTodosList))
+	mux.HandleFunc("GET /api/admin/todos", a.requireAuth(a.handleTodosJSON))
 
 	// BBS Board (builtin pack data)
 	mux.HandleFunc("GET /admin/board", a.requireAuth(a.handleBoardPage))
 	mux.HandleFunc("GET /admin/board/list", a.requireAuth(a.handleBoardList))
 	mux.HandleFunc("GET /admin/board/thread/{id}", a.requireAuth(a.handleBoardThread))
+	mux.HandleFunc("GET /api/admin/board", a.requireAuth(a.handleBoardJSON))
+	mux.HandleFunc("GET /api/admin/board/{id}", a.requireAuth(a.handleBoardThreadJSON))
 
 	// Principals management
 	mux.HandleFunc("GET /admin/principals", a.requireAuth(a.handlePrincipalsPage))
 	mux.HandleFunc("GET /admin/principals/list", a.requireAuth(a.handlePrincipalsList))
+	mux.HandleFunc("GET /api/admin/principals", a.requireAuth(a.handlePrincipalsJSON))
 	mux.HandleFunc("POST /admin/principals/{id}/approve", a.requireAuth(a.handlePrincipalApprove))
 	mux.HandleFunc("POST /admin/principals/{id}/revoke", a.requireAuth(a.handlePrincipalRevoke))
 	mux.HandleFunc("DELETE /admin/principals/{id}", a.requireAuth(a.handlePrincipalDelete))
 
 	// Threads browsing (admin view)
 	mux.HandleFunc("GET /admin/threads", a.requireAuth(a.handleThreadsPage))
+	mux.HandleFunc("GET /api/admin/threads", a.requireAuth(a.handleThreadsJSON))
 	mux.HandleFunc("GET /admin/threads/{id}", a.requireAuth(a.handleThreadDetail))
+	mux.HandleFunc("GET /api/admin/threads/{id}", a.requireAuth(a.handleThreadDetailJSON))
 	mux.HandleFunc("GET /admin/threads/{id}/messages", a.requireAuth(a.handleThreadMessages))
 
 	// Legacy chat page - redirect to root chat with agent param
@@ -343,6 +340,7 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 
 	// Token usage page
 	mux.HandleFunc("GET /admin/usage", a.requireAuth(a.handleUsagePage))
+	mux.HandleFunc("GET /api/admin/usage", a.requireAuth(a.handleUsageJSON))
 
 	// Secrets management
 	mux.HandleFunc("GET /admin/secrets", a.requireAuth(a.handleSecretsPage))
@@ -351,9 +349,11 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/secrets", a.requireAuth(a.handleSecretsCreate))
 	mux.HandleFunc("PUT /admin/secrets/{id}", a.requireAuth(a.handleSecretsUpdate))
 	mux.HandleFunc("DELETE /admin/secrets/{id}", a.requireAuth(a.handleSecretsDelete))
+	mux.HandleFunc("GET /api/admin/secrets", a.requireAuth(a.handleSecretsJSON))
 
 	// Invite management
 	mux.HandleFunc("POST /admin/invites/create", a.requireAuth(a.handleCreateInvite))
+	mux.HandleFunc("POST /api/admin/invites", a.requireAuth(a.handleCreateInviteJSON))
 }
 
 // RegisterRoutes registers all admin routes on the given mux.
@@ -970,24 +970,46 @@ func (a *Admin) handleInviteSignup(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderDashboard(w, user, csrfToken)
+
+	agents := a.listAgentItems()
+	packs := a.listPackItems()
+
+	threadCount := 0
+	if threads, err := a.store.ListThreads(r.Context(), 1000); err == nil {
+		threadCount = len(threads)
+	}
+
+	usage, _ := a.store.GetUsageStats(r.Context(), store.UsageFilter{})
+
+	a.renderDashboard(w, user, csrfToken, agents, packs, threadCount, usage)
 }
 
 // handleStatsAgents returns connected agent count (htmx partial).
-func (a *Admin) handleStatsAgents(w http.ResponseWriter, r *http.Request) {
-	count := 0
+// listAgentItems returns the current connected agents as display items.
+func (a *Admin) listAgentItems() []agentItem {
+	var agents []agentItem
 	if a.manager != nil {
-		count = len(a.manager.ListAgents())
+		for _, info := range a.manager.ListAgents() {
+			agents = append(agents, agentItem{
+				ID:        info.ID,
+				Name:      info.Name,
+				Connected: true,
+			})
+		}
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = fmt.Fprintf(w, "%d", count)
+	if agents == nil {
+		agents = []agentItem{}
+	}
+	return agents
 }
 
 // handleAgentsPage renders the agents management page.
 func (a *Admin) handleAgentsPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderAgentsPage(w, user, csrfToken)
+
+	agents := a.listAgentItems()
+	a.renderAgentsPage(w, user, csrfToken, agents)
 }
 
 // handleAgentsList returns the agents list (htmx partial).
@@ -1101,21 +1123,52 @@ func (a *Admin) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 	a.renderAgentDetail(w, user, agentInfo, agentThreads, csrfToken)
 }
 
-// handleCreateInvite creates a new invite link.
-func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
-	// Validate CSRF (htmx sends via header)
-	if !a.validateCSRF(r) {
-		http.Error(w, "Invalid request", http.StatusForbidden)
+// handleAgentDetailJSON returns agent detail as JSON for the Svelte island.
+func (a *Admin) handleAgentDetailJSON(w http.ResponseWriter, r *http.Request) {
+	agentID := r.PathValue("id")
+	if agentID == "" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
 		return
 	}
 
-	user := getUserFromContext(r)
+	agentInfo := agentDetailItem{
+		ID:        agentID,
+		Name:      agentID,
+		Connected: false,
+	}
+	if a.manager != nil {
+		for _, info := range a.manager.ListAgents() {
+			if info.ID == agentID {
+				agentInfo.Name = info.Name
+				agentInfo.Connected = true
+				agentInfo.WorkingDir = info.WorkingDir
+				agentInfo.Capabilities = info.Capabilities
+				agentInfo.Workspaces = info.Workspaces
+				agentInfo.InstanceID = info.InstanceID
+				agentInfo.Backend = info.Backend
+				break
+			}
+		}
+	}
 
+	if agentInfo.Capabilities == nil {
+		agentInfo.Capabilities = []string{}
+	}
+	if agentInfo.Workspaces == nil {
+		agentInfo.Workspaces = []string{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(agentInfo); err != nil {
+		a.logger.Error("failed to encode agent detail JSON", "error", err)
+	}
+}
+
+// createInviteToken generates and stores a new invite token, returning the invite URL.
+func (a *Admin) createInviteToken(ctx context.Context, user *store.AdminUser) (string, error) {
 	token, err := generateSecureToken(32)
 	if err != nil {
-		a.logger.Error("failed to generate invite token", "error", err)
-		http.Error(w, "Failed to create invite", http.StatusInternalServerError)
-		return
+		return "", fmt.Errorf("generate token: %w", err)
 	}
 
 	invite := &store.AdminInvite{
@@ -1125,105 +1178,136 @@ func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: time.Now().Add(InviteDuration),
 	}
 
-	if err := a.store.CreateAdminInvite(r.Context(), invite); err != nil {
+	if err := a.store.CreateAdminInvite(ctx, invite); err != nil {
+		return "", fmt.Errorf("store invite: %w", err)
+	}
+
+	inviteURL := a.config.BaseURL + "/invite/" + token
+	a.logger.Info("created admin invite", "created_by", user.Username, "token", token)
+	return inviteURL, nil
+}
+
+// handleCreateInvite creates a new invite link and returns HTML.
+func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	inviteURL, err := a.createInviteToken(r.Context(), getUserFromContext(r))
+	if err != nil {
 		a.logger.Error("failed to create invite", "error", err)
 		http.Error(w, "Failed to create invite", http.StatusInternalServerError)
 		return
 	}
 
-	inviteURL := a.config.BaseURL + "/invite/" + token
-	a.logger.Info("created admin invite", "created_by", user.Username, "token", token)
-
-	// Return the invite URL using template for proper escaping
 	a.renderInviteCreated(w, inviteURL)
+}
+
+// handleCreateInviteJSON creates a new invite link and returns JSON.
+func (a *Admin) handleCreateInviteJSON(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	inviteURL, err := a.createInviteToken(r.Context(), getUserFromContext(r))
+	if err != nil {
+		a.logger.Error("failed to create invite", "error", err)
+		http.Error(w, "Failed to create invite", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"url": inviteURL}); err != nil {
+		a.logger.Error("failed to encode invite response", "error", err)
+	}
 }
 
 // =============================================================================
 // Tools Handlers
 // =============================================================================
 
-// handleToolsPage renders the tools management page.
-func (a *Admin) handleToolsPage(w http.ResponseWriter, r *http.Request) {
-	user := getUserFromContext(r)
-	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderToolsPage(w, user, csrfToken)
+// listPackItems returns all registered tool packs as display items.
+// sortedToolItems sorts tool items by name and nil-guards the slice.
+func sortedToolItems(tools []toolItem) []toolItem {
+	if tools == nil {
+		return []toolItem{}
+	}
+	sort.Slice(tools, func(i, j int) bool {
+		return tools[i].Name < tools[j].Name
+	})
+	return tools
 }
 
-// handleToolsList returns the tools list grouped by pack (htmx partial).
-func (a *Admin) handleToolsList(w http.ResponseWriter, r *http.Request) {
+func (a *Admin) listPackItems() []packItem {
+	if a.registry == nil {
+		return []packItem{}
+	}
+
 	var items []packItem
-	if a.registry != nil {
-		// Get builtin packs first
-		builtinPacks := a.registry.ListBuiltinPacks()
-		for _, bp := range builtinPacks {
-			var tools []toolItem
-			for _, t := range bp.Tools {
-				if t.Definition == nil {
-					continue
-				}
-				tools = append(tools, toolItem{
-					Name:                 t.Definition.GetName(),
-					Description:          t.Definition.GetDescription(),
-					TimeoutSeconds:       t.Definition.GetTimeoutSeconds(),
-					RequiredCapabilities: t.Definition.GetRequiredCapabilities(),
-				})
-			}
-			sort.Slice(tools, func(i, j int) bool {
-				return tools[i].Name < tools[j].Name
-			})
-			items = append(items, packItem{
-				ID:      bp.ID,
-				Version: "builtin",
-				Tools:   tools,
-			})
-		}
 
-		// Get all external registered packs
-		packInfos := a.registry.ListPacks()
-
-		// Get all tools and group by pack
-		allTools := a.registry.GetAllTools()
-		toolsByPack := make(map[string][]toolItem)
-		for _, t := range allTools {
+	// Builtin packs
+	for _, bp := range a.registry.ListBuiltinPacks() {
+		var tools []toolItem
+		for _, t := range bp.Tools {
 			if t.Definition == nil {
 				continue
 			}
-			ti := toolItem{
+			tools = append(tools, toolItem{
 				Name:                 t.Definition.GetName(),
 				Description:          t.Definition.GetDescription(),
 				TimeoutSeconds:       t.Definition.GetTimeoutSeconds(),
 				RequiredCapabilities: t.Definition.GetRequiredCapabilities(),
-			}
-			toolsByPack[t.PackID] = append(toolsByPack[t.PackID], ti)
+			})
 		}
+		items = append(items, packItem{ID: bp.ID, Version: "builtin", Tools: sortedToolItems(tools)})
+	}
 
-		// Build pack items for all registered packs (including those with zero tools)
-		for _, pi := range packInfos {
-			tools := toolsByPack[pi.ID]
-			sort.Slice(tools, func(i, j int) bool {
-				return tools[i].Name < tools[j].Name
-			})
-			items = append(items, packItem{
-				ID:      pi.ID,
-				Version: pi.Version,
-				Tools:   tools,
-			})
+	// External packs: group tools by pack ID
+	toolsByPack := make(map[string][]toolItem)
+	for _, t := range a.registry.GetAllTools() {
+		if t.Definition == nil {
+			continue
 		}
-		sort.Slice(items, func(i, j int) bool {
-			return items[i].ID < items[j].ID
+		toolsByPack[t.PackID] = append(toolsByPack[t.PackID], toolItem{
+			Name:                 t.Definition.GetName(),
+			Description:          t.Definition.GetDescription(),
+			TimeoutSeconds:       t.Definition.GetTimeoutSeconds(),
+			RequiredCapabilities: t.Definition.GetRequiredCapabilities(),
 		})
 	}
-	a.renderToolsList(w, items)
+	for _, pi := range a.registry.ListPacks() {
+		items = append(items, packItem{ID: pi.ID, Version: pi.Version, Tools: sortedToolItems(toolsByPack[pi.ID])})
+	}
+
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	return items
 }
 
-// handleStatsPacks returns the registered pack count (htmx partial).
-func (a *Admin) handleStatsPacks(w http.ResponseWriter, r *http.Request) {
-	count := 0
-	if a.registry != nil {
-		count = len(a.registry.ListPacks()) + len(a.registry.ListBuiltinPacks())
+// handleToolsPage renders the tools management page.
+func (a *Admin) handleToolsPage(w http.ResponseWriter, r *http.Request) {
+	user := getUserFromContext(r)
+	csrfToken := a.ensureCSRFToken(w, r)
+
+	packs := a.listPackItems()
+	a.renderToolsPage(w, user, csrfToken, packs)
+}
+
+// handleToolsJSON returns tool packs as JSON for the Svelte island.
+func (a *Admin) handleToolsJSON(w http.ResponseWriter, r *http.Request) {
+	packs := a.listPackItems()
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(packs); err != nil {
+		a.logger.Error("failed to encode tools JSON", "error", err)
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = fmt.Fprintf(w, "%d", count)
+}
+
+// handleToolsList returns the tools list grouped by pack (htmx partial).
+func (a *Admin) handleToolsList(w http.ResponseWriter, r *http.Request) {
+	items := a.listPackItems()
+	a.renderToolsList(w, items)
 }
 
 // =============================================================================
@@ -1234,7 +1318,13 @@ func (a *Admin) handleStatsPacks(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleLogsPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderLogsPage(w, user, csrfToken)
+
+	entries, err := a.store.SearchLogEntries(r.Context(), "", "", nil, 100)
+	if err != nil {
+		a.logger.Error("failed to pre-fetch log entries", "error", err)
+	}
+
+	a.renderLogsPage(w, user, entries, csrfToken)
 }
 
 // handleLogsList returns the logs list (htmx partial).
@@ -1258,6 +1348,55 @@ func (a *Admin) handleLogsList(w http.ResponseWriter, r *http.Request) {
 	a.renderLogsList(w, entries)
 }
 
+// handleLogsJSON returns log entries as JSON for the Svelte island.
+func (a *Admin) handleLogsJSON(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
+			limit = l
+		}
+	}
+
+	entries, err := a.store.SearchLogEntries(r.Context(), "", query, nil, limit)
+	if err != nil {
+		a.logger.Error("failed to list log entries", "error", err)
+		http.Error(w, `{"error":"failed to load logs"}`, http.StatusInternalServerError)
+		return
+	}
+	if entries == nil {
+		entries = []*store.LogEntry{}
+	}
+
+	type entryJSON struct {
+		ID        string   `json:"ID"`
+		AgentID   string   `json:"AgentID"`
+		Message   string   `json:"Message"`
+		Tags      []string `json:"Tags"`
+		CreatedAt string   `json:"CreatedAt"`
+	}
+	items := make([]entryJSON, 0, len(entries))
+	for _, e := range entries {
+		tags := e.Tags
+		if tags == nil {
+			tags = []string{}
+		}
+		items = append(items, entryJSON{
+			ID:        e.ID,
+			AgentID:   e.AgentID,
+			Message:   e.Message,
+			Tags:      tags,
+			CreatedAt: e.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{"entries": items}); err != nil {
+		a.logger.Error("failed to encode logs JSON", "error", err)
+	}
+}
+
 // =============================================================================
 // Todos Handlers (builtin pack data)
 // =============================================================================
@@ -1266,7 +1405,13 @@ func (a *Admin) handleLogsList(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleTodosPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderTodosPage(w, user, csrfToken)
+
+	todos, err := a.store.ListAllTodos(r.Context(), 100)
+	if err != nil {
+		a.logger.Error("failed to pre-fetch todos", "error", err)
+	}
+
+	a.renderTodosPage(w, user, todos, csrfToken)
 }
 
 // handleTodosList returns the todos list (htmx partial).
@@ -1289,6 +1434,63 @@ func (a *Admin) handleTodosList(w http.ResponseWriter, r *http.Request) {
 	a.renderTodosList(w, todos)
 }
 
+// handleTodosJSON returns todos as JSON for the Svelte island.
+func (a *Admin) handleTodosJSON(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
+			limit = l
+		}
+	}
+
+	todos, err := a.store.ListAllTodos(r.Context(), limit)
+	if err != nil {
+		a.logger.Error("failed to list todos", "error", err)
+		http.Error(w, `{"error":"failed to load todos"}`, http.StatusInternalServerError)
+		return
+	}
+	if todos == nil {
+		todos = []*store.Todo{}
+	}
+
+	type todoJSON struct {
+		ID          string  `json:"ID"`
+		AgentID     string  `json:"AgentID"`
+		Description string  `json:"Description"`
+		Status      string  `json:"Status"`
+		Priority    string  `json:"Priority"`
+		Notes       string  `json:"Notes"`
+		DueDate     *string `json:"DueDate"`
+		CreatedAt   string  `json:"CreatedAt"`
+		UpdatedAt   string  `json:"UpdatedAt"`
+	}
+	items := make([]todoJSON, 0, len(todos))
+	for _, t := range todos {
+		var dueDate *string
+		if t.DueDate != nil {
+			s := t.DueDate.Format(time.RFC3339)
+			dueDate = &s
+		}
+		items = append(items, todoJSON{
+			ID:          t.ID,
+			AgentID:     t.AgentID,
+			Description: t.Description,
+			Status:      t.Status,
+			Priority:    t.Priority,
+			Notes:       t.Notes,
+			DueDate:     dueDate,
+			CreatedAt:   t.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:   t.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{"todos": items}); err != nil {
+		a.logger.Error("failed to encode todos JSON", "error", err)
+	}
+}
+
 // =============================================================================
 // BBS Board Handlers (builtin pack data)
 // =============================================================================
@@ -1297,7 +1499,13 @@ func (a *Admin) handleTodosList(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleBoardPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderBoardPage(w, user, csrfToken)
+
+	threads, err := a.store.ListBBSThreads(r.Context(), 50)
+	if err != nil {
+		a.logger.Error("failed to pre-fetch BBS threads", "error", err)
+	}
+
+	a.renderBoardPage(w, user, threads, csrfToken)
 }
 
 // handleBoardList returns the board threads list (htmx partial).
@@ -1342,6 +1550,109 @@ func (a *Admin) handleBoardThread(w http.ResponseWriter, r *http.Request) {
 	a.renderBoardThread(w, thread)
 }
 
+// handleBoardJSON returns BBS threads as JSON for the Svelte island.
+func (a *Admin) handleBoardJSON(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 50
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 200 {
+			limit = l
+		}
+	}
+
+	threads, err := a.store.ListBBSThreads(r.Context(), limit)
+	if err != nil {
+		a.logger.Error("failed to list BBS threads", "error", err)
+		http.Error(w, `{"error":"failed to load threads"}`, http.StatusInternalServerError)
+		return
+	}
+	if threads == nil {
+		threads = []*store.BBSPost{}
+	}
+
+	type postJSON struct {
+		ID        string `json:"ID"`
+		AgentID   string `json:"AgentID"`
+		ThreadID  string `json:"ThreadID"`
+		Subject   string `json:"Subject"`
+		Content   string `json:"Content"`
+		CreatedAt string `json:"CreatedAt"`
+	}
+	items := make([]postJSON, 0, len(threads))
+	for _, t := range threads {
+		items = append(items, postJSON{
+			ID:        t.ID,
+			AgentID:   t.AgentID,
+			ThreadID:  t.ThreadID,
+			Subject:   t.Subject,
+			Content:   t.Content,
+			CreatedAt: t.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{"threads": items}); err != nil {
+		a.logger.Error("failed to encode board JSON", "error", err)
+	}
+}
+
+// handleBoardThreadJSON returns a single BBS thread with replies as JSON.
+func (a *Admin) handleBoardThreadJSON(w http.ResponseWriter, r *http.Request) {
+	threadID := r.PathValue("id")
+	if threadID == "" {
+		http.Error(w, `{"error":"thread ID required"}`, http.StatusBadRequest)
+		return
+	}
+
+	thread, err := a.store.GetBBSThread(r.Context(), threadID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, `{"error":"thread not found"}`, http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to get BBS thread", "error", err, "thread_id", threadID)
+		http.Error(w, `{"error":"failed to load thread"}`, http.StatusInternalServerError)
+		return
+	}
+
+	type postJSON struct {
+		ID        string `json:"ID"`
+		AgentID   string `json:"AgentID"`
+		Subject   string `json:"Subject"`
+		Content   string `json:"Content"`
+		CreatedAt string `json:"CreatedAt"`
+	}
+	var replies []postJSON
+	for _, r := range thread.Replies {
+		replies = append(replies, postJSON{
+			ID:        r.ID,
+			AgentID:   r.AgentID,
+			Subject:   r.Subject,
+			Content:   r.Content,
+			CreatedAt: r.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	if replies == nil {
+		replies = []postJSON{}
+	}
+
+	result := map[string]any{
+		"post": postJSON{
+			ID:        thread.Post.ID,
+			AgentID:   thread.Post.AgentID,
+			Subject:   thread.Post.Subject,
+			Content:   thread.Post.Content,
+			CreatedAt: thread.Post.CreatedAt.Format(time.RFC3339),
+		},
+		"replies": replies,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		a.logger.Error("failed to encode board thread JSON", "error", err)
+	}
+}
+
 // =============================================================================
 // Principals Handlers
 // =============================================================================
@@ -1350,7 +1661,15 @@ func (a *Admin) handleBoardThread(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handlePrincipalsPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderPrincipalsPage(w, user, csrfToken)
+
+	// Pre-fetch principals so the Svelte island has data on first render.
+	principals, err := a.store.ListPrincipals(r.Context(), store.PrincipalFilter{Limit: 100})
+	if err != nil {
+		a.logger.Error("failed to list principals for page", "error", err)
+		principals = []store.Principal{}
+	}
+
+	a.renderPrincipalsPage(w, user, csrfToken, principals)
 }
 
 // handlePrincipalsList returns the principals list (htmx partial).
@@ -1381,6 +1700,37 @@ func (a *Admin) handlePrincipalsList(w http.ResponseWriter, r *http.Request) {
 
 	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderPrincipalsList(w, principals, csrfToken)
+}
+
+// handlePrincipalsJSON returns the principals list as JSON for Svelte islands.
+func (a *Admin) handlePrincipalsJSON(w http.ResponseWriter, r *http.Request) {
+	typeFilter := r.URL.Query().Get("type")
+	statusFilter := r.URL.Query().Get("status")
+
+	filter := store.PrincipalFilter{
+		Limit: 100,
+	}
+
+	if typeFilter != "" {
+		t := store.PrincipalType(typeFilter)
+		filter.Type = &t
+	}
+	if statusFilter != "" {
+		s := store.PrincipalStatus(statusFilter)
+		filter.Status = &s
+	}
+
+	principals, err := a.store.ListPrincipals(r.Context(), filter)
+	if err != nil {
+		a.logger.Error("failed to list principals", "error", err)
+		http.Error(w, "Failed to load principals", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(principals); err != nil {
+		a.logger.Error("failed to encode principals JSON", "error", err)
+	}
 }
 
 // handlePrincipalApprove approves a pending principal.
@@ -1485,6 +1835,24 @@ func (a *Admin) handleThreadsPage(w http.ResponseWriter, r *http.Request) {
 	a.renderThreadsPageWithData(w, user, threads, csrfToken)
 }
 
+// handleThreadsJSON returns threads as JSON for the Svelte island.
+func (a *Admin) handleThreadsJSON(w http.ResponseWriter, r *http.Request) {
+	threads, err := a.store.ListThreads(r.Context(), 100)
+	if err != nil {
+		a.logger.Error("failed to list threads", "error", err)
+		http.Error(w, "Failed to load threads", http.StatusInternalServerError)
+		return
+	}
+	if threads == nil {
+		threads = []*store.Thread{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(threads); err != nil {
+		a.logger.Error("failed to encode threads JSON", "error", err)
+	}
+}
+
 // handleThreadDetail renders a single thread with its messages.
 func (a *Admin) handleThreadDetail(w http.ResponseWriter, r *http.Request) {
 	threadID := r.PathValue("id")
@@ -1514,6 +1882,45 @@ func (a *Admin) handleThreadDetail(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderThreadDetail(w, user, thread, messages, csrfToken)
+}
+
+// handleThreadDetailJSON returns thread detail as JSON for the Svelte island.
+func (a *Admin) handleThreadDetailJSON(w http.ResponseWriter, r *http.Request) {
+	threadID := r.PathValue("id")
+	if threadID == "" {
+		http.Error(w, "Thread ID required", http.StatusBadRequest)
+		return
+	}
+
+	thread, err := a.store.GetThread(r.Context(), threadID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Thread not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to get thread", "error", err, "thread_id", threadID)
+		http.Error(w, "Failed to load thread", http.StatusInternalServerError)
+		return
+	}
+
+	messages, err := a.store.GetThreadMessages(r.Context(), threadID, 100)
+	if err != nil {
+		a.logger.Error("failed to get thread messages", "error", err, "thread_id", threadID)
+		http.Error(w, "Failed to load messages", http.StatusInternalServerError)
+		return
+	}
+	if messages == nil {
+		messages = []*store.Message{}
+	}
+
+	result := map[string]any{
+		"thread":   thread,
+		"messages": messages,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		a.logger.Error("failed to encode thread detail JSON", "error", err)
+	}
 }
 
 // handleThreadMessages returns messages for a thread (htmx partial).
@@ -1856,6 +2263,48 @@ func (a *Admin) handleLinkPage(w http.ResponseWriter, r *http.Request) {
 	a.renderLinkPage(w, user, codes, csrfToken)
 }
 
+// handleLinkJSON returns pending link codes as JSON for the Svelte island.
+func (a *Admin) handleLinkJSON(w http.ResponseWriter, r *http.Request) {
+	_ = a.store.DeleteExpiredLinkCodes(r.Context())
+
+	codes, err := a.store.ListPendingLinkCodes(r.Context())
+	if err != nil {
+		a.logger.Error("failed to list link codes", "error", err)
+		http.Error(w, `{"error":"failed to load link codes"}`, http.StatusInternalServerError)
+		return
+	}
+	if codes == nil {
+		codes = []*store.LinkCode{}
+	}
+
+	type codeJSON struct {
+		ID          string `json:"ID"`
+		Code        string `json:"Code"`
+		Fingerprint string `json:"Fingerprint"`
+		DeviceName  string `json:"DeviceName"`
+		Status      string `json:"Status"`
+		CreatedAt   string `json:"CreatedAt"`
+		ExpiresAt   string `json:"ExpiresAt"`
+	}
+	items := make([]codeJSON, 0, len(codes))
+	for _, c := range codes {
+		items = append(items, codeJSON{
+			ID:          c.ID,
+			Code:        c.Code,
+			Fingerprint: c.Fingerprint,
+			DeviceName:  c.DeviceName,
+			Status:      string(c.Status),
+			CreatedAt:   c.CreatedAt.Format(time.RFC3339),
+			ExpiresAt:   c.ExpiresAt.Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{"codes": items}); err != nil {
+		a.logger.Error("failed to encode link JSON", "error", err)
+	}
+}
+
 // getOrCreatePrincipalForLink finds an existing principal by fingerprint or creates a new one.
 // Returns the principal ID and any error.
 func (a *Admin) getOrCreatePrincipalForLink(ctx context.Context, linkCode *store.LinkCode) (string, error) {
@@ -2092,18 +2541,70 @@ func (a *Admin) handleLinkStatus(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleUsagePage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderUsagePage(w, user, csrfToken)
+
+	usage, _ := a.store.GetUsageStats(r.Context(), store.UsageFilter{})
+
+	a.renderUsagePage(w, user, csrfToken, usage)
 }
 
-// handleStatsTokens returns token usage stats (htmx partial).
-func (a *Admin) handleStatsTokens(w http.ResponseWriter, r *http.Request) {
-	// Get stats with optional filters
+// handleDashboardJSON returns all dashboard data as JSON for the Svelte island refresh.
+func (a *Admin) handleDashboardJSON(w http.ResponseWriter, r *http.Request) {
+	agents := a.listAgentItems()
+	packs := a.listPackItems()
+
+	threadCount := 0
+	if threads, err := a.store.ListThreads(r.Context(), 1000); err == nil {
+		threadCount = len(threads)
+	}
+
+	usage, _ := a.store.GetUsageStats(r.Context(), store.UsageFilter{})
+
+	usageMap := map[string]int64{
+		"totalInput":      0,
+		"totalOutput":     0,
+		"totalCacheRead":  0,
+		"totalCacheWrite": 0,
+		"totalThinking":   0,
+		"totalTokens":     0,
+		"requestCount":    0,
+	}
+	if usage != nil {
+		usageMap["totalInput"] = usage.TotalInput
+		usageMap["totalOutput"] = usage.TotalOutput
+		usageMap["totalCacheRead"] = usage.TotalCacheRead
+		usageMap["totalCacheWrite"] = usage.TotalCacheWrite
+		usageMap["totalThinking"] = usage.TotalThinking
+		usageMap["totalTokens"] = usage.TotalTokens
+		usageMap["requestCount"] = usage.RequestCount
+	}
+
+	response := map[string]any{
+		"agentCount":  len(agents),
+		"packCount":   len(packs),
+		"threadCount": threadCount,
+		"usage":       usageMap,
+		"agents":      agents,
+		"packs":       packs,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		a.logger.Debug("failed to encode dashboard JSON", "error", err)
+	}
+}
+
+// handleUsageJSON returns token usage stats as JSON with optional filters.
+func (a *Admin) handleUsageJSON(w http.ResponseWriter, r *http.Request) {
 	filter := store.UsageFilter{}
 
-	// Parse time range if specified
 	if sinceStr := r.URL.Query().Get("since"); sinceStr != "" {
 		if since, err := time.Parse(time.RFC3339, sinceStr); err == nil {
 			filter.Since = &since
+		}
+	}
+	if untilStr := r.URL.Query().Get("until"); untilStr != "" {
+		if until, err := time.Parse(time.RFC3339, untilStr); err == nil {
+			filter.Until = &until
 		}
 	}
 
@@ -2114,7 +2615,20 @@ func (a *Admin) handleStatsTokens(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.renderUsageStats(w, stats)
+	response := map[string]int64{
+		"totalInput":      stats.TotalInput,
+		"totalOutput":     stats.TotalOutput,
+		"totalCacheRead":  stats.TotalCacheRead,
+		"totalCacheWrite": stats.TotalCacheWrite,
+		"totalThinking":   stats.TotalThinking,
+		"totalTokens":     stats.TotalTokens,
+		"requestCount":    stats.RequestCount,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		a.logger.Debug("failed to encode usage JSON", "error", err)
+	}
 }
 
 // =============================================================================
@@ -2137,39 +2651,27 @@ func (a *Admin) handleSecretsPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	a.renderSecretsPage(w, user, agents, csrfToken)
+	// Pre-fetch secrets for island props
+	secrets := a.listSecretItems(r.Context())
+
+	a.renderSecretsPage(w, user, agents, secrets, csrfToken)
 }
 
-// handleSecretsList returns the secrets list (htmx partial).
-func (a *Admin) handleSecretsList(w http.ResponseWriter, r *http.Request) {
+// listSecretItems fetches all secrets and converts to display items.
+func (a *Admin) listSecretItems(ctx context.Context) []secretItem {
 	sqlStore := a.getSQLiteStore()
 	if sqlStore == nil {
-		http.Error(w, "Server configuration error", http.StatusInternalServerError)
-		return
+		return []secretItem{}
 	}
 
-	secrets, err := sqlStore.ListAllSecrets(r.Context())
+	secrets, err := sqlStore.ListAllSecrets(ctx)
 	if err != nil {
 		a.logger.Error("failed to list secrets", "error", err)
-		http.Error(w, "Failed to load secrets", http.StatusInternalServerError)
-		return
+		return []secretItem{}
 	}
 
-	// Apply scope filter if provided
-	scopeFilter := r.URL.Query().Get("scope")
-
-	// Convert to display items
-	var items []secretItem
+	items := make([]secretItem, 0, len(secrets))
 	for _, s := range secrets {
-		// Apply scope filter
-		isGlobal := s.AgentID == nil
-		if scopeFilter == "global" && !isGlobal {
-			continue
-		}
-		if scopeFilter == "agent" && isGlobal {
-			continue
-		}
-
 		item := secretItem{
 			ID:        s.ID,
 			Key:       s.Key,
@@ -2179,11 +2681,61 @@ func (a *Admin) handleSecretsList(w http.ResponseWriter, r *http.Request) {
 		if s.AgentID != nil {
 			item.AgentID = *s.AgentID
 			item.Scope = *s.AgentID
-			item.AgentName = *s.AgentID // Use ID as display name for now
+			item.AgentName = *s.AgentID
 		} else {
 			item.Scope = "Global"
 		}
 		items = append(items, item)
+	}
+	return items
+}
+
+// handleSecretsJSON returns secrets as JSON for the Svelte island.
+func (a *Admin) handleSecretsJSON(w http.ResponseWriter, r *http.Request) {
+	items := a.listSecretItems(r.Context())
+
+	// Apply scope filter if provided
+	scopeFilter := r.URL.Query().Get("scope")
+	if scopeFilter != "" {
+		filtered := make([]secretItem, 0, len(items))
+		for _, item := range items {
+			isGlobal := item.Scope == "Global"
+			if scopeFilter == "global" && !isGlobal {
+				continue
+			}
+			if scopeFilter == "agent" && isGlobal {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		items = filtered
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(items); err != nil {
+		a.logger.Error("failed to encode secrets JSON", "error", err)
+	}
+}
+
+// handleSecretsList returns the secrets list (htmx partial).
+func (a *Admin) handleSecretsList(w http.ResponseWriter, r *http.Request) {
+	items := a.listSecretItems(r.Context())
+
+	// Apply scope filter if provided
+	scopeFilter := r.URL.Query().Get("scope")
+	if scopeFilter != "" {
+		filtered := make([]secretItem, 0, len(items))
+		for _, item := range items {
+			isGlobal := item.Scope == "Global"
+			if scopeFilter == "global" && !isGlobal {
+				continue
+			}
+			if scopeFilter == "agent" && isGlobal {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		items = filtered
 	}
 
 	csrfToken := a.ensureCSRFToken(w, r)

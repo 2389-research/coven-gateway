@@ -15,6 +15,10 @@ const meta = {
       control: 'select',
       options: ['sm', 'md'],
     },
+    fill: {
+      control: 'select',
+      options: ['solid', 'outline'],
+    },
   },
 } satisfies Meta<Badge>;
 
@@ -47,4 +51,28 @@ export const Small: Story = {
 
 export const LongText: Story = {
   args: { variant: 'default', children: textSnippet('Long badge text content here') },
+};
+
+export const OutlineDefault: Story = {
+  args: { variant: 'default', fill: 'outline', children: textSnippet('Default') },
+};
+
+export const OutlineAccent: Story = {
+  args: { variant: 'accent', fill: 'outline', children: textSnippet('Type: Agent') },
+};
+
+export const OutlineSuccess: Story = {
+  args: { variant: 'success', fill: 'outline', children: textSnippet('Scope: Read') },
+};
+
+export const OutlineWarning: Story = {
+  args: { variant: 'warning', fill: 'outline', children: textSnippet('Expiring') },
+};
+
+export const OutlineDanger: Story = {
+  args: { variant: 'danger', fill: 'outline', children: textSnippet('Revoked') },
+};
+
+export const OutlineSmall: Story = {
+  args: { variant: 'accent', fill: 'outline', size: 'sm', children: textSnippet('v2.0') },
 };
