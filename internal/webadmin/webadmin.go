@@ -299,6 +299,7 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 
 	// Device linking UI (authenticated)
 	mux.HandleFunc("GET /admin/link", a.requireAuth(a.handleLinkPage))
+	mux.HandleFunc("GET /api/admin/link", a.requireAuth(a.handleLinkJSON))
 	mux.HandleFunc("POST /admin/link/{id}/approve", a.requireAuth(a.handleLinkApprove))
 
 	// Agent management
@@ -317,15 +318,19 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 	// Activity logs (builtin pack data)
 	mux.HandleFunc("GET /admin/logs", a.requireAuth(a.handleLogsPage))
 	mux.HandleFunc("GET /admin/logs/list", a.requireAuth(a.handleLogsList))
+	mux.HandleFunc("GET /api/admin/logs", a.requireAuth(a.handleLogsJSON))
 
 	// Todos (builtin pack data)
 	mux.HandleFunc("GET /admin/todos", a.requireAuth(a.handleTodosPage))
 	mux.HandleFunc("GET /admin/todos/list", a.requireAuth(a.handleTodosList))
+	mux.HandleFunc("GET /api/admin/todos", a.requireAuth(a.handleTodosJSON))
 
 	// BBS Board (builtin pack data)
 	mux.HandleFunc("GET /admin/board", a.requireAuth(a.handleBoardPage))
 	mux.HandleFunc("GET /admin/board/list", a.requireAuth(a.handleBoardList))
 	mux.HandleFunc("GET /admin/board/thread/{id}", a.requireAuth(a.handleBoardThread))
+	mux.HandleFunc("GET /api/admin/board", a.requireAuth(a.handleBoardJSON))
+	mux.HandleFunc("GET /api/admin/board/{id}", a.requireAuth(a.handleBoardThreadJSON))
 
 	// Principals management
 	mux.HandleFunc("GET /admin/principals", a.requireAuth(a.handlePrincipalsPage))
@@ -1323,7 +1328,13 @@ func (a *Admin) handleStatsPacks(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleLogsPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderLogsPage(w, user, csrfToken)
+
+	entries, err := a.store.SearchLogEntries(r.Context(), "", "", nil, 100)
+	if err != nil {
+		a.logger.Error("failed to pre-fetch log entries", "error", err)
+	}
+
+	a.renderLogsPage(w, user, entries, csrfToken)
 }
 
 // handleLogsList returns the logs list (htmx partial).
@@ -1347,6 +1358,55 @@ func (a *Admin) handleLogsList(w http.ResponseWriter, r *http.Request) {
 	a.renderLogsList(w, entries)
 }
 
+// handleLogsJSON returns log entries as JSON for the Svelte island.
+func (a *Admin) handleLogsJSON(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
+			limit = l
+		}
+	}
+
+	entries, err := a.store.SearchLogEntries(r.Context(), "", query, nil, limit)
+	if err != nil {
+		a.logger.Error("failed to list log entries", "error", err)
+		http.Error(w, `{"error":"failed to load logs"}`, http.StatusInternalServerError)
+		return
+	}
+	if entries == nil {
+		entries = []*store.LogEntry{}
+	}
+
+	type entryJSON struct {
+		ID        string   `json:"ID"`
+		AgentID   string   `json:"AgentID"`
+		Message   string   `json:"Message"`
+		Tags      []string `json:"Tags"`
+		CreatedAt string   `json:"CreatedAt"`
+	}
+	items := make([]entryJSON, 0, len(entries))
+	for _, e := range entries {
+		tags := e.Tags
+		if tags == nil {
+			tags = []string{}
+		}
+		items = append(items, entryJSON{
+			ID:        e.ID,
+			AgentID:   e.AgentID,
+			Message:   e.Message,
+			Tags:      tags,
+			CreatedAt: e.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{"entries": items}); err != nil {
+		a.logger.Error("failed to encode logs JSON", "error", err)
+	}
+}
+
 // =============================================================================
 // Todos Handlers (builtin pack data)
 // =============================================================================
@@ -1355,7 +1415,13 @@ func (a *Admin) handleLogsList(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleTodosPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderTodosPage(w, user, csrfToken)
+
+	todos, err := a.store.ListAllTodos(r.Context(), 100)
+	if err != nil {
+		a.logger.Error("failed to pre-fetch todos", "error", err)
+	}
+
+	a.renderTodosPage(w, user, todos, csrfToken)
 }
 
 // handleTodosList returns the todos list (htmx partial).
@@ -1378,6 +1444,63 @@ func (a *Admin) handleTodosList(w http.ResponseWriter, r *http.Request) {
 	a.renderTodosList(w, todos)
 }
 
+// handleTodosJSON returns todos as JSON for the Svelte island.
+func (a *Admin) handleTodosJSON(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 100
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
+			limit = l
+		}
+	}
+
+	todos, err := a.store.ListAllTodos(r.Context(), limit)
+	if err != nil {
+		a.logger.Error("failed to list todos", "error", err)
+		http.Error(w, `{"error":"failed to load todos"}`, http.StatusInternalServerError)
+		return
+	}
+	if todos == nil {
+		todos = []*store.Todo{}
+	}
+
+	type todoJSON struct {
+		ID          string  `json:"ID"`
+		AgentID     string  `json:"AgentID"`
+		Description string  `json:"Description"`
+		Status      string  `json:"Status"`
+		Priority    string  `json:"Priority"`
+		Notes       string  `json:"Notes"`
+		DueDate     *string `json:"DueDate"`
+		CreatedAt   string  `json:"CreatedAt"`
+		UpdatedAt   string  `json:"UpdatedAt"`
+	}
+	items := make([]todoJSON, 0, len(todos))
+	for _, t := range todos {
+		var dueDate *string
+		if t.DueDate != nil {
+			s := t.DueDate.Format(time.RFC3339)
+			dueDate = &s
+		}
+		items = append(items, todoJSON{
+			ID:          t.ID,
+			AgentID:     t.AgentID,
+			Description: t.Description,
+			Status:      t.Status,
+			Priority:    t.Priority,
+			Notes:       t.Notes,
+			DueDate:     dueDate,
+			CreatedAt:   t.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:   t.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{"todos": items}); err != nil {
+		a.logger.Error("failed to encode todos JSON", "error", err)
+	}
+}
+
 // =============================================================================
 // BBS Board Handlers (builtin pack data)
 // =============================================================================
@@ -1386,7 +1509,13 @@ func (a *Admin) handleTodosList(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleBoardPage(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderBoardPage(w, user, csrfToken)
+
+	threads, err := a.store.ListBBSThreads(r.Context(), 50)
+	if err != nil {
+		a.logger.Error("failed to pre-fetch BBS threads", "error", err)
+	}
+
+	a.renderBoardPage(w, user, threads, csrfToken)
 }
 
 // handleBoardList returns the board threads list (htmx partial).
@@ -1429,6 +1558,109 @@ func (a *Admin) handleBoardThread(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.renderBoardThread(w, thread)
+}
+
+// handleBoardJSON returns BBS threads as JSON for the Svelte island.
+func (a *Admin) handleBoardJSON(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 50
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 200 {
+			limit = l
+		}
+	}
+
+	threads, err := a.store.ListBBSThreads(r.Context(), limit)
+	if err != nil {
+		a.logger.Error("failed to list BBS threads", "error", err)
+		http.Error(w, `{"error":"failed to load threads"}`, http.StatusInternalServerError)
+		return
+	}
+	if threads == nil {
+		threads = []*store.BBSPost{}
+	}
+
+	type postJSON struct {
+		ID        string `json:"ID"`
+		AgentID   string `json:"AgentID"`
+		ThreadID  string `json:"ThreadID"`
+		Subject   string `json:"Subject"`
+		Content   string `json:"Content"`
+		CreatedAt string `json:"CreatedAt"`
+	}
+	items := make([]postJSON, 0, len(threads))
+	for _, t := range threads {
+		items = append(items, postJSON{
+			ID:        t.ID,
+			AgentID:   t.AgentID,
+			ThreadID:  t.ThreadID,
+			Subject:   t.Subject,
+			Content:   t.Content,
+			CreatedAt: t.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{"threads": items}); err != nil {
+		a.logger.Error("failed to encode board JSON", "error", err)
+	}
+}
+
+// handleBoardThreadJSON returns a single BBS thread with replies as JSON.
+func (a *Admin) handleBoardThreadJSON(w http.ResponseWriter, r *http.Request) {
+	threadID := r.PathValue("id")
+	if threadID == "" {
+		http.Error(w, `{"error":"thread ID required"}`, http.StatusBadRequest)
+		return
+	}
+
+	thread, err := a.store.GetBBSThread(r.Context(), threadID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, `{"error":"thread not found"}`, http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to get BBS thread", "error", err, "thread_id", threadID)
+		http.Error(w, `{"error":"failed to load thread"}`, http.StatusInternalServerError)
+		return
+	}
+
+	type postJSON struct {
+		ID        string `json:"ID"`
+		AgentID   string `json:"AgentID"`
+		Subject   string `json:"Subject"`
+		Content   string `json:"Content"`
+		CreatedAt string `json:"CreatedAt"`
+	}
+	var replies []postJSON
+	for _, r := range thread.Replies {
+		replies = append(replies, postJSON{
+			ID:        r.ID,
+			AgentID:   r.AgentID,
+			Subject:   r.Subject,
+			Content:   r.Content,
+			CreatedAt: r.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	if replies == nil {
+		replies = []postJSON{}
+	}
+
+	result := map[string]any{
+		"post": postJSON{
+			ID:        thread.Post.ID,
+			AgentID:   thread.Post.AgentID,
+			Subject:   thread.Post.Subject,
+			Content:   thread.Post.Content,
+			CreatedAt: thread.Post.CreatedAt.Format(time.RFC3339),
+		},
+		"replies": replies,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		a.logger.Error("failed to encode board thread JSON", "error", err)
+	}
 }
 
 // =============================================================================
@@ -2039,6 +2271,48 @@ func (a *Admin) handleLinkPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.renderLinkPage(w, user, codes, csrfToken)
+}
+
+// handleLinkJSON returns pending link codes as JSON for the Svelte island.
+func (a *Admin) handleLinkJSON(w http.ResponseWriter, r *http.Request) {
+	_ = a.store.DeleteExpiredLinkCodes(r.Context())
+
+	codes, err := a.store.ListPendingLinkCodes(r.Context())
+	if err != nil {
+		a.logger.Error("failed to list link codes", "error", err)
+		http.Error(w, `{"error":"failed to load link codes"}`, http.StatusInternalServerError)
+		return
+	}
+	if codes == nil {
+		codes = []*store.LinkCode{}
+	}
+
+	type codeJSON struct {
+		ID          string `json:"ID"`
+		Code        string `json:"Code"`
+		Fingerprint string `json:"Fingerprint"`
+		DeviceName  string `json:"DeviceName"`
+		Status      string `json:"Status"`
+		CreatedAt   string `json:"CreatedAt"`
+		ExpiresAt   string `json:"ExpiresAt"`
+	}
+	items := make([]codeJSON, 0, len(codes))
+	for _, c := range codes {
+		items = append(items, codeJSON{
+			ID:          c.ID,
+			Code:        c.Code,
+			Fingerprint: c.Fingerprint,
+			DeviceName:  c.DeviceName,
+			Status:      string(c.Status),
+			CreatedAt:   c.CreatedAt.Format(time.RFC3339),
+			ExpiresAt:   c.ExpiresAt.Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{"codes": items}); err != nil {
+		a.logger.Error("failed to encode link JSON", "error", err)
+	}
 }
 
 // getOrCreatePrincipalForLink finds an existing principal by fingerprint or creates a new one.

@@ -164,7 +164,7 @@ type setupCompleteData struct {
 type linkPageData struct {
 	Title     string
 	User      *store.AdminUser
-	Codes     []*store.LinkCode
+	PropsJSON template.JS
 	CSRFToken string
 }
 
@@ -617,10 +617,46 @@ func (a *Admin) renderSetupComplete(w http.ResponseWriter, displayName, apiToken
 func (a *Admin) renderLinkPage(w http.ResponseWriter, user *store.AdminUser, codes []*store.LinkCode, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/link.html")
 
+	if codes == nil {
+		codes = []*store.LinkCode{}
+	}
+
+	type codeJSON struct {
+		ID          string `json:"ID"`
+		Code        string `json:"Code"`
+		Fingerprint string `json:"Fingerprint"`
+		DeviceName  string `json:"DeviceName"`
+		Status      string `json:"Status"`
+		CreatedAt   string `json:"CreatedAt"`
+		ExpiresAt   string `json:"ExpiresAt"`
+	}
+	items := make([]codeJSON, 0, len(codes))
+	for _, c := range codes {
+		items = append(items, codeJSON{
+			ID:          c.ID,
+			Code:        c.Code,
+			Fingerprint: c.Fingerprint,
+			DeviceName:  c.DeviceName,
+			Status:      string(c.Status),
+			CreatedAt:   c.CreatedAt.Format(time.RFC3339),
+			ExpiresAt:   c.ExpiresAt.Format(time.RFC3339),
+		})
+	}
+
+	props := map[string]any{
+		"codes":     items,
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal link props", "error", err)
+		propsJSON = []byte("{}")
+	}
+
 	data := linkPageData{
 		Title:     "Device Linking",
 		User:      user,
-		Codes:     codes,
+		PropsJSON: template.JS(propsJSON),
 		CSRFToken: csrfToken,
 	}
 
@@ -637,6 +673,7 @@ func (a *Admin) renderLinkPage(w http.ResponseWriter, user *store.AdminUser, cod
 type logsPageData struct {
 	Title     string
 	User      *store.AdminUser
+	PropsJSON template.JS
 	CSRFToken string
 }
 
@@ -645,12 +682,49 @@ type logsListData struct {
 }
 
 // renderLogsPage renders the activity logs page.
-func (a *Admin) renderLogsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+func (a *Admin) renderLogsPage(w http.ResponseWriter, user *store.AdminUser, entries []*store.LogEntry, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/logs.html")
+
+	if entries == nil {
+		entries = []*store.LogEntry{}
+	}
+
+	type entryJSON struct {
+		ID        string   `json:"ID"`
+		AgentID   string   `json:"AgentID"`
+		Message   string   `json:"Message"`
+		Tags      []string `json:"Tags"`
+		CreatedAt string   `json:"CreatedAt"`
+	}
+	items := make([]entryJSON, 0, len(entries))
+	for _, e := range entries {
+		tags := e.Tags
+		if tags == nil {
+			tags = []string{}
+		}
+		items = append(items, entryJSON{
+			ID:        e.ID,
+			AgentID:   e.AgentID,
+			Message:   e.Message,
+			Tags:      tags,
+			CreatedAt: e.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	props := map[string]any{
+		"entries":   items,
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal logs props", "error", err)
+		propsJSON = []byte("{}")
+	}
 
 	data := logsPageData{
 		Title:     "Activity Logs",
 		User:      user,
+		PropsJSON: template.JS(propsJSON),
 		CSRFToken: csrfToken,
 	}
 
@@ -681,6 +755,7 @@ func (a *Admin) renderLogsList(w http.ResponseWriter, entries []*store.LogEntry)
 type todosPageData struct {
 	Title     string
 	User      *store.AdminUser
+	PropsJSON template.JS
 	CSRFToken string
 }
 
@@ -689,12 +764,58 @@ type todosListData struct {
 }
 
 // renderTodosPage renders the todos page.
-func (a *Admin) renderTodosPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+func (a *Admin) renderTodosPage(w http.ResponseWriter, user *store.AdminUser, todos []*store.Todo, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/todos.html")
+
+	if todos == nil {
+		todos = []*store.Todo{}
+	}
+
+	type todoJSON struct {
+		ID          string  `json:"ID"`
+		AgentID     string  `json:"AgentID"`
+		Description string  `json:"Description"`
+		Status      string  `json:"Status"`
+		Priority    string  `json:"Priority"`
+		Notes       string  `json:"Notes"`
+		DueDate     *string `json:"DueDate"`
+		CreatedAt   string  `json:"CreatedAt"`
+		UpdatedAt   string  `json:"UpdatedAt"`
+	}
+	items := make([]todoJSON, 0, len(todos))
+	for _, t := range todos {
+		var dueDate *string
+		if t.DueDate != nil {
+			s := t.DueDate.Format(time.RFC3339)
+			dueDate = &s
+		}
+		items = append(items, todoJSON{
+			ID:          t.ID,
+			AgentID:     t.AgentID,
+			Description: t.Description,
+			Status:      t.Status,
+			Priority:    t.Priority,
+			Notes:       t.Notes,
+			DueDate:     dueDate,
+			CreatedAt:   t.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:   t.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+
+	props := map[string]any{
+		"todos":     items,
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal todos props", "error", err)
+		propsJSON = []byte("{}")
+	}
 
 	data := todosPageData{
 		Title:     "Todos",
 		User:      user,
+		PropsJSON: template.JS(propsJSON),
 		CSRFToken: csrfToken,
 	}
 
@@ -725,6 +846,7 @@ func (a *Admin) renderTodosList(w http.ResponseWriter, todos []*store.Todo) {
 type boardPageData struct {
 	Title     string
 	User      *store.AdminUser
+	PropsJSON template.JS
 	CSRFToken string
 }
 
@@ -737,12 +859,47 @@ type boardThreadData struct {
 }
 
 // renderBoardPage renders the BBS board page.
-func (a *Admin) renderBoardPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+func (a *Admin) renderBoardPage(w http.ResponseWriter, user *store.AdminUser, threads []*store.BBSPost, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/board.html")
+
+	if threads == nil {
+		threads = []*store.BBSPost{}
+	}
+
+	type postJSON struct {
+		ID        string `json:"ID"`
+		AgentID   string `json:"AgentID"`
+		ThreadID  string `json:"ThreadID"`
+		Subject   string `json:"Subject"`
+		Content   string `json:"Content"`
+		CreatedAt string `json:"CreatedAt"`
+	}
+	items := make([]postJSON, 0, len(threads))
+	for _, t := range threads {
+		items = append(items, postJSON{
+			ID:        t.ID,
+			AgentID:   t.AgentID,
+			ThreadID:  t.ThreadID,
+			Subject:   t.Subject,
+			Content:   t.Content,
+			CreatedAt: t.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	props := map[string]any{
+		"threads":   items,
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal board props", "error", err)
+		propsJSON = []byte("{}")
+	}
 
 	data := boardPageData{
 		Title:     "Discussion Board",
 		User:      user,
+		PropsJSON: template.JS(propsJSON),
 		CSRFToken: csrfToken,
 	}
 

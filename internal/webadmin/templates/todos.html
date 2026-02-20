@@ -109,38 +109,7 @@
 
         <!-- Content -->
         <main class="flex-1 p-8 overflow-auto">
-            <div id="main-content" class="max-w-screen-xl mx-auto space-y-8">
-                <!-- Page Header -->
-                <div class="mb-2">
-                    <h2 class="font-serif text-3xl text-ink mb-1">{{.Title}}</h2>
-                    <p class="text-warm-500">Tasks created by agents across the system.</p>
-                </div>
-
-                <!-- Todos Panel -->
-                <div class="bg-white rounded-xl shadow-card border border-warm-100">
-                    <div class="px-6 py-4 border-b border-warm-100 flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                                </svg>
-                            </div>
-                            <h3 class="font-serif text-xl text-ink">All Todos</h3>
-                        </div>
-                        <span class="text-xs text-warm-400 font-medium">Auto-refresh: 10s</span>
-                    </div>
-                    <div class="p-6" hx-get="/admin/todos/list" hx-trigger="load, every 10s" hx-swap="innerHTML">
-                        <div class="flex items-center justify-center py-12">
-                            <div class="flex items-center gap-3 text-warm-400">
-                                <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                </svg>
-                                <span class="text-sm">Loading todos...</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <div data-island="todos-page"><script type="application/json">{{.PropsJSON}}</script></div>
         </main>
     </div>
 </div>

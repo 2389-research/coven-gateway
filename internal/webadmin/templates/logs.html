@@ -109,51 +109,7 @@
 
         <!-- Content -->
         <main class="flex-1 p-8 overflow-auto">
-            <div id="main-content" class="max-w-screen-xl mx-auto space-y-8">
-                <!-- Page Header -->
-                <div class="mb-2">
-                    <h2 class="font-serif text-3xl text-ink mb-1">{{.Title}}</h2>
-                    <p class="text-warm-500">Activity log entries from agent-created events.</p>
-                </div>
-
-                <!-- Search -->
-                <div class="bg-white rounded-xl shadow-card border border-warm-100 p-4">
-                    <form hx-get="/admin/logs/list" hx-target="#logs-content" hx-trigger="submit, keyup delay:300ms from:#search-input">
-                        <div class="flex gap-4">
-                            <input type="text" name="q" id="search-input" placeholder="Search logs..."
-                                class="flex-1 px-4 py-2 border border-warm-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-forest/20 focus:border-forest">
-                            <button type="submit" class="px-4 py-2 bg-forest text-white rounded-lg hover:bg-forest/90 font-medium">
-                                Search
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Activity Logs Panel -->
-                <div class="bg-white rounded-xl shadow-card border border-warm-100">
-                    <div class="px-6 py-4 border-b border-warm-100 flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg bg-forest/10 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-forest" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                            </div>
-                            <h3 class="font-serif text-xl text-ink">Log Entries</h3>
-                        </div>
-                        <span class="text-xs text-warm-400 font-medium">Auto-refresh: 10s</span>
-                    </div>
-                    <div id="logs-content" class="p-6" hx-get="/admin/logs/list" hx-trigger="load, every 10s" hx-swap="innerHTML">
-                        <div class="flex items-center justify-center py-12">
-                            <div class="flex items-center gap-3 text-warm-400">
-                                <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                </svg>
-                                <span class="text-sm">Loading logs...</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <div data-island="logs-page"><script type="application/json">{{.PropsJSON}}</script></div>
         </main>
     </div>
 </div>
