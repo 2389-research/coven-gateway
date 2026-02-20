@@ -9,7 +9,14 @@ import { mount, unmount } from 'svelte';
 // Registry: maps data-island names to lazy component imports.
 // Each entry returns the default export of a Svelte component module.
 const registry: Record<string, () => Promise<{ default: any }>> = {
+  'agents-page': () => import('../lib/components/AgentsPage.svelte'),
   'connection-badge': () => import('../lib/components/ConnectionBadge.svelte'),
+  'dashboard-page': () => import('../lib/components/DashboardPage.svelte'),
+  'login-form': () => import('../lib/components/LoginForm.svelte'),
+  'principals-page': () => import('../lib/components/PrincipalsPage.svelte'),
+  'threads-page': () => import('../lib/components/ThreadsPage.svelte'),
+  'tools-page': () => import('../lib/components/ToolsPage.svelte'),
+  'usage-page': () => import('../lib/components/UsagePage.svelte'),
 };
 
 // Track mounted instances for clean unmounting.

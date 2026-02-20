@@ -4,6 +4,7 @@
 package webadmin
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"path"
@@ -50,12 +51,13 @@ type dashboardData struct {
 	Title     string
 	User      *store.AdminUser
 	CSRFToken string
+	PropsJSON template.JS // Pre-built JSON for Svelte island (safe: server-generated)
 }
 
 type agentItem struct {
-	ID        string
-	Name      string
-	Connected bool
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Connected bool   `json:"connected"`
 }
 
 type agentsListData struct {
@@ -70,6 +72,7 @@ type principalsPageData struct {
 	Title     string
 	User      *store.AdminUser
 	CSRFToken string
+	PropsJSON template.JS // Pre-built JSON for Svelte island (safe: server-generated)
 }
 
 type principalsListData struct {
@@ -80,8 +83,8 @@ type principalsListData struct {
 type threadsPageData struct {
 	Title     string
 	User      *store.AdminUser
-	Threads   []*store.Thread
 	CSRFToken string
+	PropsJSON template.JS // Pre-built JSON for Svelte island (safe: server-generated)
 }
 
 type threadDetailData struct {
@@ -97,22 +100,23 @@ type messagesListData struct {
 }
 
 type toolItem struct {
-	Name                 string
-	Description          string
-	TimeoutSeconds       int32
-	RequiredCapabilities []string
+	Name                 string   `json:"name"`
+	Description          string   `json:"description"`
+	TimeoutSeconds       int32    `json:"timeoutSeconds"`
+	RequiredCapabilities []string `json:"requiredCapabilities"`
 }
 
 type packItem struct {
-	ID      string
-	Version string
-	Tools   []toolItem
+	ID      string     `json:"id"`
+	Version string     `json:"version"`
+	Tools   []toolItem `json:"tools"`
 }
 
 type toolsPageData struct {
 	Title     string
 	User      *store.AdminUser
 	CSRFToken string
+	PropsJSON template.JS // Pre-built JSON for Svelte island (safe: server-generated)
 }
 
 type toolsListData struct {
@@ -123,6 +127,7 @@ type agentsPageData struct {
 	Title     string
 	User      *store.AdminUser
 	CSRFToken string
+	PropsJSON template.JS // Pre-built JSON for Svelte island (safe: server-generated)
 }
 
 type agentDetailItem struct {
@@ -198,14 +203,49 @@ func (a *Admin) renderInvitePage(w http.ResponseWriter, token, errorMsg, csrfTok
 	}
 }
 
-// renderDashboard renders the main dashboard.
-func (a *Admin) renderDashboard(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+// renderDashboard renders the main dashboard with pre-fetched props for the Svelte island.
+func (a *Admin) renderDashboard(w http.ResponseWriter, user *store.AdminUser, csrfToken string, agents []agentItem, packs []packItem, threadCount int, usage *store.UsageStats) {
 	tmpl := parseTemplate("templates/base.html", "templates/dashboard.html")
+
+	usageMap := map[string]int64{
+		"totalInput":      0,
+		"totalOutput":     0,
+		"totalCacheRead":  0,
+		"totalCacheWrite": 0,
+		"totalThinking":   0,
+		"totalTokens":     0,
+		"requestCount":    0,
+	}
+	if usage != nil {
+		usageMap["totalInput"] = usage.TotalInput
+		usageMap["totalOutput"] = usage.TotalOutput
+		usageMap["totalCacheRead"] = usage.TotalCacheRead
+		usageMap["totalCacheWrite"] = usage.TotalCacheWrite
+		usageMap["totalThinking"] = usage.TotalThinking
+		usageMap["totalTokens"] = usage.TotalTokens
+		usageMap["requestCount"] = usage.RequestCount
+	}
+
+	props := map[string]any{
+		"agentCount":  len(agents),
+		"packCount":   len(packs),
+		"threadCount": threadCount,
+		"usage":       usageMap,
+		"agents":      agents,
+		"packs":       packs,
+		"csrfToken":   csrfToken,
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal dashboard props", "error", err)
+		propsJSON = []byte("{}")
+	}
 
 	data := dashboardData{
 		Title:     "Dashboard",
 		User:      user,
 		CSRFToken: csrfToken,
+		PropsJSON: template.JS(propsJSON),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -255,13 +295,31 @@ func (a *Admin) renderInviteCreated(w http.ResponseWriter, inviteURL string) {
 }
 
 // renderPrincipalsPage renders the principals management page.
-func (a *Admin) renderPrincipalsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+func (a *Admin) renderPrincipalsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string, principals []store.Principal) {
 	tmpl := parseTemplate("templates/base.html", "templates/principals.html")
+
+	if principals == nil {
+		principals = []store.Principal{}
+	}
+
+	// Build complete props JSON for the Svelte island.
+	// Use template.HTML to prevent Go's html/template from escaping inside <script>.
+	propsMap := map[string]any{
+		"principals": principals,
+		"csrfToken":  csrfToken,
+	}
+	propsJSON, err := json.Marshal(propsMap)
+	if err != nil {
+		a.logger.Error("failed to marshal principals props", "error", err)
+		propsJSON = []byte(`{"principals":[],"csrfToken":""}`)
+	}
+	a.logger.Debug("principals page props", "count", len(principals), "json_len", len(propsJSON))
 
 	data := principalsPageData{
 		Title:     "Principals",
 		User:      user,
 		CSRFToken: csrfToken,
+		PropsJSON: template.JS(propsJSON),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -285,16 +343,29 @@ func (a *Admin) renderPrincipalsList(w http.ResponseWriter, principals []store.P
 	}
 }
 
-// renderThreadsPage renders the threads list page without preloaded data.
-
-// renderThreadsPageWithData renders the threads list page with preloaded threads.
+// renderThreadsPageWithData renders the threads list page with Svelte island.
 func (a *Admin) renderThreadsPageWithData(w http.ResponseWriter, user *store.AdminUser, threads []*store.Thread, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/threads.html")
+
+	if threads == nil {
+		threads = []*store.Thread{}
+	}
+
+	propsMap := map[string]any{
+		"threads":   threads,
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(propsMap)
+	if err != nil {
+		a.logger.Error("failed to marshal threads props", "error", err)
+		propsJSON = []byte(`{"threads":[],"csrfToken":""}`)
+	}
+
 	data := threadsPageData{
 		Title:     "Threads",
 		User:      user,
-		Threads:   threads,
 		CSRFToken: csrfToken,
+		PropsJSON: template.JS(propsJSON),
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
@@ -334,14 +405,29 @@ func (a *Admin) renderMessagesList(w http.ResponseWriter, messages []*store.Mess
 	}
 }
 
-// renderToolsPage renders the tools management page.
-func (a *Admin) renderToolsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+// renderToolsPage renders the tools management page with Svelte island.
+func (a *Admin) renderToolsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string, packs []packItem) {
 	tmpl := parseTemplate("templates/base.html", "templates/tools.html")
+
+	if packs == nil {
+		packs = []packItem{}
+	}
+
+	propsMap := map[string]any{
+		"packs":     packs,
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(propsMap)
+	if err != nil {
+		a.logger.Error("failed to marshal tools props", "error", err)
+		propsJSON = []byte(`{"packs":[],"csrfToken":""}`)
+	}
 
 	data := toolsPageData{
 		Title:     "Tools",
 		User:      user,
 		CSRFToken: csrfToken,
+		PropsJSON: template.JS(propsJSON),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -364,14 +450,29 @@ func (a *Admin) renderToolsList(w http.ResponseWriter, packItems []packItem) {
 	}
 }
 
-// renderAgentsPage renders the agents management page.
-func (a *Admin) renderAgentsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+// renderAgentsPage renders the agents management page with Svelte island.
+func (a *Admin) renderAgentsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string, agents []agentItem) {
 	tmpl := parseTemplate("templates/base.html", "templates/agents.html")
+
+	if agents == nil {
+		agents = []agentItem{}
+	}
+
+	propsMap := map[string]any{
+		"agents":    agents,
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(propsMap)
+	if err != nil {
+		a.logger.Error("failed to marshal agents props", "error", err)
+		propsJSON = []byte(`{"agents":[],"csrfToken":""}`)
+	}
 
 	data := agentsPageData{
 		Title:     "Agents",
 		User:      user,
 		CSRFToken: csrfToken,
+		PropsJSON: template.JS(propsJSON),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -607,6 +708,7 @@ type usagePageData struct {
 	Title     string
 	User      *store.AdminUser
 	CSRFToken string
+	PropsJSON template.JS // Pre-built JSON for Svelte island (safe: server-generated)
 }
 
 type usageStatsData struct {
@@ -619,14 +721,44 @@ type usageStatsData struct {
 	RequestCount    int64
 }
 
-// renderUsagePage renders the token usage analytics page.
-func (a *Admin) renderUsagePage(w http.ResponseWriter, user *store.AdminUser, csrfToken string) {
+// renderUsagePage renders the token usage analytics page with pre-fetched props for the Svelte island.
+func (a *Admin) renderUsagePage(w http.ResponseWriter, user *store.AdminUser, csrfToken string, usage *store.UsageStats) {
 	tmpl := parseTemplate("templates/base.html", "templates/usage.html")
+
+	usageMap := map[string]int64{
+		"totalInput":      0,
+		"totalOutput":     0,
+		"totalCacheRead":  0,
+		"totalCacheWrite": 0,
+		"totalThinking":   0,
+		"totalTokens":     0,
+		"requestCount":    0,
+	}
+	if usage != nil {
+		usageMap["totalInput"] = usage.TotalInput
+		usageMap["totalOutput"] = usage.TotalOutput
+		usageMap["totalCacheRead"] = usage.TotalCacheRead
+		usageMap["totalCacheWrite"] = usage.TotalCacheWrite
+		usageMap["totalThinking"] = usage.TotalThinking
+		usageMap["totalTokens"] = usage.TotalTokens
+		usageMap["requestCount"] = usage.RequestCount
+	}
+
+	props := map[string]any{
+		"stats":     usageMap,
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal usage props", "error", err)
+		propsJSON = []byte("{}")
+	}
 
 	data := usagePageData{
 		Title:     "Token Usage",
 		User:      user,
 		CSRFToken: csrfToken,
+		PropsJSON: template.JS(propsJSON),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
