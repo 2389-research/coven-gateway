@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
   import Button from './Button.svelte';
   import Card from './Card.svelte';
@@ -31,10 +32,11 @@
   interface Props {
     secrets?: SecretItem[];
     agents?: Agent[];
+    userName?: string;
     csrfToken: string;
   }
 
-  let { secrets = [] as SecretItem[], agents = [] as Agent[], csrfToken }: Props = $props();
+  let { secrets = [] as SecretItem[], agents = [] as Agent[], userName = '', csrfToken }: Props = $props();
 
   let scopeFilter = $state('');
   let loading = $state(false);
@@ -156,7 +158,8 @@
   }
 </script>
 
-<div data-testid="secrets-page" class="space-y-6">
+<AdminLayout activePage="secrets" {userName} {csrfToken}>
+<div data-testid="secrets-page" class="space-y-6 p-6">
   <!-- Create Secret Form -->
   <Card>
     {#snippet children()}
@@ -167,7 +170,7 @@
       </div>
       <div class="p-6">
         {#if createError}
-          <div class="mb-4 px-4 py-2 bg-[var(--color-danger-50)] border border-[var(--color-danger-200)] rounded-[var(--border-radius-md)] text-[var(--color-danger-700)] text-[length:var(--typography-fontSize-sm)]">
+          <div class="mb-4 px-4 py-2 bg-[var(--cg-danger-subtleBg)] border border-[var(--cg-danger-subtleBorder)] rounded-[var(--border-radius-md)] text-[var(--cg-danger-subtleFg)] text-[length:var(--typography-fontSize-sm)]">
             {createError}
           </div>
         {/if}
@@ -330,3 +333,4 @@
     </div>
   {/snippet}
 </Dialog>
+</AdminLayout>

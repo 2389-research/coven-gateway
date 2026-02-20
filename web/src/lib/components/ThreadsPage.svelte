@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Card from './Card.svelte';
   import CodeText from './CodeText.svelte';
   import EmptyState from './EmptyState.svelte';
@@ -20,10 +21,11 @@
 
   interface Props {
     threads?: Thread[];
+    userName?: string;
     csrfToken: string;
   }
 
-  let { threads = [] as Thread[], csrfToken }: Props = $props();
+  let { threads = [] as Thread[], userName = '', csrfToken }: Props = $props();
   let loading = $state(false);
 
   async function refresh() {
@@ -50,7 +52,8 @@
   }
 </script>
 
-<div data-testid="threads-page">
+<AdminLayout activePage="threads" {userName} {csrfToken}>
+<div data-testid="threads-page" class="p-6">
   <Card>
     {#snippet children()}
       <div class="px-6 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -138,3 +141,4 @@
     {/snippet}
   </Card>
 </div>
+</AdminLayout>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
   import Card from './Card.svelte';
   import EmptyState from './EmptyState.svelte';
@@ -19,10 +20,11 @@
 
   interface Props {
     entries?: LogEntry[];
+    userName?: string;
     csrfToken: string;
   }
 
-  let { entries = [] as LogEntry[], csrfToken }: Props = $props();
+  let { entries = [] as LogEntry[], userName = '', csrfToken }: Props = $props();
   let loading = $state(false);
   let searchQuery = $state('');
 
@@ -53,7 +55,8 @@
   }
 </script>
 
-<div data-testid="logs-page" class="max-w-screen-xl mx-auto space-y-6">
+<AdminLayout activePage="logs" {userName} {csrfToken}>
+<div data-testid="logs-page" class="max-w-screen-xl mx-auto space-y-6 p-6">
   <!-- Search -->
   <Card>
     {#snippet children()}
@@ -155,3 +158,4 @@
     {/snippet}
   </Card>
 </div>
+</AdminLayout>

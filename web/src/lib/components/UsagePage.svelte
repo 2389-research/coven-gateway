@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Card from './Card.svelte';
 
   interface UsageStats {
@@ -13,6 +14,7 @@
 
   interface Props {
     stats?: UsageStats;
+    userName?: string;
     csrfToken: string;
   }
 
@@ -26,6 +28,7 @@
       totalTokens: 0,
       requestCount: 0,
     } as UsageStats,
+    userName = '',
     csrfToken,
   }: Props = $props();
 
@@ -60,7 +63,8 @@
   ];
 </script>
 
-<div data-testid="usage-page" class="space-y-6">
+<AdminLayout activePage="usage" {userName} {csrfToken}>
+<div data-testid="usage-page" class="space-y-6 p-6">
   <!-- Page Header -->
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
     <div>
@@ -111,3 +115,4 @@
     {/snippet}
   </Card>
 </div>
+</AdminLayout>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
   import Card from './Card.svelte';
   import CodeText from './CodeText.svelte';
@@ -22,10 +23,11 @@
 
   interface Props {
     codes?: LinkCodeItem[];
+    userName?: string;
     csrfToken: string;
   }
 
-  let { codes = [] as LinkCodeItem[], csrfToken }: Props = $props();
+  let { codes = [] as LinkCodeItem[], userName = '', csrfToken }: Props = $props();
   let approving = $state<Record<string, boolean>>({});
   let approved = $state<Record<string, boolean>>({});
 
@@ -72,21 +74,14 @@
   }
 </script>
 
+<AdminLayout activePage="dashboard" {userName} {csrfToken}>
 <div data-testid="link-page" class="max-w-4xl mx-auto p-6 space-y-6">
   <!-- Header -->
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-[length:var(--typography-fontSize-2xl)] font-[var(--typography-fontWeight-bold)] text-fg">
-        Device Linking
-      </h1>
-      <p class="text-fgMuted text-[length:var(--typography-fontSize-sm)] mt-1">Approve devices requesting to connect</p>
-    </div>
-    <a
-      href="/admin/"
-      class="text-[length:var(--typography-fontSize-sm)] text-fgMuted hover:text-fg"
-    >
-      &larr; Back to Admin
-    </a>
+  <div>
+    <h1 class="text-[length:var(--typography-fontSize-2xl)] font-[var(--typography-fontWeight-bold)] text-fg">
+      Device Linking
+    </h1>
+    <p class="text-fgMuted text-[length:var(--typography-fontSize-sm)] mt-1">Approve devices requesting to connect</p>
   </div>
 
   <!-- Pending Codes Table -->
@@ -213,3 +208,4 @@
     {/snippet}
   </Card>
 </div>
+</AdminLayout>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
   import Card from './Card.svelte';
   import EmptyState from './EmptyState.svelte';
@@ -19,10 +20,11 @@
 
   interface Props {
     threads?: BoardThread[];
+    userName?: string;
     csrfToken: string;
   }
 
-  let { threads = [] as BoardThread[], csrfToken }: Props = $props();
+  let { threads = [] as BoardThread[], userName = '', csrfToken }: Props = $props();
   let loading = $state(false);
   let selectedThread = $state<ThreadDetail | null>(null);
 
@@ -62,7 +64,8 @@
   }
 </script>
 
-<div data-testid="board-page" class="max-w-screen-xl mx-auto space-y-6">
+<AdminLayout activePage="board" {userName} {csrfToken}>
+<div data-testid="board-page" class="max-w-screen-xl mx-auto space-y-6 p-6">
   {#if selectedThread}
     <!-- Thread Detail View -->
     <Card>
@@ -180,3 +183,4 @@
     </Card>
   {/if}
 </div>
+</AdminLayout>

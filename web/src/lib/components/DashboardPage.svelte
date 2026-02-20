@@ -1,6 +1,9 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
+  import Button from './Button.svelte';
   import Card from './Card.svelte';
+  import CopyButton from './CopyButton.svelte';
   import EmptyState from './EmptyState.svelte';
   import Table from './Table.svelte';
   import TableHead from './TableHead.svelte';
@@ -8,6 +11,7 @@
   import TableRow from './TableRow.svelte';
   import TableHeader from './TableHeader.svelte';
   import TableCell from './TableCell.svelte';
+  import { isWebAuthnSupported, registerPasskey } from '../utils/webauthn';
 
   interface Agent {
     id: string;
@@ -43,6 +47,7 @@
     usage?: UsageStats;
     agents?: Agent[];
     packs?: Pack[];
+    userName?: string;
     csrfToken: string;
   }
 
@@ -61,6 +66,7 @@
     } as UsageStats,
     agents = [] as Agent[],
     packs = [] as Pack[],
+    userName = '',
     csrfToken,
   }: Props = $props();
 
@@ -91,9 +97,69 @@
   }
 
   let totalPackTools = $derived(packs.reduce((sum, p) => sum + p.tools.length, 0));
+
+  // Create Invite
+  let creatingInvite = $state(false);
+  let inviteUrl = $state('');
+  let inviteError = $state('');
+
+  async function createInvite() {
+    creatingInvite = true;
+    inviteUrl = '';
+    inviteError = '';
+    try {
+      const res = await fetch('/api/admin/invites', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        inviteUrl = data.url;
+      } else {
+        inviteError = 'Failed to create invite.';
+      }
+    } catch {
+      inviteError = 'Network error.';
+    } finally {
+      creatingInvite = false;
+    }
+  }
+
+  // Passkey registration
+  let passkeySupported = $derived(isWebAuthnSupported());
+  let registeringPasskey = $state(false);
+  let passkeySuccess = $state('');
+  let passkeyError = $state('');
+
+  async function addPasskey() {
+    registeringPasskey = true;
+    passkeySuccess = '';
+    passkeyError = '';
+    try {
+      await registerPasskey(csrfToken);
+      passkeySuccess = 'Passkey registered successfully!';
+    } catch (err: unknown) {
+      if (err instanceof DOMException) {
+        if (err.name === 'NotAllowedError') {
+          passkeyError = 'Registration cancelled.';
+        } else if (err.name === 'InvalidStateError') {
+          passkeyError = 'This passkey is already registered.';
+        } else {
+          passkeyError = err.message || 'Registration failed.';
+        }
+      } else if (err instanceof Error) {
+        passkeyError = err.message || 'Registration failed.';
+      } else {
+        passkeyError = 'Registration failed.';
+      }
+    } finally {
+      registeringPasskey = false;
+    }
+  }
 </script>
 
-<div data-testid="dashboard-page" class="space-y-6">
+<AdminLayout activePage="dashboard" {userName} {csrfToken}>
+<div data-testid="dashboard-page" class="space-y-6 p-6">
   <!-- Stats Grid -->
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
     <Card>
@@ -144,6 +210,44 @@
       {/snippet}
     </Card>
   </div>
+
+  <!-- Quick Actions -->
+  <Card>
+    {#snippet children()}
+      <div class="px-6 py-4 border-b border-border">
+        <h3 class="text-[length:var(--typography-fontSize-lg)] font-[var(--typography-fontWeight-semibold)] text-fg">
+          Quick Actions
+        </h3>
+      </div>
+      <div class="p-6 space-y-4">
+        <div class="flex flex-wrap items-center gap-4">
+          <Button variant="secondary" onclick={createInvite} disabled={creatingInvite}>
+            {#snippet children()}{creatingInvite ? 'Creating...' : 'Create Invite Link'}{/snippet}
+          </Button>
+          {#if inviteUrl}
+            <div class="flex items-center gap-2 px-3 py-2 bg-[var(--cg-success-subtleBg)] border border-[var(--cg-success-subtleBorder)] rounded-[var(--border-radius-md)] text-[length:var(--typography-fontSize-sm)]">
+              <span class="font-mono text-fg break-all" data-testid="invite-url">{inviteUrl}</span>
+              <CopyButton value={inviteUrl} />
+            </div>
+          {/if}
+          {#if inviteError}
+            <span class="text-[length:var(--typography-fontSize-sm)] text-[var(--cg-danger-subtleFg)]" data-testid="invite-error">{inviteError}</span>
+          {/if}
+        </div>
+        <div class="flex flex-wrap items-center gap-4">
+          <Button variant="secondary" onclick={addPasskey} disabled={registeringPasskey || !passkeySupported}>
+            {#snippet children()}{registeringPasskey ? 'Registering...' : passkeySupported ? 'Add Passkey' : 'Passkeys Not Supported'}{/snippet}
+          </Button>
+          {#if passkeySuccess}
+            <span class="text-[length:var(--typography-fontSize-sm)] text-[var(--cg-success-subtleFg)]" data-testid="passkey-success">{passkeySuccess}</span>
+          {/if}
+          {#if passkeyError}
+            <span class="text-[length:var(--typography-fontSize-sm)] text-[var(--cg-danger-subtleFg)]" data-testid="passkey-error">{passkeyError}</span>
+          {/if}
+        </div>
+      </div>
+    {/snippet}
+  </Card>
 
   <!-- Token Usage Panel -->
   <Card>
@@ -305,3 +409,4 @@
     {/snippet}
   </Card>
 </div>
+</AdminLayout>

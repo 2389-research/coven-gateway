@@ -12,7 +12,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         auto: resolve(__dirname, 'src/islands/auto.ts'),
-        chat: resolve(__dirname, 'src/islands/chat.ts'),
       },
       output: {
         entryFileNames: 'js/[name].[hash].js',

@@ -1,5 +1,9 @@
-{{/* ABOUTME: Device linking approval page */}}
-{{/* ABOUTME: Shows pending link requests for admin approval */}}
+{{/* ABOUTME: Device linking page — minimal Svelte island mount point */}}
 {{define "content"}}
-<div data-island="link-page"><script type="application/json">{{.PropsJSON}}</script></div>
+<div data-island="link-page">
+    <script type="application/json">{{.PropsJSON}}</script>
+    <noscript>
+        <p>JavaScript is required to view device linking.</p>
+    </noscript>
+</div>
 {{end}}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
   import Button from './Button.svelte';
   import Card from './Card.svelte';
@@ -26,10 +27,11 @@
 
   interface Props {
     principals?: Principal[];
+    userName?: string;
     csrfToken: string;
   }
 
-  let { principals = [] as Principal[], csrfToken }: Props = $props();
+  let { principals = [] as Principal[], userName = '', csrfToken }: Props = $props();
   let typeFilter = $state('');
   let statusFilter = $state('');
   let loading = $state(false);
@@ -118,7 +120,8 @@
   }
 </script>
 
-<div data-testid="principals-page">
+<AdminLayout activePage="principals" {userName} {csrfToken}>
+<div data-testid="principals-page" class="p-6">
   <Card>
     {#snippet children()}
       <div class="px-6 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -252,3 +255,4 @@
     </div>
   {/snippet}
 </Dialog>
+</AdminLayout>

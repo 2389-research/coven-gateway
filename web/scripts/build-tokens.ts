@@ -187,6 +187,7 @@ for (const [varName] of lightSemantic) {
 
 // Font family — override Tailwind defaults with our token-defined stack
 theme += '\n  --font-family-sans: var(--typography-fontFamily-sans);\n';
+theme += '  --font-family-serif: var(--typography-fontFamily-serif);\n';
 theme += '  --font-family-mono: var(--typography-fontFamily-mono);\n';
 
 theme += '}\n';

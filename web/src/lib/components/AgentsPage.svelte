@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
   import Card from './Card.svelte';
   import CodeText from './CodeText.svelte';
@@ -18,10 +19,11 @@
 
   interface Props {
     agents?: Agent[];
+    userName?: string;
     csrfToken: string;
   }
 
-  let { agents = [] as Agent[], csrfToken }: Props = $props();
+  let { agents = [] as Agent[], userName = '', csrfToken }: Props = $props();
   let loading = $state(false);
 
   async function refresh() {
@@ -37,7 +39,8 @@
   }
 </script>
 
-<div data-testid="agents-page">
+<AdminLayout activePage="agents" {userName} {csrfToken}>
+<div data-testid="agents-page" class="p-6">
   <Card>
     {#snippet children()}
       <div class="px-6 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -118,3 +121,4 @@
     {/snippet}
   </Card>
 </div>
+</AdminLayout>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
   import Card from './Card.svelte';
   import EmptyState from './EmptyState.svelte';
@@ -24,10 +25,11 @@
 
   interface Props {
     packs?: Pack[];
+    userName?: string;
     csrfToken: string;
   }
 
-  let { packs = [] as Pack[], csrfToken }: Props = $props();
+  let { packs = [] as Pack[], userName = '', csrfToken }: Props = $props();
   let loading = $state(false);
 
   let totalTools = $derived(packs.reduce((sum, p) => sum + p.tools.length, 0));
@@ -45,7 +47,8 @@
   }
 </script>
 
-<div data-testid="tools-page">
+<AdminLayout activePage="tools" {userName} {csrfToken}>
+<div data-testid="tools-page" class="p-6">
   <Card>
     {#snippet children()}
       <div class="px-6 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -133,3 +136,4 @@
     {/snippet}
   </Card>
 </div>
+</AdminLayout>

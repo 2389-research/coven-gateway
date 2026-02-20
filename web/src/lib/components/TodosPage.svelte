@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
   import Card from './Card.svelte';
   import EmptyState from './EmptyState.svelte';
@@ -23,10 +24,11 @@
 
   interface Props {
     todos?: TodoItem[];
+    userName?: string;
     csrfToken: string;
   }
 
-  let { todos = [] as TodoItem[], csrfToken }: Props = $props();
+  let { todos = [] as TodoItem[], userName = '', csrfToken }: Props = $props();
   let loading = $state(false);
 
   function formatTime(iso: string): string {
@@ -63,7 +65,8 @@
   }
 </script>
 
-<div data-testid="todos-page" class="max-w-screen-xl mx-auto">
+<AdminLayout activePage="todos" {userName} {csrfToken}>
+<div data-testid="todos-page" class="max-w-screen-xl mx-auto p-6">
   <Card>
     {#snippet children()}
       <div class="px-6 py-4 border-b border-border flex items-center justify-between">
@@ -168,3 +171,4 @@
     {/snippet}
   </Card>
 </div>
+</AdminLayout>

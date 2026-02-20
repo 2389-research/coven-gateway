@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
   import Card from './Card.svelte';
   import CodeText from './CodeText.svelte';
@@ -32,10 +33,11 @@
   interface Props {
     agent: Agent;
     threads?: ThreadItem[];
+    userName?: string;
     csrfToken: string;
   }
 
-  let { agent, threads = [] as ThreadItem[], csrfToken }: Props = $props();
+  let { agent, threads = [] as ThreadItem[], userName = '', csrfToken }: Props = $props();
 
   function formatTime(iso: string): string {
     if (!iso) return '\u2014';
@@ -45,7 +47,8 @@
   }
 </script>
 
-<div data-testid="agent-detail-page" class="space-y-6">
+<AdminLayout activePage="agents" {userName} {csrfToken}>
+<div data-testid="agent-detail-page" class="space-y-6 p-6">
   <!-- Agent Info Card -->
   <Card>
     {#snippet children()}
@@ -53,13 +56,13 @@
         <div class="flex items-start justify-between">
           <div class="flex items-center gap-4">
             <div class="relative">
-              <div class="w-16 h-16 rounded-xl {agent.Connected ? 'bg-[var(--color-success-100)]' : 'bg-surfaceRaised'} flex items-center justify-center">
-                <svg class="w-8 h-8 {agent.Connected ? 'text-[var(--color-success-600)]' : 'text-fgMuted'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="w-16 h-16 rounded-xl {agent.Connected ? 'bg-[var(--cg-success-subtleBg)]' : 'bg-surfaceRaised'} flex items-center justify-center">
+                <svg class="w-8 h-8 {agent.Connected ? 'text-[var(--cg-success-subtleFg)]' : 'text-fgMuted'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                 </svg>
               </div>
               {#if agent.Connected}
-                <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-[var(--color-success-600)] rounded-full border-2 border-surface"></div>
+                <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-[var(--cg-success-solidBg)] rounded-full border-2 border-surface"></div>
               {/if}
             </div>
             <div>
@@ -215,3 +218,4 @@
     {/snippet}
   </Card>
 </div>
+</AdminLayout>

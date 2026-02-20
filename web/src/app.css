@@ -16,6 +16,15 @@
   src: url('./fonts/InterVariable.woff2') format('woff2');
 }
 
+/* Self-hosted Instrument Serif — used for "Coven" branding text. */
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/InstrumentSerif.woff2') format('woff2');
+}
+
 /* Shared animation keyframes for components (Toast slide-in, Dialog backdrop). */
 @keyframes slide-in {
   from { opacity: 0; transform: translateY(0.5rem); }

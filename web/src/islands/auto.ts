@@ -12,6 +12,7 @@ const registry: Record<string, () => Promise<{ default: any }>> = {
   'agent-detail-page': () => import('../lib/components/AgentDetailPage.svelte'),
   'agents-page': () => import('../lib/components/AgentsPage.svelte'),
   'board-page': () => import('../lib/components/BoardPage.svelte'),
+  'chat-app': () => import('../lib/components/ChatApp.svelte'),
   'connection-badge': () => import('../lib/components/ConnectionBadge.svelte'),
   'dashboard-page': () => import('../lib/components/DashboardPage.svelte'),
   'link-page': () => import('../lib/components/LinkPage.svelte'),

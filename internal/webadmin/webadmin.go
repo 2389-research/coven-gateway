@@ -262,26 +262,11 @@ func (a *Admin) registerRootRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/link/request", a.handleLinkRequest)
 	mux.HandleFunc("GET /api/link/status/{code}", a.handleLinkStatus)
 
-	// Chat HTMX partials and SSE
-	mux.HandleFunc("GET /agents/list", a.requireAuth(a.handleAgentList))
-	mux.HandleFunc("GET /chatview/agent/{id}", a.requireAuth(a.handleAgentChatView))
-	mux.HandleFunc("GET /chatview/empty", a.requireAuth(a.handleEmptyState))
-	mux.HandleFunc("GET /agents/count", a.requireAuth(a.handleAgentCount))
+	// Chat API and SSE
 	mux.HandleFunc("GET /api/agents", a.requireAuth(a.handleAgentsJSON))
 	mux.HandleFunc("GET /chat/{id}/send", a.requireAuth(a.handleChatSend))
 	mux.HandleFunc("POST /chat/{id}/send", a.requireAuth(a.handleChatSend))
 	mux.HandleFunc("GET /chat/{id}/stream", a.requireAuth(a.handleChatStream))
-
-	// Settings modal tabs (htmx partials)
-	mux.HandleFunc("GET /settings/agents", a.requireAuth(a.handleSettingsAgents))
-	mux.HandleFunc("GET /settings/tools", a.requireAuth(a.handleSettingsTools))
-	mux.HandleFunc("GET /settings/security", a.requireAuth(a.handleSettingsSecurity))
-	mux.HandleFunc("GET /settings/help", a.requireAuth(a.handleSettingsHelp))
-
-	// Stats (htmx partials for chat app)
-	mux.HandleFunc("GET /stats/agents", a.requireAuth(a.handleStatsAgents))
-	mux.HandleFunc("GET /stats/packs", a.requireAuth(a.handleStatsPacks))
-	mux.HandleFunc("GET /stats/tokens", a.requireAuth(a.handleStatsTokens))
 
 	// WebAuthn/Passkey routes
 	mux.HandleFunc("POST /webauthn/register/begin", a.requireAuth(a.handleWebAuthnRegisterBegin))
@@ -368,6 +353,7 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 
 	// Invite management
 	mux.HandleFunc("POST /admin/invites/create", a.requireAuth(a.handleCreateInvite))
+	mux.HandleFunc("POST /api/admin/invites", a.requireAuth(a.handleCreateInviteJSON))
 }
 
 // RegisterRoutes registers all admin routes on the given mux.
@@ -999,15 +985,6 @@ func (a *Admin) handleDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleStatsAgents returns connected agent count (htmx partial).
-func (a *Admin) handleStatsAgents(w http.ResponseWriter, r *http.Request) {
-	count := 0
-	if a.manager != nil {
-		count = len(a.manager.ListAgents())
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = fmt.Fprintf(w, "%d", count)
-}
-
 // listAgentItems returns the current connected agents as display items.
 func (a *Admin) listAgentItems() []agentItem {
 	var agents []agentItem
@@ -1187,21 +1164,11 @@ func (a *Admin) handleAgentDetailJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleCreateInvite creates a new invite link.
-func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
-	// Validate CSRF (htmx sends via header)
-	if !a.validateCSRF(r) {
-		http.Error(w, "Invalid request", http.StatusForbidden)
-		return
-	}
-
-	user := getUserFromContext(r)
-
+// createInviteToken generates and stores a new invite token, returning the invite URL.
+func (a *Admin) createInviteToken(ctx context.Context, user *store.AdminUser) (string, error) {
 	token, err := generateSecureToken(32)
 	if err != nil {
-		a.logger.Error("failed to generate invite token", "error", err)
-		http.Error(w, "Failed to create invite", http.StatusInternalServerError)
-		return
+		return "", fmt.Errorf("generate token: %w", err)
 	}
 
 	invite := &store.AdminInvite{
@@ -1211,17 +1178,50 @@ func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: time.Now().Add(InviteDuration),
 	}
 
-	if err := a.store.CreateAdminInvite(r.Context(), invite); err != nil {
+	if err := a.store.CreateAdminInvite(ctx, invite); err != nil {
+		return "", fmt.Errorf("store invite: %w", err)
+	}
+
+	inviteURL := a.config.BaseURL + "/invite/" + token
+	a.logger.Info("created admin invite", "created_by", user.Username, "token", token)
+	return inviteURL, nil
+}
+
+// handleCreateInvite creates a new invite link and returns HTML.
+func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	inviteURL, err := a.createInviteToken(r.Context(), getUserFromContext(r))
+	if err != nil {
 		a.logger.Error("failed to create invite", "error", err)
 		http.Error(w, "Failed to create invite", http.StatusInternalServerError)
 		return
 	}
 
-	inviteURL := a.config.BaseURL + "/invite/" + token
-	a.logger.Info("created admin invite", "created_by", user.Username, "token", token)
-
-	// Return the invite URL using template for proper escaping
 	a.renderInviteCreated(w, inviteURL)
+}
+
+// handleCreateInviteJSON creates a new invite link and returns JSON.
+func (a *Admin) handleCreateInviteJSON(w http.ResponseWriter, r *http.Request) {
+	if !a.validateCSRF(r) {
+		http.Error(w, "Invalid request", http.StatusForbidden)
+		return
+	}
+
+	inviteURL, err := a.createInviteToken(r.Context(), getUserFromContext(r))
+	if err != nil {
+		a.logger.Error("failed to create invite", "error", err)
+		http.Error(w, "Failed to create invite", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"url": inviteURL}); err != nil {
+		a.logger.Error("failed to encode invite response", "error", err)
+	}
 }
 
 // =============================================================================
@@ -1308,16 +1308,6 @@ func (a *Admin) handleToolsJSON(w http.ResponseWriter, r *http.Request) {
 func (a *Admin) handleToolsList(w http.ResponseWriter, r *http.Request) {
 	items := a.listPackItems()
 	a.renderToolsList(w, items)
-}
-
-// handleStatsPacks returns the registered pack count (htmx partial).
-func (a *Admin) handleStatsPacks(w http.ResponseWriter, r *http.Request) {
-	count := 0
-	if a.registry != nil {
-		count = len(a.registry.ListPacks()) + len(a.registry.ListBuiltinPacks())
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = fmt.Fprintf(w, "%d", count)
 }
 
 // =============================================================================
@@ -2555,28 +2545,6 @@ func (a *Admin) handleUsagePage(w http.ResponseWriter, r *http.Request) {
 	usage, _ := a.store.GetUsageStats(r.Context(), store.UsageFilter{})
 
 	a.renderUsagePage(w, user, csrfToken, usage)
-}
-
-// handleStatsTokens returns token usage stats (htmx partial).
-func (a *Admin) handleStatsTokens(w http.ResponseWriter, r *http.Request) {
-	// Get stats with optional filters
-	filter := store.UsageFilter{}
-
-	// Parse time range if specified
-	if sinceStr := r.URL.Query().Get("since"); sinceStr != "" {
-		if since, err := time.Parse(time.RFC3339, sinceStr); err == nil {
-			filter.Since = &since
-		}
-	}
-
-	stats, err := a.store.GetUsageStats(r.Context(), filter)
-	if err != nil {
-		a.logger.Error("failed to get usage stats", "error", err)
-		http.Error(w, "Failed to load stats", http.StatusInternalServerError)
-		return
-	}
-
-	a.renderUsageStats(w, stats)
 }
 
 // handleDashboardJSON returns all dashboard data as JSON for the Svelte island refresh.

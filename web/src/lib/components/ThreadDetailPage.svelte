@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
   import Card from './Card.svelte';
   import CodeText from './CodeText.svelte';
@@ -26,10 +27,11 @@
   interface Props {
     thread: ThreadInfo;
     messages?: MessageItem[];
+    userName?: string;
     csrfToken: string;
   }
 
-  let { thread, messages = [] as MessageItem[], csrfToken }: Props = $props();
+  let { thread, messages = [] as MessageItem[], userName = '', csrfToken }: Props = $props();
 
   function formatTime(iso: string): string {
     if (!iso) return '\u2014';
@@ -50,7 +52,8 @@
   }
 </script>
 
-<div data-testid="thread-detail-page" class="space-y-6">
+<AdminLayout activePage="threads" {userName} {csrfToken}>
+<div data-testid="thread-detail-page" class="space-y-6 p-6">
   <!-- Thread Info Card -->
   <Card>
     {#snippet children()}
@@ -149,3 +152,4 @@
     {/snippet}
   </Card>
 </div>
+</AdminLayout>

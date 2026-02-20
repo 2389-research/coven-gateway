@@ -231,6 +231,7 @@ func (a *Admin) renderDashboard(w http.ResponseWriter, user *store.AdminUser, cs
 		"usage":       usageMap,
 		"agents":      agents,
 		"packs":       packs,
+		"userName":    user.DisplayName,
 		"csrfToken":   csrfToken,
 	}
 	propsJSON, err := json.Marshal(props)
@@ -304,6 +305,7 @@ func (a *Admin) renderPrincipalsPage(w http.ResponseWriter, user *store.AdminUse
 	// Use template.HTML to prevent Go's html/template from escaping inside <script>.
 	propsMap := map[string]any{
 		"principals": principals,
+		"userName":   user.DisplayName,
 		"csrfToken":  csrfToken,
 	}
 	propsJSON, err := json.Marshal(propsMap)
@@ -351,6 +353,7 @@ func (a *Admin) renderThreadsPageWithData(w http.ResponseWriter, user *store.Adm
 
 	propsMap := map[string]any{
 		"threads":   threads,
+		"userName":  user.DisplayName,
 		"csrfToken": csrfToken,
 	}
 	propsJSON, err := json.Marshal(propsMap)
@@ -412,6 +415,7 @@ func (a *Admin) renderThreadDetail(w http.ResponseWriter, user *store.AdminUser,
 	props := map[string]any{
 		"thread":    threadProps,
 		"messages":  msgItems,
+		"userName":  user.DisplayName,
 		"csrfToken": csrfToken,
 	}
 	propsJSON, err := json.Marshal(props)
@@ -457,6 +461,7 @@ func (a *Admin) renderToolsPage(w http.ResponseWriter, user *store.AdminUser, cs
 
 	propsMap := map[string]any{
 		"packs":     packs,
+		"userName":  user.DisplayName,
 		"csrfToken": csrfToken,
 	}
 	propsJSON, err := json.Marshal(propsMap)
@@ -502,6 +507,7 @@ func (a *Admin) renderAgentsPage(w http.ResponseWriter, user *store.AdminUser, c
 
 	propsMap := map[string]any{
 		"agents":    agents,
+		"userName":  user.DisplayName,
 		"csrfToken": csrfToken,
 	}
 	propsJSON, err := json.Marshal(propsMap)
@@ -558,6 +564,7 @@ func (a *Admin) renderAgentDetail(w http.ResponseWriter, user *store.AdminUser, 
 	props := map[string]any{
 		"agent":     agent,
 		"threads":   threadItems,
+		"userName":  user.DisplayName,
 		"csrfToken": csrfToken,
 	}
 	propsJSON, err := json.Marshal(props)
@@ -645,6 +652,7 @@ func (a *Admin) renderLinkPage(w http.ResponseWriter, user *store.AdminUser, cod
 
 	props := map[string]any{
 		"codes":     items,
+		"userName":  user.DisplayName,
 		"csrfToken": csrfToken,
 	}
 	propsJSON, err := json.Marshal(props)
@@ -713,6 +721,7 @@ func (a *Admin) renderLogsPage(w http.ResponseWriter, user *store.AdminUser, ent
 
 	props := map[string]any{
 		"entries":   items,
+		"userName":  user.DisplayName,
 		"csrfToken": csrfToken,
 	}
 	propsJSON, err := json.Marshal(props)
@@ -804,6 +813,7 @@ func (a *Admin) renderTodosPage(w http.ResponseWriter, user *store.AdminUser, to
 
 	props := map[string]any{
 		"todos":     items,
+		"userName":  user.DisplayName,
 		"csrfToken": csrfToken,
 	}
 	propsJSON, err := json.Marshal(props)
@@ -888,6 +898,7 @@ func (a *Admin) renderBoardPage(w http.ResponseWriter, user *store.AdminUser, th
 
 	props := map[string]any{
 		"threads":   items,
+		"userName":  user.DisplayName,
 		"csrfToken": csrfToken,
 	}
 	propsJSON, err := json.Marshal(props)
@@ -948,16 +959,6 @@ type usagePageData struct {
 	PropsJSON template.JS // Pre-built JSON for Svelte island (safe: server-generated)
 }
 
-type usageStatsData struct {
-	TotalInput      int64
-	TotalOutput     int64
-	TotalCacheRead  int64
-	TotalCacheWrite int64
-	TotalThinking   int64
-	TotalTokens     int64
-	RequestCount    int64
-}
-
 // renderUsagePage renders the token usage analytics page with pre-fetched props for the Svelte island.
 func (a *Admin) renderUsagePage(w http.ResponseWriter, user *store.AdminUser, csrfToken string, usage *store.UsageStats) {
 	tmpl := parseTemplate("templates/base.html", "templates/usage.html")
@@ -983,6 +984,7 @@ func (a *Admin) renderUsagePage(w http.ResponseWriter, user *store.AdminUser, cs
 
 	props := map[string]any{
 		"stats":     usageMap,
+		"userName":  user.DisplayName,
 		"csrfToken": csrfToken,
 	}
 	propsJSON, err := json.Marshal(props)
@@ -1001,26 +1003,6 @@ func (a *Admin) renderUsagePage(w http.ResponseWriter, user *store.AdminUser, cs
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render usage page", "error", err)
-	}
-}
-
-// renderUsageStats renders the usage stats partial (for dashboard and usage page).
-func (a *Admin) renderUsageStats(w http.ResponseWriter, stats *store.UsageStats) {
-	tmpl := parseTemplate("templates/partials/stats_tokens.html")
-
-	data := usageStatsData{
-		TotalInput:      stats.TotalInput,
-		TotalOutput:     stats.TotalOutput,
-		TotalCacheRead:  stats.TotalCacheRead,
-		TotalCacheWrite: stats.TotalCacheWrite,
-		TotalThinking:   stats.TotalThinking,
-		TotalTokens:     stats.TotalTokens,
-		RequestCount:    stats.RequestCount,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render usage stats", "error", err)
 	}
 }
 
@@ -1065,6 +1047,7 @@ func (a *Admin) renderSecretsPage(w http.ResponseWriter, user *store.AdminUser, 
 	props := map[string]any{
 		"agents":    agents,
 		"secrets":   secrets,
+		"userName":  user.DisplayName,
 		"csrfToken": csrfToken,
 	}
 	propsJSON, err := json.Marshal(props)
