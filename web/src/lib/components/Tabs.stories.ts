@@ -5,6 +5,10 @@ const meta = {
   title: 'Navigation/Tabs',
   component: Tabs,
   tags: ['autodocs'],
+  argTypes: {
+    activeTab: { control: 'text' },
+    tabs: { control: 'object' },
+  },
 } satisfies Meta<Tabs>;
 
 export default meta;

@@ -1,25 +1,41 @@
 import type { Meta, StoryObj } from '@storybook/svelte';
 import AgentList from './AgentList.svelte';
 
+const defaultAgents = [
+  { id: 'agent-1', name: 'Claude Agent', connected: true },
+  { id: 'agent-2', name: 'Code Assistant', connected: true },
+  { id: 'agent-3', name: 'Research Bot', connected: false },
+];
+
+/**
+ * Mock fetch('/api/agents') for the lifetime of a story.
+ * Returns a cleanup function that restores the original fetch.
+ */
+function mockAgentsFetch(agents: typeof defaultAgents) {
+  return () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === '/api/agents') {
+        return new Response(JSON.stringify(agents), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return originalFetch(input, init);
+    }) as typeof fetch;
+    return () => {
+      globalThis.fetch = originalFetch;
+    };
+  };
+}
+
 const meta: Meta<AgentList> = {
   title: 'Chat/AgentList',
   component: AgentList,
-  parameters: {
-    layout: 'padded',
-    // Mock fetch to avoid real API calls in stories
-    mockData: [
-      {
-        url: '/api/agents',
-        method: 'GET',
-        status: 200,
-        response: [
-          { id: 'agent-1', name: 'Claude Agent', connected: true },
-          { id: 'agent-2', name: 'Code Assistant', connected: true },
-          { id: 'agent-3', name: 'Research Bot', connected: true },
-        ],
-      },
-    ],
-  },
+  parameters: { layout: 'padded' },
+  beforeEach: mockAgentsFetch(defaultAgents),
   tags: ['autodocs'],
 };
 
@@ -29,7 +45,7 @@ type Story = StoryObj<AgentList>;
 export const Default: Story = {
   args: {
     activeAgentId: '',
-    pollInterval: 600000, // Very long poll in stories to avoid fetching
+    pollInterval: 600000,
   },
 };
 
@@ -44,14 +60,5 @@ export const Empty: Story = {
   args: {
     pollInterval: 600000,
   },
-  parameters: {
-    mockData: [
-      {
-        url: '/api/agents',
-        method: 'GET',
-        status: 200,
-        response: [],
-      },
-    ],
-  },
+  beforeEach: mockAgentsFetch([]),
 };

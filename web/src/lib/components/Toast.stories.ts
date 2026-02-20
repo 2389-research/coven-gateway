@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Toast from './Toast.svelte';
-import { addToast } from '../stores/toast.svelte';
+import { addToast, clearToasts } from '../stores/toast.svelte';
 
 const meta = {
   title: 'Feedback/Toast',
@@ -8,6 +8,10 @@ const meta = {
   tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
+  },
+  beforeEach: () => {
+    clearToasts();
+    return () => clearToasts();
   },
 } satisfies Meta<Toast>;
 

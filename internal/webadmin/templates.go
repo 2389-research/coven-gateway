@@ -90,8 +90,7 @@ type threadsPageData struct {
 type threadDetailData struct {
 	Title     string
 	User      *store.AdminUser
-	Thread    *store.Thread
-	Messages  []*store.Message
+	PropsJSON template.JS
 	CSRFToken string
 }
 
@@ -144,8 +143,7 @@ type agentDetailItem struct {
 type agentDetailData struct {
 	Title     string
 	User      *store.AdminUser
-	Agent     agentDetailItem
-	Threads   []*store.Thread
+	PropsJSON template.JS
 	CSRFToken string
 }
 
@@ -377,11 +375,55 @@ func (a *Admin) renderThreadsPageWithData(w http.ResponseWriter, user *store.Adm
 func (a *Admin) renderThreadDetail(w http.ResponseWriter, user *store.AdminUser, thread *store.Thread, messages []*store.Message, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/thread_detail.html")
 
+	if messages == nil {
+		messages = []*store.Message{}
+	}
+
+	type messageJSON struct {
+		ID        string `json:"ID"`
+		Sender    string `json:"Sender"`
+		Content   string `json:"Content"`
+		Type      string `json:"Type"`
+		ToolName  string `json:"ToolName"`
+		ToolID    string `json:"ToolID"`
+		CreatedAt string `json:"CreatedAt"`
+	}
+	msgItems := make([]messageJSON, 0, len(messages))
+	for _, m := range messages {
+		msgItems = append(msgItems, messageJSON{
+			ID:        m.ID,
+			Sender:    m.Sender,
+			Content:   m.Content,
+			Type:      m.Type,
+			ToolName:  m.ToolName,
+			ToolID:    m.ToolID,
+			CreatedAt: m.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	threadProps := map[string]any{
+		"ID":           thread.ID,
+		"FrontendName": thread.FrontendName,
+		"AgentID":      thread.AgentID,
+		"CreatedAt":    thread.CreatedAt.Format(time.RFC3339),
+		"UpdatedAt":    thread.UpdatedAt.Format(time.RFC3339),
+	}
+
+	props := map[string]any{
+		"thread":    threadProps,
+		"messages":  msgItems,
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal thread detail props", "error", err)
+		propsJSON = []byte("{}")
+	}
+
 	data := threadDetailData{
 		Title:     "Thread Detail",
 		User:      user,
-		Thread:    thread,
-		Messages:  messages,
+		PropsJSON: template.JS(propsJSON),
 		CSRFToken: csrfToken,
 	}
 
@@ -485,11 +527,49 @@ func (a *Admin) renderAgentsPage(w http.ResponseWriter, user *store.AdminUser, c
 func (a *Admin) renderAgentDetail(w http.ResponseWriter, user *store.AdminUser, agent agentDetailItem, threads []*store.Thread, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/agent_detail.html")
 
+	if agent.Capabilities == nil {
+		agent.Capabilities = []string{}
+	}
+	if agent.Workspaces == nil {
+		agent.Workspaces = []string{}
+	}
+	if threads == nil {
+		threads = []*store.Thread{}
+	}
+
+	type threadJSON struct {
+		ID           string `json:"ID"`
+		FrontendName string `json:"FrontendName"`
+		AgentID      string `json:"AgentID"`
+		CreatedAt    string `json:"CreatedAt"`
+		UpdatedAt    string `json:"UpdatedAt"`
+	}
+	threadItems := make([]threadJSON, 0, len(threads))
+	for _, t := range threads {
+		threadItems = append(threadItems, threadJSON{
+			ID:           t.ID,
+			FrontendName: t.FrontendName,
+			AgentID:      t.AgentID,
+			CreatedAt:    t.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:    t.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+
+	props := map[string]any{
+		"agent":     agent,
+		"threads":   threadItems,
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal agent detail props", "error", err)
+		propsJSON = []byte("{}")
+	}
+
 	data := agentDetailData{
 		Title:     agent.Name + " - Agent Details",
 		User:      user,
-		Agent:     agent,
-		Threads:   threads,
+		PropsJSON: template.JS(propsJSON),
 		CSRFToken: csrfToken,
 	}
 
@@ -805,7 +885,7 @@ type secretItem struct {
 type secretsPageData struct {
 	Title     string
 	User      *store.AdminUser
-	Agents    []agentItem // for dropdown
+	PropsJSON template.JS
 	CSRFToken string
 }
 
@@ -815,13 +895,31 @@ type secretsListData struct {
 }
 
 // renderSecretsPage renders the secrets management page.
-func (a *Admin) renderSecretsPage(w http.ResponseWriter, user *store.AdminUser, agents []agentItem, csrfToken string) {
+func (a *Admin) renderSecretsPage(w http.ResponseWriter, user *store.AdminUser, agents []agentItem, secrets []secretItem, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/secrets.html")
+
+	if agents == nil {
+		agents = []agentItem{}
+	}
+	if secrets == nil {
+		secrets = []secretItem{}
+	}
+
+	props := map[string]any{
+		"agents":    agents,
+		"secrets":   secrets,
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal secrets props", "error", err)
+		propsJSON = []byte("{}")
+	}
 
 	data := secretsPageData{
 		Title:     "Secrets",
 		User:      user,
-		Agents:    agents,
+		PropsJSON: template.JS(propsJSON),
 		CSRFToken: csrfToken,
 	}
 

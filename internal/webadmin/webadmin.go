@@ -305,6 +305,7 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsPage))
 	mux.HandleFunc("GET /admin/agents/list", a.requireAuth(a.handleAgentsList))
 	mux.HandleFunc("GET /admin/agents/{id}", a.requireAuth(a.handleAgentDetail))
+	mux.HandleFunc("GET /api/admin/agents/{id}", a.requireAuth(a.handleAgentDetailJSON))
 	mux.HandleFunc("POST /admin/agents/{id}/approve", a.requireAuth(a.handleAgentApprove))
 	mux.HandleFunc("POST /admin/agents/{id}/revoke", a.requireAuth(a.handleAgentRevoke))
 
@@ -338,6 +339,7 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/threads", a.requireAuth(a.handleThreadsPage))
 	mux.HandleFunc("GET /api/admin/threads", a.requireAuth(a.handleThreadsJSON))
 	mux.HandleFunc("GET /admin/threads/{id}", a.requireAuth(a.handleThreadDetail))
+	mux.HandleFunc("GET /api/admin/threads/{id}", a.requireAuth(a.handleThreadDetailJSON))
 	mux.HandleFunc("GET /admin/threads/{id}/messages", a.requireAuth(a.handleThreadMessages))
 
 	// Legacy chat page - redirect to root chat with agent param
@@ -357,6 +359,7 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/secrets", a.requireAuth(a.handleSecretsCreate))
 	mux.HandleFunc("PUT /admin/secrets/{id}", a.requireAuth(a.handleSecretsUpdate))
 	mux.HandleFunc("DELETE /admin/secrets/{id}", a.requireAuth(a.handleSecretsDelete))
+	mux.HandleFunc("GET /api/admin/secrets", a.requireAuth(a.handleSecretsJSON))
 
 	// Invite management
 	mux.HandleFunc("POST /admin/invites/create", a.requireAuth(a.handleCreateInvite))
@@ -1138,6 +1141,47 @@ func (a *Admin) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 	a.renderAgentDetail(w, user, agentInfo, agentThreads, csrfToken)
 }
 
+// handleAgentDetailJSON returns agent detail as JSON for the Svelte island.
+func (a *Admin) handleAgentDetailJSON(w http.ResponseWriter, r *http.Request) {
+	agentID := r.PathValue("id")
+	if agentID == "" {
+		http.Error(w, "Agent ID required", http.StatusBadRequest)
+		return
+	}
+
+	agentInfo := agentDetailItem{
+		ID:        agentID,
+		Name:      agentID,
+		Connected: false,
+	}
+	if a.manager != nil {
+		for _, info := range a.manager.ListAgents() {
+			if info.ID == agentID {
+				agentInfo.Name = info.Name
+				agentInfo.Connected = true
+				agentInfo.WorkingDir = info.WorkingDir
+				agentInfo.Capabilities = info.Capabilities
+				agentInfo.Workspaces = info.Workspaces
+				agentInfo.InstanceID = info.InstanceID
+				agentInfo.Backend = info.Backend
+				break
+			}
+		}
+	}
+
+	if agentInfo.Capabilities == nil {
+		agentInfo.Capabilities = []string{}
+	}
+	if agentInfo.Workspaces == nil {
+		agentInfo.Workspaces = []string{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(agentInfo); err != nil {
+		a.logger.Error("failed to encode agent detail JSON", "error", err)
+	}
+}
+
 // handleCreateInvite creates a new invite link.
 func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 	// Validate CSRF (htmx sends via header)
@@ -1616,6 +1660,45 @@ func (a *Admin) handleThreadDetail(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
 	a.renderThreadDetail(w, user, thread, messages, csrfToken)
+}
+
+// handleThreadDetailJSON returns thread detail as JSON for the Svelte island.
+func (a *Admin) handleThreadDetailJSON(w http.ResponseWriter, r *http.Request) {
+	threadID := r.PathValue("id")
+	if threadID == "" {
+		http.Error(w, "Thread ID required", http.StatusBadRequest)
+		return
+	}
+
+	thread, err := a.store.GetThread(r.Context(), threadID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.Error(w, "Thread not found", http.StatusNotFound)
+			return
+		}
+		a.logger.Error("failed to get thread", "error", err, "thread_id", threadID)
+		http.Error(w, "Failed to load thread", http.StatusInternalServerError)
+		return
+	}
+
+	messages, err := a.store.GetThreadMessages(r.Context(), threadID, 100)
+	if err != nil {
+		a.logger.Error("failed to get thread messages", "error", err, "thread_id", threadID)
+		http.Error(w, "Failed to load messages", http.StatusInternalServerError)
+		return
+	}
+	if messages == nil {
+		messages = []*store.Message{}
+	}
+
+	result := map[string]any{
+		"thread":   thread,
+		"messages": messages,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		a.logger.Error("failed to encode thread detail JSON", "error", err)
+	}
 }
 
 // handleThreadMessages returns messages for a thread (htmx partial).
@@ -2326,39 +2409,27 @@ func (a *Admin) handleSecretsPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	a.renderSecretsPage(w, user, agents, csrfToken)
+	// Pre-fetch secrets for island props
+	secrets := a.listSecretItems(r.Context())
+
+	a.renderSecretsPage(w, user, agents, secrets, csrfToken)
 }
 
-// handleSecretsList returns the secrets list (htmx partial).
-func (a *Admin) handleSecretsList(w http.ResponseWriter, r *http.Request) {
+// listSecretItems fetches all secrets and converts to display items.
+func (a *Admin) listSecretItems(ctx context.Context) []secretItem {
 	sqlStore := a.getSQLiteStore()
 	if sqlStore == nil {
-		http.Error(w, "Server configuration error", http.StatusInternalServerError)
-		return
+		return []secretItem{}
 	}
 
-	secrets, err := sqlStore.ListAllSecrets(r.Context())
+	secrets, err := sqlStore.ListAllSecrets(ctx)
 	if err != nil {
 		a.logger.Error("failed to list secrets", "error", err)
-		http.Error(w, "Failed to load secrets", http.StatusInternalServerError)
-		return
+		return []secretItem{}
 	}
 
-	// Apply scope filter if provided
-	scopeFilter := r.URL.Query().Get("scope")
-
-	// Convert to display items
-	var items []secretItem
+	items := make([]secretItem, 0, len(secrets))
 	for _, s := range secrets {
-		// Apply scope filter
-		isGlobal := s.AgentID == nil
-		if scopeFilter == "global" && !isGlobal {
-			continue
-		}
-		if scopeFilter == "agent" && isGlobal {
-			continue
-		}
-
 		item := secretItem{
 			ID:        s.ID,
 			Key:       s.Key,
@@ -2368,11 +2439,61 @@ func (a *Admin) handleSecretsList(w http.ResponseWriter, r *http.Request) {
 		if s.AgentID != nil {
 			item.AgentID = *s.AgentID
 			item.Scope = *s.AgentID
-			item.AgentName = *s.AgentID // Use ID as display name for now
+			item.AgentName = *s.AgentID
 		} else {
 			item.Scope = "Global"
 		}
 		items = append(items, item)
+	}
+	return items
+}
+
+// handleSecretsJSON returns secrets as JSON for the Svelte island.
+func (a *Admin) handleSecretsJSON(w http.ResponseWriter, r *http.Request) {
+	items := a.listSecretItems(r.Context())
+
+	// Apply scope filter if provided
+	scopeFilter := r.URL.Query().Get("scope")
+	if scopeFilter != "" {
+		filtered := make([]secretItem, 0, len(items))
+		for _, item := range items {
+			isGlobal := item.Scope == "Global"
+			if scopeFilter == "global" && !isGlobal {
+				continue
+			}
+			if scopeFilter == "agent" && isGlobal {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		items = filtered
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(items); err != nil {
+		a.logger.Error("failed to encode secrets JSON", "error", err)
+	}
+}
+
+// handleSecretsList returns the secrets list (htmx partial).
+func (a *Admin) handleSecretsList(w http.ResponseWriter, r *http.Request) {
+	items := a.listSecretItems(r.Context())
+
+	// Apply scope filter if provided
+	scopeFilter := r.URL.Query().Get("scope")
+	if scopeFilter != "" {
+		filtered := make([]secretItem, 0, len(items))
+		for _, item := range items {
+			isGlobal := item.Scope == "Global"
+			if scopeFilter == "global" && !isGlobal {
+				continue
+			}
+			if scopeFilter == "agent" && isGlobal {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		items = filtered
 	}
 
 	csrfToken := a.ensureCSRFToken(w, r)

@@ -13,11 +13,9 @@
     variant = 'call',
     toolName,
     content,
-    expanded: initialExpanded = false,
+    expanded = false,
     class: className = '',
   }: Props = $props();
-
-  let expanded = $state(initialExpanded);
 
   function toggle() {
     expanded = !expanded;

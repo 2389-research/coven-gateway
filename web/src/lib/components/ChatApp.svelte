@@ -16,10 +16,7 @@
     class?: string;
   }
 
-  let { agentId: initialAgentId, agentName: initialAgentName, csrfToken, class: className = '' }: Props = $props();
-
-  let activeAgentId = $state(initialAgentId ?? '');
-  let activeAgentName = $state(initialAgentName ?? '');
+  let { agentId: activeAgentId = '', agentName: activeAgentName = '', csrfToken, class: className = '' }: Props = $props();
   let chat = $state<ChatStream | null>(null);
   let isSending = $state(false);
   let sidebarOpen = $state(true);
@@ -33,9 +30,11 @@
     chat = createChatStream(id);
   }
 
-  // Connect to initial agent if provided
-  if (initialAgentId) {
-    chat = createChatStream(initialAgentId);
+  // Connect to initial agent if provided (one-time init — props are static in islands)
+  // svelte-ignore state_referenced_locally
+  if (activeAgentId) {
+    // svelte-ignore state_referenced_locally
+    chat = createChatStream(activeAgentId);
   }
 
   // Cleanup on unmount
