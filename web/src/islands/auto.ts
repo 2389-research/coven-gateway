@@ -71,6 +71,9 @@ async function mountIsland(el: Element): Promise<void> {
   try {
     const mod = await loader();
     const props = readProps(el);
+    // Clear fallback content before Svelte mount (mount() appends, not replaces).
+    // Safe: no user content — only removes server-rendered loading placeholders.
+    el.textContent = '';
     const instance = mount(mod.default, { target: el, props });
     instances.set(el, instance);
   } catch (e) {
