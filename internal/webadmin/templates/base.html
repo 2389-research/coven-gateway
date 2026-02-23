@@ -1,131 +1,14 @@
-{{/* ABOUTME: Base layout template with professional business theme */}}
-{{/* ABOUTME: Provides HTML shell, fonts, and executive dashboard styling */}}
+{{/* ABOUTME: Minimal base layout — Vite handles all styles and scripts */}}
+{{/* ABOUTME: Each page island owns its own chrome via AdminLayout.svelte */}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}} | Coven</title>
-    {{/* Tailwind CSS is now served via Vite build (web/src/app.css). */}}
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    {{/* marked.js and DOMPurify are bundled via Vite for new Svelte components.
-         The legacy chat_app.html loads CDN scripts inline where needed. */}}
-    {{/* TODO(Phase 2): Remove Google Fonts CDN once old templates migrate to token font stack.
-         Inter is already self-hosted via Vite (web/src/fonts/InterVariable.woff2).
-         These CDN fonts (DM Sans, Instrument Serif, IBM Plex Mono) are only for legacy templates. */}}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'DM Sans', system-ui, sans-serif;
-            background: linear-gradient(180deg, #FAF8F5 0%, #F5F1EC 100%);
-            min-height: 100vh;
-        }
-        /* Refined selection color */
-        ::selection {
-            background: rgba(45, 90, 71, 0.15);
-        }
-        /* Elegant scrollbars */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #F5F1EC;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #D4C9BC;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #B8A896;
-        }
-        /* Focus states */
-        input:focus, select:focus, textarea:focus, button:focus {
-            outline: none;
-            box-shadow: 0 0 0 2px rgba(45, 90, 71, 0.2);
-        }
-        /* Smooth transitions */
-        a, button {
-            transition: all 0.15s ease;
-        }
-        /* Card hover effect */
-        .card-hover:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06);
-        }
-        /* Status indicator pulse */
-        @keyframes pulse-soft {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .pulse-soft {
-            animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        /* Prose-like typography for rendered markdown */
-        .prose {
-            line-height: 1.625;
-        }
-        .prose p {
-            margin-top: 0.75em;
-            margin-bottom: 0.75em;
-        }
-        .prose p:first-child {
-            margin-top: 0;
-        }
-        .prose p:last-child {
-            margin-bottom: 0;
-        }
-        .prose pre {
-            background: #F5F1EC;
-            border: 1px solid #E8E2DA;
-            border-radius: 0.375rem;
-            padding: 0.75rem 1rem;
-            overflow-x: auto;
-            margin: 0.75em 0;
-        }
-        .prose code {
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.875em;
-        }
-        .prose pre code {
-            background: transparent;
-            padding: 0;
-        }
-        .prose :not(pre) > code {
-            background: #F5F1EC;
-            padding: 0.125rem 0.25rem;
-            border-radius: 0.25rem;
-        }
-        .prose ul, .prose ol {
-            margin: 0.75em 0;
-            padding-left: 1.5em;
-        }
-        .prose li {
-            margin: 0.25em 0;
-        }
-        .prose blockquote {
-            border-left: 3px solid #D4C9BC;
-            margin: 0.75em 0;
-            padding-left: 1em;
-            color: #5A4A38;
-        }
-        .prose h1, .prose h2, .prose h3, .prose h4 {
-            margin-top: 1em;
-            margin-bottom: 0.5em;
-            font-weight: 600;
-        }
-        .prose h1:first-child, .prose h2:first-child, .prose h3:first-child {
-            margin-top: 0;
-        }
-        .prose-sm {
-            font-size: 0.875rem;
-        }
-    </style>
     {{ scriptTags "src/islands/auto.ts" }}
 </head>
-<body class="bg-cream text-ink font-sans antialiased">
+<body class="bg-[var(--cg-bg)] text-[var(--cg-fg)] font-[var(--typography-fontFamily-sans)] antialiased">
     <div class="min-h-screen">
         {{template "content" .}}
     </div>

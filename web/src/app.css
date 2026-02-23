@@ -4,7 +4,7 @@
 @import './styles/legacy-theme.css';
 
 /* Scan Go HTML templates so Tailwind generates their utility classes.
- * Remove this @source when legacy templates are fully migrated. */
+ * Remove this @source when auth templates (setup, invite) are migrated. */
 @source "../../internal/webadmin/templates";
 
 /* Self-hosted Inter variable font — eliminates Google Fonts CDN dependency. */

@@ -100,14 +100,6 @@ test.describe('Chat smoke test', () => {
     await expect(emptyState).toBeVisible({ timeout: 5000 });
   });
 
-  test('settings modal opens with Cmd+K', async ({ page }) => {
-    const chatApp = page.locator('[data-testid="chat-app"]');
-    await expect(chatApp).toBeVisible({ timeout: 10000 });
-
-    await page.keyboard.press('Meta+k');
-    const settingsModal = page.locator('[data-testid="settings-modal"]');
-    await expect(settingsModal).toBeVisible({ timeout: 3000 });
-  });
 
   test('connection badge is present', async ({ page }) => {
     const badge = page.locator('[data-island="connection-badge"]');

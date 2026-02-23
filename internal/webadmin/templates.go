@@ -60,24 +60,11 @@ type agentItem struct {
 	Connected bool   `json:"connected"`
 }
 
-type agentsListData struct {
-	Agents []agentItem
-}
-
-type inviteCreatedData struct {
-	URL string
-}
-
 type principalsPageData struct {
 	Title     string
 	User      *store.AdminUser
 	CSRFToken string
 	PropsJSON template.JS // Pre-built JSON for Svelte island (safe: server-generated)
-}
-
-type principalsListData struct {
-	Principals []store.Principal
-	CSRFToken  string
 }
 
 type threadsPageData struct {
@@ -92,10 +79,6 @@ type threadDetailData struct {
 	User      *store.AdminUser
 	PropsJSON template.JS
 	CSRFToken string
-}
-
-type messagesListData struct {
-	Messages []*store.Message
 }
 
 type toolItem struct {
@@ -116,10 +99,6 @@ type toolsPageData struct {
 	User      *store.AdminUser
 	CSRFToken string
 	PropsJSON template.JS // Pre-built JSON for Svelte island (safe: server-generated)
-}
-
-type toolsListData struct {
-	Packs []packItem
 }
 
 type agentsPageData struct {
@@ -253,46 +232,6 @@ func (a *Admin) renderDashboard(w http.ResponseWriter, user *store.AdminUser, cs
 	}
 }
 
-// renderAgentsList renders the agents list partial.
-func (a *Admin) renderAgentsList(w http.ResponseWriter) {
-	tmpl := parseTemplate("templates/partials/agents_list.html")
-
-	// Get connected agents from manager
-	var agents []agentItem
-	if a.manager != nil {
-		for _, info := range a.manager.ListAgents() {
-			agents = append(agents, agentItem{
-				ID:        info.ID,
-				Name:      info.Name,
-				Connected: true,
-			})
-		}
-	}
-
-	data := agentsListData{
-		Agents: agents,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render agents list", "error", err)
-	}
-}
-
-// renderInviteCreated renders the invite created partial (htmx response).
-func (a *Admin) renderInviteCreated(w http.ResponseWriter, inviteURL string) {
-	tmpl := parseTemplate("templates/partials/invite_created.html")
-
-	data := inviteCreatedData{
-		URL: inviteURL,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render invite created", "error", err)
-	}
-}
-
 // renderPrincipalsPage renders the principals management page.
 func (a *Admin) renderPrincipalsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string, principals []store.Principal) {
 	tmpl := parseTemplate("templates/base.html", "templates/principals.html")
@@ -325,21 +264,6 @@ func (a *Admin) renderPrincipalsPage(w http.ResponseWriter, user *store.AdminUse
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render principals page", "error", err)
-	}
-}
-
-// renderPrincipalsList renders the principals list partial.
-func (a *Admin) renderPrincipalsList(w http.ResponseWriter, principals []store.Principal, csrfToken string) {
-	tmpl := parseTemplate("templates/partials/principals_list.html")
-
-	data := principalsListData{
-		Principals: principals,
-		CSRFToken:  csrfToken,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render principals list", "error", err)
 	}
 }
 
@@ -437,20 +361,6 @@ func (a *Admin) renderThreadDetail(w http.ResponseWriter, user *store.AdminUser,
 	}
 }
 
-// renderMessagesList renders the messages list partial.
-func (a *Admin) renderMessagesList(w http.ResponseWriter, messages []*store.Message) {
-	tmpl := parseTemplate("templates/partials/messages_list.html")
-
-	data := messagesListData{
-		Messages: messages,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render messages list", "error", err)
-	}
-}
-
 // renderToolsPage renders the tools management page with Svelte island.
 func (a *Admin) renderToolsPage(w http.ResponseWriter, user *store.AdminUser, csrfToken string, packs []packItem) {
 	tmpl := parseTemplate("templates/base.html", "templates/tools.html")
@@ -480,20 +390,6 @@ func (a *Admin) renderToolsPage(w http.ResponseWriter, user *store.AdminUser, cs
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render tools page", "error", err)
-	}
-}
-
-// renderToolsList renders the tools list partial grouped by pack.
-func (a *Admin) renderToolsList(w http.ResponseWriter, packItems []packItem) {
-	tmpl := parseTemplate("templates/partials/tools_list.html")
-
-	data := toolsListData{
-		Packs: packItems,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render tools list", "error", err)
 	}
 }
 
@@ -685,10 +581,6 @@ type logsPageData struct {
 	CSRFToken string
 }
 
-type logsListData struct {
-	Entries []*store.LogEntry
-}
-
 // renderLogsPage renders the activity logs page.
 func (a *Admin) renderLogsPage(w http.ResponseWriter, user *store.AdminUser, entries []*store.LogEntry, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/logs.html")
@@ -743,20 +635,6 @@ func (a *Admin) renderLogsPage(w http.ResponseWriter, user *store.AdminUser, ent
 	}
 }
 
-// renderLogsList renders the logs list partial.
-func (a *Admin) renderLogsList(w http.ResponseWriter, entries []*store.LogEntry) {
-	tmpl := parseTemplate("templates/partials/logs_list.html")
-
-	data := logsListData{
-		Entries: entries,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render logs list", "error", err)
-	}
-}
-
 // =============================================================================
 // Todos Templates
 // =============================================================================
@@ -766,10 +644,6 @@ type todosPageData struct {
 	User      *store.AdminUser
 	PropsJSON template.JS
 	CSRFToken string
-}
-
-type todosListData struct {
-	Todos []*store.Todo
 }
 
 // renderTodosPage renders the todos page.
@@ -835,20 +709,6 @@ func (a *Admin) renderTodosPage(w http.ResponseWriter, user *store.AdminUser, to
 	}
 }
 
-// renderTodosList renders the todos list partial.
-func (a *Admin) renderTodosList(w http.ResponseWriter, todos []*store.Todo) {
-	tmpl := parseTemplate("templates/partials/todos_list.html")
-
-	data := todosListData{
-		Todos: todos,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render todos list", "error", err)
-	}
-}
-
 // =============================================================================
 // BBS Board Templates
 // =============================================================================
@@ -858,14 +718,6 @@ type boardPageData struct {
 	User      *store.AdminUser
 	PropsJSON template.JS
 	CSRFToken string
-}
-
-type boardListData struct {
-	Threads []*store.BBSPost
-}
-
-type boardThreadData struct {
-	Thread *store.BBSThread
 }
 
 // renderBoardPage renders the BBS board page.
@@ -917,34 +769,6 @@ func (a *Admin) renderBoardPage(w http.ResponseWriter, user *store.AdminUser, th
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render board page", "error", err)
-	}
-}
-
-// renderBoardList renders the board threads list partial.
-func (a *Admin) renderBoardList(w http.ResponseWriter, threads []*store.BBSPost) {
-	tmpl := parseTemplate("templates/partials/board_list.html")
-
-	data := boardListData{
-		Threads: threads,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render board list", "error", err)
-	}
-}
-
-// renderBoardThread renders a single thread with replies.
-func (a *Admin) renderBoardThread(w http.ResponseWriter, thread *store.BBSThread) {
-	tmpl := parseTemplate("templates/partials/board_thread.html")
-
-	data := boardThreadData{
-		Thread: thread,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render board thread", "error", err)
 	}
 }
 
@@ -1028,11 +852,6 @@ type secretsPageData struct {
 	CSRFToken string
 }
 
-type secretsListData struct {
-	Secrets   []secretItem
-	CSRFToken string
-}
-
 // renderSecretsPage renders the secrets management page.
 func (a *Admin) renderSecretsPage(w http.ResponseWriter, user *store.AdminUser, agents []agentItem, secrets []secretItem, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/secrets.html")
@@ -1066,20 +885,5 @@ func (a *Admin) renderSecretsPage(w http.ResponseWriter, user *store.AdminUser, 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
 		a.logger.Error("failed to render secrets page", "error", err)
-	}
-}
-
-// renderSecretsList renders the secrets list partial.
-func (a *Admin) renderSecretsList(w http.ResponseWriter, secrets []secretItem, csrfToken string) {
-	tmpl := parseTemplate("templates/partials/secrets_list.html")
-
-	data := secretsListData{
-		Secrets:   secrets,
-		CSRFToken: csrfToken,
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
-		a.logger.Error("failed to render secrets list", "error", err)
 	}
 }
