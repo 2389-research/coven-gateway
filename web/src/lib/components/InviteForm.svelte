@@ -18,7 +18,7 @@
   let { csrfToken, token, error }: Props = $props();
 </script>
 
-<div class="min-h-screen flex items-center justify-center p-4" data-testid="invite-form">
+<div class="min-h-screen flex items-center justify-center p-4" data-testid="invite-page">
   <div class="w-full max-w-md">
     <!-- Logo/Brand -->
     <div class="text-center mb-8">
@@ -72,7 +72,7 @@
           </Alert>
         {/if}
 
-        <form method="POST" action={`/invite/${token}`} data-testid="invite-form">
+        <form method="POST" action={`/invite/${token}`} data-testid="invite-account-form">
           <input type="hidden" name="csrf_token" value={csrfToken} />
           <Stack gap="4">
             <TextField

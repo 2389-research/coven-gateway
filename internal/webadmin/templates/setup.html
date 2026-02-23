@@ -5,24 +5,24 @@
   <script type="application/json">{{.PropsJSON}}</script>
 </div>
 <noscript>
-  <div class="min-h-screen flex items-center justify-center p-4">
-    <form method="POST" action="/setup" class="w-full max-w-sm space-y-4">
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem">
+    <form method="POST" action="/setup" style="width:100%;max-width:24rem">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      {{if .Error}}<p class="text-red-600">{{.Error}}</p>{{end}}
-      <label class="block">Username
-        <input type="text" name="username" required class="w-full p-2 border">
+      {{if .Error}}<p style="color:#dc2626;margin-bottom:0.5rem">{{.Error}}</p>{{end}}
+      <label style="display:block;margin-bottom:0.75rem">Username
+        <input type="text" name="username" required style="display:block;width:100%;padding:0.5rem;border:1px solid #ccc">
       </label>
-      <label class="block">Display Name
-        <input type="text" name="display_name" required class="w-full p-2 border">
+      <label style="display:block;margin-bottom:0.75rem">Display Name
+        <input type="text" name="display_name" required style="display:block;width:100%;padding:0.5rem;border:1px solid #ccc">
       </label>
-      <label class="block">Password
-        <input type="password" name="password" required class="w-full p-2 border">
+      <label style="display:block;margin-bottom:0.75rem">Password
+        <input type="password" name="password" required style="display:block;width:100%;padding:0.5rem;border:1px solid #ccc">
       </label>
-      <label class="flex items-center gap-2">
+      <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem">
         <input type="checkbox" name="create_principal" checked>
         Create API principal
       </label>
-      <button type="submit" class="w-full p-2 bg-blue-600 text-white">Complete Setup</button>
+      <button type="submit" style="width:100%;padding:0.5rem;background:#2563eb;color:#fff;border:none;cursor:pointer">Complete Setup</button>
     </form>
   </div>
 </noscript>
