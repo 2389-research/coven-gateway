@@ -26,6 +26,8 @@
   background-color: var(--cg-bg);
   color: var(--cg-fg);
   font-family: var(--typography-fontFamily-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Shared animation keyframes for components (Toast slide-in, Dialog backdrop). */
