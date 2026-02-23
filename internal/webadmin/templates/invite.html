@@ -9,9 +9,15 @@
     <form method="POST" action="/invite/{{.Token}}" class="w-full max-w-sm space-y-4">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       {{if .Error}}<p class="text-red-600">{{.Error}}</p>{{end}}
-      <input type="text" name="username" placeholder="Username" required class="w-full p-2 border">
-      <input type="text" name="display_name" placeholder="Display Name" class="w-full p-2 border">
-      <input type="password" name="password" placeholder="Password" required class="w-full p-2 border">
+      <label class="block">Username
+        <input type="text" name="username" required class="w-full p-2 border">
+      </label>
+      <label class="block">Display Name
+        <input type="text" name="display_name" class="w-full p-2 border">
+      </label>
+      <label class="block">Password
+        <input type="password" name="password" required class="w-full p-2 border">
+      </label>
       <button type="submit" class="w-full p-2 bg-blue-600 text-white">Create Account</button>
     </form>
   </div>

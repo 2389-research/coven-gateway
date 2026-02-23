@@ -71,7 +71,7 @@
           </Alert>
         {/if}
 
-        <form method="POST" action="/setup" data-testid="setup-password-form">
+        <form method="POST" action="/setup" data-testid="setup-form">
           <input type="hidden" name="csrf_token" value={csrfToken} />
           <Stack gap="4">
             <TextField

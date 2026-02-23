@@ -72,7 +72,7 @@
           </Alert>
         {/if}
 
-        <form method="POST" action="/invite/{token}" data-testid="invite-password-form">
+        <form method="POST" action={`/invite/${token}`} data-testid="invite-form">
           <input type="hidden" name="csrf_token" value={csrfToken} />
           <Stack gap="4">
             <TextField

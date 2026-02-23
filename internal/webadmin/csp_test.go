@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/2389/coven-gateway/internal/assets"
 )
 
 func TestCSPMiddleware_SetsHeader(t *testing.T) {
@@ -58,5 +60,52 @@ func TestCSPMiddleware_PreservesInnerHandler(t *testing.T) {
 	}
 	if rec.Header().Get("Content-Security-Policy") == "" {
 		t.Error("CSP header missing on non-200 response")
+	}
+}
+
+func TestCSPMiddleware_DevMode(t *testing.T) {
+	// Save and restore manifest state.
+	orig := assets.Manifest
+	defer func() { assets.Manifest = orig }()
+
+	assets.Manifest = nil // dev mode
+
+	handler := CSPMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "http://localhost:5173") {
+		t.Errorf("dev CSP should allow localhost:5173; got: %s", csp)
+	}
+	if !strings.Contains(csp, "ws://localhost:5173") {
+		t.Errorf("dev CSP should allow ws://localhost:5173 for HMR; got: %s", csp)
+	}
+}
+
+func TestCSPMiddleware_ProdMode(t *testing.T) {
+	// Save and restore manifest state.
+	orig := assets.Manifest
+	defer func() { assets.Manifest = orig }()
+
+	assets.Manifest = map[string]assets.ManifestEntry{
+		"test": {File: "test.js", IsEntry: true},
+	}
+
+	handler := CSPMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	csp := rec.Header().Get("Content-Security-Policy")
+	if strings.Contains(csp, "localhost") {
+		t.Errorf("prod CSP should not reference localhost; got: %s", csp)
 	}
 }
