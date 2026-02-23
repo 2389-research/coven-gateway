@@ -4,6 +4,7 @@
 
   interface Props extends Omit<HTMLInputAttributes, 'class' | 'prefix'> {
     label?: string;
+    hint?: string;
     error?: string;
     leading?: Snippet;
     trailing?: Snippet;
@@ -12,6 +13,7 @@
 
   let {
     label,
+    hint,
     error,
     leading,
     trailing,
@@ -70,6 +72,10 @@
   {#if error}
     <p id={errorId} class="text-[length:var(--typography-fontSize-sm)] text-danger-subtleFg" role="alert">
       {error}
+    </p>
+  {:else if hint}
+    <p class="text-[length:var(--typography-fontSize-sm)] text-fgMuted">
+      {hint}
     </p>
   {/if}
 </div>

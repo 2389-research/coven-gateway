@@ -1,11 +1,6 @@
 @import 'tailwindcss';
 @import './styles/generated/variables.css';
 @import './styles/generated/theme.css';
-@import './styles/legacy-theme.css';
-
-/* Scan Go HTML templates so Tailwind generates their utility classes.
- * Remove this @source when auth templates (setup, invite) are migrated. */
-@source "../../internal/webadmin/templates";
 
 /* Self-hosted Inter variable font — eliminates Google Fonts CDN dependency. */
 @font-face {
@@ -23,6 +18,16 @@
   font-weight: 400;
   font-display: swap;
   src: url('./fonts/InstrumentSerif.woff2') format('woff2');
+}
+
+/* Base body styles — replaces arbitrary-value Tailwind classes in base.html
+ * so the @source template scan is no longer needed. */
+.cg-body {
+  background-color: var(--cg-bg);
+  color: var(--cg-fg);
+  font-family: var(--typography-fontFamily-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Shared animation keyframes for components (Toast slide-in, Dialog backdrop). */

@@ -45,6 +45,7 @@ type inviteData struct {
 	Token     string
 	Error     string
 	CSRFToken string
+	PropsJSON template.JS // Pre-built JSON for Svelte island (safe: server-generated)
 }
 
 type dashboardData struct {
@@ -130,6 +131,7 @@ type setupData struct {
 	Title     string
 	Error     string
 	CSRFToken string
+	PropsJSON template.JS // Pre-built JSON for Svelte island (safe: server-generated)
 }
 
 type setupCompleteData struct {
@@ -138,6 +140,7 @@ type setupCompleteData struct {
 	APIToken    string
 	HasToken    bool
 	GRPCAddress string
+	PropsJSON   template.JS // Pre-built JSON for Svelte island (safe: server-generated)
 }
 
 type linkPageData struct {
@@ -167,11 +170,25 @@ func (a *Admin) renderLoginPage(w http.ResponseWriter, errorMsg, csrfToken strin
 func (a *Admin) renderInvitePage(w http.ResponseWriter, token, errorMsg, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/invite.html")
 
+	props := map[string]any{
+		"csrfToken": csrfToken,
+		"token":     token,
+	}
+	if errorMsg != "" {
+		props["error"] = errorMsg
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal invite props", "error", err)
+		propsJSON = []byte("{}")
+	}
+
 	data := inviteData{
 		Title:     "Create Account",
 		Token:     token,
 		Error:     errorMsg,
 		CSRFToken: csrfToken,
+		PropsJSON: template.JS(propsJSON),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -486,10 +503,23 @@ func (a *Admin) renderAgentDetail(w http.ResponseWriter, user *store.AdminUser, 
 func (a *Admin) renderSetupPage(w http.ResponseWriter, errorMsg, csrfToken string) {
 	tmpl := parseTemplate("templates/base.html", "templates/setup.html")
 
+	props := map[string]any{
+		"csrfToken": csrfToken,
+	}
+	if errorMsg != "" {
+		props["error"] = errorMsg
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal setup props", "error", err)
+		propsJSON = []byte("{}")
+	}
+
 	data := setupData{
 		Title:     "Initial Setup",
 		Error:     errorMsg,
 		CSRFToken: csrfToken,
+		PropsJSON: template.JS(propsJSON),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -502,12 +532,28 @@ func (a *Admin) renderSetupPage(w http.ResponseWriter, errorMsg, csrfToken strin
 func (a *Admin) renderSetupComplete(w http.ResponseWriter, displayName, apiToken, grpcAddress string) {
 	tmpl := parseTemplate("templates/base.html", "templates/setup_complete.html")
 
+	hasToken := apiToken != ""
+	props := map[string]any{
+		"displayName": displayName,
+		"hasToken":    hasToken,
+		"grpcAddress": grpcAddress,
+	}
+	if hasToken {
+		props["apiToken"] = apiToken
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal setup complete props", "error", err)
+		propsJSON = []byte("{}")
+	}
+
 	data := setupCompleteData{
 		Title:       "Setup Complete",
 		DisplayName: displayName,
 		APIToken:    apiToken,
-		HasToken:    apiToken != "",
+		HasToken:    hasToken,
 		GRPCAddress: grpcAddress,
+		PropsJSON:   template.JS(propsJSON),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
