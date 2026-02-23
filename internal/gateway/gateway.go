@@ -364,47 +364,15 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		return nil, err
 	}
 
-	// Register web admin UI routes
-	// The admin UI has its own session-based auth (separate from JWT)
-	webAdminBaseURL := determineWebAdminBaseURL(cfg, logger)
-	webAdminCfg := webadmin.NewConfig{
-		Store:        sqlStore,
-		Manager:      gw.agentManager,
-		Conversation: convService,
-		Broadcaster:  eventBroadcaster,
-		Registry:     packRegistry,
-		Config: webadmin.Config{
-			BaseURL: webAdminBaseURL,
-		},
-		PrincipalStore: sqlStore,
-		TokenGenerator: grpcResult.jwtVerifier, // May be nil if auth is disabled
+	// Register web admin UI + question router
+	if err := gw.initWebAdmin(cfg, sqlStore, convService, eventBroadcaster, packRegistry, grpcResult.jwtVerifier, clientService, logger, mux); err != nil {
+		return nil, err
 	}
-	gw.webAdmin = webadmin.NewWithConfig(webAdminCfg)
-	gw.webAdmin.RegisterRoutes(mux)
-	logger.Info("admin web UI enabled at /admin/", "base_url", webAdminBaseURL)
-
-	// Create question router for ask_user tool (uses webAdmin as ClientStreamer)
-	gw.questionRouter = builtins.NewInMemoryQuestionRouter(gw.webAdmin)
-	if err := packRegistry.RegisterBuiltinPack(builtins.UIPack(gw.questionRouter)); err != nil {
-		return nil, fmt.Errorf("registering UI pack: %w", err)
-	}
-	// Wire up question answerer to ClientService
-	clientService.SetQuestionAnswerer(gw.questionRouter)
 
 	// Register MCP server routes for tool pack access
-	// MCP endpoints allow external agents (like Claude Code) to list and execute pack tools
-	mcpServer, err := mcp.NewServer(mcp.Config{
-		Registry:    packRegistry,
-		Router:      packRouter,
-		TokenStore:  mcpTokens,
-		Logger:      logger.With("component", "mcp"),
-		RequireAuth: false, // MCP endpoints don't require auth for now
-	})
-	if err != nil {
-		return nil, fmt.Errorf("creating MCP server: %w", err)
+	if err := gw.initMCPServer(packRegistry, packRouter, mcpTokens, logger, mux); err != nil {
+		return nil, err
 	}
-	gw.mcpServer = mcpServer
-	gw.mcpServer.RegisterRoutes(mux)
 
 	gw.httpServer = &http.Server{
 		Addr:              cfg.Server.HTTPAddr,
@@ -413,6 +381,50 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	}
 
 	return gw, nil
+}
+
+// initWebAdmin sets up the web admin UI, question router, and registers routes.
+func (g *Gateway) initWebAdmin(cfg *config.Config, sqlStore *store.SQLiteStore, convService *conversation.Service, broadcaster *conversation.EventBroadcaster, registry *packs.Registry, jwtVerifier *auth.JWTVerifier, clientService *client.ClientService, logger *slog.Logger, mux *http.ServeMux) error {
+	webAdminBaseURL := determineWebAdminBaseURL(cfg, logger)
+	webAdminCfg := webadmin.NewConfig{
+		Store:          sqlStore,
+		Manager:        g.agentManager,
+		Conversation:   convService,
+		Broadcaster:    broadcaster,
+		Registry:       registry,
+		Config:         webadmin.Config{BaseURL: webAdminBaseURL},
+		PrincipalStore: sqlStore,
+	}
+	if jwtVerifier != nil { // avoid nil-pointer-in-interface gotcha
+		webAdminCfg.TokenGenerator = jwtVerifier
+	}
+	g.webAdmin = webadmin.NewWithConfig(webAdminCfg)
+	g.webAdmin.RegisterRoutes(mux)
+	logger.Info("admin web UI enabled at /admin/", "base_url", webAdminBaseURL)
+
+	g.questionRouter = builtins.NewInMemoryQuestionRouter(g.webAdmin)
+	if err := registry.RegisterBuiltinPack(builtins.UIPack(g.questionRouter)); err != nil {
+		return fmt.Errorf("registering UI pack: %w", err)
+	}
+	clientService.SetQuestionAnswerer(g.questionRouter)
+	return nil
+}
+
+// initMCPServer creates the MCP server and registers its routes.
+func (g *Gateway) initMCPServer(registry *packs.Registry, router *packs.Router, tokens *mcp.TokenStore, logger *slog.Logger, mux *http.ServeMux) error {
+	mcpServer, err := mcp.NewServer(mcp.Config{
+		Registry:    registry,
+		Router:      router,
+		TokenStore:  tokens,
+		Logger:      logger.With("component", "mcp"),
+		RequireAuth: false,
+	})
+	if err != nil {
+		return fmt.Errorf("creating MCP server: %w", err)
+	}
+	g.mcpServer = mcpServer
+	g.mcpServer.RegisterRoutes(mux)
+	return nil
 }
 
 // setupTCPListeners creates standard TCP listeners for gRPC and HTTP.

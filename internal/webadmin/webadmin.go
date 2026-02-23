@@ -2176,6 +2176,9 @@ func (a *Admin) validatePendingLinkCode(w http.ResponseWriter, ctx context.Conte
 
 // generateApprovalToken creates a principal and generates an auth token.
 func (a *Admin) generateApprovalToken(ctx context.Context, linkCode *store.LinkCode) (string, string, error) {
+	if a.tokenGenerator == nil {
+		return "", "", errors.New("token generation unavailable: jwt_secret not configured")
+	}
 	principalID, err := a.getOrCreatePrincipalForLink(ctx, linkCode)
 	if err != nil {
 		return "", "", fmt.Errorf("create principal: %w", err)
