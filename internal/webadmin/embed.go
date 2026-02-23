@@ -5,5 +5,5 @@ package webadmin
 
 import "embed"
 
-//go:embed templates/*.html templates/partials/*.html
+//go:embed templates/*.html
 var templateFS embed.FS
