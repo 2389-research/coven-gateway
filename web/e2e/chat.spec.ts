@@ -95,11 +95,9 @@ test.describe('Chat smoke test', () => {
     const chatApp = page.locator('[data-testid="chat-app"]');
     await expect(chatApp).toBeVisible({ timeout: 10000 });
 
+    // With no agent pre-selected, the empty state should show
     const emptyState = page.getByText('Select an agent to start chatting');
-    const chatThread = page.locator('[data-testid="chat-thread"]');
-    const hasEmpty = await emptyState.isVisible().catch(() => false);
-    const hasThread = await chatThread.isVisible().catch(() => false);
-    expect(hasEmpty || hasThread).toBe(true);
+    await expect(emptyState).toBeVisible({ timeout: 5000 });
   });
 
   test('settings modal opens with Cmd+K', async ({ page }) => {

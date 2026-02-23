@@ -75,7 +75,14 @@ export function getMessageSender(type: ChatMessageType): MessageSender {
 
 /** Check if a message type is displayable in the chat thread */
 export function isDisplayableMessage(type: ChatMessageType): boolean {
-  return type !== 'done' && type !== 'usage';
+  switch (type) {
+    case 'done':
+    case 'usage':
+    case 'canceled':
+      return false;
+    default:
+      return true;
+  }
 }
 
 /** Group messages by date for date separator rendering */

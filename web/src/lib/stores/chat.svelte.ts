@@ -14,7 +14,7 @@
  */
 
 import { createSSEStream, type SSEStatus } from './sse.svelte';
-import type { ChatMessage, ChatMessageType } from '../types/chat';
+import type { ChatMessage, ChatMessageType, QuestionOption } from '../types/chat';
 
 export interface ChatStreamOptions {
   /** Max reconnection attempts. 0 = infinite. Default: 5. */
@@ -96,6 +96,7 @@ export function createChatStream(agentId: string, options: ChatStreamOptions = {
       reason: data.reason as string | undefined,
       questionId: data.question_id as string | undefined,
       question: data.question as string | undefined,
+      options: Array.isArray(data.options) ? data.options as QuestionOption[] : undefined,
       multiSelect: data.multi_select as boolean | undefined,
       header: data.header as string | undefined,
       timeoutSeconds: data.timeout_seconds as number | undefined,

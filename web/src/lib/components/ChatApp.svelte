@@ -167,4 +167,4 @@
   </div>
 </div>
 
-<SettingsModal bind:open={settingsOpen} {csrfToken} />
+<SettingsModal bind:open={settingsOpen} />

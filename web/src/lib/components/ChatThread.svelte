@@ -73,19 +73,31 @@
   }
 
   /** Auto-scroll on new messages if user is at bottom */
+  let prevMessageCount = 0;
   $effect(() => {
-    // Track displayMessages.length to trigger on new messages
-    const _len = displayMessages.length;
+    const len = displayMessages.length;
     if (!containerEl) return;
 
-    if (isAtBottom) {
-      // Use requestAnimationFrame to scroll after DOM update
+    // Skip initial mount — only react to new messages arriving
+    if (prevMessageCount === 0) {
+      prevMessageCount = len;
+      // Scroll to bottom on initial load
       requestAnimationFrame(() => {
-        containerEl?.scrollTo({ top: containerEl.scrollHeight, behavior: 'smooth' });
+        containerEl?.scrollTo({ top: containerEl.scrollHeight });
       });
-    } else if (_len > 0) {
-      hasNewMessages = true;
+      return;
     }
+
+    if (len > prevMessageCount) {
+      if (isAtBottom) {
+        requestAnimationFrame(() => {
+          containerEl?.scrollTo({ top: containerEl.scrollHeight, behavior: 'smooth' });
+        });
+      } else {
+        hasNewMessages = true;
+      }
+    }
+    prevMessageCount = len;
   });
 </script>
 

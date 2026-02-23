@@ -5,11 +5,10 @@
 
   interface Props {
     open: boolean;
-    csrfToken?: string;
     class?: string;
   }
 
-  let { open = $bindable(false), csrfToken = '', class: className = '' }: Props = $props();
+  let { open = $bindable(false), class: className = '' }: Props = $props();
 
   const tabs = [
     { id: 'agents', label: 'Agents' },

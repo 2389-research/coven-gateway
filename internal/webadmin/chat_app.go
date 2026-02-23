@@ -5,6 +5,7 @@ package webadmin
 
 import (
 	"encoding/json"
+	"html/template"
 	"net/http"
 	"sort"
 
@@ -13,10 +14,9 @@ import (
 
 // chatAppData holds data for the main chat app shell.
 type chatAppData struct {
-	Title      string
-	User       *store.AdminUser
-	CSRFToken  string
-	AgentCount int
+	Title     string
+	User      *store.AdminUser
+	PropsJSON template.JS
 }
 
 // handleChatApp renders the main chat app shell.
@@ -24,17 +24,20 @@ func (a *Admin) handleChatApp(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	csrfToken := a.ensureCSRFToken(w, r)
 
-	// Count connected agents
-	agentCount := 0
-	if a.manager != nil {
-		agentCount = len(a.manager.ListAgents())
+	props := map[string]string{
+		"csrfToken": csrfToken,
+	}
+	propsJSON, err := json.Marshal(props)
+	if err != nil {
+		a.logger.Error("failed to marshal chat props", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
 
 	data := chatAppData{
-		Title:      "Chat",
-		User:       user,
-		CSRFToken:  csrfToken,
-		AgentCount: agentCount,
+		Title:     "Chat",
+		User:      user,
+		PropsJSON: template.JS(propsJSON),
 	}
 
 	tmpl := parseTemplate(
