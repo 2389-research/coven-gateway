@@ -289,7 +289,6 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 
 	// Agent management
 	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsPage))
-	mux.HandleFunc("GET /admin/agents/list", a.requireAuth(a.handleAgentsList))
 	mux.HandleFunc("GET /admin/agents/{id}", a.requireAuth(a.handleAgentDetail))
 	mux.HandleFunc("GET /api/admin/agents/{id}", a.requireAuth(a.handleAgentDetailJSON))
 	mux.HandleFunc("POST /admin/agents/{id}/approve", a.requireAuth(a.handleAgentApprove))
@@ -297,29 +296,23 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 
 	// Tools management
 	mux.HandleFunc("GET /admin/tools", a.requireAuth(a.handleToolsPage))
-	mux.HandleFunc("GET /admin/tools/list", a.requireAuth(a.handleToolsList))
 	mux.HandleFunc("GET /api/admin/tools", a.requireAuth(a.handleToolsJSON))
 
 	// Activity logs (builtin pack data)
 	mux.HandleFunc("GET /admin/logs", a.requireAuth(a.handleLogsPage))
-	mux.HandleFunc("GET /admin/logs/list", a.requireAuth(a.handleLogsList))
 	mux.HandleFunc("GET /api/admin/logs", a.requireAuth(a.handleLogsJSON))
 
 	// Todos (builtin pack data)
 	mux.HandleFunc("GET /admin/todos", a.requireAuth(a.handleTodosPage))
-	mux.HandleFunc("GET /admin/todos/list", a.requireAuth(a.handleTodosList))
 	mux.HandleFunc("GET /api/admin/todos", a.requireAuth(a.handleTodosJSON))
 
 	// BBS Board (builtin pack data)
 	mux.HandleFunc("GET /admin/board", a.requireAuth(a.handleBoardPage))
-	mux.HandleFunc("GET /admin/board/list", a.requireAuth(a.handleBoardList))
-	mux.HandleFunc("GET /admin/board/thread/{id}", a.requireAuth(a.handleBoardThread))
 	mux.HandleFunc("GET /api/admin/board", a.requireAuth(a.handleBoardJSON))
 	mux.HandleFunc("GET /api/admin/board/{id}", a.requireAuth(a.handleBoardThreadJSON))
 
 	// Principals management
 	mux.HandleFunc("GET /admin/principals", a.requireAuth(a.handlePrincipalsPage))
-	mux.HandleFunc("GET /admin/principals/list", a.requireAuth(a.handlePrincipalsList))
 	mux.HandleFunc("GET /api/admin/principals", a.requireAuth(a.handlePrincipalsJSON))
 	mux.HandleFunc("POST /admin/principals/{id}/approve", a.requireAuth(a.handlePrincipalApprove))
 	mux.HandleFunc("POST /admin/principals/{id}/revoke", a.requireAuth(a.handlePrincipalRevoke))
@@ -330,7 +323,6 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/threads", a.requireAuth(a.handleThreadsJSON))
 	mux.HandleFunc("GET /admin/threads/{id}", a.requireAuth(a.handleThreadDetail))
 	mux.HandleFunc("GET /api/admin/threads/{id}", a.requireAuth(a.handleThreadDetailJSON))
-	mux.HandleFunc("GET /admin/threads/{id}/messages", a.requireAuth(a.handleThreadMessages))
 
 	// Legacy chat page - redirect to root chat with agent param
 	mux.HandleFunc("GET /admin/chat/{id}", a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
@@ -344,7 +336,6 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 
 	// Secrets management
 	mux.HandleFunc("GET /admin/secrets", a.requireAuth(a.handleSecretsPage))
-	mux.HandleFunc("GET /admin/secrets/list", a.requireAuth(a.handleSecretsList))
 	mux.HandleFunc("GET /admin/secrets/{id}/value", a.requireAuth(a.handleSecretsGetValue))
 	mux.HandleFunc("POST /admin/secrets", a.requireAuth(a.handleSecretsCreate))
 	mux.HandleFunc("PUT /admin/secrets/{id}", a.requireAuth(a.handleSecretsUpdate))
@@ -352,7 +343,6 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/secrets", a.requireAuth(a.handleSecretsJSON))
 
 	// Invite management
-	mux.HandleFunc("POST /admin/invites/create", a.requireAuth(a.handleCreateInvite))
 	mux.HandleFunc("POST /api/admin/invites", a.requireAuth(a.handleCreateInviteJSON))
 }
 
@@ -1012,11 +1002,6 @@ func (a *Admin) handleAgentsPage(w http.ResponseWriter, r *http.Request) {
 	a.renderAgentsPage(w, user, csrfToken, agents)
 }
 
-// handleAgentsList returns the agents list (htmx partial).
-func (a *Admin) handleAgentsList(w http.ResponseWriter, r *http.Request) {
-	a.renderAgentsList(w)
-}
-
 // handleAgentApprove approves a pending agent principal.
 func (a *Admin) handleAgentApprove(w http.ResponseWriter, r *http.Request) {
 	if !a.validateCSRF(r) {
@@ -1043,8 +1028,7 @@ func (a *Admin) handleAgentApprove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.logger.Info("agent approved", "agent_id", agentID)
-	// Return updated agents list
-	a.renderAgentsList(w)
+	http.Redirect(w, r, "/admin/agents", http.StatusSeeOther)
 }
 
 // handleAgentRevoke revokes an agent principal.
@@ -1071,8 +1055,7 @@ func (a *Admin) handleAgentRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.logger.Info("agent revoked", "agent_id", agentID)
-	// Return updated agents list
-	a.renderAgentsList(w)
+	http.Redirect(w, r, "/admin/agents", http.StatusSeeOther)
 }
 
 // handleAgentDetail renders the agent detail page.
@@ -1187,23 +1170,6 @@ func (a *Admin) createInviteToken(ctx context.Context, user *store.AdminUser) (s
 	return inviteURL, nil
 }
 
-// handleCreateInvite creates a new invite link and returns HTML.
-func (a *Admin) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
-	if !a.validateCSRF(r) {
-		http.Error(w, "Invalid request", http.StatusForbidden)
-		return
-	}
-
-	inviteURL, err := a.createInviteToken(r.Context(), getUserFromContext(r))
-	if err != nil {
-		a.logger.Error("failed to create invite", "error", err)
-		http.Error(w, "Failed to create invite", http.StatusInternalServerError)
-		return
-	}
-
-	a.renderInviteCreated(w, inviteURL)
-}
-
 // handleCreateInviteJSON creates a new invite link and returns JSON.
 func (a *Admin) handleCreateInviteJSON(w http.ResponseWriter, r *http.Request) {
 	if !a.validateCSRF(r) {
@@ -1304,12 +1270,6 @@ func (a *Admin) handleToolsJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleToolsList returns the tools list grouped by pack (htmx partial).
-func (a *Admin) handleToolsList(w http.ResponseWriter, r *http.Request) {
-	items := a.listPackItems()
-	a.renderToolsList(w, items)
-}
-
 // =============================================================================
 // Activity Logs Handlers (builtin pack data)
 // =============================================================================
@@ -1325,27 +1285,6 @@ func (a *Admin) handleLogsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.renderLogsPage(w, user, entries, csrfToken)
-}
-
-// handleLogsList returns the logs list (htmx partial).
-func (a *Admin) handleLogsList(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("q")
-	limitStr := r.URL.Query().Get("limit")
-	limit := 100
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
-			limit = l
-		}
-	}
-
-	entries, err := a.store.SearchLogEntries(r.Context(), "", query, nil, limit)
-	if err != nil {
-		a.logger.Error("failed to list log entries", "error", err)
-		http.Error(w, "Failed to load logs", http.StatusInternalServerError)
-		return
-	}
-
-	a.renderLogsList(w, entries)
 }
 
 // handleLogsJSON returns log entries as JSON for the Svelte island.
@@ -1412,26 +1351,6 @@ func (a *Admin) handleTodosPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.renderTodosPage(w, user, todos, csrfToken)
-}
-
-// handleTodosList returns the todos list (htmx partial).
-func (a *Admin) handleTodosList(w http.ResponseWriter, r *http.Request) {
-	limitStr := r.URL.Query().Get("limit")
-	limit := 100
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
-			limit = l
-		}
-	}
-
-	todos, err := a.store.ListAllTodos(r.Context(), limit)
-	if err != nil {
-		a.logger.Error("failed to list todos", "error", err)
-		http.Error(w, "Failed to load todos", http.StatusInternalServerError)
-		return
-	}
-
-	a.renderTodosList(w, todos)
 }
 
 // handleTodosJSON returns todos as JSON for the Svelte island.
@@ -1506,48 +1425,6 @@ func (a *Admin) handleBoardPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.renderBoardPage(w, user, threads, csrfToken)
-}
-
-// handleBoardList returns the board threads list (htmx partial).
-func (a *Admin) handleBoardList(w http.ResponseWriter, r *http.Request) {
-	limitStr := r.URL.Query().Get("limit")
-	limit := 50
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 200 {
-			limit = l
-		}
-	}
-
-	threads, err := a.store.ListBBSThreads(r.Context(), limit)
-	if err != nil {
-		a.logger.Error("failed to list BBS threads", "error", err)
-		http.Error(w, "Failed to load threads", http.StatusInternalServerError)
-		return
-	}
-
-	a.renderBoardList(w, threads)
-}
-
-// handleBoardThread returns a single thread with replies (htmx partial).
-func (a *Admin) handleBoardThread(w http.ResponseWriter, r *http.Request) {
-	threadID := r.PathValue("id")
-	if threadID == "" {
-		http.Error(w, "Thread ID required", http.StatusBadRequest)
-		return
-	}
-
-	thread, err := a.store.GetBBSThread(r.Context(), threadID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			http.Error(w, "Thread not found", http.StatusNotFound)
-			return
-		}
-		a.logger.Error("failed to get BBS thread", "error", err, "thread_id", threadID)
-		http.Error(w, "Failed to load thread", http.StatusInternalServerError)
-		return
-	}
-
-	a.renderBoardThread(w, thread)
 }
 
 // handleBoardJSON returns BBS threads as JSON for the Svelte island.
@@ -1670,36 +1547,6 @@ func (a *Admin) handlePrincipalsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.renderPrincipalsPage(w, user, csrfToken, principals)
-}
-
-// handlePrincipalsList returns the principals list (htmx partial).
-func (a *Admin) handlePrincipalsList(w http.ResponseWriter, r *http.Request) {
-	// Parse query params for filtering
-	typeFilter := r.URL.Query().Get("type")
-	statusFilter := r.URL.Query().Get("status")
-
-	filter := store.PrincipalFilter{
-		Limit: 100,
-	}
-
-	if typeFilter != "" {
-		t := store.PrincipalType(typeFilter)
-		filter.Type = &t
-	}
-	if statusFilter != "" {
-		s := store.PrincipalStatus(statusFilter)
-		filter.Status = &s
-	}
-
-	principals, err := a.store.ListPrincipals(r.Context(), filter)
-	if err != nil {
-		a.logger.Error("failed to list principals", "error", err)
-		http.Error(w, "Failed to load principals", http.StatusInternalServerError)
-		return
-	}
-
-	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderPrincipalsList(w, principals, csrfToken)
 }
 
 // handlePrincipalsJSON returns the principals list as JSON for Svelte islands.
@@ -1921,32 +1768,6 @@ func (a *Admin) handleThreadDetailJSON(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		a.logger.Error("failed to encode thread detail JSON", "error", err)
 	}
-}
-
-// handleThreadMessages returns messages for a thread (htmx partial).
-func (a *Admin) handleThreadMessages(w http.ResponseWriter, r *http.Request) {
-	threadID := r.PathValue("id")
-	if threadID == "" {
-		http.Error(w, "Thread ID required", http.StatusBadRequest)
-		return
-	}
-
-	limitStr := r.URL.Query().Get("limit")
-	limit := 50
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
-			limit = l
-		}
-	}
-
-	messages, err := a.store.GetThreadMessages(r.Context(), threadID, limit)
-	if err != nil {
-		a.logger.Error("failed to get thread messages", "error", err, "thread_id", threadID)
-		http.Error(w, "Failed to load messages", http.StatusInternalServerError)
-		return
-	}
-
-	a.renderMessagesList(w, messages)
 }
 
 // =============================================================================
@@ -2717,31 +2538,6 @@ func (a *Admin) handleSecretsJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSecretsList returns the secrets list (htmx partial).
-func (a *Admin) handleSecretsList(w http.ResponseWriter, r *http.Request) {
-	items := a.listSecretItems(r.Context())
-
-	// Apply scope filter if provided
-	scopeFilter := r.URL.Query().Get("scope")
-	if scopeFilter != "" {
-		filtered := make([]secretItem, 0, len(items))
-		for _, item := range items {
-			isGlobal := item.Scope == "Global"
-			if scopeFilter == "global" && !isGlobal {
-				continue
-			}
-			if scopeFilter == "agent" && isGlobal {
-				continue
-			}
-			filtered = append(filtered, item)
-		}
-		items = filtered
-	}
-
-	csrfToken := a.ensureCSRFToken(w, r)
-	a.renderSecretsList(w, items, csrfToken)
-}
-
 // handleSecretsGetValue returns a secret's value as JSON (for reveal functionality).
 func (a *Admin) handleSecretsGetValue(w http.ResponseWriter, r *http.Request) {
 	secretID := r.PathValue("id")
@@ -2852,7 +2648,7 @@ func (a *Admin) handleSecretsCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.logger.Info("secret created", "key", data.key, "agent_id", data.agentID)
-	a.handleSecretsList(w, r)
+	http.Redirect(w, r, "/admin/secrets", http.StatusSeeOther)
 }
 
 // handleSecretsUpdate updates a secret's value.
@@ -2912,9 +2708,7 @@ func (a *Admin) handleSecretsUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.logger.Info("secret updated", "id", secretID, "key", secret.Key)
-
-	// Return updated list via htmx
-	a.handleSecretsList(w, r)
+	http.Redirect(w, r, "/admin/secrets", http.StatusSeeOther)
 }
 
 // handleSecretsDelete deletes a secret.
