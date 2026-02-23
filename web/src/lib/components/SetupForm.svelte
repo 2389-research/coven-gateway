@@ -71,7 +71,7 @@
           </Alert>
         {/if}
 
-        <form method="POST" action="/setup" data-testid="setup-form">
+        <form method="POST" action="/setup" data-testid="setup-account-form">
           <input type="hidden" name="csrf_token" value={csrfToken} />
           <Stack gap="4">
             <TextField
@@ -92,6 +92,7 @@
               name="password"
               type="password"
               required
+              minlength={8}
               autocomplete="new-password"
               hint="Minimum 8 characters"
             />

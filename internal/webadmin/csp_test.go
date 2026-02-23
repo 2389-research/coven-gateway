@@ -85,6 +85,9 @@ func TestCSPMiddleware_DevMode(t *testing.T) {
 	if !strings.Contains(csp, "ws://localhost:5173") {
 		t.Errorf("dev CSP should allow ws://localhost:5173 for HMR; got: %s", csp)
 	}
+	if !strings.Contains(csp, "'unsafe-eval'") {
+		t.Errorf("dev CSP should allow 'unsafe-eval' for Vite error overlay; got: %s", csp)
+	}
 }
 
 func TestCSPMiddleware_ProdMode(t *testing.T) {

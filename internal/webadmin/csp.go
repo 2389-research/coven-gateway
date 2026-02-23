@@ -19,7 +19,7 @@ const cspProd = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe
 
 // cspDev relaxes script-src and connect-src to allow the Vite dev server origin
 // (http://localhost:5173) for HMR and module loading during local development.
-const cspDev = "default-src 'none'; script-src 'self' http://localhost:5173; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:5173 ws://localhost:5173; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+const cspDev = "default-src 'none'; script-src 'self' 'unsafe-eval' http://localhost:5173; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:5173 ws://localhost:5173; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 // CSPMiddleware wraps an http.Handler and sets the Content-Security-Policy header.
 // In dev mode (no Vite manifest), it permits the Vite dev server origin.

@@ -92,6 +92,7 @@
               name="password"
               type="password"
               required
+              minlength={8}
               autocomplete="new-password"
               hint="Minimum 8 characters"
             />

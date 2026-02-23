@@ -20,6 +20,14 @@
   src: url('./fonts/InstrumentSerif.woff2') format('woff2');
 }
 
+/* Base body styles — replaces arbitrary-value Tailwind classes in base.html
+ * so the @source template scan is no longer needed. */
+.cg-body {
+  background-color: var(--cg-bg);
+  color: var(--cg-fg);
+  font-family: var(--typography-fontFamily-sans);
+}
+
 /* Shared animation keyframes for components (Toast slide-in, Dialog backdrop). */
 @keyframes slide-in {
   from { opacity: 0; transform: translateY(0.5rem); }
