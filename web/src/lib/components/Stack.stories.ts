@@ -69,3 +69,34 @@ export const SpaceBetween: Story = {
     children: stackItems,
   },
 };
+
+const manyItems = htmlSnippet(
+  Array.from({ length: 12 }, (_, i) =>
+    `<div style="background:#e2e8f0;padding:8px 16px;border-radius:6px">Tag ${i + 1}</div>`,
+  ).join(''),
+);
+
+export const Wrapped: Story = {
+  args: {
+    direction: 'horizontal',
+    gap: '2',
+    wrap: true,
+    children: manyItems,
+  },
+};
+
+export const TightGap: Story = {
+  args: {
+    direction: 'vertical',
+    gap: '1',
+    children: stackItems,
+  },
+};
+
+export const WideGap: Story = {
+  args: {
+    direction: 'vertical',
+    gap: '8',
+    children: stackItems,
+  },
+};

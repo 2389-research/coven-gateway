@@ -37,3 +37,7 @@ export function addToast(
 export function removeToast(id: string): void {
   toasts = toasts.filter((t) => t.id !== id);
 }
+
+export function clearToasts(): void {
+  toasts = [];
+}

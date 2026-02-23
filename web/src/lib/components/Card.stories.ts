@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Card from './Card.svelte';
-import { textSnippet } from './_storyHelpers';
+import { textSnippet, htmlSnippet } from './_storyHelpers';
 
 const meta = {
   title: 'Layout/Card',
@@ -41,5 +41,22 @@ export const NoPadding: Story = {
   args: {
     padding: 'none',
     children: textSnippet('Card with no padding — useful for full-bleed content.'),
+  },
+};
+
+export const WithHeader: Story = {
+  args: {
+    header: textSnippet('Card Title'),
+    children: textSnippet('Card body content below the header divider.'),
+  },
+};
+
+export const WithHeaderAndFooter: Story = {
+  args: {
+    header: textSnippet('Settings'),
+    children: textSnippet('Configure your preferences in this section.'),
+    footer: htmlSnippet(
+      '<div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" style="padding:4px 12px">Cancel</button><button type="button" style="padding:4px 12px;background:#3b82f6;color:white;border-radius:4px">Save</button></div>',
+    ),
   },
 };

@@ -33,5 +33,6 @@
   --color-info-subtleBorder: var(--cg-info-subtleBorder);
 
   --font-family-sans: var(--typography-fontFamily-sans);
+  --font-family-serif: var(--typography-fontFamily-serif);
   --font-family-mono: var(--typography-fontFamily-mono);
 }

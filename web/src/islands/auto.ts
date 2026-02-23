@@ -9,7 +9,22 @@ import { mount, unmount } from 'svelte';
 // Registry: maps data-island names to lazy component imports.
 // Each entry returns the default export of a Svelte component module.
 const registry: Record<string, () => Promise<{ default: any }>> = {
+  'agent-detail-page': () => import('../lib/components/AgentDetailPage.svelte'),
+  'agents-page': () => import('../lib/components/AgentsPage.svelte'),
+  'board-page': () => import('../lib/components/BoardPage.svelte'),
+  'chat-app': () => import('../lib/components/ChatApp.svelte'),
   'connection-badge': () => import('../lib/components/ConnectionBadge.svelte'),
+  'dashboard-page': () => import('../lib/components/DashboardPage.svelte'),
+  'link-page': () => import('../lib/components/LinkPage.svelte'),
+  'login-form': () => import('../lib/components/LoginForm.svelte'),
+  'logs-page': () => import('../lib/components/LogsPage.svelte'),
+  'principals-page': () => import('../lib/components/PrincipalsPage.svelte'),
+  'secrets-page': () => import('../lib/components/SecretsPage.svelte'),
+  'thread-detail-page': () => import('../lib/components/ThreadDetailPage.svelte'),
+  'threads-page': () => import('../lib/components/ThreadsPage.svelte'),
+  'todos-page': () => import('../lib/components/TodosPage.svelte'),
+  'tools-page': () => import('../lib/components/ToolsPage.svelte'),
+  'usage-page': () => import('../lib/components/UsagePage.svelte'),
 };
 
 // Track mounted instances for clean unmounting.

@@ -721,7 +721,12 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	g.logger.Info("shutting down gateway")
 
 	var errs []error
-	errs = appendCloseError(errs, "HTTP shutdown", g.httpServer.Shutdown(ctx))
+	if err := g.httpServer.Shutdown(ctx); err != nil {
+		// SSE connections won't close gracefully within the timeout — force close.
+		g.logger.Debug("graceful HTTP shutdown timed out, forcing close", "error", err)
+		errs = append(errs, fmt.Errorf("http shutdown: %w", err))
+		_ = g.httpServer.Close()
+	}
 
 	g.shutdownGRPCServer(ctx)
 

@@ -8,8 +8,8 @@
     <title>{{.Title}} | Coven</title>
     {{/* Tailwind CSS is now served via Vite build (web/src/app.css). */}}
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    {{/* marked.js and DOMPurify are bundled via Vite for new Svelte components.
+         The legacy chat_app.html loads CDN scripts inline where needed. */}}
     {{/* TODO(Phase 2): Remove Google Fonts CDN once old templates migrate to token font stack.
          Inter is already self-hosted via Vite (web/src/fonts/InterVariable.woff2).
          These CDN fonts (DM Sans, Instrument Serif, IBM Plex Mono) are only for legacy templates. */}}

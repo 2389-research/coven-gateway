@@ -7,6 +7,18 @@ const config: StorybookConfig = {
     name: '@storybook/svelte-vite',
     options: {},
   },
+  viteFinal: async (config) => {
+    // esbuild 0.25.x has a resolution bug where it tries to read
+    // `node_modules/react` as a file instead of resolving the package
+    // entry point. Pre-bundling react/react-dom fixes this.
+    config.optimizeDeps = config.optimizeDeps || {};
+    config.optimizeDeps.include = [
+      ...(config.optimizeDeps.include || []),
+      'react',
+      'react-dom',
+    ];
+    return config;
+  },
 };
 
 export default config;
