@@ -14,7 +14,7 @@ Proceed to SPA **only if** at least 3 of these conditions are true:
 | # | Condition | Evidence Required |
 |---|-----------|-------------------|
 | 1 | Cross-page state sharing is causing bugs or duplication | Documented instances of state sync issues between islands |
-| 2 | Page transitions are noticeably slow (full page reload) | User complaints or metrics showing > 500ms transition times |
+| 2 | Page transitions are noticeably slow (full-page reload) | User complaints or metrics showing > 500ms transition times |
 | 3 | Offline or optimistic UI is a product requirement | Feature request from users or product roadmap item |
 | 4 | Deep linking / browser history needs exceed what HTMX provides | Specific UX flows that require URL-driven client-side state |
 | 5 | The team has grown beyond 2 developers and can absorb the maintenance cost | Actual headcount, not projected |
