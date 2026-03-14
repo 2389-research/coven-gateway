@@ -1,8 +1,8 @@
-// ABOUTME: Tests for build-tokens.ts strict mode and reference resolution.
-// ABOUTME: Validates resolveRefs handles valid refs, unresolved refs, and cyclic refs.
+// ABOUTME: Tests for token-utils.ts — pure functions used by build-tokens.ts.
+// ABOUTME: Validates flatten and resolveRefs handle valid refs, unresolved refs, and cyclic refs.
 
 import { describe, it, expect } from 'vitest';
-import { resolveRefs, flatten } from './build-tokens';
+import { resolveRefs, flatten } from './token-utils';
 
 describe('flatten', () => {
   it('flattens nested objects into dot-delimited paths', () => {
@@ -78,10 +78,7 @@ describe('resolveRefs', () => {
     expect(errors).toHaveLength(2);
   });
 
-  it('strict mode would fail when errors are present', () => {
-    // This test verifies the contract: if errors array is non-empty after
-    // resolution, strict mode should cause the build to fail. We test the
-    // errors collection mechanism that drives that decision.
+  it('accumulates errors across multiple resolveRefs calls with shared array', () => {
     const lookup = {
       'valid.ref': 'ok',
       'bad.chain': '{nonexistent}',
@@ -91,13 +88,10 @@ describe('resolveRefs', () => {
     expect(errors).toHaveLength(0);
 
     resolveRefs('{bad.chain}', lookup, errors);
-    // bad.chain resolves to '{nonexistent}' which then fails to resolve
     expect(errors.length).toBeGreaterThan(0);
 
-    // This is the condition checked in strict mode
-    const wouldFail = process.env.TOKENS_STRICT === '1' && errors.length > 0;
-    // In test context TOKENS_STRICT is not set, so wouldFail is false,
-    // but the errors array correctly captures the problems
-    expect(errors.length).toBeGreaterThan(0);
+    // A second bad call appends to the same array
+    resolveRefs('{also.missing}', lookup, errors);
+    expect(errors.length).toBeGreaterThan(1);
   });
 });
