@@ -230,7 +230,7 @@ Container widths:
 The token build script (`web/scripts/build-tokens.ts`) generates:
 
 1. **`web/src/styles/generated/variables.css`** — `:root` and `[data-theme="dark"]` blocks
-2. **`web/src/styles/generated/tailwind.ts`** — Tailwind theme extension mapping tokens to `hsl(var(--color-*) / <alpha-value>)`
+2. **`web/src/styles/generated/theme.css`** — Tailwind v4 @theme block mapping semantic colors to utilities
 
 Theme switching is a `data-theme` attribute on `<html>`. No class toggling, no JS runtime cost.
 
@@ -249,6 +249,7 @@ Theme switching is a `data-theme` attribute on `<html>`. No class toggling, no J
 ### Component Inventory
 
 #### Layout
+
 | Component | Purpose | Priority |
 |-----------|---------|----------|
 | `AppShell` | Top-level layout: sidebar + header + main content | P0 |
@@ -260,6 +261,7 @@ Theme switching is a `data-theme` attribute on `<html>`. No class toggling, no J
 | `Panel` | Side panel (settings, details) with slide animation | P1 |
 
 #### Navigation
+
 | Component | Purpose | Priority |
 |-----------|---------|----------|
 | `SidebarNav` | Vertical nav with icons, groups, active state, collapse | P0 |
@@ -269,6 +271,7 @@ Theme switching is a `data-theme` attribute on `<html>`. No class toggling, no J
 | `Pagination` | Page navigation for lists | P2 |
 
 #### Data Display
+
 | Component | Purpose | Priority |
 |-----------|---------|----------|
 | `Table` | Headless data table with sorting, selection, virtual scroll | P0 |
@@ -282,6 +285,7 @@ Theme switching is a `data-theme` attribute on `<html>`. No class toggling, no J
 | `Avatar` | User/agent avatar with fallback initials | P2 |
 
 #### Inputs
+
 | Component | Purpose | Priority |
 |-----------|---------|----------|
 | `Button` | Primary/secondary/ghost/danger, sm/md/lg sizes | P0 |
@@ -296,6 +300,7 @@ Theme switching is a `data-theme` attribute on `<html>`. No class toggling, no J
 | `TagInput` | Multi-value input with tag chips | P2 |
 
 #### Overlays
+
 | Component | Purpose | Priority |
 |-----------|---------|----------|
 | `Dialog` | Modal dialog with focus trap, escape close | P0 |
@@ -305,6 +310,7 @@ Theme switching is a `data-theme` attribute on `<html>`. No class toggling, no J
 | `ContextMenu` | Right-click menu | P2 |
 
 #### Feedback
+
 | Component | Purpose | Priority |
 |-----------|---------|----------|
 | `Toast` | Temporary notification with auto-dismiss | P0 |
@@ -316,6 +322,7 @@ Theme switching is a `data-theme` attribute on `<html>`. No class toggling, no J
 | `ProgressBar` | Determinate/indeterminate progress | P2 |
 
 #### Real-time & Chat
+
 | Component | Purpose | Priority |
 |-----------|---------|----------|
 | `ChatThread` | Scrollable message list with auto-scroll, date separators | P0 |
@@ -329,6 +336,7 @@ Theme switching is a `data-theme` attribute on `<html>`. No class toggling, no J
 | `TokenCounter` | Token usage display with progress bar | P2 |
 
 #### Domain-Specific
+
 | Component | Purpose | Priority |
 |-----------|---------|----------|
 | `AgentList` | Filterable agent list with status, name, model | P0 |
@@ -413,7 +421,7 @@ export function createSSEStore<T>(url: string, parse: (data: string) => T) {
 
 ### Directory Structure
 
-```
+```text
 web/
 ├── tokens/
 │   └── tokens.json              <- Design token source of truth

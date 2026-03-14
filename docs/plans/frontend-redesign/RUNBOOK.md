@@ -227,9 +227,9 @@ Phase N+1:
 
 1. **If you're about to type a second unrelated task in the same session, stop.** `/clear` or start a new session.
 
-2. **If Claude asks "should I also..." for something outside the current deliverable scope, say no.** Scope creep within a session is how context fills up.
+2. **When Claude asks "should I also..." for something outside the current deliverable scope, say no.** Scope creep within a session is how context fills up.
 
-3. **If a session has been running >20 minutes, assess whether to continue or commit and restart.** Long sessions degrade. Short focused sessions compound.
+3. **Long sessions degrade — assess at the 20-minute mark whether to continue or commit and restart.** Short focused sessions compound.
 
 4. **Always state what's already done.** Claude can't see git history efficiently. Tell it "deliverables 1-6 are committed" so it doesn't re-investigate.
 

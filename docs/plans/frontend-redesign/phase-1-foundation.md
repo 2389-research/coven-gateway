@@ -49,7 +49,7 @@ All of the following must pass before proceeding to Phase 2:
 
 ## Suggested Task Order
 
-```
+```text
 1. Initialize web/ project (Vite + Svelte 5 + TS)     ← scaffolding
 2. Token build script (variables.css only)              ← design foundation
 3. internal/assets/embed.go + ScriptTags()              ← Go integration

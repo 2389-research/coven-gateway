@@ -1,3 +1,6 @@
+// ABOUTME: Reads tokens.json and generates CSS custom properties and Tailwind v4 theme files.
+// ABOUTME: Supports TOKENS_STRICT=1 env var to fail on unresolved or cyclic token references.
+
 /**
  * Reads tokens.json and generates:
  *   1. variables.css — CSS custom properties for all tokens
@@ -10,6 +13,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
+import { flatten, resolveRefs } from './token-utils';
 
 const TOKENS_PATH = resolve(import.meta.dirname!, '..', 'tokens', 'tokens.json');
 const OUTPUT_DIR = resolve(import.meta.dirname!, '..', 'src', 'styles', 'generated');
@@ -18,41 +22,6 @@ const THEME_PATH = resolve(OUTPUT_DIR, 'theme.css');
 
 // Read and parse tokens
 const tokens = JSON.parse(readFileSync(TOKENS_PATH, 'utf-8'));
-
-// Flatten a nested object into path→value pairs: { "a.b.c": "value" }
-function flatten(obj: unknown, prefix = ''): Record<string, string> {
-  const result: Record<string, string> = {};
-  if (typeof obj !== 'object' || obj === null) return result;
-  for (const [key, value] of Object.entries(obj)) {
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (typeof value === 'object' && value !== null) {
-      Object.assign(result, flatten(value, path));
-    } else {
-      result[path] = String(value);
-    }
-  }
-  return result;
-}
-
-// Resolve {path.to.value} references against a flat lookup.
-// Tracks visited refs to prevent infinite recursion on cyclic references.
-function resolveRefs(value: string, lookup: Record<string, string>, visited = new Set<string>()): string {
-  return value.replace(/\{([^}]+)\}/g, (_, ref: string) => {
-    if (visited.has(ref)) {
-      console.warn(`Cyclic token reference detected: {${ref}}`);
-      return `{${ref}}`;
-    }
-    const resolved = lookup[ref];
-    if (resolved === undefined) {
-      console.warn(`Unresolved token reference: {${ref}}`);
-      return `{${ref}}`;
-    }
-    // Recursively resolve in case of chained references
-    const next = new Set(visited);
-    next.add(ref);
-    return resolveRefs(resolved, lookup, next);
-  });
-}
 
 // Convert a flat key to CSS var name.
 // Color tokens get --cg-* prefix; non-color tokens get --{category}-* prefix.
@@ -76,10 +45,20 @@ function wrapHsl(value: string): string {
 // Build the full flat lookup for reference resolution
 const allFlat = flatten(tokens);
 
-// Resolve all references
+// Resolve all references, collecting any errors for strict mode
+const tokenErrors: string[] = [];
 const resolved: Record<string, string> = {};
 for (const [key, value] of Object.entries(allFlat)) {
-  resolved[key] = resolveRefs(value, allFlat);
+  resolved[key] = resolveRefs(value, allFlat, tokenErrors);
+}
+
+// In strict mode (TOKENS_STRICT=1), fail the build on any unresolved or cyclic references
+if (process.env.TOKENS_STRICT === '1' && tokenErrors.length > 0) {
+  console.error(`\nStrict mode: ${tokenErrors.length} token reference error(s) found:`);
+  for (const err of tokenErrors) {
+    console.error(`  - ${err}`);
+  }
+  process.exit(1);
 }
 
 // Group tokens for output
