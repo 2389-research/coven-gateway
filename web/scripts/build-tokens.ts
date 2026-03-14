@@ -1,3 +1,6 @@
+// ABOUTME: Reads tokens.json and generates CSS custom properties and Tailwind v4 theme files.
+// ABOUTME: Supports TOKENS_STRICT=1 env var to fail on unresolved or cyclic token references.
+
 /**
  * Reads tokens.json and generates:
  *   1. variables.css — CSS custom properties for all tokens
@@ -20,7 +23,7 @@ const THEME_PATH = resolve(OUTPUT_DIR, 'theme.css');
 const tokens = JSON.parse(readFileSync(TOKENS_PATH, 'utf-8'));
 
 // Flatten a nested object into path→value pairs: { "a.b.c": "value" }
-function flatten(obj: unknown, prefix = ''): Record<string, string> {
+export function flatten(obj: unknown, prefix = ''): Record<string, string> {
   const result: Record<string, string> = {};
   if (typeof obj !== 'object' || obj === null) return result;
   for (const [key, value] of Object.entries(obj)) {
@@ -36,21 +39,31 @@ function flatten(obj: unknown, prefix = ''): Record<string, string> {
 
 // Resolve {path.to.value} references against a flat lookup.
 // Tracks visited refs to prevent infinite recursion on cyclic references.
-function resolveRefs(value: string, lookup: Record<string, string>, visited = new Set<string>()): string {
+// Collects error messages into the provided errors array for strict mode enforcement.
+export function resolveRefs(
+  value: string,
+  lookup: Record<string, string>,
+  errors: string[] = [],
+  visited = new Set<string>(),
+): string {
   return value.replace(/\{([^}]+)\}/g, (_, ref: string) => {
     if (visited.has(ref)) {
-      console.warn(`Cyclic token reference detected: {${ref}}`);
+      const msg = `Cyclic token reference detected: {${ref}}`;
+      console.warn(msg);
+      errors.push(msg);
       return `{${ref}}`;
     }
     const resolved = lookup[ref];
     if (resolved === undefined) {
-      console.warn(`Unresolved token reference: {${ref}}`);
+      const msg = `Unresolved token reference: {${ref}}`;
+      console.warn(msg);
+      errors.push(msg);
       return `{${ref}}`;
     }
     // Recursively resolve in case of chained references
     const next = new Set(visited);
     next.add(ref);
-    return resolveRefs(resolved, lookup, next);
+    return resolveRefs(resolved, lookup, errors, next);
   });
 }
 
@@ -76,10 +89,20 @@ function wrapHsl(value: string): string {
 // Build the full flat lookup for reference resolution
 const allFlat = flatten(tokens);
 
-// Resolve all references
+// Resolve all references, collecting any errors for strict mode
+const tokenErrors: string[] = [];
 const resolved: Record<string, string> = {};
 for (const [key, value] of Object.entries(allFlat)) {
-  resolved[key] = resolveRefs(value, allFlat);
+  resolved[key] = resolveRefs(value, allFlat, tokenErrors);
+}
+
+// In strict mode (TOKENS_STRICT=1), fail the build on any unresolved or cyclic references
+if (process.env.TOKENS_STRICT === '1' && tokenErrors.length > 0) {
+  console.error(`\nStrict mode: ${tokenErrors.length} token reference error(s) found:`);
+  for (const err of tokenErrors) {
+    console.error(`  - ${err}`);
+  }
+  process.exit(1);
 }
 
 // Group tokens for output

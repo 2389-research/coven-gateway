@@ -34,6 +34,21 @@
 | Dark theme has too many contrast issues | Ship without dark theme. Add it as a separate Phase 5b after manual audit of all semantic token mappings against WCAG 2.1 AA. |
 | CSP breaks third-party integrations added later | Use `nonce`-based CSP instead of hash-based. Generate per-request nonces in Go, pass to template. |
 
+## CSP Mitigation for Island Props
+
+Svelte island components receive server-side props via `<script type="application/json">` blocks
+embedded in Go templates. Since `type="application/json"` blocks are not executable, they do not
+violate `script-src` CSP directives. However, the overall CSP policy uses nonce-based enforcement:
+
+- The Go server generates a per-request cryptographic nonce and passes it to the base template.
+- All executable `<script>` tags include `nonce="{{.CSPNonce}}"`.
+- The `Content-Security-Policy` header is set to `script-src 'nonce-<value>'` (no `'unsafe-inline'`).
+- `<script type="application/json">` blocks do not need a nonce because browsers do not execute them.
+- The island hydration script (`islands.ts`) reads the JSON data and passes it as props during mount.
+
+This approach satisfies CSP without requiring hash-based policies, and scales to any number of
+islands without per-component CSP bookkeeping.
+
 ## Bundle Budget
 
 | Asset | Limit (gzipped) |
