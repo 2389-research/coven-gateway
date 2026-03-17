@@ -94,16 +94,13 @@ func (d *Discoverer) Discover(ctx context.Context) ([]Session, error) {
 		}
 
 		// Resolve the actual binary running in this pane.
-		binPath, err := resolveBinary(ctx, panePID)
-		if err != nil {
-			d.logger.Debug("could not resolve binary", "pane", paneID, "pid", panePID, "err", err)
+		// pane_pid is typically the shell (zsh/bash); Claude runs as a child.
+		binPath, _ := findClaudeBinary(ctx, panePID)
+		if binPath == "" {
 			continue
 		}
 
 		binName := filepath.Base(binPath)
-		if !isClaudeBinary(binName) {
-			continue
-		}
 
 		sess := Session{
 			SessionName: sessionName,
@@ -125,7 +122,50 @@ func (d *Discoverer) Discover(ctx context.Context) ([]Session, error) {
 	return sessions, nil
 }
 
-// resolveBinary gets the actual binary path for a PID.
+// findClaudeBinary checks the given PID and its children (up to 2 levels deep)
+// for a known Claude binary. Returns (binaryPath, pid, nil) if found, or ("", "", nil)
+// if no Claude binary exists in the process tree. The pid return value is the PID
+// of the process running the Claude binary (which may differ from the input pid).
+func findClaudeBinary(ctx context.Context, pid string) (binPath string, claudePID string) {
+	// Check the PID itself first (handles direct exec, e.g. claude-sim).
+	if path, ok := resolveIfClaude(ctx, pid); ok {
+		return path, pid
+	}
+
+	// Walk children — real Claude sessions are typically shell → claude.
+	children := childPIDs(ctx, pid)
+	for _, cpid := range children {
+		if path, ok := resolveIfClaude(ctx, cpid); ok {
+			return path, cpid
+		}
+	}
+
+	// One more level: shell → wrapper → claude (uncommon but possible).
+	for _, cpid := range children {
+		for _, gpid := range childPIDs(ctx, cpid) {
+			if path, ok := resolveIfClaude(ctx, gpid); ok {
+				return path, gpid
+			}
+		}
+	}
+
+	return "", ""
+}
+
+// resolveIfClaude resolves a PID's binary and returns its path if it's a known
+// Claude binary. Returns ("", false) if the PID doesn't resolve or isn't Claude.
+func resolveIfClaude(ctx context.Context, pid string) (string, bool) {
+	binPath, err := resolveBinary(ctx, pid)
+	if err != nil {
+		return "", false
+	}
+	if isClaudeBinary(filepath.Base(binPath)) {
+		return binPath, true
+	}
+	return "", false
+}
+
+// resolveBinary gets the binary name/path for a PID.
 // On macOS: ps -o comm= -p <pid> (returns full path for Mach-O binaries).
 // On Linux: readlink /proc/<pid>/exe.
 func resolveBinary(ctx context.Context, pid string) (string, error) {
@@ -143,6 +183,22 @@ func resolveBinary(ctx context.Context, pid string) (string, error) {
 		}
 		return strings.TrimSpace(string(out)), nil
 	}
+}
+
+// childPIDs returns the PIDs of direct child processes. Works on macOS and Linux.
+// Returns nil if the process has no children or pgrep fails (both are normal).
+func childPIDs(ctx context.Context, pid string) []string {
+	out, err := exec.CommandContext(ctx, "pgrep", "-P", pid).Output()
+	if err != nil {
+		return nil // pgrep exits 1 when no children — not an error
+	}
+	var pids []string
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			pids = append(pids, line)
+		}
+	}
+	return pids
 }
 
 // isClaudeBinary checks if a binary name matches known Claude Code binaries.
