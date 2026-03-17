@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +20,17 @@ import (
 // ANSI escape sequence pattern for stripping terminal formatting.
 // Covers: CSI sequences (\x1b[...X), CSI with ? prefix (\x1b[?...X for DEC private modes),
 // OSC sequences (\x1b]...\x07), and carriage returns.
+// Note: cursor-right (\x1b[nC) and cursor-down (\x1b[nB) are handled separately
+// by StripANSI to preserve word spacing and line breaks before this regex runs.
 var ansiRegex = regexp.MustCompile(`\x1b\[\??[0-9;]*[a-zA-Z]|\x1b\].*?\x07|\r`)
+
+// cursorRightRegex matches CSI cursor-forward sequences (\x1b[nC).
+// Claude's TUI uses these as spaces between words; stripping them loses word boundaries.
+var cursorRightRegex = regexp.MustCompile(`\x1b\[(\d*)C`)
+
+// Note: cursor-down (\x1b[nB) is NOT replaced with newlines because
+// the TUI uses it heavily for re-rendering, which would create false line breaks.
+// Cursor-down is stripped by the general ansiRegex instead.
 
 // promptPattern matches Claude Code's magenta arrow prompt (after ANSI stripping).
 // The prompt appears as "❯ " at the start of a line.
@@ -34,6 +45,11 @@ var horizontalRulePattern = regexp.MustCompile(`(?m)^─{10,}`)
 // The pattern looks for a word ending with "…" or "..." optionally preceded by
 // a spinner character (✽, ✻, ✶, ✳, ✢, ·, ⏺, or braille spinners).
 var thinkingPattern = regexp.MustCompile(`(?:Thinking\.\.\.|[\p{L}]+…)`)
+
+// realContentPattern requires at least one word of 3+ letters.
+// Filters out TUI rendering fragments (single characters like "P", "Dn", "og")
+// that appear during character-at-a-time screen re-rendering.
+var realContentPattern = regexp.MustCompile(`\p{L}{3,}`)
 
 // tuiChromePatterns matches Claude Code's TUI chrome that gets mixed into pipe-pane output.
 // These appear on the same line as response text due to terminal re-rendering.
@@ -220,8 +236,29 @@ func (p *PaneIO) ReadPipeOutput(offset int64) (string, int64, error) {
 }
 
 // StripANSI removes ANSI escape sequences from terminal output.
+// Cursor-right (\x1b[nC) is replaced with spaces and cursor-down (\x1b[nB)
+// with newlines BEFORE stripping, so word boundaries and line breaks survive.
 func StripANSI(s string) string {
+	// Phase 1: Replace cursor movements with whitespace equivalents.
+	s = cursorRightRegex.ReplaceAllStringFunc(s, func(m string) string {
+		return strings.Repeat(" ", parseCursorN(m))
+	})
+	// Phase 2: Strip remaining ANSI sequences and carriage returns.
 	return ansiRegex.ReplaceAllString(s, "")
+}
+
+// parseCursorN extracts N from a CSI sequence like \x1b[NC or \x1b[NB.
+// Returns 1 when N is omitted (CSI default).
+func parseCursorN(seq string) int {
+	// seq is \x1b[<digits><letter>, extract the digits.
+	inner := seq[2 : len(seq)-1]
+	if inner == "" {
+		return 1
+	}
+	if n, err := strconv.Atoi(inner); err == nil && n > 0 {
+		return min(n, 200) // cap to avoid absurd allocations
+	}
+	return 1
 }
 
 // ResponseState tracks the state of Claude's response in terminal output.
@@ -360,10 +397,24 @@ func (r *ResponseTracker) handleThinkingLine(line, trimmed string) {
 	if isSpinnerFrame(trimmed) || trimmed == "" {
 		return
 	}
+	// Horizontal rules during thinking are TUI separators (between prompt and response area).
+	if horizontalRulePattern.MatchString(trimmed) {
+		return
+	}
+	// Prompt lines (❯) appear in TUI re-renders during thinking — skip them.
+	if promptPattern.MatchString(trimmed) {
+		return
+	}
 	// Any real content means response started.
 	cleaned := cleanTUIChrome(line)
-	if strings.TrimSpace(cleaned) == "" {
+	cleanedTrimmed := strings.TrimSpace(cleaned)
+	if cleanedTrimmed == "" {
 		return // was only TUI chrome
+	}
+	// Skip TUI rendering fragments (single characters from incremental re-draws).
+	// Real response text always contains at least one word of 3+ letters.
+	if !realContentPattern.MatchString(cleanedTrimmed) {
+		return
 	}
 	r.state = StateResponding
 	r.textBuf.Reset()
