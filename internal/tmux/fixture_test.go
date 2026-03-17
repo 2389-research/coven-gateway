@@ -267,6 +267,40 @@ func TestFixture_ErrorResponse(t *testing.T) {
 	}
 }
 
+func TestFixture_RealClaudeSession(t *testing.T) {
+	// Real pipe-pane output captured from Claude Code v2.x on macOS.
+	// This is raw terminal output with ANSI codes, TUI chrome, DEC private modes.
+	path := filepath.Join("testdata", "real_claude_session.raw")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Skipf("skipping real session test: %v", err)
+	}
+
+	tracker, events := newTestTracker("Hi there what are you working on")
+	clean := StripANSI(string(data))
+	feedFixture(t, tracker, clean)
+
+	if !hasThinkingEvent(*events) {
+		t.Error("real session: expected thinking event (Pontificating…)")
+	}
+	if !hasDoneEvent(*events) {
+		t.Fatal("real session: expected done event — response not detected")
+	}
+
+	doneText := extractDoneText(*events)
+	// The response should contain actual content, not TUI chrome.
+	if strings.Contains(doneText, "How is Claude doing") {
+		t.Error("real session: TUI chrome leaked into response text")
+	}
+	if strings.Contains(doneText, "bypass permissions") {
+		t.Error("real session: permission hint leaked into response text")
+	}
+	// Should contain some actual response content.
+	if !strings.Contains(doneText, "report") {
+		t.Errorf("real session: expected response about reports, got: %q", doneText[:min(len(doneText), 200)])
+	}
+}
+
 func TestFixture_ChunkedDelivery(t *testing.T) {
 	// Simulate pipe-pane delivering the same fixture in small chunks
 	// (more realistic than single-chunk delivery).

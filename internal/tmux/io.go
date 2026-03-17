@@ -17,14 +17,48 @@ import (
 )
 
 // ANSI escape sequence pattern for stripping terminal formatting.
-var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07|\r`)
+// Covers: CSI sequences (\x1b[...X), CSI with ? prefix (\x1b[?...X for DEC private modes),
+// OSC sequences (\x1b]...\x07), and carriage returns.
+var ansiRegex = regexp.MustCompile(`\x1b\[\??[0-9;]*[a-zA-Z]|\x1b\].*?\x07|\r`)
 
 // promptPattern matches Claude Code's magenta arrow prompt (after ANSI stripping).
 // The prompt appears as "❯ " at the start of a line.
 var promptPattern = regexp.MustCompile(`(?m)^❯\s*$`)
 
 // horizontalRulePattern matches Claude's dim horizontal rule separator.
-var horizontalRulePattern = regexp.MustCompile(`(?m)^─{10,}$`)
+// Allows trailing whitespace/TUI chrome after the rule characters.
+var horizontalRulePattern = regexp.MustCompile(`(?m)^─{10,}`)
+
+// thinkingPattern matches Claude Code's animated thinking indicator.
+// Claude uses verbs like "Thinking...", "Pontificating…", "Channeling…" etc.
+// The pattern looks for a word ending with "…" or "..." optionally preceded by
+// a spinner character (✽, ✻, ✶, ✳, ✢, ·, ⏺, or braille spinners).
+var thinkingPattern = regexp.MustCompile(`(?:Thinking\.\.\.|[\p{L}]+…)`)
+
+// tuiChromePatterns matches Claude Code's TUI chrome that gets mixed into pipe-pane output.
+// These appear on the same line as response text due to terminal re-rendering.
+var tuiChromePatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)How is Claude doing this session\?.*`),
+	regexp.MustCompile(`\d+:\s*Bad.*\d+:\s*Fine.*\d+:\s*Good.*\d+:\s*Dismiss`),
+	regexp.MustCompile(`bypass permissions on.*shift\+tab.*`),
+	regexp.MustCompile(`[⏵]{2}.*`), // double-triangle permission hint prefix
+}
+
+// cleanTUIChrome removes Claude's TUI chrome from a line (feedback prompts, permission hints).
+func cleanTUIChrome(line string) string {
+	// Find the earliest chrome match and truncate there.
+	// TUI chrome always appears at the end of actual content.
+	earliest := len(line)
+	for _, pat := range tuiChromePatterns {
+		if loc := pat.FindStringIndex(line); loc != nil && loc[0] < earliest {
+			earliest = loc[0]
+		}
+	}
+	if earliest < len(line) {
+		line = line[:earliest]
+	}
+	return line
+}
 
 // PaneIO handles input/output for a single tmux pane.
 type PaneIO struct {
@@ -261,10 +295,9 @@ func (r *ResponseTracker) processLine(line string) {
 		return
 	}
 
-	// In StateIdle, detect "Thinking..." BEFORE the spinner filter.
-	// pipe-pane merges spinner frames with "Thinking..." into one line
-	// (e.g. "⠋ Thinking...⠙ Thinking...") because \r is stripped.
-	if r.state == StateIdle && strings.Contains(trimmed, "Thinking...") {
+	// In StateIdle, detect thinking BEFORE the spinner filter.
+	// Claude shows animated verbs: "Thinking...", "Pontificating…", "Channeling…", etc.
+	if r.state == StateIdle && thinkingPattern.MatchString(trimmed) {
 		r.transitionToThinking()
 		return
 	}
@@ -292,6 +325,20 @@ func (r *ResponseTracker) shouldSkipLine(trimmed string) bool {
 	if r.inputText != "" && r.isInputEcho(trimmed) {
 		return true
 	}
+	// Skip lines that are entirely TUI chrome (feedback prompt, permission hint).
+	if isTUIChromeLine(trimmed) {
+		return true
+	}
+	return false
+}
+
+// isTUIChromeLine returns true if the line consists entirely of TUI chrome.
+func isTUIChromeLine(trimmed string) bool {
+	for _, pat := range tuiChromePatterns {
+		if pat.MatchString(trimmed) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -307,20 +354,24 @@ func (r *ResponseTracker) transitionToThinking() {
 // handleThinkingLine processes a line while in the thinking state.
 // Must be called with r.mu held.
 func (r *ResponseTracker) handleThinkingLine(line, trimmed string) {
-	if strings.Contains(trimmed, "Thinking...") {
+	if thinkingPattern.MatchString(trimmed) {
 		return // still thinking
 	}
-	if trimmed == "" {
+	if isSpinnerFrame(trimmed) || trimmed == "" {
 		return
 	}
 	// Any real content means response started.
+	cleaned := cleanTUIChrome(line)
+	if strings.TrimSpace(cleaned) == "" {
+		return // was only TUI chrome
+	}
 	r.state = StateResponding
 	r.textBuf.Reset()
 	r.sawRule = false
-	r.textBuf.WriteString(line)
+	r.textBuf.WriteString(cleaned)
 	r.textBuf.WriteString("\n")
 	r.logger.Debug("state: thinking → responding")
-	r.notify(StateResponding, line)
+	r.notify(StateResponding, cleaned)
 }
 
 // handleRespondingLine processes a line while in the responding state.
@@ -339,6 +390,10 @@ func (r *ResponseTracker) handleRespondingLine(line, trimmed string) {
 		}
 		return
 	}
+	// Still-thinking lines during responding (Claude re-renders thinking indicator).
+	if thinkingPattern.MatchString(trimmed) {
+		return
+	}
 	// After a horizontal rule, empty lines before the prompt are expected.
 	// Don't reset sawRule or accumulate them.
 	if r.sawRule {
@@ -348,9 +403,15 @@ func (r *ResponseTracker) handleRespondingLine(line, trimmed string) {
 		// Non-empty, non-prompt text after rule = false boundary.
 		r.sawRule = false
 	}
-	r.textBuf.WriteString(line)
+	// Clean TUI chrome from response lines.
+	cleaned := cleanTUIChrome(line)
+	cleanedTrimmed := strings.TrimSpace(cleaned)
+	if cleanedTrimmed == "" {
+		return // was only TUI chrome
+	}
+	r.textBuf.WriteString(cleaned)
 	r.textBuf.WriteString("\n")
-	r.notify(StateResponding, line)
+	r.notify(StateResponding, cleaned)
 }
 
 // completeDone transitions from responding to done, then resets to idle.
@@ -392,7 +453,7 @@ func (r *ResponseTracker) FlushPending() {
 	// This avoids fragmenting partial words into the text buffer.
 	switch r.state {
 	case StateIdle:
-		if strings.Contains(trimmed, "Thinking...") {
+		if thinkingPattern.MatchString(trimmed) {
 			r.pending = ""
 			r.state = StateThinking
 			r.sawRule = false
@@ -551,7 +612,12 @@ func WaitForResponse(ctx context.Context, tracker *ResponseTracker, paneIO *Pane
 }
 
 func isSpinnerFrame(s string) bool {
-	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	// Braille spinners (claude-sim and older Claude versions).
+	// Star/dot spinners (Claude Code v2.x TUI).
+	spinners := []string{
+		"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏",
+		"✽", "✻", "✶", "✳", "✢", "·", "⏺",
+	}
 	for _, sp := range spinners {
 		if strings.HasPrefix(s, sp) {
 			return true
