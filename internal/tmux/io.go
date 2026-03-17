@@ -432,13 +432,36 @@ func (r *ResponseTracker) isInputEcho(trimmed string) bool {
 	return false
 }
 
+// State returns the current response state (for external status checks).
+func (r *ResponseTracker) State() ResponseState {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.state
+}
+
+// String returns a human-readable name for a ResponseState.
+func (s ResponseState) String() string {
+	switch s {
+	case StateIdle:
+		return "idle"
+	case StateThinking:
+		return "thinking"
+	case StateResponding:
+		return "responding"
+	case StateDone:
+		return "done"
+	default:
+		return "unknown"
+	}
+}
+
 // WaitForResponse blocks until a complete response is captured or the context expires.
 // startOffset should be PaneIO.CurrentPipeSize() captured BEFORE sending input.
-func WaitForResponse(ctx context.Context, tracker *ResponseTracker, paneIO *PaneIO, startOffset int64, pollInterval time.Duration) (string, error) {
-	var result string
-	done := make(chan struct{}, 1)
-
+// installResponseCallbacks resets the tracker and wires up channels for done/thinking signals.
+func installResponseCallbacks(tracker *ResponseTracker, result *string, done, thinkingDetected chan struct{}) {
 	tracker.mu.Lock()
+	defer tracker.mu.Unlock()
+
 	origOnChange := tracker.onChange
 	tracker.state = StateIdle
 	tracker.textBuf.Reset()
@@ -448,19 +471,65 @@ func WaitForResponse(ctx context.Context, tracker *ResponseTracker, paneIO *Pane
 		if origOnChange != nil {
 			origOnChange(state, text)
 		}
-		if state == StateDone {
-			result = text
+		switch state {
+		case StateThinking:
+			select {
+			case thinkingDetected <- struct{}{}:
+			default:
+			}
+		case StateDone:
+			*result = text
 			select {
 			case done <- struct{}{}:
 			default:
 			}
 		}
 	}
-	tracker.mu.Unlock()
+}
+
+// drainTimer stops a timer and drains its channel if needed.
+func drainTimer(t *time.Timer) {
+	if !t.Stop() {
+		select {
+		case <-t.C:
+		default:
+		}
+	}
+}
+
+// pollPipeOutput reads new pipe data, feeds it to the tracker, and returns the new offset.
+func pollPipeOutput(tracker *ResponseTracker, paneIO *PaneIO, offset int64) int64 {
+	raw, newOffset, err := paneIO.ReadPipeOutput(offset)
+	if err != nil {
+		tracker.logger.Debug("read pipe error", "err", err, "offset", offset)
+		return offset
+	}
+	if newOffset > offset {
+		tracker.logger.Debug("pipe data read", "bytes", newOffset-offset, "offset", offset)
+		clean := StripANSI(raw)
+		tracker.Feed(clean)
+		tracker.FlushPending()
+	}
+	return newOffset
+}
+
+func WaitForResponse(ctx context.Context, tracker *ResponseTracker, paneIO *PaneIO, startOffset int64, pollInterval time.Duration) (string, error) {
+	var result string
+	done := make(chan struct{}, 1)
+	thinkingDetected := make(chan struct{}, 1)
+
+	installResponseCallbacks(tracker, &result, done, thinkingDetected)
 
 	offset := startOffset
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
+
+	// Busy detection: if Claude doesn't start thinking within 30s,
+	// it's likely already processing something else.
+	const busyTimeout = 30 * time.Second
+	busyTimer := time.NewTimer(busyTimeout)
+	defer busyTimer.Stop()
+	busyChecked := false
 
 	for {
 		select {
@@ -468,19 +537,15 @@ func WaitForResponse(ctx context.Context, tracker *ResponseTracker, paneIO *Pane
 			return "", ctx.Err()
 		case <-done:
 			return strings.TrimSpace(result), nil
+		case <-thinkingDetected:
+			drainTimer(busyTimer)
+			busyChecked = true
+		case <-busyTimer.C:
+			if !busyChecked {
+				return "", errors.New("claude appears busy: no thinking detected within 30s (may be processing another request)")
+			}
 		case <-ticker.C:
-			raw, newOffset, err := paneIO.ReadPipeOutput(offset)
-			if err != nil {
-				tracker.logger.Debug("read pipe error", "err", err, "offset", offset)
-				continue
-			}
-			if newOffset > offset {
-				tracker.logger.Debug("pipe data read", "bytes", newOffset-offset, "offset", offset)
-				offset = newOffset
-				clean := StripANSI(raw)
-				tracker.Feed(clean)
-				tracker.FlushPending()
-			}
+			offset = pollPipeOutput(tracker, paneIO, offset)
 		}
 	}
 }

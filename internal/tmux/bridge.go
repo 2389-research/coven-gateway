@@ -353,3 +353,18 @@ func (b *Bridge) heartbeatLoop(ctx context.Context) {
 		}
 	}
 }
+
+// Status returns the current bridge state for status logging.
+func (b *Bridge) Status() string {
+	b.mu.Lock()
+	running := b.running
+	b.mu.Unlock()
+
+	if !running {
+		return "stopped"
+	}
+	if b.tracker != nil {
+		return b.tracker.State().String()
+	}
+	return "connected"
+}

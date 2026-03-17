@@ -1,0 +1,7 @@
+Claude Code (claude-code) v1.0.32
+
+  /help for help, /status for your plan limits
+
+cwd: /Users/dev/myproject
+
+❯

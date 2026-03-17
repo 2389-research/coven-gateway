@@ -1,0 +1,14 @@
+what does main.go do
+❯ what does main.go do
+⠋ Thinking...⠙ Thinking...⠹ Thinking...
+The `main.go` file is the entry point for the application. It:
+
+1. Parses command-line flags
+2. Loads configuration from `COVEN_CONFIG` or default path
+3. Initializes the gateway with gRPC and HTTP servers
+4. Starts listening for agent connections
+
+The key function is `runServe()` which orchestrates the full startup sequence.
+─────────────────────────────────────────────────────────────────
+
+❯

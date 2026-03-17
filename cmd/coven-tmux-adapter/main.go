@@ -16,6 +16,12 @@ import (
 	"github.com/2389/coven-gateway/internal/tmux"
 )
 
+// bridgeEntry tracks a running bridge and its cancel function.
+type bridgeEntry struct {
+	bridge *tmux.Bridge
+	cancel context.CancelFunc
+}
+
 func main() {
 	gatewayAddr := flag.String("gateway", "localhost:50051", "coven-gateway gRPC address")
 	scanInterval := flag.Duration("scan-interval", 10*time.Second, "interval between tmux scans")
@@ -42,7 +48,7 @@ func run(ctx context.Context, logger *slog.Logger, gatewayAddr string, scanInter
 	discoverer := tmux.NewDiscoverer(logger)
 
 	// Track active bridges by agent ID to avoid duplicates.
-	bridges := make(map[string]context.CancelFunc)
+	bridges := make(map[string]*bridgeEntry)
 	var mu sync.Mutex
 
 	scan := func() {
@@ -74,9 +80,9 @@ func run(ctx context.Context, logger *slog.Logger, gatewayAddr string, scanInter
 			)
 
 			bridgeCtx, bridgeCancel := context.WithCancel(ctx)
-			bridges[agentID] = bridgeCancel
-
 			bridge := tmux.NewBridge(sess, gatewayAddr, logger)
+			bridges[agentID] = &bridgeEntry{bridge: bridge, cancel: bridgeCancel}
+
 			go func(id string) {
 				if err := bridge.Run(bridgeCtx); err != nil {
 					logger.Error("bridge exited", "agent_id", id, "err", err)
@@ -88,10 +94,10 @@ func run(ctx context.Context, logger *slog.Logger, gatewayAddr string, scanInter
 		}
 
 		// Clean up bridges for sessions that no longer exist.
-		for id, cancelFn := range bridges {
+		for id, entry := range bridges {
 			if !alive[id] {
 				logger.Info("session disappeared, stopping bridge", "agent_id", id)
-				cancelFn()
+				entry.cancel()
 				delete(bridges, id)
 			}
 		}
@@ -110,22 +116,49 @@ func run(ctx context.Context, logger *slog.Logger, gatewayAddr string, scanInter
 		return nil
 	}
 
-	// Continuous re-scanning.
-	ticker := time.NewTicker(scanInterval)
-	defer ticker.Stop()
+	// Continuous re-scanning + periodic status logging.
+	scanTicker := time.NewTicker(scanInterval)
+	defer scanTicker.Stop()
+
+	statusTicker := time.NewTicker(60 * time.Second)
+	defer statusTicker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Info("shutting down")
 			mu.Lock()
-			for _, cancelFn := range bridges {
-				cancelFn()
+			for _, entry := range bridges {
+				entry.cancel()
 			}
 			mu.Unlock()
 			return nil
-		case <-ticker.C:
+		case <-scanTicker.C:
 			scan()
+		case <-statusTicker.C:
+			logBridgeStatus(logger, &mu, bridges)
 		}
 	}
+}
+
+// logBridgeStatus logs the current state of all active bridges.
+func logBridgeStatus(logger *slog.Logger, mu *sync.Mutex, bridges map[string]*bridgeEntry) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(bridges) == 0 {
+		logger.Info("adapter status: no active bridges")
+		return
+	}
+
+	states := make(map[string]int)
+	for _, entry := range bridges {
+		status := entry.bridge.Status()
+		states[status]++
+	}
+
+	logger.Info("adapter status",
+		"bridges", len(bridges),
+		"states", states,
+	)
 }

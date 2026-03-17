@@ -1,0 +1,20 @@
+read the config file
+❯ read the config file
+⠋ Thinking...⠙ Thinking...
+I'll read the configuration file for you.
+
+📂 Read config.yaml
+
+server:
+  grpc_addr: "0.0.0.0:50051"
+  http_addr: "0.0.0.0:8080"
+database:
+  path: "/app/data/gateway.db"
+
+The config file defines:
+- **gRPC server** on port 50051 for agent connections
+- **HTTP server** on port 8080 for the REST API
+- **SQLite database** at `/app/data/gateway.db`
+─────────────────────────────────────────────────────────────────
+
+❯
