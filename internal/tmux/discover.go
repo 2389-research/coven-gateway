@@ -131,7 +131,7 @@ func (d *Discoverer) Discover(ctx context.Context) ([]Session, error) {
 func resolveBinary(ctx context.Context, pid string) (string, error) {
 	switch runtime.GOOS {
 	case "linux":
-		target, err := exec.CommandContext(ctx, "readlink", "/proc/"+pid+"/exe").Output() //nolint:gosec // G204: pid comes from trusted tmux pane_pid
+		target, err := exec.CommandContext(ctx, "readlink", "/proc/"+pid+"/exe").Output()
 		if err != nil {
 			return "", fmt.Errorf("readlink /proc/%s/exe: %w", pid, err)
 		}
