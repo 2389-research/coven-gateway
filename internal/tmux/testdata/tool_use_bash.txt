@@ -1,0 +1,20 @@
+run the tests
+❯ run the tests
+⠋ Thinking...⠙ Thinking...
+I'll run the test suite for you.
+
+⚡ Bash go test ./...
+
+ok  	github.com/2389/coven-gateway/internal/agent	0.012s
+ok  	github.com/2389/coven-gateway/internal/store	0.089s
+ok  	github.com/2389/coven-gateway/internal/gateway	0.234s
+--- FAIL: TestBindingResolve (0.01s)
+    resolver_test.go:45: expected thread_id "abc", got ""
+FAIL	github.com/2389/coven-gateway/internal/gateway	0.234s
+
+One test is failing: `TestBindingResolve` in the gateway package. The test expects a thread_id to be returned but the resolver is returning an empty string. This likely means the binding lookup is not finding the matching record.
+
+Would you like me to investigate and fix this test failure?
+─────────────────────────────────────────────────────────────────
+
+❯

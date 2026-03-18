@@ -1,0 +1,27 @@
+fix the nil pointer bug
+❯ fix the nil pointer bug
+⠋ Thinking...⠙ Thinking...⠹ Thinking...⠸ Thinking...
+I'll fix the nil pointer dereference in the agent manager.
+
+📂 Read internal/agent/manager.go
+
+// ... existing code ...
+
+The issue is on line 45 where `agents` can be nil when no agents are connected.
+
+✏️ Edit internal/agent/manager.go
+
+ func (m *Manager) ListAgents() []Agent {
+     m.mu.RLock()
+     defer m.mu.RUnlock()
+-    return m.agents
++    if m.agents == nil {
++        return []Agent{}
++    }
++    return m.agents
+ }
+
+The fix ensures `ListAgents()` always returns an empty slice instead of nil. This prevents nil pointer dereference when the caller iterates over the result, and ensures JSON marshaling produces `[]` instead of `null`.
+─────────────────────────────────────────────────────────────────
+
+❯

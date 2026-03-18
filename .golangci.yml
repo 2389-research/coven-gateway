@@ -76,7 +76,10 @@ linters:
       excludes:
         - G115  # integer overflow — only used with bitmask-safe conversions
         - G117  # struct field names (JWTSecret, AuthKey, etc.) — not secret exposure
+        - G118  # context cancel stored in map/struct — gosec can't trace deferred calls
+        - G120  # ParseForm without MaxBytesReader — admin routes behind auth middleware
         - G203  # template.HTML only used for trusted embedded content
+        - G204  # subprocess with variable — tmux/ps commands with controlled args
         - G404
         - G703  # path traversal — CLI paths from config/user input, sanitized at entry
         - G704  # SSRF — internal health checks use trusted config URLs only

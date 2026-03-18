@@ -1,0 +1,24 @@
+delete the temp files
+❯ delete the temp files
+⠋ Thinking...⠙ Thinking...
+I'll clean up the temporary files.
+
+⚡ Bash rm -rf /tmp/coven-test-*
+
+  Allow this command? (yes/no/always)
+
+  Claude wants to run: rm -rf /tmp/coven-test-*
+
+  [yes] Allow once  [no] Deny  [always] Allow for this session
+
+yes
+
+Removed 3 temporary files:
+- `/tmp/coven-test-001`
+- `/tmp/coven-test-002`
+- `/tmp/coven-test-003`
+
+The temp directory is now clean.
+─────────────────────────────────────────────────────────────────
+
+❯

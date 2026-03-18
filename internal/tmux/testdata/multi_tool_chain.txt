@@ -1,0 +1,42 @@
+add a health check endpoint
+❯ add a health check endpoint
+⠋ Thinking...⠙ Thinking...⠹ Thinking...
+I'll add a health check endpoint to the gateway's HTTP server.
+
+📂 Read internal/gateway/api.go
+
+// ... existing handler code ...
+
+📂 Read internal/gateway/gateway.go
+
+// ... HTTP server setup ...
+
+I can see the HTTP routes are registered in `registerHTTPAPIRoutes`. I'll add a `/health` endpoint.
+
+✏️ Edit internal/gateway/api.go
+
+ // handleHealth returns 200 OK with basic server status.
+ func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) {
+     w.Header().Set("Content-Type", "application/json")
+     json.NewEncoder(w).Encode(map[string]any{
+         "status":      "ok",
+         "agent_count": g.agentManager.Count(),
+         "uptime":      time.Since(g.startTime).String(),
+     })
+ }
+
+✏️ Edit internal/gateway/gateway.go
+
+ mux.HandleFunc("/health", g.handleHealth)
+
+Now let me verify it compiles:
+
+⚡ Bash go build ./...
+
+Build successful. The `/health` endpoint is now available and returns:
+- `status`: always "ok" if the server is running
+- `agent_count`: number of connected agents
+- `uptime`: server uptime as a human-readable string
+─────────────────────────────────────────────────────────────────
+
+❯
