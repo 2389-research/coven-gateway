@@ -31,6 +31,7 @@ func TestResponseTracker_BasicFlow(t *testing.T) {
 	tracker.Feed("─────────────────────────────────────────────────────────────────\n")
 	tracker.Feed("\n")
 	tracker.Feed("❯\n")
+	tracker.FlushPending()
 
 	if len(*events) < 3 {
 		t.Fatalf("expected at least 3 events, got %d: %v", len(*events), *events)
@@ -64,6 +65,7 @@ func TestResponseTracker_InputEchoFiltered(t *testing.T) {
 	tracker.Feed("gRPC is a framework.\n") // response
 	tracker.Feed("─────────────────────────────────────────────────────────────────\n")
 	tracker.Feed("❯\n")
+	tracker.FlushPending()
 
 	// Neither input echo should appear in the response.
 	var doneText string
@@ -90,6 +92,7 @@ func TestResponseTracker_SpinnerMergedWithThinking(t *testing.T) {
 	tracker.Feed("The answer is 42.\n")
 	tracker.Feed("─────────────────────────────────────────────────────────────────\n")
 	tracker.Feed("❯\n")
+	tracker.FlushPending()
 
 	if (*events)[0] != "thinking" {
 		t.Errorf("expected thinking event first, got %v", *events)
@@ -117,6 +120,7 @@ func TestResponseTracker_EmptyLineBetweenRuleAndPrompt(t *testing.T) {
 	tracker.Feed("─────────────────────────────────────────────────────────────────\n")
 	tracker.Feed("\n")  // empty line
 	tracker.Feed("❯\n") // prompt
+	tracker.FlushPending()
 
 	var done bool
 	for _, e := range *events {
@@ -141,6 +145,7 @@ func TestResponseTracker_PendingLineBuffer(t *testing.T) {
 	tracker.Feed("\n")     // now "Hello world!" is a complete line
 	tracker.Feed("─────────────────────────────────────────────────────────────────\n")
 	tracker.Feed("❯\n")
+	tracker.FlushPending()
 
 	var doneText string
 	for _, e := range *events {
@@ -188,6 +193,7 @@ func TestResponseTracker_ToolUseInResponse(t *testing.T) {
 	tracker.Feed("The code looks good.\n")
 	tracker.Feed("─────────────────────────────────────────────────────────────────\n")
 	tracker.Feed("❯\n")
+	tracker.FlushPending()
 
 	var doneText string
 	for _, e := range *events {
@@ -214,6 +220,7 @@ func TestResponseTracker_MultipleResponses(t *testing.T) {
 	tracker.Feed("Answer 1.\n")
 	tracker.Feed("─────────────────────────────────────────────────────────────────\n")
 	tracker.Feed("❯\n")
+	tracker.FlushPending()
 
 	count := 0
 	for _, e := range *events {
@@ -231,6 +238,7 @@ func TestResponseTracker_MultipleResponses(t *testing.T) {
 	tracker.textBuf.Reset()
 	tracker.pending = ""
 	tracker.sawRule = false
+	tracker.doneCandidate = false
 	tracker.inputText = "q2"
 	tracker.mu.Unlock()
 
@@ -239,6 +247,7 @@ func TestResponseTracker_MultipleResponses(t *testing.T) {
 	tracker.Feed("Answer 2.\n")
 	tracker.Feed("─────────────────────────────────────────────────────────────────\n")
 	tracker.Feed("❯\n")
+	tracker.FlushPending()
 
 	count = 0
 	for _, e := range *events {
@@ -248,6 +257,48 @@ func TestResponseTracker_MultipleResponses(t *testing.T) {
 	}
 	if count != 2 {
 		t.Fatalf("expected 2 done events after both responses, got %d", count)
+	}
+}
+
+func TestResponseTracker_TUIInputAreaChrome(t *testing.T) {
+	// Real Claude TUI re-renders include rule → prompt → rule → bypass between
+	// response lines. This should NOT trigger done detection mid-response.
+	tracker, events := newTestTracker("hello")
+
+	tracker.Feed("hello\n")
+	tracker.Feed("Thinking...\n")
+	tracker.Feed("First paragraph of the response.\n")
+	// TUI input area chrome (appears in every re-render frame).
+	tracker.Feed("─────────────────────────────────────────────────────────────────\n")
+	tracker.Feed("❯\n")
+	tracker.Feed("─────────────────────────────────────────────────────────────────\n")
+	// Response continues after the TUI input area chrome.
+	tracker.Feed("Second paragraph after re-render.\n")
+	// Real end of response.
+	tracker.Feed("─────────────────────────────────────────────────────────────────\n")
+	tracker.Feed("❯\n")
+	tracker.FlushPending()
+
+	doneText := extractDoneText(*events)
+	if doneText == "" {
+		t.Fatalf("no done event; events: %v", *events)
+	}
+	if !strings.Contains(doneText, "First paragraph") {
+		t.Errorf("first paragraph missing from response: %q", doneText)
+	}
+	if !strings.Contains(doneText, "Second paragraph") {
+		t.Errorf("second paragraph missing (TUI chrome caused premature done): %q", doneText)
+	}
+
+	// Should only have ONE done event, not two.
+	count := 0
+	for _, e := range *events {
+		if strings.HasPrefix(e, "done:") {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected 1 done event, got %d (TUI chrome caused multiple dones)", count)
 	}
 }
 

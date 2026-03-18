@@ -28,9 +28,10 @@ var ansiRegex = regexp.MustCompile(`\x1b\[\??[0-9;]*[a-zA-Z]|\x1b\].*?\x07|\r`)
 // Claude's TUI uses these as spaces between words; stripping them loses word boundaries.
 var cursorRightRegex = regexp.MustCompile(`\x1b\[(\d*)C`)
 
-// Note: cursor-down (\x1b[nB) is NOT replaced with newlines because
-// the TUI uses it heavily for re-rendering, which would create false line breaks.
-// Cursor-down is stripped by the general ansiRegex instead.
+// cursorDownRegex matches CSI cursor-down sequences (\x1b[nB).
+// Claude's TUI uses these for line advancement; replacing with newlines
+// preserves row structure so prompts and rules appear on their own lines.
+var cursorDownRegex = regexp.MustCompile(`\x1b\[(\d*)B`)
 
 // promptPattern matches Claude Code's magenta arrow prompt (after ANSI stripping).
 // The prompt appears as "❯ " at the start of a line.
@@ -46,10 +47,21 @@ var horizontalRulePattern = regexp.MustCompile(`(?m)^─{10,}`)
 // a spinner character (✽, ✻, ✶, ✳, ✢, ·, ⏺, or braille spinners).
 var thinkingPattern = regexp.MustCompile(`(?:Thinking\.\.\.|[\p{L}]+…)`)
 
-// realContentPattern requires at least one word of 3+ letters.
-// Filters out TUI rendering fragments (single characters like "P", "Dn", "og")
-// that appear during character-at-a-time screen re-rendering.
-var realContentPattern = regexp.MustCompile(`\p{L}{3,}`)
+// hasRealContent checks if a line has substantive text, not a TUI rendering fragment.
+// Requires a space (multi-token) AND at least one token of 4+ characters.
+// Single characters/word fragments from character-at-a-time rendering ("P", "ing",
+// "Hello") are filtered; real sentences ("Answer 1.", "The answer is 42") pass.
+func hasRealContent(s string) bool {
+	if !strings.ContainsRune(s, ' ') {
+		return false // single token — likely a rendering fragment
+	}
+	for word := range strings.SplitSeq(s, " ") {
+		if len(strings.TrimSpace(word)) >= 4 {
+			return true
+		}
+	}
+	return false
+}
 
 // tuiChromePatterns matches Claude Code's TUI chrome that gets mixed into pipe-pane output.
 // These appear on the same line as response text due to terminal re-rendering.
@@ -243,6 +255,9 @@ func StripANSI(s string) string {
 	s = cursorRightRegex.ReplaceAllStringFunc(s, func(m string) string {
 		return strings.Repeat(" ", parseCursorN(m))
 	})
+	s = cursorDownRegex.ReplaceAllStringFunc(s, func(m string) string {
+		return strings.Repeat("\n", parseCursorN(m))
+	})
 	// Phase 2: Strip remaining ANSI sequences and carriage returns.
 	return ansiRegex.ReplaceAllString(s, "")
 }
@@ -277,14 +292,15 @@ const (
 
 // ResponseTracker monitors terminal output to detect response boundaries.
 type ResponseTracker struct {
-	state     ResponseState
-	mu        sync.Mutex
-	textBuf   strings.Builder
-	pending   string // incomplete line waiting for \n
-	inputText string // the input text sent, used to filter echo
-	logger    *slog.Logger
-	onChange  func(state ResponseState, text string)
-	sawRule   bool // saw horizontal rule, next prompt means done
+	state         ResponseState
+	mu            sync.Mutex
+	textBuf       strings.Builder
+	pending       string // incomplete line waiting for \n
+	inputText     string // the input text sent, used to filter echo
+	logger        *slog.Logger
+	onChange      func(state ResponseState, text string)
+	sawRule       bool // saw horizontal rule, next prompt means done
+	doneCandidate bool // saw rule+prompt, waiting to confirm it's not TUI input area
 }
 
 // NewResponseTracker creates a tracker that calls onChange when state transitions occur.
@@ -384,6 +400,7 @@ func isTUIChromeLine(trimmed string) bool {
 func (r *ResponseTracker) transitionToThinking() {
 	r.state = StateThinking
 	r.sawRule = false
+	r.doneCandidate = false
 	r.logger.Debug("state: idle → thinking")
 	r.notify(StateThinking, "")
 }
@@ -412,8 +429,8 @@ func (r *ResponseTracker) handleThinkingLine(line, trimmed string) {
 		return // was only TUI chrome
 	}
 	// Skip TUI rendering fragments (single characters from incremental re-draws).
-	// Real response text always contains at least one word of 3+ letters.
-	if !realContentPattern.MatchString(cleanedTrimmed) {
+	// Real response text always contains at least two words of 3+ characters.
+	if !hasRealContent(cleanedTrimmed) {
 		return
 	}
 	r.state = StateResponding
@@ -428,31 +445,13 @@ func (r *ResponseTracker) handleThinkingLine(line, trimmed string) {
 // handleRespondingLine processes a line while in the responding state.
 // Must be called with r.mu held.
 func (r *ResponseTracker) handleRespondingLine(line, trimmed string) {
-	// Check for horizontal rule (response footer).
-	if horizontalRulePattern.MatchString(trimmed) {
-		r.sawRule = true
-		r.logger.Debug("horizontal rule detected")
+	// Check pending done candidate first — may cancel or confirm it.
+	if r.doneCandidate && r.resolveDoneCandidate(trimmed) {
 		return
 	}
-	// Check for prompt after horizontal rule (response complete).
-	if promptPattern.MatchString(trimmed) {
-		if r.sawRule {
-			r.completeDone()
-		}
+	// Boundary detection: rules, prompts, and thinking indicators.
+	if r.handleRespondingBoundary(trimmed) {
 		return
-	}
-	// Still-thinking lines during responding (Claude re-renders thinking indicator).
-	if thinkingPattern.MatchString(trimmed) {
-		return
-	}
-	// After a horizontal rule, empty lines before the prompt are expected.
-	// Don't reset sawRule or accumulate them.
-	if r.sawRule {
-		if trimmed == "" {
-			return // gap between rule and prompt
-		}
-		// Non-empty, non-prompt text after rule = false boundary.
-		r.sawRule = false
 	}
 	// Clean TUI chrome from response lines.
 	cleaned := cleanTUIChrome(line)
@@ -465,6 +464,62 @@ func (r *ResponseTracker) handleRespondingLine(line, trimmed string) {
 	r.notify(StateResponding, cleaned)
 }
 
+// handleRespondingBoundary checks for boundary markers (rules, prompts, thinking)
+// during the responding state. Returns true if the line was consumed.
+// Must be called with r.mu held.
+func (r *ResponseTracker) handleRespondingBoundary(trimmed string) bool {
+	if horizontalRulePattern.MatchString(trimmed) {
+		r.sawRule = true
+		return true
+	}
+	// Prompt after rule → set done candidate (deferred, not immediate).
+	// TUI re-renders include rule+prompt as input area chrome between response lines.
+	if promptPattern.MatchString(trimmed) {
+		if r.sawRule {
+			r.doneCandidate = true
+			r.sawRule = false
+			r.logger.Debug("done candidate set (rule+prompt)")
+		}
+		return true
+	}
+	// Still-thinking lines (Claude re-renders thinking indicator mid-response).
+	if thinkingPattern.MatchString(trimmed) && !hasRealContent(trimmed) {
+		return true
+	}
+	// After a rule, empty lines before the prompt are expected.
+	if r.sawRule {
+		if trimmed == "" {
+			return true // gap between rule and prompt
+		}
+		r.sawRule = false // non-prompt text after rule = false boundary
+	}
+	return false
+}
+
+// resolveDoneCandidate checks a line that follows a rule+prompt "done candidate".
+// Returns true if the line was consumed (caller should return), false if the line
+// should be processed normally (done candidate was cancelled, content follows).
+// Claude's TUI input area is: rule → prompt → rule → bypass. The second rule
+// and bypass are expected chrome — skip them but keep the done candidate alive.
+// Only real response content cancels the candidate (false boundary).
+// Must be called with r.mu held.
+func (r *ResponseTracker) resolveDoneCandidate(trimmed string) bool {
+	if horizontalRulePattern.MatchString(trimmed) {
+		// Second rule is expected (TUI input area bottom border). Skip it
+		// but keep doneCandidate alive — done is confirmed by FlushPending
+		// when no more data arrives.
+		return true
+	}
+	if trimmed == "" || promptPattern.MatchString(trimmed) {
+		return true // gap or redundant prompt while waiting to confirm
+	}
+	// Real content after rule+prompt → false boundary, continue responding.
+	r.doneCandidate = false
+	r.sawRule = false
+	r.logger.Debug("done candidate cancelled: more content follows")
+	return false
+}
+
 // completeDone transitions from responding to done, then resets to idle.
 // Must be called with r.mu held.
 func (r *ResponseTracker) completeDone() {
@@ -475,6 +530,7 @@ func (r *ResponseTracker) completeDone() {
 	r.state = StateIdle
 	r.textBuf.Reset()
 	r.sawRule = false
+	r.doneCandidate = false
 }
 
 // notify calls the onChange callback if set.
@@ -488,23 +544,21 @@ func (r *ResponseTracker) notify(state ResponseState, text string) {
 // FlushPending processes any pending (incomplete line) data for state-detection.
 // Call this after Feed() to handle the case where the final output (e.g. prompt "❯")
 // doesn't end with \n and would otherwise be stuck in the pending buffer.
+// It also completes deferred done detection when no more data follows a rule+prompt.
 func (r *ResponseTracker) FlushPending() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.pending == "" {
-		return
-	}
-	trimmed := strings.TrimSpace(r.pending)
-	if trimmed == "" {
-		return
+	trimmed := ""
+	if r.pending != "" {
+		trimmed = strings.TrimSpace(r.pending)
 	}
 
 	// Only process pending for state transitions, not text accumulation.
 	// This avoids fragmenting partial words into the text buffer.
 	switch r.state {
 	case StateIdle:
-		if thinkingPattern.MatchString(trimmed) {
+		if trimmed != "" && thinkingPattern.MatchString(trimmed) {
 			r.pending = ""
 			r.state = StateThinking
 			r.sawRule = false
@@ -512,13 +566,26 @@ func (r *ResponseTracker) FlushPending() {
 			r.notify(StateThinking, "")
 		}
 	case StateResponding:
-		r.flushPendingResponding(trimmed)
+		if trimmed != "" {
+			r.flushPendingResponding(trimmed)
+		}
+		// If we saw rule+prompt and no more data followed, the response is done.
+		if r.doneCandidate {
+			r.pending = ""
+			r.completeDone()
+		}
 	}
 }
 
 // flushPendingResponding handles pending data while in the responding state.
 // Must be called with r.mu held.
 func (r *ResponseTracker) flushPendingResponding(trimmed string) {
+	// If pending is a second rule after a done candidate, skip it
+	// (expected TUI input area bottom border). Keep doneCandidate alive.
+	if r.doneCandidate && horizontalRulePattern.MatchString(trimmed) {
+		r.pending = ""
+		return
+	}
 	if horizontalRulePattern.MatchString(trimmed) {
 		r.sawRule = true
 		r.pending = ""
@@ -527,7 +594,10 @@ func (r *ResponseTracker) flushPendingResponding(trimmed string) {
 	}
 	if r.sawRule && promptPattern.MatchString(trimmed) {
 		r.pending = ""
-		r.completeDone()
+		// Defer done: set candidate instead of completing immediately.
+		r.doneCandidate = true
+		r.sawRule = false
+		r.logger.Debug("done candidate set from pending (rule+prompt)")
 	}
 }
 
@@ -579,6 +649,7 @@ func installResponseCallbacks(tracker *ResponseTracker, result *string, done, th
 	tracker.textBuf.Reset()
 	tracker.pending = ""
 	tracker.sawRule = false
+	tracker.doneCandidate = false
 	tracker.onChange = func(state ResponseState, text string) {
 		if origOnChange != nil {
 			origOnChange(state, text)
@@ -610,6 +681,8 @@ func drainTimer(t *time.Timer) {
 }
 
 // pollPipeOutput reads new pipe data, feeds it to the tracker, and returns the new offset.
+// FlushPending is called on every poll (not just when new data arrives) so that
+// deferred done detection completes when the pipe stops producing output.
 func pollPipeOutput(tracker *ResponseTracker, paneIO *PaneIO, offset int64) int64 {
 	raw, newOffset, err := paneIO.ReadPipeOutput(offset)
 	if err != nil {
@@ -620,8 +693,8 @@ func pollPipeOutput(tracker *ResponseTracker, paneIO *PaneIO, offset int64) int6
 		tracker.logger.Debug("pipe data read", "bytes", newOffset-offset, "offset", offset)
 		clean := StripANSI(raw)
 		tracker.Feed(clean)
-		tracker.FlushPending()
 	}
+	tracker.FlushPending()
 	return newOffset
 }
 
