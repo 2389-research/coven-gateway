@@ -137,6 +137,13 @@ func runServe(ctx context.Context) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
+	// Refuse to stand up open listeners unless the operator explicitly opted
+	// into anonymous mode. Prevents a missing COVEN_JWT_SECRET from silently
+	// producing a fully open, admin-for-everyone control plane.
+	if err := cfg.ValidateServable(); err != nil {
+		return fmt.Errorf("refusing to serve: %w", err)
+	}
+
 	// Setup logger
 	logger := setupLogger(cfg.Logging)
 

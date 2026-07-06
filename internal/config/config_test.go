@@ -523,6 +523,57 @@ func TestExpandEnvVars(t *testing.T) {
 	}
 }
 
+func TestValidateServable_Auth(t *testing.T) {
+	base := func() Config {
+		return Config{
+			Server:   ServerConfig{GRPCAddr: ":50051", HTTPAddr: ":8080"},
+			Database: DatabaseConfig{Path: "./test.db"},
+		}
+	}
+	tests := []struct {
+		name          string
+		auth          AuthConfig
+		wantErr       bool
+		wantErrSubstr string
+	}{
+		{
+			name:          "empty secret without opt-in is rejected",
+			auth:          AuthConfig{JWTSecret: "", AllowAnonymous: false},
+			wantErr:       true,
+			wantErrSubstr: "auth.jwt_secret is required",
+		},
+		{
+			name:    "empty secret with explicit opt-in is allowed",
+			auth:    AuthConfig{JWTSecret: "", AllowAnonymous: true},
+			wantErr: false,
+		},
+		{
+			name:    "configured secret is allowed",
+			auth:    AuthConfig{JWTSecret: "s3cret-value"},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := base()
+			cfg.Auth = tt.auth
+			err := cfg.ValidateServable()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("ValidateServable() = nil, want error containing %q", tt.wantErrSubstr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrSubstr) {
+					t.Fatalf("ValidateServable() error = %q, want substring %q", err, tt.wantErrSubstr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ValidateServable() = %v, want nil", err)
+			}
+		})
+	}
+}
+
 func TestValidate_TailscaleConfig(t *testing.T) {
 	tests := []struct {
 		name          string
