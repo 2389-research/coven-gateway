@@ -408,7 +408,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 
 	gw.httpServer = &http.Server{
 		Addr:              cfg.Server.HTTPAddr,
-		Handler:           webadmin.CSPMiddleware(mux),
+		Handler:           webadmin.CSPMiddleware(maxBytesMiddleware(mux)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
