@@ -6,7 +6,7 @@ package gateway
 import "net/http"
 
 // MaxAPIBodySize is the maximum accepted HTTP request body (1 MiB).
-// Matches the MCP server's limit so every POST surface is bounded.
+// Matches mcp.MaxRequestBodySize so every POST surface is bounded; keep in sync.
 const MaxAPIBodySize int64 = 1 << 20
 
 // maxBytesMiddleware caps the request body size for every request passing

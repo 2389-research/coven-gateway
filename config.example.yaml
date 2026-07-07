@@ -68,9 +68,12 @@ auth:
   # INSECURE — every caller is granted the admin role. Local development only.
   # allow_anonymous: false
 
-  # agent_auto_registration controls whether connecting agents are auto-approved.
-  # "approved" trusts any agent that reaches the gRPC port. Use "pending" on
-  # untrusted networks and approve agents manually via coven-admin.
+  # agent_auto_registration controls how connecting agents are registered:
+  # - "approved": auto-create principal with approved status (can receive
+  #   messages immediately). Trusts any agent that reaches the gRPC port.
+  # - "pending": auto-create principal with pending status; an admin must
+  #   approve via coven-admin. Use this on untrusted networks.
+  # - "disabled": reject unknown SSH fingerprints (admin must pre-register).
   agent_auto_registration: "approved"
 
 logging:

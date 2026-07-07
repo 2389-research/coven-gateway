@@ -196,7 +196,7 @@ func (c *Config) ValidateServable() error {
 		return errors.New(
 			"auth.jwt_secret is required to serve: set COVEN_JWT_SECRET, or set " +
 				"auth.allow_anonymous: true to run without authentication " +
-				"(INSECURE — every caller becomes admin; local development only)")
+				"(INSECURE -- every caller becomes admin; local development only)")
 	}
 	return nil
 }
