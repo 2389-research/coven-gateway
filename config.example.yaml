@@ -59,13 +59,21 @@ frontends:
     allowed_rooms: []
 
 auth:
-  # JWT secret for token authentication (min 32 bytes)
-  # Use environment variable - NEVER commit real secrets!
+  # jwt_secret secures the HTTP API and the gRPC client/admin services.
+  # If it is empty, the gateway REFUSES TO START unless allow_anonymous is true.
+  # Generate one with: openssl rand -base64 32
   jwt_secret: "${COVEN_JWT_SECRET}"
-  # Agent auto-registration mode: approved (default), pending, or disabled
-  # - approved: auto-create principal with approved status (can receive messages immediately)
-  # - pending: auto-create principal with pending status (admin must approve)
-  # - disabled: reject unknown SSH fingerprints (admin must pre-register)
+
+  # allow_anonymous: run with NO authentication when jwt_secret is empty.
+  # INSECURE — every caller is granted the admin role. Local development only.
+  # allow_anonymous: false
+
+  # agent_auto_registration controls how connecting agents are registered:
+  # - "approved": auto-create principal with approved status (can receive
+  #   messages immediately). Trusts any agent that reaches the gRPC port.
+  # - "pending": auto-create principal with pending status; an admin must
+  #   approve via coven-admin. Use this on untrusted networks.
+  # - "disabled": reject unknown SSH fingerprints (admin must pre-register).
   agent_auto_registration: "approved"
 
 logging:

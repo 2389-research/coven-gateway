@@ -36,6 +36,9 @@ type Config struct {
 type AuthConfig struct {
 	JWTSecret             string `yaml:"jwt_secret"`
 	AgentAutoRegistration string `yaml:"agent_auto_registration"` // "approved", "pending", or "disabled"
+	// AllowAnonymous permits serving with no authentication when JWTSecret is empty.
+	// INSECURE: every caller is granted the admin role. Local development only.
+	AllowAnonymous bool `yaml:"allow_anonymous"`
 }
 
 // TailscaleConfig holds Tailscale tsnet configuration.
@@ -181,6 +184,20 @@ func (c *Config) Validate() error {
 		return errors.New("database.path is required")
 	}
 
+	return nil
+}
+
+// ValidateServable checks preconditions required to serve traffic safely.
+// It is stricter than Validate and is intended to be called only by the
+// `serve` command, immediately after loading config. Non-serving subcommands
+// (token generation, bootstrap) are unaffected.
+func (c *Config) ValidateServable() error {
+	if c.Auth.JWTSecret == "" && !c.Auth.AllowAnonymous {
+		return errors.New(
+			"auth.jwt_secret is required to serve: set COVEN_JWT_SECRET, or set " +
+				"auth.allow_anonymous: true to run without authentication " +
+				"(INSECURE -- every caller becomes admin; local development only)")
+	}
 	return nil
 }
 
