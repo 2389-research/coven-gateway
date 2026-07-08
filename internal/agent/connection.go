@@ -25,6 +25,7 @@ type Connection struct {
 	stream  pb.CovenControl_AgentStreamServer
 	pending map[string]chan *pb.MessageResponse
 	mu      sync.RWMutex
+	sendMu  sync.Mutex // serializes stream.Send: gRPC forbids concurrent Send on one stream
 	logger  *slog.Logger
 }
 
@@ -69,6 +70,8 @@ var ErrNilStream = errors.New("connection stream is nil")
 // Send transmits a ServerMessage to the agent via the GRPC stream.
 // Returns ErrNilStream if the stream is nil.
 func (c *Connection) Send(msg *pb.ServerMessage) error {
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
 	if c.stream == nil {
 		return ErrNilStream
 	}

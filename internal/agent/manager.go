@@ -152,10 +152,15 @@ func (m *Manager) transformResponses(
 	for {
 		select {
 		case <-ctx.Done():
-			outChan <- &Response{
+			// Best-effort final error: if the reader is gone and the
+			// buffer is full, drop it rather than block forever.
+			select {
+			case outChan <- &Response{
 				Event: EventError,
 				Error: "context canceled",
 				Done:  true,
+			}:
+			default:
 			}
 			return
 
@@ -165,7 +170,12 @@ func (m *Manager) transformResponses(
 			}
 
 			resp := m.convertResponse(pbResp)
-			outChan <- resp
+			select {
+			case outChan <- resp:
+			case <-ctx.Done():
+				// Reader gone mid-stream; exit rather than block forever.
+				return
+			}
 
 			if resp.Done {
 				return

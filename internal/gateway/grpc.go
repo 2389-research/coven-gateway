@@ -154,7 +154,10 @@ func (s *covenControlServer) dispatchMessage(stream pb.CovenControl_AgentStreamS
 	case *pb.AgentMessage_Register:
 		s.logger.Warn("received duplicate registration", "agent_id", conn.ID)
 	case *pb.AgentMessage_ExecutePackTool:
-		s.handleExecutePackTool(stream, conn, payload.ExecutePackTool)
+		// Pack tools can run for up to their per-call timeout; never block
+		// the receive loop on them. All stream writes go through conn.Send,
+		// which serializes concurrent senders.
+		go s.handleExecutePackTool(stream.Context(), conn, payload.ExecutePackTool)
 	default:
 		s.logger.Warn("received unknown message type", "agent_id", conn.ID)
 	}
@@ -249,7 +252,7 @@ func (s *covenControlServer) AgentStream(stream pb.CovenControl_AgentStreamServe
 		},
 	}
 
-	if err := stream.Send(welcome); err != nil {
+	if err := conn.Send(welcome); err != nil {
 		return status.Errorf(codes.Internal, "sending welcome: %v", err)
 	}
 
@@ -279,7 +282,7 @@ func (s *covenControlServer) handleResponse(conn *agent.Connection, resp *pb.Mes
 
 // handleExecutePackTool routes a pack tool execution request through the pack router
 // and sends the result back to the agent.
-func (s *covenControlServer) handleExecutePackTool(stream pb.CovenControl_AgentStreamServer, conn *agent.Connection, req *pb.ExecutePackTool) {
+func (s *covenControlServer) handleExecutePackTool(ctx context.Context, conn *agent.Connection, req *pb.ExecutePackTool) {
 	started := time.Now()
 
 	s.logger.Info("→ pack tool request",
@@ -290,13 +293,13 @@ func (s *covenControlServer) handleExecutePackTool(stream pb.CovenControl_AgentS
 
 	// Check if pack router is available
 	if s.gateway.packRouter == nil {
-		s.sendPackToolError(stream, req.GetRequestId(), "pack router not initialized")
+		s.sendPackToolError(conn, req.GetRequestId(), "pack router not initialized")
 		return
 	}
 
 	// Route the tool call (this blocks until the pack responds or timeout)
 	resp, err := s.gateway.packRouter.RouteToolCall(
-		stream.Context(),
+		ctx,
 		req.GetToolName(),
 		req.GetInputJson(),
 		req.GetRequestId(),
@@ -313,7 +316,7 @@ func (s *covenControlServer) handleExecutePackTool(stream pb.CovenControl_AgentS
 			"duration_ms", elapsed.Milliseconds(),
 			"error", err,
 		)
-		s.sendPackToolError(stream, req.GetRequestId(), err.Error())
+		s.sendPackToolError(conn, req.GetRequestId(), err.Error())
 		return
 	}
 
@@ -335,7 +338,7 @@ func (s *covenControlServer) handleExecutePackTool(stream pb.CovenControl_AgentS
 		result.GetPackToolResult().Result = &pb.PackToolResult_OutputJson{OutputJson: resp.GetOutputJson()}
 	}
 
-	if err := stream.Send(result); err != nil {
+	if err := conn.Send(result); err != nil {
 		s.logger.Error("failed to send pack tool result",
 			"agent_id", conn.ID,
 			"request_id", req.GetRequestId(),
@@ -353,7 +356,7 @@ func (s *covenControlServer) handleExecutePackTool(stream pb.CovenControl_AgentS
 }
 
 // sendPackToolError sends an error result for a pack tool execution request.
-func (s *covenControlServer) sendPackToolError(stream pb.CovenControl_AgentStreamServer, requestID, errMsg string) {
+func (s *covenControlServer) sendPackToolError(conn *agent.Connection, requestID, errMsg string) {
 	result := &pb.ServerMessage{
 		Payload: &pb.ServerMessage_PackToolResult{
 			PackToolResult: &pb.PackToolResult{
@@ -362,7 +365,7 @@ func (s *covenControlServer) sendPackToolError(stream pb.CovenControl_AgentStrea
 			},
 		},
 	}
-	if err := stream.Send(result); err != nil {
+	if err := conn.Send(result); err != nil {
 		s.logger.Error("failed to send pack tool error",
 			"request_id", requestID,
 			"error", err,

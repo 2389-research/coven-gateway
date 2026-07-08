@@ -208,7 +208,7 @@ func TestEventToClientStreamEvent_TextChunk(t *testing.T) {
 		ThreadID:        &threadID,
 		Direction:       store.EventDirectionOutbound,
 		Author:          "agent",
-		Type:            store.EventTypeTextChunk,
+		Type:            eventTypeTextChunk,
 		Text:            &content,
 		Timestamp:       time.Now(),
 	}
@@ -230,7 +230,7 @@ func TestEventToClientStreamEvent_TextChunkNilText(t *testing.T) {
 		ID:              "chunk-002",
 		ConversationKey: "agent-1",
 		Direction:       store.EventDirectionOutbound,
-		Type:            store.EventTypeTextChunk,
+		Type:            eventTypeTextChunk,
 		Text:            nil,
 		Timestamp:       time.Now(),
 	}

@@ -515,7 +515,7 @@ collected:
 
 	// First broadcast: text chunk (streamed live, not persisted)
 	require.GreaterOrEqual(t, len(broadcasts), 2, "expected text_chunk + message broadcasts")
-	assert.Equal(t, store.EventTypeTextChunk, broadcasts[0].Type)
+	assert.Equal(t, eventTypeTextChunk, broadcasts[0].Type)
 	assert.Equal(t, "Broadcasted", *broadcasts[0].Text)
 	assert.Equal(t, "agent-broadcast", broadcasts[0].ConversationKey)
 	assert.NotEmpty(t, broadcasts[0].ID, "text chunk should have ID for observability")

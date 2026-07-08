@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -689,4 +690,81 @@ func openRawSQLDB(path string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+// Every EventType constant the store package exports must be insertable —
+// i.e. present in the ledger_events CHECK constraint. Guards against
+// constants drifting from the schema, where the failure mode is a runtime
+// constraint error that callers swallow.
+func TestEveryEventTypeIsInsertable(t *testing.T) {
+	s := newTestStore(t)
+
+	types := []EventType{
+		EventTypeMessage,
+		EventTypeToolCall,
+		EventTypeToolResult,
+		EventTypeSystem,
+		EventTypeError,
+	}
+
+	for _, et := range types {
+		event := &LedgerEvent{
+			ID:              "evt-type-" + string(et),
+			ConversationKey: "conv-types",
+			Direction:       EventDirectionInbound,
+			Author:          "tester",
+			Timestamp:       time.Now().UTC(),
+			Type:            et,
+		}
+		if err := s.SaveEvent(context.Background(), event); err != nil {
+			t.Errorf("EventType %q is defined in the store package but not insertable: %v", et, err)
+		}
+	}
+}
+
+func TestConcurrentWritesDoNotFail(t *testing.T) {
+	s := newTestStore(t)
+
+	const goroutines = 8
+	const eventsPerGoroutine = 20
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, goroutines*eventsPerGoroutine)
+
+	for g := range goroutines {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			for i := range eventsPerGoroutine {
+				event := &LedgerEvent{
+					ID:              fmt.Sprintf("evt-%d-%d", g, i),
+					ConversationKey: "conv-concurrent",
+					Direction:       EventDirectionInbound,
+					Author:          "tester",
+					Timestamp:       time.Now().UTC(),
+					Type:            EventTypeMessage,
+				}
+				if err := s.SaveEvent(context.Background(), event); err != nil {
+					errCh <- fmt.Errorf("goroutine %d event %d: %w", g, i, err)
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		t.Errorf("concurrent SaveEvent failed: %v", err)
+	}
+
+	result, err := s.GetEvents(context.Background(), GetEventsParams{
+		ConversationKey: "conv-concurrent",
+		Limit:           500,
+	})
+	if err != nil {
+		t.Fatalf("GetEvents failed: %v", err)
+	}
+	if got, want := len(result.Events), goroutines*eventsPerGoroutine; got != want {
+		t.Errorf("expected %d persisted events, got %d", want, got)
+	}
 }
