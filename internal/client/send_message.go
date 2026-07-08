@@ -20,6 +20,11 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
+// eventTypeTextChunk tags ephemeral streaming chunks broadcast to live
+// watchers. Deliberately NOT part of store's EventType set: it is never
+// persisted, and the ledger_events CHECK constraint rejects it.
+const eventTypeTextChunk store.EventType = "text_chunk"
+
 // DedupeCache defines the interface for deduplication operations.
 type DedupeCache interface {
 	Check(key string) bool
@@ -205,7 +210,7 @@ func (s *ClientService) handleAgentResponse(ctx context.Context, conversationKey
 			ThreadID:        &threadID,
 			Direction:       store.EventDirectionOutbound,
 			Author:          "agent",
-			Type:            store.EventTypeTextChunk,
+			Type:            eventTypeTextChunk,
 			Text:            &resp.Text,
 			Timestamp:       time.Now(),
 		}

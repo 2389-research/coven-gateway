@@ -266,7 +266,7 @@ func eventToClientStreamEvent(e *store.LedgerEvent) *pb.ClientStreamEvent {
 		Timestamp:       e.Timestamp.Format(time.RFC3339),
 	}
 
-	if e.Type == store.EventTypeTextChunk {
+	if e.Type == eventTypeTextChunk {
 		content := ""
 		if e.Text != nil {
 			content = *e.Text

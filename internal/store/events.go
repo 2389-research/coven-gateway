@@ -28,9 +28,10 @@ const (
 // EventType categorizes the kind of event.
 type EventType string
 
+// These values correspond 1:1 with the ledger_events CHECK constraint in
+// sqlite.go — adding one here requires a schema migration.
 const (
 	EventTypeMessage    EventType = "message"
-	EventTypeTextChunk  EventType = "text_chunk"
 	EventTypeToolCall   EventType = "tool_call"
 	EventTypeToolResult EventType = "tool_result"
 	EventTypeSystem     EventType = "system"

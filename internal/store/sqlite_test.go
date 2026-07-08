@@ -692,6 +692,36 @@ func openRawSQLDB(path string) (*sql.DB, error) {
 	return db, nil
 }
 
+// Every EventType constant the store package exports must be insertable —
+// i.e. present in the ledger_events CHECK constraint. Guards against
+// constants drifting from the schema, where the failure mode is a runtime
+// constraint error that callers swallow.
+func TestEveryEventTypeIsInsertable(t *testing.T) {
+	s := newTestStore(t)
+
+	types := []EventType{
+		EventTypeMessage,
+		EventTypeToolCall,
+		EventTypeToolResult,
+		EventTypeSystem,
+		EventTypeError,
+	}
+
+	for _, et := range types {
+		event := &LedgerEvent{
+			ID:              "evt-type-" + string(et),
+			ConversationKey: "conv-types",
+			Direction:       EventDirectionInbound,
+			Author:          "tester",
+			Timestamp:       time.Now().UTC(),
+			Type:            et,
+		}
+		if err := s.SaveEvent(context.Background(), event); err != nil {
+			t.Errorf("EventType %q is defined in the store package but not insertable: %v", et, err)
+		}
+	}
+}
+
 func TestConcurrentWritesDoNotFail(t *testing.T) {
 	s := newTestStore(t)
 
