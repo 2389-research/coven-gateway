@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -726,4 +727,83 @@ func TestConcurrentAccess(t *testing.T) {
 
 		wg.Wait()
 	})
+}
+
+func TestTransformResponsesExitsWhenReaderGone(t *testing.T) {
+	manager := NewManager(slog.Default())
+	stream := newMockStream()
+	conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Capabilities: []string{"chat"}, Stream: stream, Logger: slog.Default()})
+	if err := manager.Register(conn); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	baseline := runtime.NumGoroutine()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	outChan, err := manager.SendMessage(ctx, &SendRequest{
+		AgentID:  "agent-1",
+		ThreadID: "thread-1",
+		Sender:   "user",
+		Content:  "hello",
+	})
+	if err != nil {
+		t.Fatalf("SendMessage failed: %v", err)
+	}
+
+	// Learn the request ID from the message the manager sent to the agent.
+	sent := stream.getSentMessages()
+	requestID := sent[len(sent)-1].GetSendMessage().GetRequestId()
+
+	// Simulate a fast agent whose reader has gone away: nobody reads
+	// outChan while the agent floods responses. respChan (cap 16) and
+	// outChan (cap 16) both fill, then transformResponses blocks on its
+	// send into outChan.
+	for i := 0; i < 40; i++ {
+		conn.HandleResponse(&pb.MessageResponse{
+			RequestId: requestID,
+			Event: &pb.MessageResponse_Text{
+				Text: "chunk",
+			},
+		})
+	}
+
+	// Wait until the transform goroutine has filled outChan. From that
+	// state the pre-fix code cannot exit regardless of scheduling: both
+	// its sends block on the full, unread channel. (len/cap are legal on
+	// receive-only channels.)
+	//
+	// The arithmetic that guarantees the fill: respChan and outChan share
+	// capacity 16, and the flood of 40 keeps respChan saturated until at
+	// least 16 responses have flowed through to outChan. Excess responses
+	// are dropped by HandleResponse; drops never stall the fill. If either
+	// buffer size changes, revisit this test.
+	fillDeadline := time.NewTimer(2 * time.Second)
+	defer fillDeadline.Stop()
+	fillTick := time.NewTicker(time.Millisecond)
+	defer fillTick.Stop()
+	for len(outChan) < cap(outChan) {
+		select {
+		case <-fillDeadline.C:
+			t.Fatalf("outChan never filled: len=%d cap=%d", len(outChan), cap(outChan))
+		case <-fillTick.C:
+		}
+	}
+
+	// Client disconnects.
+	cancel()
+
+	// The transform goroutine must exit even though outChan is full and
+	// never read again. Poll goroutine count back down to baseline.
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for runtime.NumGoroutine() > baseline {
+		select {
+		case <-deadline.C:
+			t.Fatalf("transformResponses leaked: %d goroutines, baseline %d",
+				runtime.NumGoroutine(), baseline)
+		case <-tick.C:
+		}
+	}
 }
