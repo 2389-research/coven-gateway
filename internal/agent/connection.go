@@ -25,6 +25,7 @@ type Connection struct {
 	stream  pb.CovenControl_AgentStreamServer
 	pending map[string]chan *pb.MessageResponse
 	mu      sync.RWMutex
+	sendMu  sync.Mutex // serializes stream.Send: gRPC forbids concurrent Send on one stream
 	logger  *slog.Logger
 }
 
@@ -72,6 +73,8 @@ func (c *Connection) Send(msg *pb.ServerMessage) error {
 	if c.stream == nil {
 		return ErrNilStream
 	}
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
 	return c.stream.Send(msg)
 }
 

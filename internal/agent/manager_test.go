@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -805,5 +806,46 @@ func TestTransformResponsesExitsWhenReaderGone(t *testing.T) {
 				runtime.NumGoroutine(), baseline)
 		case <-tick.C:
 		}
+	}
+}
+
+// concurrencyDetectingStream fails the test if two goroutines are ever
+// inside Send simultaneously — gRPC server streams forbid concurrent Send.
+type concurrencyDetectingStream struct {
+	mockStream
+	inFlight atomic.Int32
+	overlap  atomic.Bool
+}
+
+func (s *concurrencyDetectingStream) Send(msg *pb.ServerMessage) error {
+	if s.inFlight.Add(1) > 1 {
+		s.overlap.Store(true)
+	}
+	time.Sleep(time.Millisecond) // widen the race window
+	s.inFlight.Add(-1)
+	return nil
+}
+
+func TestConnectionSendSerializesStreamWrites(t *testing.T) {
+	stream := &concurrencyDetectingStream{}
+	conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Stream: stream, Logger: slog.Default()})
+
+	var wg sync.WaitGroup
+	for g := 0; g < 4; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 25; i++ {
+				if err := conn.Send(&pb.ServerMessage{}); err != nil {
+					t.Errorf("Send failed: %v", err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	if stream.overlap.Load() {
+		t.Fatal("concurrent stream.Send detected: Connection.Send must serialize writes")
 	}
 }
