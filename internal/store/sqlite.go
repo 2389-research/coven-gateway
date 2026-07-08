@@ -40,6 +40,12 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
 
+	// SQLite allows one writer at a time; a pool of connections just turns
+	// writer contention into immediate SQLITE_BUSY errors. A single
+	// connection serializes all access — and guarantees the per-connection
+	// pragmas below apply to every query.
+	db.SetMaxOpenConns(1)
+
 	// Enable WAL mode for better concurrent performance
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		_ = db.Close()
@@ -50,6 +56,14 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("enabling foreign keys: %w", err)
+	}
+
+	// Retry window for residual lock contention (e.g. external tooling
+	// holding the file). modernc.org/sqlite takes pragmas via Exec, not
+	// mattn-style DSN parameters.
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("setting busy timeout: %w", err)
 	}
 
 	s := &SQLiteStore{

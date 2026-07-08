@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -689,4 +690,51 @@ func openRawSQLDB(path string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+func TestConcurrentWritesDoNotFail(t *testing.T) {
+	s := newTestStore(t)
+
+	const goroutines = 8
+	const eventsPerGoroutine = 20
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, goroutines*eventsPerGoroutine)
+
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < eventsPerGoroutine; i++ {
+				event := &LedgerEvent{
+					ID:              fmt.Sprintf("evt-%d-%d", g, i),
+					ConversationKey: "conv-concurrent",
+					Direction:       EventDirectionInbound,
+					Author:          "tester",
+					Timestamp:       time.Now().UTC(),
+					Type:            EventTypeMessage,
+				}
+				if err := s.SaveEvent(context.Background(), event); err != nil {
+					errCh <- fmt.Errorf("goroutine %d event %d: %w", g, i, err)
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		t.Errorf("concurrent SaveEvent failed: %v", err)
+	}
+
+	result, err := s.GetEvents(context.Background(), GetEventsParams{
+		ConversationKey: "conv-concurrent",
+		Limit:           500,
+	})
+	if err != nil {
+		t.Fatalf("GetEvents failed: %v", err)
+	}
+	if got, want := len(result.Events), goroutines*eventsPerGoroutine; got != want {
+		t.Errorf("expected %d persisted events, got %d", want, got)
+	}
 }
