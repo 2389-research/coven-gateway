@@ -73,8 +73,7 @@ func TestExecutePackToolDoesNotBlockMessageLoop(t *testing.T) {
 		logger:  logger,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	stream := &fakeAgentStream{ctx: ctx}
 	conn := agent.NewConnection(agent.ConnectionParams{ID: "agent-1", Name: "Test Agent", Stream: stream, Logger: logger})
 

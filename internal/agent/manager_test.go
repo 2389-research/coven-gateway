@@ -759,7 +759,7 @@ func TestTransformResponsesExitsWhenReaderGone(t *testing.T) {
 	// outChan while the agent floods responses. respChan (cap 16) and
 	// outChan (cap 16) both fill, then transformResponses blocks on its
 	// send into outChan.
-	for i := 0; i < 40; i++ {
+	for range 40 {
 		conn.HandleResponse(&pb.MessageResponse{
 			RequestId: requestID,
 			Event: &pb.MessageResponse_Text{
@@ -831,17 +831,15 @@ func TestConnectionSendSerializesStreamWrites(t *testing.T) {
 	conn := NewConnection(ConnectionParams{ID: "agent-1", Name: "Test Agent", Stream: stream, Logger: slog.Default()})
 
 	var wg sync.WaitGroup
-	for g := 0; g < 4; g++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < 25; i++ {
+	for range 4 {
+		wg.Go(func() {
+			for range 25 {
 				if err := conn.Send(&pb.ServerMessage{}); err != nil {
 					t.Errorf("Send failed: %v", err)
 					return
 				}
 			}
-		}()
+		})
 	}
 	wg.Wait()
 

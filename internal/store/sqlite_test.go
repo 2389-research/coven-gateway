@@ -731,11 +731,11 @@ func TestConcurrentWritesDoNotFail(t *testing.T) {
 	var wg sync.WaitGroup
 	errCh := make(chan error, goroutines*eventsPerGoroutine)
 
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		wg.Add(1)
 		go func(g int) {
 			defer wg.Done()
-			for i := 0; i < eventsPerGoroutine; i++ {
+			for i := range eventsPerGoroutine {
 				event := &LedgerEvent{
 					ID:              fmt.Sprintf("evt-%d-%d", g, i),
 					ConversationKey: "conv-concurrent",
