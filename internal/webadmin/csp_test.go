@@ -1,6 +1,9 @@
+// ABOUTME: Tests for the security headers middleware (CSP policy selection and header values).
+// ABOUTME: Covers prod/dev CSP, always-set headers, and HSTS gating on TLS.
 package webadmin
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,7 +17,7 @@ func TestCSPMiddleware_SetsHeader(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := CSPMiddleware(inner)
+	handler := SecurityHeadersMiddleware(inner)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -46,7 +49,7 @@ func TestCSPMiddleware_PreservesInnerHandler(t *testing.T) {
 		w.WriteHeader(http.StatusTeapot)
 	})
 
-	handler := CSPMiddleware(inner)
+	handler := SecurityHeadersMiddleware(inner)
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	rec := httptest.NewRecorder()
 
@@ -70,7 +73,7 @@ func TestCSPMiddleware_DevMode(t *testing.T) {
 
 	assets.Manifest = nil // dev mode
 
-	handler := CSPMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -99,7 +102,7 @@ func TestCSPMiddleware_ProdMode(t *testing.T) {
 		"test": {File: "test.js", IsEntry: true},
 	}
 
-	handler := CSPMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -110,5 +113,47 @@ func TestCSPMiddleware_ProdMode(t *testing.T) {
 	csp := rec.Header().Get("Content-Security-Policy")
 	if strings.Contains(csp, "localhost") {
 		t.Errorf("prod CSP should not reference localhost; got: %s", csp)
+	}
+}
+
+func TestSecurityHeaders_SetOnEveryResponse(t *testing.T) {
+	handler := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	want := map[string]string{
+		"X-Content-Type-Options": "nosniff",
+		"Referrer-Policy":        "strict-origin-when-cross-origin",
+		"X-Frame-Options":        "DENY",
+		"Permissions-Policy":     "camera=(), microphone=(), geolocation=()",
+	}
+	for header, value := range want {
+		if got := rec.Header().Get(header); got != value {
+			t.Errorf("%s = %q, want %q", header, got, value)
+		}
+	}
+	if rec.Header().Get("Content-Security-Policy") == "" {
+		t.Error("Content-Security-Policy missing")
+	}
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Errorf("HSTS must not be set on plain-HTTP connections, got %q", got)
+	}
+}
+
+func TestSecurityHeaders_HSTSOnlyOverTLS(t *testing.T) {
+	handler := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.TLS = &tls.ConnectionState{}
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	const want = "max-age=63072000; includeSubDomains"
+	if got := rec.Header().Get("Strict-Transport-Security"); got != want {
+		t.Errorf("Strict-Transport-Security = %q, want %q", got, want)
 	}
 }

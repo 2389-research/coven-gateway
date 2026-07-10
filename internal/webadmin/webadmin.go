@@ -6,6 +6,7 @@ package webadmin
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -447,6 +448,7 @@ func (a *Admin) ensureCSRFToken(w http.ResponseWriter, r *http.Request) string {
 	}
 
 	// Set cookie (path "/" so it works for both root and /admin routes)
+	//nolint:gosec // G124 false positive: Secure is intentionally conditional on r.TLS — plain-HTTP tailnet deployments must still receive this cookie.
 	http.SetCookie(w, &http.Cookie{
 		Name:     CSRFCookieName,
 		Value:    token,
@@ -472,7 +474,12 @@ func (a *Admin) validateCSRF(r *http.Request) bool {
 		formToken = r.Header.Get("X-CSRF-Token")
 	}
 
-	return formToken != "" && formToken == cookie.Value
+	if formToken == "" {
+		return false
+	}
+	// Constant-time compare: == short-circuits on the first differing byte,
+	// leaking token prefixes through response timing.
+	return subtle.ConstantTimeCompare([]byte(formToken), []byte(cookie.Value)) == 1
 }
 
 // createSession creates a new session for a user and sets the cookie.
@@ -494,6 +501,7 @@ func (a *Admin) createSession(w http.ResponseWriter, r *http.Request, userID str
 	}
 
 	// Set cookie (path "/" so it works for both root and /admin routes)
+	//nolint:gosec // G124 false positive: Secure is intentionally conditional on r.TLS — plain-HTTP tailnet deployments must still receive this cookie.
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    sessionID,
@@ -610,22 +618,29 @@ func (a *Admin) handleLogout(w http.ResponseWriter, r *http.Request) {
 		_ = a.store.DeleteAdminSession(r.Context(), cookie.Value)
 	}
 
-	// Clear session cookie
+	// Clear session cookie. Attributes mirror createSession: browsers may
+	// refuse to evict a Secure cookie via a Set-Cookie lacking Secure.
+	//nolint:gosec // G124 false positive: Secure is intentionally conditional on r.TLS — plain-HTTP tailnet deployments must still clear this cookie.
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
 	})
 
-	// Clear CSRF cookie
+	// Clear CSRF cookie. Attributes mirror ensureCSRFToken.
+	//nolint:gosec // G124 false positive: Secure is intentionally conditional on r.TLS — plain-HTTP tailnet deployments must still clear this cookie.
 	http.SetCookie(w, &http.Cookie{
 		Name:     CSRFCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteStrictMode,
 	})
 
 	http.Redirect(w, r, "/login", http.StatusSeeOther)

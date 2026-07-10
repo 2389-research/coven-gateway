@@ -85,6 +85,33 @@ func TestGatewayNew(t *testing.T) {
 	}
 }
 
+func TestHTTPServerTimeouts(t *testing.T) {
+	cfg := testConfig(t)
+	logger := testLogger()
+
+	gw, err := New(cfg, logger)
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+	defer gw.Shutdown(context.Background())
+
+	if got, want := gw.httpServer.ReadHeaderTimeout, 10*time.Second; got != want {
+		t.Errorf("ReadHeaderTimeout = %v, want %v", got, want)
+	}
+	if got, want := gw.httpServer.IdleTimeout, 120*time.Second; got != want {
+		t.Errorf("IdleTimeout = %v, want %v", got, want)
+	}
+	// WriteTimeout and ReadTimeout MUST stay 0: this server holds SSE streams
+	// open indefinitely (/api/send, /chat/{id}/stream, /api/health/stream);
+	// either timeout would kill active streams mid-flight.
+	if gw.httpServer.WriteTimeout != 0 {
+		t.Errorf("WriteTimeout = %v, must be 0 (SSE)", gw.httpServer.WriteTimeout)
+	}
+	if gw.httpServer.ReadTimeout != 0 {
+		t.Errorf("ReadTimeout = %v, must be 0 (SSE)", gw.httpServer.ReadTimeout)
+	}
+}
+
 func TestGatewayRunAndShutdown(t *testing.T) {
 	cfg := testConfig(t)
 	logger := testLogger()
