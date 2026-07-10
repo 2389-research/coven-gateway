@@ -6,6 +6,7 @@ package webadmin
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -472,7 +473,12 @@ func (a *Admin) validateCSRF(r *http.Request) bool {
 		formToken = r.Header.Get("X-CSRF-Token")
 	}
 
-	return formToken != "" && formToken == cookie.Value
+	if formToken == "" {
+		return false
+	}
+	// Constant-time compare: == short-circuits on the first differing byte,
+	// leaking token prefixes through response timing.
+	return subtle.ConstantTimeCompare([]byte(formToken), []byte(cookie.Value)) == 1
 }
 
 // createSession creates a new session for a user and sets the cookie.
