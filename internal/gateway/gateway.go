@@ -410,6 +410,11 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		Addr:              cfg.Server.HTTPAddr,
 		Handler:           webadmin.SecurityHeadersMiddleware(maxBytesMiddleware(mux)),
 		ReadHeaderTimeout: 10 * time.Second,
+		// IdleTimeout only reaps idle keep-alive connections between requests;
+		// it does not touch in-flight requests, so active SSE streams are safe.
+		// WriteTimeout/ReadTimeout are deliberately unset: they count against
+		// long-lived SSE responses and would kill streams mid-flight.
+		IdleTimeout: 120 * time.Second,
 	}
 
 	return gw, nil
