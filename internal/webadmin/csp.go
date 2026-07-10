@@ -14,7 +14,7 @@ import (
 // - style-src 'self' 'unsafe-inline': Svelte may inject scoped styles at runtime
 // - connect-src 'self': covers SSE streams + fetch/XHR
 // - form-action 'self': all forms POST to same origin
-// - frame-ancestors 'none': anti-clickjacking (replaces X-Frame-Options).
+// - frame-ancestors 'none': anti-clickjacking (belt-and-suspenders with the X-Frame-Options header this middleware also sets).
 const cspProd = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 // cspDev relaxes script-src and connect-src to allow the Vite dev server origin

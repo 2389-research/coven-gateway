@@ -1,3 +1,5 @@
+// ABOUTME: Tests for the security headers middleware (CSP policy selection and header values).
+// ABOUTME: Covers prod/dev CSP, always-set headers, and HSTS gating on TLS.
 package webadmin
 
 import (
