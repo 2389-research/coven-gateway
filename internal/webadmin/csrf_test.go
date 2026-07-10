@@ -27,14 +27,14 @@ func csrfRequest(cookieVal, formVal string) *http.Request {
 }
 
 func TestValidateCSRF_MatchingFormToken(t *testing.T) {
-	admin := newTestAdmin(nil)
+	admin := newTestAdmin()
 	if !admin.validateCSRF(csrfRequest("tok-abc123", "tok-abc123")) {
 		t.Error("matching cookie and form token should validate")
 	}
 }
 
 func TestValidateCSRF_MatchingHeaderToken(t *testing.T) {
-	admin := newTestAdmin(nil)
+	admin := newTestAdmin()
 	req := httptest.NewRequest(http.MethodPost, "/login", nil)
 	req.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: "tok-abc123"})
 	req.Header.Set("X-CSRF-Token", "tok-abc123")
@@ -44,28 +44,28 @@ func TestValidateCSRF_MatchingHeaderToken(t *testing.T) {
 }
 
 func TestValidateCSRF_MismatchedToken(t *testing.T) {
-	admin := newTestAdmin(nil)
+	admin := newTestAdmin()
 	if admin.validateCSRF(csrfRequest("tok-abc123", "tok-abc124")) {
 		t.Error("mismatched token must not validate")
 	}
 }
 
 func TestValidateCSRF_DifferentLengthToken(t *testing.T) {
-	admin := newTestAdmin(nil)
+	admin := newTestAdmin()
 	if admin.validateCSRF(csrfRequest("tok-abc123", "tok-abc")) {
 		t.Error("different-length token must not validate")
 	}
 }
 
 func TestValidateCSRF_MissingCookie(t *testing.T) {
-	admin := newTestAdmin(nil)
+	admin := newTestAdmin()
 	if admin.validateCSRF(csrfRequest("", "tok-abc123")) {
 		t.Error("request without CSRF cookie must not validate")
 	}
 }
 
 func TestValidateCSRF_EmptyFormAndHeader(t *testing.T) {
-	admin := newTestAdmin(nil)
+	admin := newTestAdmin()
 	if admin.validateCSRF(csrfRequest("tok-abc123", "")) {
 		t.Error("request without any submitted token must not validate")
 	}

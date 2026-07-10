@@ -26,7 +26,7 @@ func findCookie(t *testing.T, cookies []*http.Cookie, name string) *http.Cookie 
 }
 
 func TestHandleLogout_ClearCookieAttributes_PlainHTTP(t *testing.T) {
-	admin := newTestAdmin(nil)
+	admin := newTestAdmin()
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	rec := httptest.NewRecorder()
 
@@ -64,7 +64,7 @@ func TestHandleLogout_ClearCookieAttributes_PlainHTTP(t *testing.T) {
 }
 
 func TestHandleLogout_ClearCookieAttributes_TLS(t *testing.T) {
-	admin := newTestAdmin(nil)
+	admin := newTestAdmin()
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	req.TLS = &tls.ConnectionState{}
 	rec := httptest.NewRecorder()

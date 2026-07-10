@@ -406,9 +406,18 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	gw.mcpServer = mcpServer
 	gw.mcpServer.RegisterRoutes(mux)
 
-	gw.httpServer = &http.Server{
-		Addr:              cfg.Server.HTTPAddr,
-		Handler:           webadmin.SecurityHeadersMiddleware(maxBytesMiddleware(mux)),
+	gw.httpServer = buildHTTPServer(cfg.Server.HTTPAddr, webadmin.SecurityHeadersMiddleware(maxBytesMiddleware(mux)))
+
+	return gw, nil
+}
+
+// buildHTTPServer constructs the HTTP server with the correct timeout configuration for SSE.
+// ReadHeaderTimeout and IdleTimeout are set; WriteTimeout and ReadTimeout are deliberately
+// left unset because they would kill long-lived SSE streams mid-flight.
+func buildHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		// IdleTimeout only reaps idle keep-alive connections between requests;
 		// it does not touch in-flight requests, so active SSE streams are safe.
@@ -416,8 +425,6 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		// long-lived SSE responses and would kill streams mid-flight.
 		IdleTimeout: 120 * time.Second,
 	}
-
-	return gw, nil
 }
 
 // setupTCPListeners creates standard TCP listeners for gRPC and HTTP.

@@ -11,14 +11,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/2389/coven-gateway/internal/packs"
 	"github.com/2389/coven-gateway/internal/store"
 )
 
 // newTestAdmin creates a minimal Admin instance for handler testing.
-func newTestAdmin(registry *packs.Registry) *Admin {
+func newTestAdmin() *Admin {
 	return &Admin{
-		registry: registry,
+		registry: nil,
 		logger:   slog.Default(),
 	}
 }
@@ -38,7 +37,7 @@ func requestWithUser(r *http.Request) *http.Request {
 // --- handleToolsPage tests ---
 
 func TestHandleToolsPage_RendersToolsPage(t *testing.T) {
-	admin := newTestAdmin(nil)
+	admin := newTestAdmin()
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/tools", nil)
 	req = requestWithUser(req)
