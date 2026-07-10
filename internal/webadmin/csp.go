@@ -1,4 +1,4 @@
-// ABOUTME: Content Security Policy middleware for all HTTP responses
+// ABOUTME: Security headers middleware for all HTTP responses (CSP, nosniff, HSTS, etc.)
 // ABOUTME: Restricts script/style/connect sources to same-origin for XSS protection
 
 package webadmin
@@ -21,9 +21,12 @@ const cspProd = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe
 // (http://localhost:5173) for HMR and module loading during local development.
 const cspDev = "default-src 'none'; script-src 'self' 'unsafe-eval' http://localhost:5173; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:5173 ws://localhost:5173; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
-// CSPMiddleware wraps an http.Handler and sets the Content-Security-Policy header.
-// In dev mode (no Vite manifest), it permits the Vite dev server origin.
-func CSPMiddleware(next http.Handler) http.Handler {
+// SecurityHeadersMiddleware wraps an http.Handler and sets baseline security
+// headers on every response: Content-Security-Policy, X-Content-Type-Options,
+// Referrer-Policy, X-Frame-Options, Permissions-Policy, and — on TLS
+// connections only — Strict-Transport-Security.
+// In dev mode (no Vite manifest), the CSP permits the Vite dev server origin.
+func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 	// Evaluate once at startup: manifest is loaded during init().
 	policy := cspProd
 	if assets.Manifest == nil {
@@ -31,7 +34,19 @@ func CSPMiddleware(next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", policy)
+		h := w.Header()
+		h.Set("Content-Security-Policy", policy)
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		if r.TLS != nil {
+			// HSTS only over TLS: emitting it on a plain-HTTP tailnet
+			// deployment would poison browsers against the plain listener.
+			// Under Funnel, TLS may terminate at the Tailscale edge before
+			// this process; in that case r.TLS is nil and no HSTS is sent.
+			h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
