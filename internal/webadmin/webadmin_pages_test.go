@@ -147,7 +147,7 @@ func TestHandleDashboardJSON_Returns200WithExpectedFields(t *testing.T) {
 
 // --- handleThreadsPage / handleThreadsJSON ---
 
-func seedTestThread(t *testing.T, s FullStore, id, title string) *store.Thread {
+func seedTestThread(t *testing.T, s FullStore, id, _ string) {
 	t.Helper()
 	thread := &store.Thread{
 		ID:           id,
@@ -160,7 +160,6 @@ func seedTestThread(t *testing.T, s FullStore, id, title string) *store.Thread {
 	if err := s.CreateThread(context.Background(), thread); err != nil {
 		t.Fatalf("CreateThread: %v", err)
 	}
-	return thread
 }
 
 func TestHandleThreadsPage_EmptyStore_Returns200(t *testing.T) {
@@ -537,5 +536,146 @@ func TestHandleUsageJSON_Returns200WithFields(t *testing.T) {
 	}
 	if _, ok := resp["totalTokens"]; !ok {
 		t.Error("expected 'totalTokens' field in response")
+	}
+}
+
+func TestHandleUsageJSON_WithSinceFilter(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/usage?since=2024-01-01T00:00:00Z", nil)
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleUsageJSON(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 with since filter, got %d", rec.Code)
+	}
+}
+
+func TestHandleUsageJSON_WithUntilFilter(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/usage?until=2099-01-01T00:00:00Z", nil)
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleUsageJSON(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 with until filter, got %d", rec.Code)
+	}
+}
+
+func TestHandleUsageJSON_WithInvalidSince_Ignores(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/usage?since=not-a-date", nil)
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleUsageJSON(rec, req)
+	// Invalid date is silently ignored; response is still 200
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for invalid since, got %d", rec.Code)
+	}
+}
+
+// --- handleThreadDetail / handleThreadDetailJSON empty ID coverage ---
+
+func TestHandleThreadDetail_EmptyID_ReturnsBadRequest(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/admin/threads/", nil)
+	req.SetPathValue("id", "")
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleThreadDetail(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestHandleThreadDetailJSON_EmptyID_ReturnsBadRequest(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/threads/", nil)
+	req.SetPathValue("id", "")
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleThreadDetailJSON(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+// --- handleBoardJSON limit coverage ---
+
+func TestHandleBoardJSON_WithValidLimit_Returns200(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/board?limit=10", nil)
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleBoardJSON(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestHandleBoardJSON_WithInvalidLimit_UsesDefault(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/board?limit=notanumber", nil)
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleBoardJSON(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 with invalid limit, got %d", rec.Code)
+	}
+}
+
+// --- handleThreadsJSON with data ---
+
+func TestHandleThreadsJSON_EmptyStore_ReturnsEmptyJSONArray(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/threads", nil)
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleThreadsJSON(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	var threads []any
+	if err := json.Unmarshal(rec.Body.Bytes(), &threads); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(threads) != 0 {
+		t.Errorf("expected empty threads, got %d", len(threads))
+	}
+}
+
+// --- handleTodosJSON with limit ---
+
+func TestHandleTodosJSON_WithLimit(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/todos?limit=5", nil)
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleTodosJSON(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestHandleTodosJSON_WithInvalidLimit_UsesDefault(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/todos?limit=badvalue", nil)
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleTodosJSON(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+// --- handleLogsJSON with custom limit ---
+
+func TestHandleLogsJSON_WithCustomLimit(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/logs?limit=20", nil)
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleLogsJSON(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
 	}
 }

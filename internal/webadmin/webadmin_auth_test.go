@@ -619,10 +619,25 @@ func TestHandleSetupSubmit_AllFieldsRequired(t *testing.T) {
 	}
 }
 
-// min returns the smaller of two ints (stdlib min requires Go 1.21).
-func min(a, b int) int {
-	if a < b {
-		return a
+func TestHandleSetupSubmit_WithCreatePrincipal_NilStore_StillSucceeds(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	csrfCookie := buildSetupCSRFCookie(t, a)
+
+	// principalStore is nil — createOwnerPrincipal returns "" immediately
+	form := url.Values{}
+	form.Set("username", "setupadmin2")
+	form.Set("password", "securepass123")
+	form.Set("display_name", "Setup Admin 2")
+	form.Set("create_principal", "on")
+	form.Set("csrf_token", csrfCookie.Value)
+
+	req := httptest.NewRequest(http.MethodPost, "/setup", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(csrfCookie)
+	rec := httptest.NewRecorder()
+	a.handleSetupSubmit(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 (setup complete), got %d", rec.Code)
 	}
-	return b
 }

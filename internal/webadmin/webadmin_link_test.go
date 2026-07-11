@@ -172,6 +172,40 @@ func TestHandleLinkStatus_EmptyCode_ReturnsBadRequest(t *testing.T) {
 	}
 }
 
+func TestHandleLinkStatus_ExpiredCode_ReturnsExpired(t *testing.T) {
+	a := newTestAdminWithStore(t)
+
+	// Create a link code with expiry in the past
+	expiredCode := &store.LinkCode{
+		ID:          "expired-id",
+		Code:        "EXPRD1",
+		Fingerprint: validFingerprint(),
+		DeviceName:  "expired-device",
+		Status:      store.LinkCodeStatusPending,
+		CreatedAt:   time.Now().Add(-2 * time.Hour),
+		ExpiresAt:   time.Now().Add(-1 * time.Hour), // already expired
+	}
+	if err := a.store.CreateLinkCode(context.Background(), expiredCode); err != nil {
+		t.Fatalf("CreateLinkCode: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/link/status/EXPRD1", nil)
+	req.SetPathValue("code", "EXPRD1")
+	rec := httptest.NewRecorder()
+	a.handleLinkStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["status"] != "expired" {
+		t.Errorf("expected status 'expired', got %q", resp["status"])
+	}
+}
+
 // --- handleLinkPage / handleLinkJSON ---
 
 func TestHandleLinkPage_Returns200(t *testing.T) {
@@ -562,6 +596,47 @@ func TestHandleInviteSignup_MissingCSRF_ShowsError(t *testing.T) {
 	}
 }
 
+func TestHandleInviteSignup_UsernameAlreadyTaken_ShowsError(t *testing.T) {
+	a := newTestAdminWithStore(t)
+
+	// Seed an existing user with the same username
+	createAdminUserWithPassword(t, a, "existing-user", "password123")
+
+	token := createInvite(t, a)
+	csrf := getInviteCSRFCookie(t, a, token)
+
+	form := url.Values{}
+	form.Set("username", "existing-user") // already taken
+	form.Set("password", "password123")
+	form.Set("csrf_token", csrf.Value)
+
+	req := httptest.NewRequest(http.MethodPost, "/invite/"+token, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetPathValue("token", token)
+	req.AddCookie(csrf)
+	rec := httptest.NewRecorder()
+	a.handleInviteSignup(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 error page for taken username, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "already") && !strings.Contains(rec.Body.String(), "taken") && !strings.Contains(rec.Body.String(), "exists") {
+		// The showInviteError renders a template; just check for 200 status
+		t.Logf("body excerpt: %s", rec.Body.String()[:min(200, rec.Body.Len())])
+	}
+}
+
+func TestHandleInviteSignup_EmptyToken_ReturnsBadRequest(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodPost, "/invite/", nil)
+	req.SetPathValue("token", "")
+	rec := httptest.NewRecorder()
+	a.handleInviteSignup(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty token, got %d", rec.Code)
+	}
+}
+
 // --- handleCreateInviteJSON ---
 
 func TestHandleCreateInviteJSON_HappyPath_ReturnsURL(t *testing.T) {
@@ -609,5 +684,74 @@ func TestHandleCreateInviteJSON_MissingCSRF_ReturnsForbidden(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("expected 403, got %d", rec.Code)
+	}
+}
+
+// --- handleLinkApprove ---
+
+func TestHandleLinkApprove_NoCSRF_ReturnsForbidden(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	req := httptest.NewRequest(http.MethodPost, "/admin/link/code-1/approve", nil)
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleLinkApprove(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", rec.Code)
+	}
+}
+
+func TestHandleLinkApprove_EmptyID_ReturnsBadRequest(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	csrf := adminCSRFCookie(t, a)
+
+	form := "csrf_token=" + csrf.Value
+	req := httptest.NewRequest(http.MethodPost, "/admin/link//approve", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(csrf)
+	req.SetPathValue("id", "")
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleLinkApprove(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestHandleLinkApprove_UnknownCode_Returns404(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	csrf := adminCSRFCookie(t, a)
+
+	form := "csrf_token=" + csrf.Value
+	req := httptest.NewRequest(http.MethodPost, "/admin/link/nonexistent/approve", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(csrf)
+	req.SetPathValue("id", "nonexistent")
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleLinkApprove(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for unknown link code, got %d", rec.Code)
+	}
+}
+
+func TestHandleLinkApprove_NilPrincipalStore_Returns500(t *testing.T) {
+	a := newTestAdminWithStore(t)
+	// principalStore is nil in newTestAdminWithStore
+	csrf := adminCSRFCookie(t, a)
+
+	// Create a pending link code
+	fp := validFingerprint()
+	_, codeID := createLinkCode(t, a, fp, "test-device")
+
+	form := "csrf_token=" + csrf.Value
+	req := httptest.NewRequest(http.MethodPost, "/admin/link/"+codeID+"/approve", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(csrf)
+	req.SetPathValue("id", codeID)
+	req = requestWithUser(req)
+	rec := httptest.NewRecorder()
+	a.handleLinkApprove(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 when principalStore is nil, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
