@@ -1,7 +1,5 @@
 // ABOUTME: Tests for webadmin device-link flow and invite flow handlers.
-// ABOUTME: Covers handleLinkRequest, handleLinkStatus, handleLinkApprove, handleLinkPage,
-// ABOUTME: handleLinkJSON, validatePendingLinkCode, handleInvitePage, handleInviteSignup,
-// ABOUTME: handleCreateInviteJSON, parseInviteSignupForm, validateInvite, showInviteError.
+// ABOUTME: Covers link request/status/approve/page/JSON and invite page/signup/create paths.
 
 package webadmin
 

@@ -765,7 +765,7 @@ func TestHandlePrincipalsJSON_StatusFilter_Pending(t *testing.T) {
 // handleBoardJSON — cover the thread detail path
 // =============================================================================
 
-func TestHandleBoardThreadJSON_WithThread_Returns200(t *testing.T) {
+func TestHandleBoardThreadJSON_NonBBSThread_Returns404(t *testing.T) {
 	a := newTestAdminWithStore(t)
 	ctx := context.Background()
 
@@ -786,10 +786,10 @@ func TestHandleBoardThreadJSON_WithThread_Returns200(t *testing.T) {
 	rec := httptest.NewRecorder()
 	a.handleBoardThreadJSON(rec, req)
 
-	// The bbs thread GetBBSThread will return not found since it's not a BBS thread,
-	// but the function itself is exercised
-	if rec.Code == 0 {
-		t.Error("expected non-zero status code")
+	// GetBBSThread returns not found since this thread has no BBS data,
+	// so the handler responds 404.
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", rec.Code)
 	}
 }
 
@@ -865,7 +865,9 @@ func TestSendWithContext_ChannelFull_WaitsAndRetries(t *testing.T) {
 	msg := &chatMessage{Type: "queued"}
 	result := sendWithContext(ctx, sess, msg)
 	// result will be false since channel stays full and timeout fires
-	_ = result // we just want to exercise the code path
+	if result {
+		t.Error("expected false when channel is full and timeout fires")
+	}
 }
 
 func TestSendWithContext_SessionContextCancelled_ReturnsFalse(t *testing.T) {
