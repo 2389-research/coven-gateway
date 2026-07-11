@@ -55,12 +55,6 @@ func (s *scriptedAgentStream) Recv() (*pb.AgentMessage, error) {
 	return msg, nil
 }
 
-func (s *scriptedAgentStream) sentMessages() []*pb.ServerMessage {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]*pb.ServerMessage(nil), s.sent...)
-}
-
 // =============================================================================
 // receiveRegistration
 // =============================================================================
@@ -302,7 +296,7 @@ func TestExtractRegistrationInfo_NoMetadata(t *testing.T) {
 	if info.instanceID == "" {
 		t.Error("expected non-empty instanceID")
 	}
-	if info.workspaces != nil && len(info.workspaces) > 0 {
+	if len(info.workspaces) > 0 {
 		t.Error("expected empty workspaces without metadata")
 	}
 }
@@ -365,11 +359,9 @@ func TestHandleExecutePackTool_NilPackRouter(t *testing.T) {
 	req := &pb.ExecutePackTool{RequestId: "req-nil", ToolName: "some_tool"}
 	srv.handleExecutePackTool(context.Background(), conn, req)
 
-	// Wait briefly for the error to be sent
-	deadline := context.Background()
-	_ = deadline
-	var found bool
-	for i := 0; i < 100; i++ {
+	// Wait briefly for the error to be sent (handleExecutePackTool is async).
+	found := false
+	for range 100 {
 		for _, msg := range stream.sentMessages() {
 			if r := msg.GetPackToolResult(); r != nil && r.GetRequestId() == "req-nil" {
 				found = true
@@ -463,24 +455,14 @@ func TestHandleExecutePackTool_UnknownTool(t *testing.T) {
 	// This is async; the error result arrives via goroutine
 	srv.handleExecutePackTool(context.Background(), conn, req)
 
-	// Wait up to 200ms for the result to appear
-	deadline := context.Background()
-	_ = deadline
-	found := false
-	for i := 0; i < 200; i++ {
+	// Poll briefly; the key is it doesn't panic. Timeout is acceptable.
+	for range 200 {
 		for _, msg := range stream.sentMessages() {
 			if r := msg.GetPackToolResult(); r != nil && r.GetRequestId() == "req-unk" {
-				found = true
-				break
+				return
 			}
 		}
-		if found {
-			break
-		}
-		// short busy-wait: 1ms * 200 = 200ms max
-		_ = context.Background()
 	}
-	// For this test it's fine if we time out; the key is it doesn't panic
 }
 
 // =============================================================================

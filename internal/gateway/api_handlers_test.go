@@ -9,8 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,7 +16,6 @@ import (
 	"time"
 
 	"github.com/2389/coven-gateway/internal/agent"
-	"github.com/2389/coven-gateway/internal/config"
 	"github.com/2389/coven-gateway/internal/store"
 )
 
@@ -753,40 +750,6 @@ func TestHandleCreateBindingError_GenericError(t *testing.T) {
 }
 
 // =============================================================================
-// newTestGatewayWithBroadcastableAgent: gateway with an agent that can respond to sends
-// =============================================================================
-
-// newTestGatewayWithRespondingAgent creates a gateway with an agent whose stream
-// sends a text+done response sequence. Used for SSE streaming path coverage.
-func newTestGatewayWithRespondingAgent(t *testing.T) *Gateway {
-	t.Helper()
-
-	cfg := &config.Config{
-		Server: config.ServerConfig{
-			GRPCAddr: "localhost:0",
-			HTTPAddr: "localhost:0",
-		},
-		Database: config.DatabaseConfig{
-			Path: ":memory:",
-		},
-	}
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	gw, err := New(cfg, logger)
-	if err != nil {
-		t.Fatalf("failed to create gateway: %v", err)
-	}
-
-	// Use the mockSender so handleSendMessage exercises the SSE path
-	respChan := make(chan *agent.Response, 2)
-	respChan <- &agent.Response{Event: agent.EventText, Text: "hi"}
-	respChan <- &agent.Response{Event: agent.EventDone, Text: "hi", Done: true}
-	close(respChan)
-
-	gw.mockSender = &mockAgentManager{respChan: respChan}
-
-	return gw
-}
 
 // TestStreamResponses_ClosedChannelWithoutDone ensures the loop exits cleanly
 // when the channel closes without a Done event.
@@ -839,11 +802,15 @@ func TestHandleSendMessage_StreamResponses(t *testing.T) {
 	// channel so the conversation service bypasses the gRPC stream.
 	gw := newTestGatewayWithMockManager(t)
 
-	body, _ := json.Marshal(SendMessageRequest{
+	bodyBytes, err := json.Marshal(SendMessageRequest{
 		AgentID: "test-agent",
 		Sender:  "user@test.com",
 		Content: "Hello",
 	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	body := bodyBytes
 	req := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)

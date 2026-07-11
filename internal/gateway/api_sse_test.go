@@ -444,9 +444,9 @@ func TestWriteSSEEvent_HappyPath(t *testing.T) {
 
 	// Parse the data portion to verify JSON correctness
 	dataLine := ""
-	for _, line := range strings.Split(body, "\n") {
-		if strings.HasPrefix(line, "data: ") {
-			dataLine = strings.TrimPrefix(line, "data: ")
+	for line := range strings.SplitSeq(body, "\n") {
+		if rest, ok := strings.CutPrefix(line, "data: "); ok {
+			dataLine = rest
 			break
 		}
 	}
