@@ -863,3 +863,55 @@ func TestHandleSendMessage_StreamResponses(t *testing.T) {
 		t.Errorf("expected SSE events in output, got: %q", output)
 	}
 }
+
+// =============================================================================
+// handleToolApproval — success and other-error arms
+// =============================================================================
+
+func TestHandleToolApproval_Success(t *testing.T) {
+	// Need a real registered agent with a stream so Send works
+	gw := newTestGatewayWithAgentForBinding(t, "inst-tapr", "/path", "agent-tapr")
+
+	body := `{"agent_id":"agent-tapr","tool_id":"tool-xyz","approved":true,"approve_all":false}`
+	req := httptest.NewRequest(http.MethodPost, "/api/tools/approve", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	gw.handleToolApproval(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200, body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["success"] != true {
+		t.Errorf("success = %v, want true", resp["success"])
+	}
+	if resp["approved"] != true {
+		t.Errorf("approved = %v, want true", resp["approved"])
+	}
+}
+
+// =============================================================================
+// handleAnswerQuestion — DeliverAnswer error arm
+// =============================================================================
+
+func TestHandleAnswerQuestion_QuestionNotFound(t *testing.T) {
+	gw := newTestGateway(t)
+	// questionRouter is set by New(); deliver to an unknown question ID
+	body := `{"agent_id":"a-1","question_id":"q-unknown","selected":["yes"]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/questions/answer", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	gw.handleAnswerQuestion(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404, body: %s", rec.Code, rec.Body.String())
+	}
+	var errResp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if errResp["error"] != "question not found or already answered" {
+		t.Errorf("error = %q, want 'question not found or already answered'", errResp["error"])
+	}
+}
