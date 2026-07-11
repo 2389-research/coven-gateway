@@ -450,18 +450,28 @@ func TestHandleExecutePackTool_UnknownTool(t *testing.T) {
 		Logger: logger,
 	})
 
-	// unknown_tool is not in any pack — router should error quickly
+	// unknown_tool is not in any pack — router should send back an error result quickly.
 	req := &pb.ExecutePackTool{RequestId: "req-unk", ToolName: "unknown_tool"}
-	// This is async; the error result arrives via goroutine
 	srv.handleExecutePackTool(context.Background(), conn, req)
 
-	// Poll briefly; the key is it doesn't panic. Timeout is acceptable.
+	// Poll up to 200 iterations for the async error result to arrive.
+	found := false
 	for range 200 {
 		for _, msg := range stream.sentMessages() {
 			if r := msg.GetPackToolResult(); r != nil && r.GetRequestId() == "req-unk" {
-				return
+				if r.GetError() == "" {
+					t.Error("expected non-empty error in PackToolResult for unknown tool")
+				}
+				found = true
+				break
 			}
 		}
+		if found {
+			break
+		}
+	}
+	if !found {
+		t.Error("expected PackToolResult to be sent for unknown tool")
 	}
 }
 
