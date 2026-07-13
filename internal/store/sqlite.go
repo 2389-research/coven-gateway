@@ -46,7 +46,10 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	// pragmas below apply to every query.
 	db.SetMaxOpenConns(1)
 
-	// Enable WAL mode for better concurrent performance
+	// Enable WAL mode. With SetMaxOpenConns(1) Go-side access is serialized,
+	// but WAL still earns its keep: OS-level readers (external tooling) can
+	// read during writes, and crash-recovery semantics are better than
+	// rollback journal.
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("enabling WAL mode: %w", err)
