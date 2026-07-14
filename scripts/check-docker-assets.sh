@@ -42,13 +42,20 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 IMAGE_TAG="${COVEN_DOCKER_TEST_IMAGE:-coven-gateway:frontend-assets-test}"
 DIAGNOSTIC_DIR="$(mktemp -d "${TMPDIR:-/tmp}/coven-docker-assets.XXXXXX")"
 CONTAINER_ID=""
+CURL_OPTIONS=(--connect-timeout 2 --max-time 5 --silent --show-error)
 
 cleanup() {
     local status=$?
 
     trap - EXIT
     if [[ -n "$CONTAINER_ID" ]]; then
-        docker rm --force "$CONTAINER_ID" >"$DIAGNOSTIC_DIR/container-remove.log" 2>&1 || true
+        if ! docker rm --force "$CONTAINER_ID" >"$DIAGNOSTIC_DIR/container-remove.log" 2>&1; then
+            echo "Failed to remove test container: $CONTAINER_ID" >&2
+            tail -n 40 "$DIAGNOSTIC_DIR/container-remove.log" >&2
+            if [[ $status -eq 0 ]]; then
+                status=1
+            fi
+        fi
     fi
 
     if [[ $status -eq 0 ]]; then
@@ -86,11 +93,17 @@ require_command curl
 cd "$ROOT_DIR"
 
 BUILD_LOG="$DIAGNOSTIC_DIR/build.log"
-if docker buildx version >/dev/null 2>&1; then
+if docker buildx version >/dev/null 2>&1 && docker buildx inspect >/dev/null 2>&1; then
+    BUILD_MODE="Buildx"
     BUILD_COMMAND=(docker buildx build --load --tag "$IMAGE_TAG" .)
 else
+    BUILD_MODE="legacy"
     BUILD_COMMAND=(docker build --tag "$IMAGE_TAG" .)
 fi
+
+echo "Docker test image: $IMAGE_TAG"
+echo "Docker build mode: $BUILD_MODE"
+echo "Docker build log: $BUILD_LOG"
 
 if ! "${BUILD_COMMAND[@]}" >"$BUILD_LOG" 2>&1; then
     echo "Docker image build failed. Last 40 lines:" >&2
@@ -111,17 +124,44 @@ fi
 
 if ! PORT_OUTPUT="$(docker port "$CONTAINER_ID" 8080/tcp 2>"$DIAGNOSTIC_DIR/docker-port.log")"; then
     echo "Could not determine the gateway's published port" >&2
+    echo "Captured docker port output: ${PORT_OUTPUT:-<empty>}" >&2
+    tail -n 40 "$DIAGNOSTIC_DIR/docker-port.log" >&2
     capture_container_logs
     exit 1
 fi
-PORT="${PORT_OUTPUT##*:}"
+
+if [[ "$PORT_OUTPUT" =~ ^127\.0\.0\.1:([0-9]+)$ ]]; then
+    PORT="${BASH_REMATCH[1]}"
+else
+    echo "Docker published port output is not exactly one localhost port" >&2
+    echo "Captured docker port output: ${PORT_OUTPUT:-<empty>}" >&2
+    tail -n 40 "$DIAGNOSTIC_DIR/docker-port.log" >&2
+    capture_container_logs
+    exit 1
+fi
+
+if ((10#$PORT < 1 || 10#$PORT > 65535)); then
+    echo "Docker published port is outside the valid range: $PORT" >&2
+    echo "Captured docker port output: $PORT_OUTPUT" >&2
+    tail -n 40 "$DIAGNOSTIC_DIR/docker-port.log" >&2
+    capture_container_logs
+    exit 1
+fi
+
 BASE_URL="http://127.0.0.1:$PORT"
 
 HEALTHY=false
 for _ in {1..60}; do
-    if curl --fail --silent "$BASE_URL/health" >"$DIAGNOSTIC_DIR/health-response" 2>"$DIAGNOSTIC_DIR/health-curl.log"; then
-        HEALTHY=true
-        break
+    HEALTH_STATUS=""
+    if HEALTH_STATUS="$(curl "${CURL_OPTIONS[@]}" \
+        --output "$DIAGNOSTIC_DIR/health-response" \
+        --write-out '%{http_code}' \
+        "$BASE_URL/health" 2>"$DIAGNOSTIC_DIR/health-curl.log")"; then
+        printf '%s\n' "$HEALTH_STATUS" >"$DIAGNOSTIC_DIR/health-status"
+        if [[ "$HEALTH_STATUS" == "200" ]]; then
+            HEALTHY=true
+            break
+        fi
     fi
     sleep 0.5
 done
@@ -133,8 +173,20 @@ if [[ "$HEALTHY" != true ]]; then
 fi
 
 LOGIN_HTML="$DIAGNOSTIC_DIR/login.html"
-if ! curl --fail --location --silent --show-error "$BASE_URL/login" >"$LOGIN_HTML" 2>"$DIAGNOSTIC_DIR/login-curl.log"; then
+if ! LOGIN_STATUS="$(curl "${CURL_OPTIONS[@]}" \
+    --location \
+    --output "$LOGIN_HTML" \
+    --write-out '%{http_code}' \
+    "$BASE_URL/login" 2>"$DIAGNOSTIC_DIR/login-curl.log")"; then
     echo "Failed to fetch the login page" >&2
+    tail -n 40 "$DIAGNOSTIC_DIR/login-curl.log" >&2
+    capture_container_logs
+    exit 1
+fi
+printf '%s\n' "$LOGIN_STATUS" >"$DIAGNOSTIC_DIR/login-status"
+
+if [[ "$LOGIN_STATUS" != "200" ]]; then
+    echo "Login page returned final HTTP status $LOGIN_STATUS, expected 200" >&2
     tail -n 40 "$DIAGNOSTIC_DIR/login-curl.log" >&2
     capture_container_logs
     exit 1
@@ -159,10 +211,33 @@ case "$ASSET_PATH" in
         ;;
 esac
 
-if ! curl --fail --silent --show-error "$BASE_URL$ASSET_PATH" \
-    >"$DIAGNOSTIC_DIR/asset-response" 2>"$DIAGNOSTIC_DIR/asset-curl.log"; then
+ASSET_RESPONSE="$DIAGNOSTIC_DIR/asset-response"
+ASSET_METADATA="$DIAGNOSTIC_DIR/asset-metadata"
+if ! curl "${CURL_OPTIONS[@]}" \
+    --output "$ASSET_RESPONSE" \
+    --write-out '%{http_code}\n%{content_type}\n' \
+    "$BASE_URL$ASSET_PATH" >"$ASSET_METADATA" 2>"$DIAGNOSTIC_DIR/asset-curl.log"; then
     echo "Failed to fetch embedded frontend asset: $ASSET_PATH" >&2
     tail -n 40 "$DIAGNOSTIC_DIR/asset-curl.log" >&2
+    exit 1
+fi
+
+ASSET_STATUS="$(sed -n '1p' "$ASSET_METADATA")"
+ASSET_CONTENT_TYPE="$(sed -n '2p' "$ASSET_METADATA")"
+ASSET_MEDIA_TYPE="${ASSET_CONTENT_TYPE%%;*}"
+
+if [[ "$ASSET_STATUS" != "200" ]]; then
+    echo "Embedded frontend asset returned HTTP status $ASSET_STATUS, expected 200" >&2
+    exit 1
+fi
+
+if [[ ! -s "$ASSET_RESPONSE" ]]; then
+    echo "Embedded frontend asset response is empty: $ASSET_PATH" >&2
+    exit 1
+fi
+
+if [[ "$ASSET_MEDIA_TYPE" != "application/javascript" ]]; then
+    echo "Embedded frontend asset has unexpected content type: ${ASSET_CONTENT_TYPE:-<empty>}" >&2
     exit 1
 fi
 
