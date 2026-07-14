@@ -557,16 +557,9 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 		a.showLoginError(w, r, "Invalid form data")
 		return
 	}
-	if !a.validateCSRF(r) {
-		a.showLoginError(w, r, "Invalid request, please try again")
-		return
-	}
 
-	username := r.FormValue("username")
-	password := r.FormValue("password")
-
-	if username == "" || password == "" {
-		a.showLoginError(w, r, "Username and password required")
+	username, password, ok := a.validateLoginRequest(w, r)
+	if !ok {
 		return
 	}
 
@@ -575,6 +568,7 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	if userErr != nil {
 		if errors.Is(userErr, store.ErrAdminUserNotFound) {
+			loginLimiter.recordFailure(username)
 			a.showLoginError(w, r, "Invalid username or password")
 		} else {
 			a.logger.Error("failed to get user", "error", userErr)
@@ -589,6 +583,7 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if bcryptErr != nil {
+		loginLimiter.recordFailure(username)
 		a.showLoginError(w, r, "Invalid username or password")
 		return
 	}
@@ -601,6 +596,33 @@ func (a *Admin) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	a.logger.Info("admin login successful", "username", username)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// validateLoginRequest checks CSRF, non-empty credentials, and the failed-login
+// rate limit before any store or bcrypt work. Returns username, password, and
+// ok=true when all preconditions pass; ok=false when the response was already
+// written (either an error render or a rate-limit block).
+func (a *Admin) validateLoginRequest(w http.ResponseWriter, r *http.Request) (username, password string, ok bool) {
+	if !a.validateCSRF(r) {
+		a.showLoginError(w, r, "Invalid request, please try again")
+		return "", "", false
+	}
+
+	username = r.FormValue("username")
+	password = r.FormValue("password")
+	if username == "" || password == "" {
+		a.showLoginError(w, r, "Username and password required")
+		return "", "", false
+	}
+
+	// Gate before any store/bcrypt work: a blocked request costs nothing.
+	if loginLimiter.tooMany(username) {
+		a.logger.Warn("login rate limit exceeded", "username", username)
+		a.showLoginError(w, r, "Too many login attempts, please try again in a minute")
+		return "", "", false
+	}
+
+	return username, password, true
 }
 
 // handleLogout logs out the current user.
