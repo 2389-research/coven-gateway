@@ -574,6 +574,36 @@ func TestValidateServable_Auth(t *testing.T) {
 	}
 }
 
+func TestServerConfig_TrustForwardedProto(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// With trust_forwarded_proto: true
+	withFlag := filepath.Join(tmpDir, "with.yaml")
+	if err := os.WriteFile(withFlag, []byte("server:\n  grpc_addr: \":50051\"\n  http_addr: \":8080\"\n  trust_forwarded_proto: true\ndatabase:\n  path: \"./test.db\"\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	cfg, err := Load(withFlag)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.Server.TrustForwardedProto {
+		t.Error("TrustForwardedProto = false, want true when set in config")
+	}
+
+	// Without trust_forwarded_proto (default false)
+	withoutFlag := filepath.Join(tmpDir, "without.yaml")
+	if err := os.WriteFile(withoutFlag, []byte("server:\n  grpc_addr: \":50051\"\n  http_addr: \":8080\"\ndatabase:\n  path: \"./test.db\"\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	cfg2, err := Load(withoutFlag)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg2.Server.TrustForwardedProto {
+		t.Error("TrustForwardedProto = true, want false (default) when not set in config")
+	}
+}
+
 func TestValidate_TailscaleConfig(t *testing.T) {
 	tests := []struct {
 		name          string

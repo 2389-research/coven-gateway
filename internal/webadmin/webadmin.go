@@ -63,6 +63,8 @@ const userContextKey contextKey = "admin_user"
 type Config struct {
 	// BaseURL is the external URL for generating invite links
 	BaseURL string
+	// TrustForwardedProto mirrors config.ServerConfig.TrustForwardedProto for cookie Secure decisions.
+	TrustForwardedProto bool
 }
 
 // TokenGenerator creates JWT tokens for principals.
@@ -122,18 +124,19 @@ type FullStore interface {
 
 // Admin handles admin UI routes and authentication.
 type Admin struct {
-	store            FullStore
-	principalStore   PrincipalStore
-	manager          *agent.Manager
-	conversation     *conversation.Service
-	broadcaster      *conversation.EventBroadcaster
-	registry         *packs.Registry
-	config           Config
-	logger           *slog.Logger
-	webauthn         *webauthn.WebAuthn
-	webauthnSessions *webAuthnSessionStore
-	chatHub          *chatHub
-	tokenGenerator   TokenGenerator
+	store               FullStore
+	principalStore      PrincipalStore
+	manager             *agent.Manager
+	conversation        *conversation.Service
+	broadcaster         *conversation.EventBroadcaster
+	registry            *packs.Registry
+	config              Config
+	logger              *slog.Logger
+	webauthn            *webauthn.WebAuthn
+	webauthnSessions    *webAuthnSessionStore
+	chatHub             *chatHub
+	tokenGenerator      TokenGenerator
+	trustForwardedProto bool
 }
 
 // getSQLiteStore returns the underlying SQLiteStore if available.
@@ -174,16 +177,17 @@ func New(fullStore FullStore, manager *agent.Manager, convService *conversation.
 // NewWithConfig creates a new Admin handler with full configuration.
 func NewWithConfig(cfg NewConfig) *Admin {
 	a := &Admin{
-		store:          cfg.Store,
-		principalStore: cfg.PrincipalStore,
-		manager:        cfg.Manager,
-		conversation:   cfg.Conversation,
-		broadcaster:    cfg.Broadcaster,
-		registry:       cfg.Registry,
-		config:         cfg.Config,
-		logger:         slog.Default().With("component", "admin"),
-		chatHub:        newChatHub(),
-		tokenGenerator: cfg.TokenGenerator,
+		store:               cfg.Store,
+		principalStore:      cfg.PrincipalStore,
+		manager:             cfg.Manager,
+		conversation:        cfg.Conversation,
+		broadcaster:         cfg.Broadcaster,
+		registry:            cfg.Registry,
+		config:              cfg.Config,
+		logger:              slog.Default().With("component", "admin"),
+		chatHub:             newChatHub(),
+		tokenGenerator:      cfg.TokenGenerator,
+		trustForwardedProto: cfg.Config.TrustForwardedProto,
 	}
 
 	// Initialize WebAuthn (errors are logged but don't prevent startup)
@@ -448,13 +452,13 @@ func (a *Admin) ensureCSRFToken(w http.ResponseWriter, r *http.Request) string {
 	}
 
 	// Set cookie (path "/" so it works for both root and /admin routes)
-	//nolint:gosec // G124 false positive: Secure is intentionally conditional on r.TLS — plain-HTTP tailnet deployments must still receive this cookie.
+	//nolint:gosec // G124 false positive: Secure is intentionally conditional on direct TLS or opted-in forwarded proto — plain-HTTP tailnet deployments must still receive this cookie.
 	http.SetCookie(w, &http.Cookie{
 		Name:     CSRFCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   requestIsSecure(r, a.trustForwardedProto),
 		SameSite: http.SameSiteStrictMode,
 	})
 
@@ -501,14 +505,14 @@ func (a *Admin) createSession(w http.ResponseWriter, r *http.Request, userID str
 	}
 
 	// Set cookie (path "/" so it works for both root and /admin routes)
-	//nolint:gosec // G124 false positive: Secure is intentionally conditional on r.TLS — plain-HTTP tailnet deployments must still receive this cookie.
+	//nolint:gosec // G124 false positive: Secure is intentionally conditional on direct TLS or opted-in forwarded proto — plain-HTTP tailnet deployments must still receive this cookie.
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    sessionID,
 		Path:     "/",
 		Expires:  session.ExpiresAt,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   requestIsSecure(r, a.trustForwardedProto),
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -642,26 +646,26 @@ func (a *Admin) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 	// Clear session cookie. Attributes mirror createSession: browsers may
 	// refuse to evict a Secure cookie via a Set-Cookie lacking Secure.
-	//nolint:gosec // G124 false positive: Secure is intentionally conditional on r.TLS — plain-HTTP tailnet deployments must still clear this cookie.
+	//nolint:gosec // G124 false positive: Secure is intentionally conditional on direct TLS or opted-in forwarded proto — plain-HTTP tailnet deployments must still clear this cookie.
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   requestIsSecure(r, a.trustForwardedProto),
 		SameSite: http.SameSiteLaxMode,
 	})
 
 	// Clear CSRF cookie. Attributes mirror ensureCSRFToken.
-	//nolint:gosec // G124 false positive: Secure is intentionally conditional on r.TLS — plain-HTTP tailnet deployments must still clear this cookie.
+	//nolint:gosec // G124 false positive: Secure is intentionally conditional on direct TLS or opted-in forwarded proto — plain-HTTP tailnet deployments must still clear this cookie.
 	http.SetCookie(w, &http.Cookie{
 		Name:     CSRFCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   requestIsSecure(r, a.trustForwardedProto),
 		SameSite: http.SameSiteStrictMode,
 	})
 

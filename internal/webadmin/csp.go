@@ -5,6 +5,7 @@ package webadmin
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/2389/coven-gateway/internal/assets"
 )
@@ -21,12 +22,22 @@ const cspProd = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe
 // (http://localhost:5173) for HMR and module loading during local development.
 const cspDev = "default-src 'none'; script-src 'self' 'unsafe-eval' http://localhost:5173; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:5173 ws://localhost:5173; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
+// requestIsSecure reports whether the request arrived over HTTPS: direct
+// TLS always counts; X-Forwarded-Proto: https counts only when the
+// deployment opted in to trusting its TLS-terminating proxy.
+func requestIsSecure(r *http.Request, trustForwardedProto bool) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return trustForwardedProto && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
 // SecurityHeadersMiddleware wraps an http.Handler and sets baseline security
 // headers on every response: Content-Security-Policy, X-Content-Type-Options,
 // Referrer-Policy, X-Frame-Options, Permissions-Policy, and — on TLS
 // connections only — Strict-Transport-Security.
 // In dev mode (no Vite manifest), the CSP permits the Vite dev server origin.
-func SecurityHeadersMiddleware(next http.Handler) http.Handler {
+func SecurityHeadersMiddleware(trustForwardedProto bool, next http.Handler) http.Handler {
 	// Evaluate once at startup: manifest is loaded during init().
 	policy := cspProd
 	if assets.Manifest == nil {
@@ -40,11 +51,12 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		if r.TLS != nil {
+		if requestIsSecure(r, trustForwardedProto) {
 			// HSTS only over TLS: emitting it on a plain-HTTP tailnet
 			// deployment would poison browsers against the plain listener.
 			// Under Funnel, TLS may terminate at the Tailscale edge before
-			// this process; in that case r.TLS is nil and no HSTS is sent.
+			// this process; in that case r.TLS is nil and no HSTS is sent
+			// unless server.trust_forwarded_proto opts in to honoring X-Forwarded-Proto from the proxy.
 			h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		}
 		next.ServeHTTP(w, r)

@@ -6,6 +6,10 @@ server:
   grpc_addr: "0.0.0.0:50051"
   # HTTP address for health checks and metrics (not needed if tailscale.enabled)
   http_addr: "0.0.0.0:8080"
+  # Trust X-Forwarded-Proto: https for HSTS and Secure cookies. Enable ONLY
+  # behind a trusted TLS-terminating proxy such as Tailscale Funnel — HSTS
+  # sticks in browsers for two years, so never enable on plain-HTTP setups.
+  # trust_forwarded_proto: true
 
 # Tailscale integration - run gateway as a node on your tailnet
 # When enabled, gateway listens on Tailscale network instead of local TCP

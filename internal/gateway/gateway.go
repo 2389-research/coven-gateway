@@ -374,7 +374,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		Broadcaster:  eventBroadcaster,
 		Registry:     packRegistry,
 		Config: webadmin.Config{
-			BaseURL: webAdminBaseURL,
+			BaseURL:             webAdminBaseURL,
+			TrustForwardedProto: cfg.Server.TrustForwardedProto,
 		},
 		PrincipalStore: sqlStore,
 		TokenGenerator: grpcResult.jwtVerifier, // May be nil if auth is disabled
@@ -406,7 +407,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	gw.mcpServer = mcpServer
 	gw.mcpServer.RegisterRoutes(mux)
 
-	gw.httpServer = buildHTTPServer(cfg.Server.HTTPAddr, webadmin.SecurityHeadersMiddleware(maxBytesMiddleware(mux)))
+	gw.httpServer = buildHTTPServer(cfg.Server.HTTPAddr, webadmin.SecurityHeadersMiddleware(cfg.Server.TrustForwardedProto, maxBytesMiddleware(mux)))
 
 	return gw, nil
 }

@@ -56,6 +56,12 @@ type TailscaleConfig struct {
 type ServerConfig struct {
 	GRPCAddr string `yaml:"grpc_addr"`
 	HTTPAddr string `yaml:"http_addr"`
+	// TrustForwardedProto treats X-Forwarded-Proto: https as equivalent to
+	// direct TLS for HSTS and Secure-cookie decisions. Enable ONLY when the
+	// gateway sits behind a trusted TLS-terminating proxy (e.g. Tailscale
+	// Funnel); HSTS is sticky in browsers for its whole max-age, so a wrong
+	// emit on a plain-HTTP deployment is worse than a missing one.
+	TrustForwardedProto bool `yaml:"trust_forwarded_proto"`
 }
 
 // DatabaseConfig holds database configuration.

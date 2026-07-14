@@ -17,7 +17,7 @@ func TestCSPMiddleware_SetsHeader(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	handler := SecurityHeadersMiddleware(inner)
+	handler := SecurityHeadersMiddleware(false, inner)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -49,7 +49,7 @@ func TestCSPMiddleware_PreservesInnerHandler(t *testing.T) {
 		w.WriteHeader(http.StatusTeapot)
 	})
 
-	handler := SecurityHeadersMiddleware(inner)
+	handler := SecurityHeadersMiddleware(false, inner)
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	rec := httptest.NewRecorder()
 
@@ -73,7 +73,7 @@ func TestCSPMiddleware_DevMode(t *testing.T) {
 
 	assets.Manifest = nil // dev mode
 
-	handler := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := SecurityHeadersMiddleware(false, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -102,7 +102,7 @@ func TestCSPMiddleware_ProdMode(t *testing.T) {
 		"test": {File: "test.js", IsEntry: true},
 	}
 
-	handler := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := SecurityHeadersMiddleware(false, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -117,7 +117,7 @@ func TestCSPMiddleware_ProdMode(t *testing.T) {
 }
 
 func TestSecurityHeaders_SetOnEveryResponse(t *testing.T) {
-	handler := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := SecurityHeadersMiddleware(false, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -144,7 +144,7 @@ func TestSecurityHeaders_SetOnEveryResponse(t *testing.T) {
 }
 
 func TestSecurityHeaders_HSTSOnlyOverTLS(t *testing.T) {
-	handler := SecurityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := SecurityHeadersMiddleware(false, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -155,5 +155,35 @@ func TestSecurityHeaders_HSTSOnlyOverTLS(t *testing.T) {
 	const want = "max-age=63072000; includeSubDomains"
 	if got := rec.Header().Get("Strict-Transport-Security"); got != want {
 		t.Errorf("Strict-Transport-Security = %q, want %q", got, want)
+	}
+}
+
+func TestSecurityHeaders_ForwardedProtoTrusted(t *testing.T) {
+	cases := []struct {
+		name     string
+		trust    bool
+		xfp      string
+		wantHSTS bool
+	}{
+		{"trust off, header present", false, "https", false},
+		{"trust on, header https", true, "https", true},
+		{"trust on, header HTTPS uppercase", true, "HTTPS", true},
+		{"trust on, header http", true, "http", false},
+		{"trust on, no header", true, "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := SecurityHeadersMiddleware(tc.trust, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			if tc.xfp != "" {
+				req.Header.Set("X-Forwarded-Proto", tc.xfp)
+			}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			got := rec.Header().Get("Strict-Transport-Security") != ""
+			if got != tc.wantHSTS {
+				t.Errorf("HSTS emitted=%v, want %v", got, tc.wantHSTS)
+			}
+		})
 	}
 }

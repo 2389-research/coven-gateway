@@ -424,6 +424,54 @@ func TestHandleLogin_CorrectCredentials_SetsSessionAndRedirects(t *testing.T) {
 	}
 }
 
+func TestHandleLogin_ForwardedProtoSetsSecureCookie(t *testing.T) {
+	cases := []struct {
+		name       string
+		trust      bool
+		wantSecure bool
+	}{
+		{"trust on, XFP https -> Secure", true, true},
+		{"trust off, XFP https -> not Secure", false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := newTestAdminWithStore(t)
+			a.trustForwardedProto = tc.trust
+			createAdminUserWithPassword(t, a, "fpuser", "correct horse")
+
+			pageReq := httptest.NewRequest(http.MethodGet, "/login", nil)
+			pageRec := httptest.NewRecorder()
+			a.handleLoginPage(pageRec, pageReq)
+			var csrfCookie *http.Cookie
+			for _, c := range pageRec.Result().Cookies() {
+				if c.Name == CSRFCookieName {
+					csrfCookie = c
+				}
+			}
+
+			form := url.Values{}
+			form.Set("username", "fpuser")
+			form.Set("password", "correct horse")
+			form.Set("csrf_token", csrfCookie.Value)
+			req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.AddCookie(csrfCookie)
+			req.Header.Set("X-Forwarded-Proto", "https")
+			rec := httptest.NewRecorder()
+			a.handleLogin(rec, req)
+
+			result := rec.Result()
+			if result.StatusCode != http.StatusSeeOther {
+				t.Fatalf("expected redirect 303, got %d", result.StatusCode)
+			}
+			sessionCookie := findCookie(t, result.Cookies(), SessionCookieName)
+			if sessionCookie.Secure != tc.wantSecure {
+				t.Errorf("session cookie Secure=%v, want %v (trust=%v)", sessionCookie.Secure, tc.wantSecure, tc.trust)
+			}
+		})
+	}
+}
+
 // --- handleSetupPage ---
 
 func TestHandleSetupPage_NoAdmins_RendersSetupForm(t *testing.T) {
