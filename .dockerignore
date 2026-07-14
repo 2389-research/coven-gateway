@@ -8,6 +8,9 @@ tailscale/
 # Build artifacts
 bin/
 *.exe
+web/node_modules/
+web/dist/
+internal/assets/dist/
 
 # Git
 .git/

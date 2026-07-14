@@ -1,7 +1,18 @@
 # ABOUTME: Multi-stage Dockerfile for coven-gateway
 # ABOUTME: Builds a minimal container with CGO-enabled SQLite support
 
-# Stage 1: Build
+# Stage 1: Build frontend assets
+FROM node:22-bookworm-slim AS web-builder
+
+WORKDIR /app/web
+
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --silent
+
+COPY web/ ./
+RUN npx tsx scripts/build-tokens.ts && npm run build
+
+# Stage 2: Build Go binaries
 FROM golang:1.25-bookworm AS builder
 
 WORKDIR /app
@@ -18,12 +29,14 @@ RUN go mod download
 
 # Copy source code
 COPY . .
+COPY --from=web-builder /app/web/dist ./internal/assets/dist
 
 # Build with CGO enabled for SQLite
+RUN test -f internal/assets/dist/.vite/manifest.json
 RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /coven-gateway ./cmd/coven-gateway
 RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /coven-admin ./cmd/coven-admin
 
-# Stage 2: Runtime
+# Stage 3: Runtime
 FROM debian:bookworm-slim
 
 # Install runtime dependencies
