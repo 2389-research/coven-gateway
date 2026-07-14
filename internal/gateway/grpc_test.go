@@ -85,7 +85,7 @@ func TestExecutePackToolDoesNotBlockMessageLoop(t *testing.T) {
 				ToolName:  "slow_tool",
 			},
 		},
-	})
+	}, make(chan struct{}, maxConcurrentPackToolsPerConn))
 	elapsed := time.Since(start)
 
 	// The message loop must get control back immediately, not after the

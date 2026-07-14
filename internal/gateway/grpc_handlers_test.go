@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -218,7 +219,7 @@ func TestDispatchMessage_UnknownType(t *testing.T) {
 
 	// An AgentMessage with nil payload hits the default arm
 	msg := &pb.AgentMessage{}
-	srv.dispatchMessage(stream, conn, msg) // should not panic
+	srv.dispatchMessage(stream, conn, msg, make(chan struct{}, maxConcurrentPackToolsPerConn)) // should not panic
 }
 
 // =============================================================================
@@ -563,4 +564,86 @@ func newTestCovenControlServer(t *testing.T) *covenControlServer {
 	gw := newTestGateway(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return &covenControlServer{gateway: gw, logger: logger}
+}
+
+// =============================================================================
+// dispatchMessage — pack tool concurrency cap
+// =============================================================================
+
+func TestDispatchMessage_PackToolCapReached_SendsErrorResult(t *testing.T) {
+	srv := newTestCovenControlServer(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := &fakeAgentStream{ctx: context.Background()}
+	conn := agent.NewConnection(agent.ConnectionParams{
+		ID:     "agent-cap",
+		Name:   "Test",
+		Stream: stream,
+		Logger: logger,
+	})
+
+	packSem := make(chan struct{}, maxConcurrentPackToolsPerConn)
+	for range maxConcurrentPackToolsPerConn {
+		packSem <- struct{}{} // saturate the cap
+	}
+
+	msg := &pb.AgentMessage{Payload: &pb.AgentMessage_ExecutePackTool{
+		ExecutePackTool: &pb.ExecutePackTool{RequestId: "req-cap", ToolName: "any"},
+	}}
+	srv.dispatchMessage(stream, conn, msg, packSem)
+
+	// The rejection path is inline (no goroutine), so assert immediately.
+	found := false
+	for _, sent := range stream.sentMessages() {
+		if r := sent.GetPackToolResult(); r != nil && r.GetRequestId() == "req-cap" {
+			if r.GetError() == "" {
+				t.Error("expected non-empty error when pack tool cap is reached")
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected a PackToolResult error to be sent when cap is reached")
+	}
+	if len(packSem) != maxConcurrentPackToolsPerConn {
+		t.Errorf("rejected dispatch must not consume a semaphore slot: len=%d", len(packSem))
+	}
+}
+
+func TestDispatchMessage_PackToolUnderCap_RunsAndReleasesSlot(t *testing.T) {
+	srv := newTestCovenControlServer(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stream := &fakeAgentStream{ctx: context.Background()}
+	conn := agent.NewConnection(agent.ConnectionParams{
+		ID:     "agent-under-cap",
+		Name:   "Test",
+		Stream: stream,
+		Logger: logger,
+	})
+
+	packSem := make(chan struct{}, maxConcurrentPackToolsPerConn)
+	msg := &pb.AgentMessage{Payload: &pb.AgentMessage_ExecutePackTool{
+		ExecutePackTool: &pb.ExecutePackTool{RequestId: "req-ok", ToolName: "unknown_tool"},
+	}}
+	srv.dispatchMessage(stream, conn, msg, packSem)
+
+	// Accepted dispatch runs in a goroutine; the unknown-tool path replies
+	// with an error result fast. Poll (bounded) until the slot is released
+	// AND a result for req-ok was sent.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		resultSeen := false
+		for _, sent := range stream.sentMessages() {
+			if r := sent.GetPackToolResult(); r != nil && r.GetRequestId() == "req-ok" {
+				resultSeen = true
+			}
+		}
+		if resultSeen && len(packSem) == 0 {
+			return // slot released and result delivered
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("slot not released or no result sent: len(packSem)=%d, resultSeen=%v",
+				len(packSem), resultSeen)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

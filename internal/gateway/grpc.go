@@ -21,6 +21,12 @@ import (
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
 
+// maxConcurrentPackToolsPerConn caps in-flight pack tool executions per
+// agent connection. Each call is individually bounded by the router's
+// per-call timeout; the cap bounds aggregate goroutine growth if an
+// agent floods ExecutePackTool messages (issue #56).
+const maxConcurrentPackToolsPerConn = 10
+
 // covenControlServer implements the CovenControl gRPC service.
 type covenControlServer struct {
 	pb.UnimplementedCovenControlServer
@@ -145,7 +151,7 @@ func (s *covenControlServer) checkRecvError(err error, agentID string) (bool, er
 }
 
 // dispatchMessage routes an agent message to the appropriate handler.
-func (s *covenControlServer) dispatchMessage(stream pb.CovenControl_AgentStreamServer, conn *agent.Connection, msg *pb.AgentMessage) {
+func (s *covenControlServer) dispatchMessage(stream pb.CovenControl_AgentStreamServer, conn *agent.Connection, msg *pb.AgentMessage, packSem chan struct{}) {
 	switch payload := msg.GetPayload().(type) {
 	case *pb.AgentMessage_Heartbeat:
 		s.handleHeartbeat(conn, payload.Heartbeat)
@@ -157,7 +163,20 @@ func (s *covenControlServer) dispatchMessage(stream pb.CovenControl_AgentStreamS
 		// Pack tools can run for up to their per-call timeout; never block
 		// the receive loop on them. All stream writes go through conn.Send,
 		// which serializes concurrent senders.
-		go s.handleExecutePackTool(stream.Context(), conn, payload.ExecutePackTool)
+		select {
+		case packSem <- struct{}{}:
+			go func() {
+				defer func() { <-packSem }()
+				s.handleExecutePackTool(stream.Context(), conn, payload.ExecutePackTool)
+			}()
+		default:
+			s.logger.Warn("pack tool dispatch rejected: per-connection cap reached",
+				"agent_id", conn.ID,
+				"request_id", payload.ExecutePackTool.GetRequestId(),
+				"cap", maxConcurrentPackToolsPerConn)
+			s.sendPackToolError(conn, payload.ExecutePackTool.GetRequestId(),
+				"too many concurrent pack tool executions")
+		}
 	default:
 		s.logger.Warn("received unknown message type", "agent_id", conn.ID)
 	}
@@ -165,12 +184,13 @@ func (s *covenControlServer) dispatchMessage(stream pb.CovenControl_AgentStreamS
 
 // runMessageLoop handles the main receive loop for an agent connection.
 func (s *covenControlServer) runMessageLoop(stream pb.CovenControl_AgentStreamServer, conn *agent.Connection) error {
+	packSem := make(chan struct{}, maxConcurrentPackToolsPerConn)
 	for {
 		msg, err := stream.Recv()
 		if shouldContinue, grpcErr := s.checkRecvError(err, conn.ID); !shouldContinue {
 			return grpcErr
 		}
-		s.dispatchMessage(stream, conn, msg)
+		s.dispatchMessage(stream, conn, msg, packSem)
 	}
 }
 
