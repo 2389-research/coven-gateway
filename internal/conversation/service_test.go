@@ -4,8 +4,12 @@
 package conversation
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -452,4 +456,86 @@ func TestService_SendMessage_SenderError(t *testing.T) {
 	assert.Equal(t, "user", events[0].Author)
 	require.NotNil(t, events[0].Text)
 	assert.Equal(t, "Hello", *events[0].Text)
+}
+
+// syncLogBuffer is a race-safe io.Writer for capturing slog output in tests.
+type syncLogBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncLogBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncLogBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func TestPersistResponses_CancelDrainsUpstreamUntilClose(t *testing.T) {
+	testStore := createTestStore(t)
+	svc := New(testStore, &mockSender{}, nil, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	in := make(chan *agent.Response)
+	out := svc.persistResponses(ctx, "th-drain", "ag-drain", in)
+
+	cancel()
+
+	// Push more messages than out's buffer (16) can hold; without the drain,
+	// these sends would block forever once the persist loop exits.
+	for i := range 24 {
+		select {
+		case in <- &agent.Response{Event: agent.EventText, Text: "m"}:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("send %d blocked: drain goroutine not consuming after cancel", i)
+		}
+	}
+	close(in)
+
+	// The persist loop exits via the ctx.Done() case and closes out.
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case _, ok := <-out:
+			if !ok {
+				return // out closed — clean shutdown
+			}
+		case <-deadline:
+			t.Fatal("out never closed after cancel")
+		}
+	}
+}
+
+func TestPersistResponses_DrainTimesOutWhenUpstreamNeverCloses(t *testing.T) {
+	origTimeout := drainTimeout
+	defer func() { drainTimeout = origTimeout }()
+	drainTimeout = 50 * time.Millisecond
+
+	logBuf := &syncLogBuffer{}
+	logger := slog.New(slog.NewTextHandler(logBuf, nil))
+
+	testStore := createTestStore(t)
+	svc := New(testStore, &mockSender{}, logger, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	in := make(chan *agent.Response)
+	out := svc.persistResponses(ctx, "th-timeout", "ag-timeout", in)
+
+	cancel()
+	// Trigger the ctx.Done() case so the drain goroutine spawns.
+	in <- &agent.Response{Event: agent.EventText, Text: "m"}
+	for range out {
+	} // wait for the persist loop to exit and close out
+
+	// Upstream never closes in — the drain must give up loudly.
+	require.Eventually(t, func() bool {
+		return strings.Contains(logBuf.String(), "response drain timed out")
+	}, 2*time.Second, 10*time.Millisecond, "expected drain-timeout warning in logs")
+
+	close(in)
 }

@@ -16,6 +16,12 @@ import (
 	"github.com/2389/coven-gateway/internal/store"
 )
 
+// drainTimeout bounds the post-cancel drain of the upstream response
+// channel. transformResponses is expected to close the channel promptly
+// once its consumers stop; the timeout is a backstop so a regression
+// there cannot leak drain goroutines silently (issue #57).
+var drainTimeout = 30 * time.Second
+
 // ConversationStore defines what the service needs from storage.
 type ConversationStore interface {
 	CreateThread(ctx context.Context, thread *store.Thread) error
@@ -386,6 +392,25 @@ func (p *responsePersister) handleResponse(resp *agent.Response) {
 	}
 }
 
+// drainUntilClose consumes the upstream channel until it closes or drainTimeout
+// elapses. ctx is already canceled when this runs, so the timeout is the only
+// escape hatch (issue #57).
+func (s *Service) drainUntilClose(in <-chan *agent.Response, threadID string) {
+	deadline := time.NewTimer(drainTimeout)
+	defer deadline.Stop()
+	for {
+		select {
+		case _, ok := <-in:
+			if !ok {
+				return
+			}
+		case <-deadline.C:
+			s.logger.Warn("response drain timed out; upstream channel never closed", "thread_id", threadID)
+			return
+		}
+	}
+}
+
 // persistResponses wraps the agent response channel to save messages as they stream.
 // Events are keyed by agentID for cross-client history sync (TUI, web, mobile all query by agent).
 func (s *Service) persistResponses(ctx context.Context, threadID, agentID string, in <-chan *agent.Response) <-chan *agent.Response {
@@ -419,16 +444,23 @@ func (s *Service) persistResponses(ctx context.Context, threadID, agentID string
 			}
 			sendTimer.Reset(5 * time.Second)
 
+			// Prioritize cancellation over buffered output so the drain
+			// goroutine spawns immediately when ctx is already done.
+			select {
+			case <-ctx.Done():
+				s.logger.Debug("context canceled during response streaming", "thread_id", threadID)
+				go s.drainUntilClose(in, threadID)
+				return
+			default:
+			}
+
 			select {
 			case out <- resp:
 			case <-sendTimer.C:
 				s.logger.Warn("response channel full, dropping message", "thread_id", threadID, "event", resp.Event)
 			case <-ctx.Done():
 				s.logger.Debug("context canceled during response streaming", "thread_id", threadID)
-				go func() {
-					for range in {
-					}
-				}()
+				go s.drainUntilClose(in, threadID)
 				return
 			}
 		}
