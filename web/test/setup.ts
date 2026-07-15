@@ -1,7 +1,12 @@
+// ABOUTME: Configures browser API test boundaries shared by frontend unit tests.
+// ABOUTME: Resets controllable EventSource instances before every Vitest case.
+
 /**
  * Vitest global setup — runs before every test file.
  * Provides browser API mocks that jsdom doesn't include.
  */
+
+import { beforeEach } from 'vitest';
 
 // Mock EventSource for components that use SSE (e.g. ConnectionBadge).
 // Tests can control the mock instance via the exported helpers.
