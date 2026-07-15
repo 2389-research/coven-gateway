@@ -1,3 +1,7 @@
+<!--
+  ABOUTME: Renders the admin secret registry with scoped creation, reveal, and deletion.
+  ABOUTME: Keeps secret values hidden until explicitly fetched for the selected record.
+-->
 <script lang="ts">
   import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
@@ -39,7 +43,6 @@
   let { secrets = [] as SecretItem[], agents = [] as Agent[], userName = '', csrfToken }: Props = $props();
 
   let scopeFilter = $state('');
-  let loading = $state(false);
 
   // Create form state
   let newKey = $state('');
@@ -73,15 +76,10 @@
   );
 
   async function refresh() {
-    loading = true;
-    try {
-      const url = '/api/admin/secrets';
-      const res = await fetch(url);
-      if (res.ok) {
-        secrets = await res.json();
-      }
-    } finally {
-      loading = false;
+    const url = '/api/admin/secrets';
+    const res = await fetch(url);
+    if (res.ok) {
+      secrets = await res.json();
     }
   }
 

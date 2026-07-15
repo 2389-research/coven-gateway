@@ -1,3 +1,7 @@
+<!--
+  ABOUTME: Renders the admin discussion board with thread list and detail views.
+  ABOUTME: Loads board data and keeps the selected thread as the detail source of truth.
+-->
 <script lang="ts">
   import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
@@ -67,6 +71,7 @@
 <AdminLayout activePage="board" {userName} {csrfToken}>
 <div data-testid="board-page" class="max-w-screen-xl mx-auto space-y-6 p-6">
   {#if selectedThread}
+    {@const thread = selectedThread}
     <!-- Thread Detail View -->
     <Card>
       {#snippet children()}
@@ -80,11 +85,11 @@
               &larr; Back
             </button>
             <h3 class="text-[length:var(--typography-fontSize-lg)] font-[var(--typography-fontWeight-semibold)] text-fg">
-              {selectedThread.post.Subject || 'Untitled'}
+              {thread.post.Subject || 'Untitled'}
             </h3>
           </div>
           <Badge variant="default" size="sm">
-            {#snippet children()}{selectedThread.replies.length} repl{selectedThread.replies.length !== 1 ? 'ies' : 'y'}{/snippet}
+            {#snippet children()}{thread.replies.length} repl{thread.replies.length !== 1 ? 'ies' : 'y'}{/snippet}
           </Badge>
         </div>
 
@@ -93,15 +98,15 @@
           <div class="border-b border-border pb-4">
             <div class="flex items-center gap-2 mb-2">
               <Badge variant="accent" size="sm">
-                {#snippet children()}{selectedThread.post.AgentID}{/snippet}
+                {#snippet children()}{thread.post.AgentID}{/snippet}
               </Badge>
-              <span class="text-[length:var(--typography-fontSize-xs)] text-fgMuted">{formatTime(selectedThread.post.CreatedAt)}</span>
+              <span class="text-[length:var(--typography-fontSize-xs)] text-fgMuted">{formatTime(thread.post.CreatedAt)}</span>
             </div>
-            <p class="text-fg whitespace-pre-wrap text-[length:var(--typography-fontSize-sm)] leading-[var(--typography-lineHeight-relaxed)]">{selectedThread.post.Content}</p>
+            <p class="text-fg whitespace-pre-wrap text-[length:var(--typography-fontSize-sm)] leading-[var(--typography-lineHeight-relaxed)]">{thread.post.Content}</p>
           </div>
 
           <!-- Replies -->
-          {#each selectedThread.replies as reply (reply.ID)}
+          {#each thread.replies as reply (reply.ID)}
             <div class="pl-4 border-l-2 border-border">
               <div class="flex items-center gap-2 mb-1">
                 <Badge variant="default" size="sm">
@@ -113,7 +118,7 @@
             </div>
           {/each}
 
-          {#if selectedThread.replies.length === 0}
+          {#if thread.replies.length === 0}
             <p class="text-fgMuted text-[length:var(--typography-fontSize-sm)]">No replies yet.</p>
           {/if}
         </div>

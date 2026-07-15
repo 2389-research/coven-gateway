@@ -162,7 +162,7 @@
 
       <Stack gap="4">
         {#if displayError}
-          <Alert variant="danger" role="alert">
+          <Alert variant="danger">
             {#snippet children()}
               {displayError}
             {/snippet}

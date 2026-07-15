@@ -1,3 +1,7 @@
+<!--
+  ABOUTME: Renders the agent chat workspace and switches its active SSE conversation.
+  ABOUTME: Displays connection, streaming, message, sidebar, and input state from one chat stream.
+-->
 <script lang="ts">
   import ChatThread from './ChatThread.svelte';
   import ChatInput from './ChatInput.svelte';
@@ -113,7 +117,7 @@
           class="lg:hidden"
         />
         <div class="flex items-center gap-2">
-          <StatusDot status={chat.status === 'connected' ? 'online' : 'offline'} />
+          <StatusDot status={chat.status === 'open' ? 'online' : 'offline'} />
           <h2 class="text-[length:var(--typography-fontSize-base)] font-[var(--typography-fontWeight-semibold)] text-fg">
             {activeAgentName}
           </h2>

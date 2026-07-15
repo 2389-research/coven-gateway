@@ -65,7 +65,7 @@
         </p>
 
         {#if error}
-          <Alert variant="danger" role="alert">
+          <Alert variant="danger">
             {#snippet children()}
               {error}
             {/snippet}

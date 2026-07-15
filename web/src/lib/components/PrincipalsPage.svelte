@@ -1,3 +1,7 @@
+<!--
+  ABOUTME: Renders the admin principal registry with filters and lifecycle actions.
+  ABOUTME: Refreshes the principal collection after successful approve, revoke, and delete requests.
+-->
 <script lang="ts">
   import AdminLayout from './AdminLayout.svelte';
   import Badge from './Badge.svelte';
@@ -34,7 +38,6 @@
   let { principals = [] as Principal[], userName = '', csrfToken }: Props = $props();
   let typeFilter = $state('');
   let statusFilter = $state('');
-  let loading = $state(false);
   let deleteTarget = $state<Principal | null>(null);
   let showDeleteDialog = $state(false);
 
@@ -71,14 +74,9 @@
   );
 
   async function refresh() {
-    loading = true;
-    try {
-      const res = await fetch('/api/admin/principals');
-      if (res.ok) {
-        principals = await res.json();
-      }
-    } finally {
-      loading = false;
+    const res = await fetch('/api/admin/principals');
+    if (res.ok) {
+      principals = await res.json();
     }
   }
 
