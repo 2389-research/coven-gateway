@@ -1,3 +1,6 @@
+// ABOUTME: Exercises the compiled chat UI against a real gateway and fake agent.
+// ABOUTME: Verifies setup, login, agent selection, SSE status, and messaging in a browser.
+
 /**
  * Phase 3 D13: Chat smoke test.
  *
@@ -184,6 +187,11 @@ test.describe('Chat with connected agent', () => {
 
     // Header should show agent name
     await expect(page.getByRole('heading', { name: 'Echo Agent' })).toBeVisible();
+    const chatHeaderStatus = page
+      .getByRole('heading', { name: 'Echo Agent' })
+      .locator('..')
+      .getByTestId('status-dot');
+    await expect(chatHeaderStatus).toHaveAttribute('aria-label', 'Online', { timeout: 5000 });
   });
 
   test('send message and receive SSE response', async ({ page }) => {

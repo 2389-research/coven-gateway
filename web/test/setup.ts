@@ -8,9 +8,12 @@
 
 import { beforeEach } from 'vitest';
 
+// jsdom lacks the browser scrolling API used by the real ChatThread component.
+HTMLElement.prototype.scrollTo = () => {};
+
 // Mock EventSource for components that use SSE (e.g. ConnectionBadge).
 // Tests can control the mock instance via the exported helpers.
-class MockEventSource {
+export class MockEventSource {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
   static readonly CLOSED = 2;
