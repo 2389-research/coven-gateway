@@ -217,3 +217,12 @@ Expected: PASS with no failed HTTP requests and no development URLs.
 Run: `git diff main...HEAD --check && git status --short && git diff main...HEAD -- Dockerfile .dockerignore scripts/check-docker-assets.sh`
 
 Expected: only the approved design, implementation plan, regression script, Dockerfile, and `.dockerignore` are changed; `proto/coven-proto` and `coven-gateway.db.bak` remain uncommitted and excluded.
+
+## Verification Result (2026-07-14)
+
+- `scripts/check-docker-assets.sh` exited 0 with `Docker frontend assets are embedded and reachable`. The runtime login/setup request ended at an accepted final URL with HTTP 200, contained none of `localhost:5173`, `@vite/client`, or `src/islands/auto.ts`, and loaded its bundled JavaScript with HTTP 200 and content type `application/javascript`. The runtime image contained no `node`, `npm`, or `npx`, and no test container leaked after verification.
+- `go test -race ./...` exited 0, and `go vet ./...` exited 0 with no output.
+- `npm test` exited 0 with 104/104 tests passing. Its output was not pristine because the unresolved- and cyclic-token test cases emitted their expected diagnostics to stderr.
+- `npm run check` exited 1: `svelte-check` reported 83 errors and 0 warnings in 41 unchanged files, and Node emitted a `DEP0205` deprecation warning. Repository-wide verification therefore remains non-green; this branch changes no web source files.
+- Full local verification logs were written to `/tmp/coven-docker-fix-verification-nEOJn0` during the verification session. That path is ephemeral and is not durable evidence; the regression script is the repeatable verification source.
+- The current regression harness also validates that the login request's final URL is `/login` or the expected `/setup`, and rejects all three Vite development markers listed above.
