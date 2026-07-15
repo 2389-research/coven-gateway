@@ -116,15 +116,10 @@ test.describe('Chat with connected agent', () => {
   test.beforeAll(async () => {
     if (!fs.existsSync(FAKE_AGENT_BIN)) {
       console.log(`fake-agent binary not found at ${FAKE_AGENT_BIN}, building...`);
-      try {
-        execFileSync('go', ['build', '-o', 'bin/fake-agent', './cmd/fake-agent'], {
-          cwd: PROJECT_ROOT,
-          stdio: 'pipe',
-        });
-      } catch {
-        console.log('Failed to build fake-agent, agent tests will be skipped');
-        return;
-      }
+      execFileSync('go', ['build', '-o', 'bin/fake-agent', './cmd/fake-agent'], {
+        cwd: PROJECT_ROOT,
+        stdio: 'pipe',
+      });
     }
 
     // Start fake agent as subprocess
@@ -169,8 +164,6 @@ test.describe('Chat with connected agent', () => {
   });
 
   test('select agent from sidebar', async ({ page }) => {
-    test.skip(!fakeAgent, 'fake-agent not running');
-
     // Wait for agent list to refresh (polls every 5s)
     const agentItem = page.locator('[data-testid="agent-list-item"]');
     await expect(agentItem.first()).toBeVisible({ timeout: 15000 });
@@ -195,8 +188,6 @@ test.describe('Chat with connected agent', () => {
   });
 
   test('send message and receive SSE response', async ({ page }) => {
-    test.skip(!fakeAgent, 'fake-agent not running');
-
     // Wait for and select agent
     const agentItem = page.locator('[data-testid="agent-list-item"]');
     await expect(agentItem.first()).toBeVisible({ timeout: 15000 });
@@ -221,8 +212,6 @@ test.describe('Chat with connected agent', () => {
   });
 
   test('markdown renders in agent response', async ({ page }) => {
-    test.skip(!fakeAgent, 'fake-agent not running');
-
     // Wait for and select agent
     const agentItem = page.locator('[data-testid="agent-list-item"]');
     await expect(agentItem.first()).toBeVisible({ timeout: 15000 });

@@ -1,4 +1,4 @@
-// ABOUTME: Verifies Alert owns accessible live-region roles for every variant.
+// ABOUTME: Verifies Alert owns accessible live-region roles for danger and informational variants.
 // ABOUTME: Protects form callers from duplicating or overriding Alert semantics.
 
 import { render, screen } from '@testing-library/svelte';
