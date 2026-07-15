@@ -173,17 +173,21 @@ if [[ "$HEALTHY" != true ]]; then
 fi
 
 LOGIN_HTML="$DIAGNOSTIC_DIR/login.html"
-if ! LOGIN_STATUS="$(curl "${CURL_OPTIONS[@]}" \
+LOGIN_METADATA="$DIAGNOSTIC_DIR/login-metadata"
+if ! curl "${CURL_OPTIONS[@]}" \
     --location \
     --output "$LOGIN_HTML" \
-    --write-out '%{http_code}' \
-    "$BASE_URL/login" 2>"$DIAGNOSTIC_DIR/login-curl.log")"; then
+    --write-out '%{http_code}\n%{url_effective}\n' \
+    "$BASE_URL/login" >"$LOGIN_METADATA" 2>"$DIAGNOSTIC_DIR/login-curl.log"; then
     echo "Failed to fetch the login page" >&2
     tail -n 40 "$DIAGNOSTIC_DIR/login-curl.log" >&2
     capture_container_logs
     exit 1
 fi
+LOGIN_STATUS="$(sed -n '1p' "$LOGIN_METADATA")"
+LOGIN_EFFECTIVE_URL="$(sed -n '2p' "$LOGIN_METADATA")"
 printf '%s\n' "$LOGIN_STATUS" >"$DIAGNOSTIC_DIR/login-status"
+printf '%s\n' "$LOGIN_EFFECTIVE_URL" >"$DIAGNOSTIC_DIR/login-effective-url"
 
 if [[ "$LOGIN_STATUS" != "200" ]]; then
     echo "Login page returned final HTTP status $LOGIN_STATUS, expected 200" >&2
@@ -192,10 +196,24 @@ if [[ "$LOGIN_STATUS" != "200" ]]; then
     exit 1
 fi
 
-if grep --quiet --fixed-strings 'localhost:5173' "$LOGIN_HTML"; then
-    echo "Login page references the Vite development server" >&2
-    exit 1
-fi
+case "$LOGIN_EFFECTIVE_URL" in
+    "$BASE_URL/login" | "$BASE_URL/setup")
+        echo "Login page final URL accepted: $LOGIN_EFFECTIVE_URL"
+        ;;
+    *)
+        echo "Login request ended at unexpected URL: ${LOGIN_EFFECTIVE_URL:-<empty>}" >&2
+        capture_container_logs
+        exit 1
+        ;;
+esac
+
+VITE_DEV_MARKERS=('localhost:5173' '@vite/client' 'src/islands/auto.ts')
+for marker in "${VITE_DEV_MARKERS[@]}"; do
+    if grep --quiet --fixed-strings "$marker" "$LOGIN_HTML"; then
+        echo "Login page references Vite development assets: $marker" >&2
+        exit 1
+    fi
+done
 
 ASSET_PATH="$(sed -n '/<script type="module" src="/{s/.*<script type="module" src="\([^"]*\)".*/\1/p;q;}' "$LOGIN_HTML")"
 if [[ -z "$ASSET_PATH" ]]; then
