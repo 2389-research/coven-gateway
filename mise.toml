@@ -1,0 +1,5 @@
+# ABOUTME: Selects tool versions used for local coven-gateway development.
+# ABOUTME: Keeps frontend commands on the same Node major as CI and Docker.
+
+[tools]
+node = "22"
