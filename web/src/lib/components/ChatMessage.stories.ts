@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the ChatMessage component in Storybook.
+// ABOUTME: Defines message variants and controls for roles, content, and timestamps.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import ChatMessage from './ChatMessage.svelte';
 import type { ChatMessage as ChatMessageType } from '../types/chat';
@@ -16,7 +18,7 @@ const meta = {
   component: ChatMessage,
   tags: ['autodocs'],
   parameters: { layout: 'padded' },
-} satisfies Meta<ChatMessage>;
+} satisfies Meta<typeof ChatMessage>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

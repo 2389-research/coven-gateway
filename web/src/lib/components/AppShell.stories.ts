@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the AppShell component in Storybook.
+// ABOUTME: Defines shell variants and controls for representative application content.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import AppShell from './AppShell.svelte';
 import { htmlSnippet } from './_storyHelpers';
@@ -9,7 +11,7 @@ const meta = {
   parameters: {
     layout: 'fullscreen',
   },
-} satisfies Meta<AppShell>;
+} satisfies Meta<typeof AppShell>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the ToolCallView component in Storybook.
+// ABOUTME: Defines tool-call variants and controls for request and result states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import ToolCallView from './ToolCallView.svelte';
 
@@ -10,7 +12,7 @@ const meta = {
     variant: { control: 'select', options: ['call', 'result'] },
     expanded: { control: 'boolean' },
   },
-} satisfies Meta<ToolCallView>;
+} satisfies Meta<typeof ToolCallView>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

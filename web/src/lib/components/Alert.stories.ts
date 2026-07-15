@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the Alert component in Storybook.
+// ABOUTME: Defines feedback variants and controls for alert content and dismissal.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Alert from './Alert.svelte';
 import { textSnippet } from './_storyHelpers';
@@ -14,7 +16,7 @@ const meta = {
     title: { control: 'text' },
     dismissible: { control: 'boolean' },
   },
-} satisfies Meta<Alert>;
+} satisfies Meta<typeof Alert>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the Card component in Storybook.
+// ABOUTME: Defines card variants and controls for padding, headers, and content.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Card from './Card.svelte';
 import { textSnippet, htmlSnippet } from './_storyHelpers';
@@ -12,7 +14,7 @@ const meta = {
       options: ['none', 'sm', 'md', 'lg'],
     },
   },
-} satisfies Meta<Card>;
+} satisfies Meta<typeof Card>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the Select component in Storybook.
+// ABOUTME: Defines select variants and controls for options, values, and validation states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Select from './Select.svelte';
 
@@ -17,7 +19,7 @@ const meta = {
     placeholder: { control: 'text' },
     disabled: { control: 'boolean' },
   },
-} satisfies Meta<Select>;
+} satisfies Meta<typeof Select>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

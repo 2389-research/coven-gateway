@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the AgentList component in Storybook.
+// ABOUTME: Defines agent-list variants and controls backed by representative fetch responses.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import AgentList from './AgentList.svelte';
 
@@ -31,16 +33,16 @@ function mockAgentsFetch(agents: typeof defaultAgents) {
   };
 }
 
-const meta: Meta<AgentList> = {
+const meta = {
   title: 'Chat/AgentList',
   component: AgentList,
   parameters: { layout: 'padded' },
   beforeEach: mockAgentsFetch(defaultAgents),
   tags: ['autodocs'],
-};
+} satisfies Meta<typeof AgentList>;
 
 export default meta;
-type Story = StoryObj<AgentList>;
+type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   args: {

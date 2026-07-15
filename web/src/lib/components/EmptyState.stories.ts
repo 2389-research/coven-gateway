@@ -1,6 +1,8 @@
+// ABOUTME: Demonstrates the EmptyState component in Storybook.
+// ABOUTME: Defines empty-state variants and controls for messaging and actions.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import EmptyState from './EmptyState.svelte';
-import { htmlSnippet, textSnippet } from './_storyHelpers';
+import { htmlSnippet } from './_storyHelpers';
 
 const meta = {
   title: 'Data Display/EmptyState',
@@ -10,7 +12,7 @@ const meta = {
     heading: { control: 'text' },
     description: { control: 'text' },
   },
-} satisfies Meta<EmptyState>;
+} satisfies Meta<typeof EmptyState>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the ConnectionBadge component in Storybook.
+// ABOUTME: Defines connection variants and controls for status and label states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import ConnectionBadge from './ConnectionBadge.svelte';
 
@@ -12,7 +14,7 @@ const meta = {
     },
     label: { control: 'text' },
   },
-} satisfies Meta<ConnectionBadge>;
+} satisfies Meta<typeof ConnectionBadge>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

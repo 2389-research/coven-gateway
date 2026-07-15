@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the ThinkingIndicator component in Storybook.
+// ABOUTME: Defines thinking-indicator variants and controls for accessible labels.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import ThinkingIndicator from './ThinkingIndicator.svelte';
 
@@ -9,7 +11,7 @@ const meta = {
   argTypes: {
     text: { control: 'text' },
   },
-} satisfies Meta<ThinkingIndicator>;
+} satisfies Meta<typeof ThinkingIndicator>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the TextField component in Storybook.
+// ABOUTME: Defines text-field variants and controls for values and validation states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import TextField from './TextField.svelte';
 import { htmlSnippet } from './_storyHelpers';
@@ -12,7 +14,7 @@ const meta = {
     placeholder: { control: 'text' },
     disabled: { control: 'boolean' },
   },
-} satisfies Meta<TextField>;
+} satisfies Meta<typeof TextField>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

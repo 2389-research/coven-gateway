@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the Stack component in Storybook.
+// ABOUTME: Defines stack variants and controls for direction, gap, and alignment.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Stack from './Stack.svelte';
 import { htmlSnippet } from './_storyHelpers';
@@ -25,7 +27,7 @@ const meta = {
     },
     wrap: { control: 'boolean' },
   },
-} satisfies Meta<Stack>;
+} satisfies Meta<typeof Stack>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

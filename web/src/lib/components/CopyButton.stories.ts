@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the CopyButton component in Storybook.
+// ABOUTME: Defines copy-action variants and controls for values and labels.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import CopyButton from './CopyButton.svelte';
 
@@ -11,7 +13,7 @@ const meta = {
     copiedLabel: { control: 'text' },
     disabled: { control: 'boolean' },
   },
-} satisfies Meta<CopyButton>;
+} satisfies Meta<typeof CopyButton>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

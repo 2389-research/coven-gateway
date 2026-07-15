@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the TextArea component in Storybook.
+// ABOUTME: Defines text-area variants and controls for values and validation states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import TextArea from './TextArea.svelte';
 
@@ -13,7 +15,7 @@ const meta = {
     disabled: { control: 'boolean' },
     rows: { control: 'number' },
   },
-} satisfies Meta<TextArea>;
+} satisfies Meta<typeof TextArea>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

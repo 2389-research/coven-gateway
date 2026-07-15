@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the AdminLayout component in Storybook.
+// ABOUTME: Defines layout variants and controls for representative admin content.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import AdminLayout from './AdminLayout.svelte';
 import { htmlSnippet } from './_storyHelpers';
@@ -9,7 +11,7 @@ const meta = {
   parameters: {
     layout: 'fullscreen',
   },
-} satisfies Meta<AdminLayout>;
+} satisfies Meta<typeof AdminLayout>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

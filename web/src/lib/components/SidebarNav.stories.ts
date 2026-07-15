@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the SidebarNav component in Storybook.
+// ABOUTME: Defines navigation variants and controls for active destinations.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import SidebarNav from './SidebarNav.svelte';
 
@@ -9,7 +11,7 @@ const meta = {
     items: { control: 'object' },
     groups: { control: 'object' },
   },
-} satisfies Meta<SidebarNav>;
+} satisfies Meta<typeof SidebarNav>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

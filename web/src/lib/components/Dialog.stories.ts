@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the Dialog component in Storybook.
+// ABOUTME: Defines dialog variants and controls for visibility, headers, and content.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Dialog from './Dialog.svelte';
 import { textSnippet, htmlSnippet } from './_storyHelpers';
@@ -9,7 +11,7 @@ const meta = {
   argTypes: {
     open: { control: 'boolean' },
   },
-} satisfies Meta<Dialog>;
+} satisfies Meta<typeof Dialog>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the CodeText component in Storybook.
+// ABOUTME: Defines code-text variants and controls for representative technical values.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import CodeText from './CodeText.svelte';
 import { textSnippet } from './_storyHelpers';
@@ -6,7 +8,7 @@ const meta = {
   title: 'Data Display/CodeText',
   component: CodeText,
   tags: ['autodocs'],
-} satisfies Meta<CodeText>;
+} satisfies Meta<typeof CodeText>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

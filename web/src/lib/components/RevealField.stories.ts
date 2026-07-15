@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the RevealField component in Storybook.
+// ABOUTME: Defines reveal-field variants and controls for concealed values and labels.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import RevealField from './RevealField.svelte';
 
@@ -9,7 +11,7 @@ const meta = {
     value: { control: 'text' },
     mask: { control: 'text' },
   },
-} satisfies Meta<RevealField>;
+} satisfies Meta<typeof RevealField>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

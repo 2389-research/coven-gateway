@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the IconButton component in Storybook.
+// ABOUTME: Defines icon-button variants and controls for size and accessibility labels.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import IconButton from './IconButton.svelte';
 import { htmlSnippet } from './_storyHelpers';
@@ -23,7 +25,7 @@ const meta = {
     },
     disabled: { control: 'boolean' },
   },
-} satisfies Meta<IconButton>;
+} satisfies Meta<typeof IconButton>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

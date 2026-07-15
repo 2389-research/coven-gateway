@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the Badge component in Storybook.
+// ABOUTME: Defines badge variants and controls for status, size, and fill.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Badge from './Badge.svelte';
 import { textSnippet } from './_storyHelpers';
@@ -20,7 +22,7 @@ const meta = {
       options: ['solid', 'outline'],
     },
   },
-} satisfies Meta<Badge>;
+} satisfies Meta<typeof Badge>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

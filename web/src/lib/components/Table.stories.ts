@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the Table demo component in Storybook.
+// ABOUTME: Defines table variants and controls for representative data states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import TableDemo from './_TableDemo.svelte';
 
@@ -11,7 +13,7 @@ const meta = {
       options: ['basic', 'actions', 'empty', 'aligned'],
     },
   },
-} satisfies Meta<TableDemo>;
+} satisfies Meta<typeof TableDemo>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

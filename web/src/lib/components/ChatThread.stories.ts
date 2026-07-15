@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the ChatThread component in Storybook.
+// ABOUTME: Defines thread variants and controls for message and connection states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import ChatThread from './ChatThread.svelte';
 import type { ChatMessage } from '../types/chat';
@@ -50,7 +52,7 @@ const meta = {
   component: ChatThread,
   tags: ['autodocs'],
   parameters: { layout: 'padded' },
-} satisfies Meta<ChatThread>;
+} satisfies Meta<typeof ChatThread>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the StatusDot component in Storybook.
+// ABOUTME: Defines status-dot variants and controls for state and labels.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import StatusDot from './StatusDot.svelte';
 
@@ -14,7 +16,7 @@ const meta = {
     label: { control: 'text' },
     showLabel: { control: 'boolean' },
   },
-} satisfies Meta<StatusDot>;
+} satisfies Meta<typeof StatusDot>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

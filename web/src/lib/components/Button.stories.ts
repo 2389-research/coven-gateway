@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the Button component in Storybook.
+// ABOUTME: Defines button variants and controls for size, loading, and disabled states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Button from './Button.svelte';
 import { textSnippet } from './_storyHelpers';
@@ -18,7 +20,7 @@ const meta = {
     loading: { control: 'boolean' },
     disabled: { control: 'boolean' },
   },
-} satisfies Meta<Button>;
+} satisfies Meta<typeof Button>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

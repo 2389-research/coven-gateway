@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the Tabs component in Storybook.
+// ABOUTME: Defines tab variants and controls for active selection states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Tabs from './Tabs.svelte';
 
@@ -9,7 +11,7 @@ const meta = {
     activeTab: { control: 'text' },
     tabs: { control: 'object' },
   },
-} satisfies Meta<Tabs>;
+} satisfies Meta<typeof Tabs>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

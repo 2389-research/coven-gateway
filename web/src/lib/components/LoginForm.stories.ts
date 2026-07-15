@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the LoginForm component in Storybook.
+// ABOUTME: Defines login-form variants and controls for authentication response states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import LoginForm from './LoginForm.svelte';
 
@@ -44,16 +46,16 @@ function mockWebAuthnFetch() {
   };
 }
 
-const meta: Meta<LoginForm> = {
+const meta = {
   title: 'Pages/LoginForm',
   component: LoginForm,
   parameters: { layout: 'fullscreen' },
   beforeEach: mockWebAuthnFetch(),
   tags: ['autodocs'],
-};
+} satisfies Meta<typeof LoginForm>;
 
 export default meta;
-type Story = StoryObj<LoginForm>;
+type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   args: {

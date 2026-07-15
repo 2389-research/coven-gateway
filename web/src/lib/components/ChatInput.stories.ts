@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the ChatInput component in Storybook.
+// ABOUTME: Defines chat-input variants and controls for messaging interaction states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import ChatInput from './ChatInput.svelte';
 
@@ -14,7 +16,7 @@ const meta = {
     placeholder: { control: 'text' },
   },
   parameters: { layout: 'padded' },
-} satisfies Meta<ChatInput>;
+} satisfies Meta<typeof ChatInput>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

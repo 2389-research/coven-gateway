@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the Toast component in Storybook.
+// ABOUTME: Defines toast variants and controls for message and feedback states.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Toast from './Toast.svelte';
 import { addToast, clearToasts } from '../stores/toast.svelte';
@@ -13,7 +15,7 @@ const meta = {
     clearToasts();
     return () => clearToasts();
   },
-} satisfies Meta<Toast>;
+} satisfies Meta<typeof Toast>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

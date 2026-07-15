@@ -1,3 +1,5 @@
+// ABOUTME: Demonstrates the Spinner component in Storybook.
+// ABOUTME: Defines spinner variants and controls for size and accessible labels.
 import type { Meta, StoryObj } from '@storybook/svelte';
 import Spinner from './Spinner.svelte';
 
@@ -12,7 +14,7 @@ const meta = {
     },
     label: { control: 'text' },
   },
-} satisfies Meta<Spinner>;
+} satisfies Meta<typeof Spinner>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
