@@ -1,7 +1,7 @@
 # Codebase Structure
 
 ## Directory Layout
-```
+```text
 coven-gateway/
 ├── cmd/                    # Main packages for binaries
 │   ├── coven-admin/        # Admin CLI tool
