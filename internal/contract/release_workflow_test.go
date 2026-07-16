@@ -75,7 +75,7 @@ func TestReleaseWorkflowBuildsFrontendBeforeGoReleaser(t *testing.T) {
 	}
 
 	if nodeIndex != -1 && frontendIndex != -1 && releaseIndex != -1 &&
-		!(nodeIndex < frontendIndex && frontendIndex < releaseIndex) {
+		(nodeIndex >= frontendIndex || frontendIndex >= releaseIndex) {
 		t.Error("release job must set up Node.js, build frontend assets, then run GoReleaser")
 	}
 }
