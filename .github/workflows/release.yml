@@ -1,3 +1,5 @@
+# ABOUTME: Builds and publishes tagged coven-gateway release artifacts.
+# ABOUTME: Compiles production frontend assets before GoReleaser packages binaries.
 name: Release
 
 on:
