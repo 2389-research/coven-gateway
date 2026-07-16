@@ -78,11 +78,11 @@ brews:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
     homepage: "https://github.com/2389-research/coven-gateway"
-    description: "coven-gateway - Gateway server for AI agent orchestration"
+    description: "Gateway server for AI agent orchestration"
     install: |
       bin.install "coven-gateway"
     test: |
-      system "#{bin}/coven-gateway", "--help"
+      assert_match "Usage: coven-gateway <command>", shell_output("#{bin}/coven-gateway 2>&1", 1)
 
 changelog:
   sort: asc
