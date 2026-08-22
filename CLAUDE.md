@@ -266,7 +266,7 @@ npx playwright test                 # E2E tests
 **Phase 2 (Design System Core)** — Completed 2026-02-18, PR #50
 
 - Storybook 10.x is current stable with native Svelte 5 support. Upgraded from 8.6 during Phase 2 (8.6 couldn't handle Snippet props).
-- `_storyHelpers.ts` provides `htmlSnippet()` and `textSnippet()` to bridge CSF3 args → Svelte 5 Snippets. All Phase 3+ stories should use this pattern.
+- `_storyHelpers.ts` provides `htmlSnippet()` and `textSnippet()` to bridge CSF3 args → Svelte 5 Snippets. All Phase 3+ stories should use this pattern. (File deleted 2026-08-22 with Storybook — pattern no longer applicable.)
 - `legacy-theme.css` bridges old Go template classes to token CSS variables. Enables gradual migration.
 - `@source "../../internal/webadmin/templates"` in app.css scans Go templates so Vite-built Tailwind covers old and new pages.
 - SSE headless store is named `createSSEStream` (not `createSSEStore` from the design doc). Returns `{ status, close }`.

@@ -30,7 +30,10 @@ const registry: Record<string, () => Promise<{ default: any }>> = {
   'usage-page': () => import('../lib/components/UsagePage.svelte'),
 };
 
-// Track mounted instances to prevent double-mounting.
+// Track mounted instances to prevent double-mounting. With scanAndMount
+// currently called only on initial page load, the `mounting` WeakSet alone
+// covers the live races; this map keeps the guard correct if scanAndMount
+// ever gains additional callers.
 const instances = new WeakMap<Element, ReturnType<typeof mount>>();
 // Guard against concurrent mount calls from overlapping scanAndMount calls.
 const mounting = new WeakSet<Element>();
