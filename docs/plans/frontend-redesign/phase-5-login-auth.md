@@ -1,5 +1,7 @@
 # Phase 5: Login & Auth
 
+**Status:** COMPLETE — login/invite/setup/setup-complete on Svelte islands (verified 2026-08-22). Gate evidence: playwright suite requires a running gateway (local-only); not re-run against a live server during toolchain cleanup. WebAuthn E2E and CSP-zero-violations criteria not independently re-verified.
+
 **Weeks:** 11
 **Depends on:** [Phase 4 gate](phase-4-dashboard-admin.md#exit-gate)
 **Goal:** Unify the login/auth experience with the new design system. WebAuthn flows migrated to Svelte components.

@@ -1,5 +1,7 @@
 # Phase 4: Dashboard & Admin Pages
 
+**Status:** COMPLETE — every admin page renders via a Svelte island (verified 2026-08-22). Gate evidence: vitest 123/123 green, make web clean; playwright requires a running gateway and was not re-run against a live server during toolchain cleanup. Not verified at the time: performance-parity criterion (no measurement run).
+
 **Weeks:** 8–10
 **Depends on:** [Phase 3 gate](phase-3-chat-migration.md#exit-gate)
 **Goal:** Migrate the admin dashboard and management pages. These are lower-traffic than chat but still benefit from the component library and design tokens.

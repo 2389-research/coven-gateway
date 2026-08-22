@@ -223,7 +223,7 @@ IMPORTANT: When working on anything in `web/`, any frontend redesign deliverable
 
 **Plans directory:** `docs/plans/frontend-redesign/`
 **Design doc:** `docs/plans/2026-02-17-frontend-redesign-design.md` (reference for tokens, component APIs, build pipeline)
-**Current phase:** 3 (Chat Migration — Highest User Value)
+**Current phase:** 3–5 complete; 6 (SPA evaluation) not started and not currently planned — islands are the working end-state.
 **Runbook:** `docs/plans/frontend-redesign/RUNBOOK.md`
 
 ### Frontend Build Commands (from `web/` directory)
@@ -240,7 +240,6 @@ make web-dev                        # Start Vite dev server (from repo root)
 ```bash
 npm test                            # Vitest unit tests
 npx playwright test                 # E2E tests
-npm run storybook                   # Component stories
 ```
 
 ### Session Rules
@@ -275,3 +274,16 @@ npm run storybook                   # Component stories
 - `type="button"` must be explicit on all `<button>` elements — HTML default is `submit`.
 - Dialog onclose requires split handlers: `requestClose()` for manual actions (sets state), `handleNativeClose()` for the native event (fires callback). Prevents double-firing.
 - Bundle at Phase 2 exit: JS 12.5KB gzip, CSS 10.3KB gzip — well under 50KB/15KB budget.
+- Storybook removed 2026-08-22 (toolchain cleanup); stories replaced by render smoke tests + axe e2e.
+
+**Toolchain cleanup (2026-08-22)** — plan: docs/plans/2026-08-22-frontend-toolchain-cleanup.md
+
+- Storybook removed (4 packages). Render coverage: web/src/lib/components/renders.test.ts; a11y: e2e/a11y.spec.ts runs axe against the real app.
+- HTMX scaffolding removed from auto.ts; HTMX was already unloaded. chat_app_v2.html renamed to chat_app.html.
+- CI now runs web unit tests (ci.yml test job). Playwright still local-only.
+
+### Frontend Dependency Policy
+
+- web/package.json uses exact pins — no ^ or ~ ranges.
+- Updates are deliberate: on a security advisory that affects us, or a scheduled quarterly pass. Never update reactively mid-task.
+- Any version bump is its own commit with check + test + make web green, and a one-line reason.

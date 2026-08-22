@@ -1,5 +1,7 @@
 # Phase 3: Chat Migration — Highest User Value
 
+**Status:** COMPLETE — chat fully on Svelte islands. Deviation from plan: the env-var feature flag was never built; chat_app.html (formerly chat_app_v2.html) shipped unconditionally. Verified 2026-08-22.
+
 **Weeks:** 5–7
 **Depends on:** [Phase 2 gate](phase-2-design-system.md#exit-gate)
 **Goal:** Replace the monolithic `chat_app.html` (currently ~the entire frontend experience) with a Go template shell hosting Svelte chat islands. This is the highest-value migration — it's the page users spend 90%+ of their time on.
