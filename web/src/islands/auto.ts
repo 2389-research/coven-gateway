@@ -1,10 +1,10 @@
 /**
  * Island auto-loader: mounts Svelte components into [data-island] containers.
- * Handles HTMX lifecycle (beforeSwap, beforeCleanupElement, afterSwap, load)
- * for clean mount/unmount on page transitions.
+ * Pages are full navigations, so mounting happens once per page load;
+ * teardown is the browser discarding the document.
  */
 import '../app.css';
-import { mount, unmount } from 'svelte';
+import { mount } from 'svelte';
 
 // Registry: maps data-island names to lazy component imports.
 // Each entry returns the default export of a Svelte component module.
@@ -30,9 +30,9 @@ const registry: Record<string, () => Promise<{ default: any }>> = {
   'usage-page': () => import('../lib/components/UsagePage.svelte'),
 };
 
-// Track mounted instances for clean unmounting.
+// Track mounted instances to prevent double-mounting.
 const instances = new WeakMap<Element, ReturnType<typeof mount>>();
-// Guard against concurrent mount calls from overlapping HTMX events.
+// Guard against concurrent mount calls from overlapping scanAndMount calls.
 const mounting = new WeakSet<Element>();
 
 /**
@@ -80,71 +80,11 @@ async function mountIsland(el: Element): Promise<void> {
   }
 }
 
-/** Unmount a Svelte component from a [data-island] container. */
-function unmountIsland(el: Element): void {
-  const instance = instances.get(el);
-  if (!instance) return;
-  try {
-    unmount(instance);
-  } catch (e) {
-    console.error('[islands] failed to unmount', el, e);
-  }
-  instances.delete(el);
-}
-
 /** Find and mount all islands within a root element. */
 function scanAndMount(root: Element | Document): void {
   const islands = root.querySelectorAll('[data-island]');
   islands.forEach((el) => mountIsland(el));
 }
-
-/** Unmount all islands within a root element. */
-function scanAndUnmount(root: Element | Document): void {
-  const islands = root.querySelectorAll('[data-island]');
-  islands.forEach((el) => unmountIsland(el));
-}
-
-// --- HTMX lifecycle integration ---
-
-// Before swap: unmount islands in the element being replaced.
-document.addEventListener('htmx:beforeSwap', ((e: CustomEvent) => {
-  const target = e.detail?.target;
-  if (target instanceof Element) {
-    scanAndUnmount(target);
-  }
-}) as EventListener);
-
-// Before cleanup: unmount islands in elements being removed during settling.
-// Catches removals that beforeSwap may miss (e.g. individual element cleanup).
-document.addEventListener('htmx:beforeCleanupElement', ((e: CustomEvent) => {
-  const elt = e.detail?.elt;
-  if (elt instanceof Element) {
-    if (elt.hasAttribute('data-island')) {
-      unmountIsland(elt);
-    }
-    scanAndUnmount(elt);
-  }
-}) as EventListener);
-
-// After swap: mount islands in the new content.
-document.addEventListener('htmx:afterSwap', ((e: CustomEvent) => {
-  const target = e.detail?.target;
-  if (target instanceof Element) {
-    scanAndMount(target);
-  }
-}) as EventListener);
-
-// htmx:load fires for OOB swaps and fragment loads that afterSwap may miss.
-document.addEventListener('htmx:load', ((e: CustomEvent) => {
-  const elt = e.detail?.elt;
-  if (elt instanceof Element) {
-    // Mount islands within the loaded element, or the element itself if it's an island
-    if (elt.hasAttribute('data-island')) {
-      mountIsland(elt);
-    }
-    scanAndMount(elt);
-  }
-}) as EventListener);
 
 // --- Initial mount on page load ---
 if (document.readyState === 'loading') {
