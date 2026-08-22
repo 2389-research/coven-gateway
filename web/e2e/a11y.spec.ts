@@ -91,6 +91,8 @@ async function scan(page: Page, path: string) {
 // Tests
 // ---------------------------------------------------------------------------
 
+// On a fresh DB, /login redirects to /setup — same a11y profile, and the
+// /login KNOWN_ISSUES entry covers both, so this passes in either state.
 test('login page has no axe violations', async ({ page }) => {
   await scan(page, '/login');
 });
