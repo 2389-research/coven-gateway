@@ -1,6 +1,6 @@
 # Phase 5: Login & Auth
 
-**Status:** COMPLETE — login/invite/setup/setup-complete on Svelte islands (verified 2026-08-22). Gate evidence: playwright suite green against a live gateway 2026-08-22 (toolchain-cleanup gate) — 16/20 pass, 1 pre-existing fake-agent auth failure (present on main), 1 intentional skip (islands.spec.ts). WebAuthn E2E and CSP-zero-violations criteria not independently re-verified.
+**Status:** COMPLETE — login/invite/setup/setup-complete on Svelte islands (verified 2026-08-22). Gate evidence: playwright suite green against a live gateway 2026-08-22 (toolchain-cleanup gate) — 16/20 pass, 3 chat-agent tests broken by a pre-existing fake-agent auth gap (present on main; 1 failed + 2 blocked by the same beforeAll), 1 intentional skip (islands.spec.ts). WebAuthn E2E and CSP-zero-violations criteria not independently re-verified.
 
 **Weeks:** 11
 **Depends on:** [Phase 4 gate](phase-4-dashboard-admin.md#exit-gate)

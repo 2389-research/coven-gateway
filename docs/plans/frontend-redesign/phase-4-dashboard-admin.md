@@ -1,6 +1,6 @@
 # Phase 4: Dashboard & Admin Pages
 
-**Status:** COMPLETE — every admin page renders via a Svelte island (verified 2026-08-22). Gate evidence: vitest 123/123 green, make web clean; playwright suite green against a live gateway 2026-08-22 (toolchain-cleanup gate) — 16/20 pass, 1 pre-existing fake-agent auth failure (present on main), 1 intentional skip (islands.spec.ts). Not verified at the time: performance-parity criterion (no measurement run).
+**Status:** COMPLETE — every admin page renders via a Svelte island (verified 2026-08-22). Gate evidence: vitest 123/123 green, make web clean; playwright suite green against a live gateway 2026-08-22 (toolchain-cleanup gate) — 16/20 pass, 3 chat-agent tests broken by a pre-existing fake-agent auth gap (present on main; 1 failed + 2 blocked by the same beforeAll), 1 intentional skip (islands.spec.ts). Not verified at the time: performance-parity criterion (no measurement run).
 
 **Weeks:** 8–10
 **Depends on:** [Phase 3 gate](phase-3-chat-migration.md#exit-gate)
