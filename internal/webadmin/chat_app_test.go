@@ -1,5 +1,5 @@
 // ABOUTME: Tests for the chat app templates
-// ABOUTME: Ensures the v2 Svelte island template parses correctly
+// ABOUTME: Ensures the Svelte island template parses correctly
 
 package webadmin
 
@@ -8,12 +8,12 @@ import (
 	"testing"
 )
 
-func TestChatAppV2TemplateParse(t *testing.T) {
+func TestChatAppTemplateParse(t *testing.T) {
 	_, err := template.New("base.html").Funcs(templateFuncs).ParseFS(templateFS,
 		"templates/base.html",
-		"templates/chat_app_v2.html",
+		"templates/chat_app.html",
 	)
 	if err != nil {
-		t.Fatalf("failed to parse chat_app_v2.html: %v", err)
+		t.Fatalf("failed to parse chat_app.html: %v", err)
 	}
 }

@@ -474,7 +474,7 @@ func (a *Admin) validateCSRF(r *http.Request) bool {
 
 	formToken := r.FormValue("csrf_token")
 	if formToken == "" {
-		// Also check header for htmx requests
+		// Also check the X-CSRF-Token header for fetch() requests
 		formToken = r.Header.Get("X-CSRF-Token")
 	}
 
@@ -1015,7 +1015,6 @@ func (a *Admin) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	a.renderDashboard(w, user, csrfToken, agents, packs, threadCount, usage)
 }
 
-// handleStatsAgents returns connected agent count (htmx partial).
 // listAgentItems returns the current connected agents as display items.
 func (a *Admin) listAgentItems() []agentItem {
 	var agents []agentItem
@@ -2783,7 +2782,7 @@ func (a *Admin) handleSecretsDelete(w http.ResponseWriter, r *http.Request) {
 
 	a.logger.Info("secret deleted", "id", secretID)
 
-	// Return empty response - htmx will remove the row
+	// Return empty response; the page's fetch client updates its own state
 	w.WriteHeader(http.StatusOK)
 }
 

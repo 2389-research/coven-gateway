@@ -42,7 +42,7 @@ func (a *Admin) handleChatApp(w http.ResponseWriter, r *http.Request) {
 
 	tmpl := parseTemplate(
 		"templates/base.html",
-		"templates/chat_app_v2.html",
+		"templates/chat_app.html",
 	)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
