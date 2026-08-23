@@ -113,7 +113,7 @@ func (a *Admin) handleMintPairToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = a.store.AppendAuditLog(r.Context(), &store.AuditEntry{
+	if err := a.store.AppendAuditLog(r.Context(), &store.AuditEntry{
 		ActorPrincipalID: user.ID,
 		Action:           store.AuditMintPairToken,
 		TargetType:       "pair_token",
@@ -122,13 +122,17 @@ func (a *Admin) handleMintPairToken(w http.ResponseWriter, r *http.Request) {
 			"username":   user.Username,
 			"expires_at": pt.ExpiresAt.Format(time.RFC3339),
 		},
-	})
+	}); err != nil {
+		a.logger.Error("appending mint audit log", "error", err, "pair_token_id", pt.ID)
+	}
 
 	a.logger.Info("minted pair token", "pair_token_id", pt.ID, "by", user.Username)
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"url":        payload,
 		"qr":         "data:image/png;base64," + base64.StdEncoding.EncodeToString(png),
 		"expires_at": pt.ExpiresAt.Format(time.RFC3339),
-	})
+	}); err != nil {
+		a.logger.Error("encoding mint response", "error", err, "pair_token_id", pt.ID)
+	}
 }
