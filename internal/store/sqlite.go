@@ -133,6 +133,8 @@ CREATE TABLE IF NOT EXISTS link_codes (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT
 CREATE INDEX IF NOT EXISTS idx_link_codes_code ON link_codes(code);
 CREATE INDEX IF NOT EXISTS idx_link_codes_expires ON link_codes(expires_at);
 CREATE INDEX IF NOT EXISTS idx_link_codes_status ON link_codes(status);
+CREATE TABLE IF NOT EXISTS pair_tokens (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, created_by TEXT NOT NULL REFERENCES admin_users(id), created_at TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, principal_id TEXT REFERENCES principals(principal_id));
+CREATE INDEX IF NOT EXISTS idx_pair_tokens_expires ON pair_tokens(expires_at);
 CREATE TABLE IF NOT EXISTS webauthn_credentials (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE, credential_id BLOB UNIQUE NOT NULL, public_key BLOB NOT NULL, attestation_type TEXT, transports TEXT, sign_count INTEGER DEFAULT 0, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id);
 `
