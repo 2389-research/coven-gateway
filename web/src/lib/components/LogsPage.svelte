@@ -5,6 +5,7 @@
   import EmptyState from './EmptyState.svelte';
   import DataTable from './DataTable.svelte';
   import type { DataColumn } from './dataTable.js';
+  import { formatTime } from '../utils/time.js';
 
   interface LogEntry {
     ID: string;
@@ -23,13 +24,6 @@
   let { entries = [] as LogEntry[], userName = '', csrfToken }: Props = $props();
   let loading = $state(false);
   let searchQuery = $state('');
-
-  function formatTime(iso: string): string {
-    if (!iso) return '—';
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) +
-      ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  }
 
   async function search() {
     loading = true;
@@ -59,7 +53,7 @@
 </script>
 
 {#snippet timeCell(entry: LogEntry)}
-  <span class="text-fgMuted whitespace-nowrap">{formatTime(entry.CreatedAt)}</span>
+  <span class="text-fgMuted whitespace-nowrap">{formatTime(entry.CreatedAt, { seconds: true })}</span>
 {/snippet}
 
 {#snippet agentCell(entry: LogEntry)}

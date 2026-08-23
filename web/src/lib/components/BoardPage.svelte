@@ -7,6 +7,7 @@
   import Badge from './Badge.svelte';
   import Card from './Card.svelte';
   import EmptyState from './EmptyState.svelte';
+  import { formatTime } from '../utils/time.js';
 
   interface BoardThread {
     ID: string;
@@ -31,13 +32,6 @@
   let { threads = [] as BoardThread[], userName = '', csrfToken }: Props = $props();
   let loading = $state(false);
   let selectedThread = $state<ThreadDetail | null>(null);
-
-  function formatTime(iso: string): string {
-    if (!iso) return '\u2014';
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) +
-      ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-  }
 
   async function refresh() {
     loading = true;

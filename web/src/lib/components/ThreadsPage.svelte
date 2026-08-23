@@ -5,6 +5,7 @@
   import EmptyState from './EmptyState.svelte';
   import DataTable from './DataTable.svelte';
   import type { DataColumn } from './dataTable.js';
+  import { formatTime } from '../utils/time.js';
 
   interface Thread {
     ID: string;
@@ -34,13 +35,6 @@
     } finally {
       loading = false;
     }
-  }
-
-  function formatTime(iso: string): string {
-    if (!iso) return '—';
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) +
-      ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
   }
 
   function truncateId(id: string): string {
