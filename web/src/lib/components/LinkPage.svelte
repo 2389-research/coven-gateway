@@ -67,6 +67,71 @@
       // ignore
     }
   }
+
+  interface MintResponse {
+    url: string;
+    qr: string;
+    expires_at: string;
+  }
+
+  let minting = $state(false);
+  let mintError = $state('');
+  let pairURL = $state('');
+  let pairQR = $state('');
+  let pairExpiresAt = $state<Date | null>(null);
+  let remaining = $state(0);
+  let ticker: ReturnType<typeof setInterval> | undefined;
+
+  $effect(() => {
+    return () => {
+      if (ticker) clearInterval(ticker);
+    };
+  });
+
+  function stopTicker() {
+    if (ticker) {
+      clearInterval(ticker);
+      ticker = undefined;
+    }
+  }
+
+  function tick() {
+    if (!pairExpiresAt) return;
+    remaining = Math.max(0, Math.floor((pairExpiresAt.getTime() - Date.now()) / 1000));
+    if (remaining <= 0) stopTicker();
+  }
+
+  function formatRemaining(s: number): string {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${String(sec).padStart(2, '0')}`;
+  }
+
+  async function mintPairToken() {
+    minting = true;
+    mintError = '';
+    try {
+      const res = await fetch('/api/admin/link/pair-token', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+      });
+      if (!res.ok) {
+        mintError = res.status === 409 ? await res.text() : 'Failed to create pairing code';
+        return;
+      }
+      const data: MintResponse = await res.json();
+      pairURL = data.url;
+      pairQR = data.qr;
+      pairExpiresAt = new Date(data.expires_at);
+      stopTicker();
+      tick();
+      ticker = setInterval(tick, 1000);
+    } catch {
+      mintError = 'Failed to create pairing code';
+    } finally {
+      minting = false;
+    }
+  }
 </script>
 
 <AdminLayout activePage="dashboard" {userName} {csrfToken}>
@@ -171,6 +236,47 @@
               </TableBody>
             {/snippet}
           </Table>
+        {/if}
+      </div>
+    {/snippet}
+  </Card>
+
+  <!-- QR Pairing Section -->
+  <Card>
+    {#snippet children()}
+      <div class="p-6">
+        <h3 class="font-[var(--typography-fontWeight-semibold)] text-fg mb-3">Pair by QR code</h3>
+        <p class="text-[length:var(--typography-fontSize-sm)] text-fgMuted mb-4">
+          Generate a single-use code, then scan it with the Coven app (or paste the link on macOS).
+          It expires after 5 minutes.
+        </p>
+        {#if mintError}
+          <p class="text-[length:var(--typography-fontSize-sm)] text-danger-subtleFg mb-4" role="alert">{mintError}</p>
+        {/if}
+        {#if pairQR && remaining > 0}
+          <div class="flex flex-col items-start gap-3">
+            <img src={pairQR} alt="Pairing QR code" width="256" height="256" class="rounded-[var(--border-radius-md)] bg-white p-2" />
+            <CodeText class="text-[length:var(--typography-fontSize-xs)] break-all">
+              {#snippet children()}{pairURL}{/snippet}
+            </CodeText>
+            <span class="text-[length:var(--typography-fontSize-sm)] text-fgMuted">
+              Expires in {formatRemaining(remaining)}
+            </span>
+          </div>
+        {:else}
+          {#if pairExpiresAt && remaining <= 0}
+            <p class="text-[length:var(--typography-fontSize-sm)] text-fgMuted mb-4">
+              This code has expired — generate another.
+            </p>
+          {/if}
+          <button
+            type="button"
+            onclick={mintPairToken}
+            disabled={minting}
+            class="px-3 py-1.5 bg-[var(--color-primary)] text-[var(--color-primaryFg)] text-[length:var(--typography-fontSize-sm)] font-[var(--typography-fontWeight-medium)] rounded-[var(--border-radius-md)] hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {minting ? 'Generating...' : 'Generate QR code'}
+          </button>
         {/if}
       </div>
     {/snippet}
