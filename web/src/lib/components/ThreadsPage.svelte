@@ -3,12 +3,8 @@
   import Card from './Card.svelte';
   import CodeText from './CodeText.svelte';
   import EmptyState from './EmptyState.svelte';
-  import Table from './Table.svelte';
-  import TableHead from './TableHead.svelte';
-  import TableBody from './TableBody.svelte';
-  import TableRow from './TableRow.svelte';
-  import TableHeader from './TableHeader.svelte';
-  import TableCell from './TableCell.svelte';
+  import DataTable from './DataTable.svelte';
+  import type { DataColumn } from './dataTable.js';
 
   interface Thread {
     ID: string;
@@ -50,7 +46,42 @@
   function truncateId(id: string): string {
     return id.length > 12 ? id.slice(0, 12) + '...' : id;
   }
+
+  const columns = $derived([
+    { key: 'ID', header: 'Thread', cell: threadCell },
+    { key: 'AgentID', header: 'Agent', cell: agentCell },
+    { key: 'FrontendName', header: 'Frontend', cell: frontendCell },
+    { key: 'UpdatedAt', header: 'Updated', cell: updatedCell },
+    { key: 'actions', header: 'Actions', align: 'right' as const, cell: actionsCell },
+  ] satisfies DataColumn<Thread>[]);
 </script>
+
+{#snippet threadCell(thread: Thread)}
+  <CodeText class="text-[length:var(--typography-fontSize-xs)]">
+    {#snippet children()}{truncateId(thread.ID)}{/snippet}
+  </CodeText>
+{/snippet}
+
+{#snippet agentCell(thread: Thread)}
+  <span class="text-fgMuted">{truncateId(thread.AgentID)}</span>
+{/snippet}
+
+{#snippet frontendCell(thread: Thread)}
+  <span class="font-[var(--typography-fontWeight-medium)] text-fg">{thread.FrontendName}</span>
+{/snippet}
+
+{#snippet updatedCell(thread: Thread)}
+  <span class="text-fgMuted">{formatTime(thread.UpdatedAt)}</span>
+{/snippet}
+
+{#snippet actionsCell(thread: Thread)}
+  <a
+    href="/admin/threads/{thread.ID}"
+    class="text-[length:var(--typography-fontSize-sm)] text-accent hover:underline"
+  >
+    View
+  </a>
+{/snippet}
 
 <AdminLayout activePage="threads" {userName} {csrfToken}>
 <div data-testid="threads-page" class="p-6">
@@ -77,65 +108,7 @@
             description="Conversations will appear here when clients interact with agents."
           />
         {:else}
-          <Table>
-            {#snippet children()}
-              <TableHead>
-                {#snippet children()}
-                  <TableRow>
-                    {#snippet children()}
-                      <TableHeader>{#snippet children()}Thread{/snippet}</TableHeader>
-                      <TableHeader>{#snippet children()}Agent{/snippet}</TableHeader>
-                      <TableHeader>{#snippet children()}Frontend{/snippet}</TableHeader>
-                      <TableHeader>{#snippet children()}Updated{/snippet}</TableHeader>
-                      <TableHeader align="right">{#snippet children()}Actions{/snippet}</TableHeader>
-                    {/snippet}
-                  </TableRow>
-                {/snippet}
-              </TableHead>
-              <TableBody>
-                {#snippet children()}
-                  {#each threads as thread (thread.ID)}
-                    <TableRow>
-                      {#snippet children()}
-                        <TableCell>
-                          {#snippet children()}
-                            <CodeText class="text-[length:var(--typography-fontSize-xs)]">
-                              {#snippet children()}{truncateId(thread.ID)}{/snippet}
-                            </CodeText>
-                          {/snippet}
-                        </TableCell>
-                        <TableCell>
-                          {#snippet children()}
-                            <span class="text-fgMuted">{truncateId(thread.AgentID)}</span>
-                          {/snippet}
-                        </TableCell>
-                        <TableCell>
-                          {#snippet children()}
-                            <span class="font-[var(--typography-fontWeight-medium)] text-fg">{thread.FrontendName}</span>
-                          {/snippet}
-                        </TableCell>
-                        <TableCell>
-                          {#snippet children()}
-                            <span class="text-fgMuted">{formatTime(thread.UpdatedAt)}</span>
-                          {/snippet}
-                        </TableCell>
-                        <TableCell align="right">
-                          {#snippet children()}
-                            <a
-                              href="/admin/threads/{thread.ID}"
-                              class="text-[length:var(--typography-fontSize-sm)] text-accent hover:underline"
-                            >
-                              View
-                            </a>
-                          {/snippet}
-                        </TableCell>
-                      {/snippet}
-                    </TableRow>
-                  {/each}
-                {/snippet}
-              </TableBody>
-            {/snippet}
-          </Table>
+          <DataTable {columns} rows={threads} rowKey={(t) => t.ID} />
         {/if}
       </div>
     {/snippet}
