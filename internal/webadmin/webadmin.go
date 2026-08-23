@@ -2285,6 +2285,19 @@ func (a *Admin) handleLinkApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := a.store.AppendAuditLog(r.Context(), &store.AuditEntry{
+		ActorPrincipalID: user.ID,
+		Action:           store.AuditApproveLink,
+		TargetType:       "principal",
+		TargetID:         principalID,
+		Detail: map[string]any{
+			"device_name":  linkCode.DeviceName,
+			"link_code_id": id,
+		},
+	}); err != nil {
+		a.logger.Error("appending approve link audit log", "error", err, "link_code_id", id)
+	}
+
 	a.logger.Info("link code approved", "code", linkCode.Code, "device", linkCode.DeviceName, "approved_by", user.Username)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(`<span class="px-2 py-1 text-xs rounded-full bg-success/20 text-success font-medium">Approved</span>`))

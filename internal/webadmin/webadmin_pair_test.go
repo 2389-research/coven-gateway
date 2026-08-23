@@ -505,3 +505,42 @@ func TestHandleLinkPair_RateLimited(t *testing.T) {
 		t.Errorf("expected 'too many attempts', got %q", rec.Body.String())
 	}
 }
+
+func TestHandleLinkApprove_WritesAuditEntry(t *testing.T) {
+	a, s := newPairTestAdmin(t, Config{BaseURL: "https://gw.example.ts.net"})
+	user := createAdminUserWithPassword(t, a, "approveaudit", "password123")
+	linkID := createPendingLink(t, a, validFingerprint(), "Audited Device")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/link/"+linkID+"/approve", nil)
+	csrfVal := "test-csrf-token-value"
+	req.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfVal})
+	req.Header.Set("X-CSRF-Token", csrfVal)
+	req.SetPathValue("id", linkID)
+	req = req.WithContext(withUser(req.Context(), user))
+	rec := httptest.NewRecorder()
+	a.handleLinkApprove(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	entries, err := s.ListAuditLog(context.Background(), store.AuditFilter{})
+	if err != nil {
+		t.Fatalf("listing audit log: %v", err)
+	}
+	found := false
+	for _, e := range entries {
+		if e.Action == store.AuditApproveLink && e.ActorPrincipalID == user.ID {
+			found = true
+			if e.Detail["device_name"] != "Audited Device" {
+				t.Errorf("expected device_name detail, got %v", e.Detail["device_name"])
+			}
+			if e.Detail["link_code_id"] != linkID {
+				t.Errorf("expected link_code_id detail %q, got %v", linkID, e.Detail["link_code_id"])
+			}
+		}
+	}
+	if !found {
+		t.Error("expected an approve_link audit entry")
+	}
+}
