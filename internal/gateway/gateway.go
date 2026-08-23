@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -367,6 +368,18 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 	// Register web admin UI routes
 	// The admin UI has its own session-based auth (separate from JWT)
 	webAdminBaseURL := determineWebAdminBaseURL(cfg, logger)
+
+	// gRPC port for QR pairing payloads: the tsnet listener is hardcoded to
+	// :50051 in setupTailscaleListeners; direct mode parses Server.GRPCAddr.
+	grpcPort := 50051
+	if !cfg.Tailscale.Enabled {
+		if _, portStr, err := net.SplitHostPort(cfg.Server.GRPCAddr); err == nil {
+			if p, err := strconv.Atoi(portStr); err == nil {
+				grpcPort = p
+			}
+		}
+	}
+
 	webAdminCfg := webadmin.NewConfig{
 		Store:        sqlStore,
 		Manager:      gw.agentManager,
@@ -375,6 +388,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		Registry:     packRegistry,
 		Config: webadmin.Config{
 			BaseURL:             webAdminBaseURL,
+			GRPCPort:            grpcPort,
 			TrustForwardedProto: cfg.Server.TrustForwardedProto,
 		},
 		PrincipalStore: sqlStore,

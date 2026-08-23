@@ -50,6 +50,9 @@ const (
 	// LinkCodeDuration is how long link codes are valid.
 	LinkCodeDuration = 10 * time.Minute
 
+	// PairTokenDuration is how long a minted QR pair token remains valid.
+	PairTokenDuration = 5 * time.Minute
+
 	// LinkCodeLength is the length of the short code.
 	LinkCodeLength = 6
 )
@@ -63,6 +66,8 @@ const userContextKey contextKey = "admin_user"
 type Config struct {
 	// BaseURL is the external URL for generating invite links
 	BaseURL string
+	// GRPCPort is the gRPC listener port embedded in QR pairing payloads.
+	GRPCPort int
 	// TrustForwardedProto mirrors config.ServerConfig.TrustForwardedProto for cookie Secure decisions.
 	TrustForwardedProto bool
 }
@@ -120,6 +125,16 @@ type FullStore interface {
 	// Token usage tracking
 	GetUsageStats(ctx context.Context, filter store.UsageFilter) (*store.UsageStats, error)
 	GetThreadUsage(ctx context.Context, threadID string) ([]*store.TokenUsage, error)
+
+	// Pair tokens (QR pairing)
+	CreatePairToken(ctx context.Context, tokenHash, createdBy string, expiresAt time.Time) (*store.PairToken, error)
+	GetPairTokenByHash(ctx context.Context, tokenHash string) (*store.PairToken, error)
+	ConsumePairToken(ctx context.Context, id string) error
+	SetPairTokenPrincipal(ctx context.Context, id, principalID string) error
+	DeleteExpiredPairTokens(ctx context.Context) error
+
+	// Audit
+	AppendAuditLog(ctx context.Context, entry *store.AuditEntry) error
 }
 
 // Admin handles admin UI routes and authentication.
@@ -291,6 +306,7 @@ func (a *Admin) registerAdminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/link", a.requireAuth(a.handleLinkPage))
 	mux.HandleFunc("GET /api/admin/link", a.requireAuth(a.handleLinkJSON))
 	mux.HandleFunc("POST /admin/link/{id}/approve", a.requireAuth(a.handleLinkApprove))
+	mux.HandleFunc("POST /api/admin/link/pair-token", a.requireAuth(a.handleMintPairToken))
 
 	// Agent management
 	mux.HandleFunc("GET /admin/agents", a.requireAuth(a.handleAgentsPage))
