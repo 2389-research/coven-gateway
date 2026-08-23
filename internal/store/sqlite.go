@@ -363,8 +363,8 @@ func (s *SQLiteStore) migrateConversationKeysToAgentID() error {
 	return nil
 }
 
-// migrateAuditLogCheckConstraint updates the audit_log table CHECK constraint
-// to include 'create_principal' and 'delete_principal' actions for existing databases.
+// migrateAuditLogCheckConstraint recreates the audit_log table so the CHECK
+// constraint accepts the pair actions (mint_pair_token, pair_enroll, approve_link).
 // SQLite doesn't support ALTER TABLE for CHECK constraints, so we recreate the table.
 func (s *SQLiteStore) migrateAuditLogCheckConstraint() error {
 	if !s.needsAuditLogMigration() {

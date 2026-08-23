@@ -212,7 +212,7 @@ func TestAuditStore_Append_WithMemberID(t *testing.T) {
 }
 
 func TestAuditLogAcceptsPairActions(t *testing.T) {
-	s := newTestStore(t)
+	s := setupTestStore(t)
 	ctx := context.Background()
 
 	for _, action := range []AuditAction{AuditMintPairToken, AuditPairEnroll, AuditApproveLink} {
