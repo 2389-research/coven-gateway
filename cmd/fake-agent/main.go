@@ -16,6 +16,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	pb "github.com/2389/coven-gateway/proto/coven"
 )
@@ -24,14 +25,15 @@ func main() {
 	addr := flag.String("addr", "localhost:50051", "gRPC server address")
 	name := flag.String("name", "Echo Agent", "Agent display name")
 	agentID := flag.String("id", "e2e-echo-agent", "Agent ID")
+	token := flag.String("token", "", "Bearer token for gateway auth (omit for allow_anonymous gateways)")
 	flag.Parse()
 
-	if err := run(*addr, *name, *agentID); err != nil {
+	if err := run(*addr, *name, *agentID, *token); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(addr, name, agentID string) error {
+func run(addr, name, agentID, token string) error {
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
@@ -40,6 +42,8 @@ func run(addr, name, agentID string) error {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
+
+	ctx = withBearer(ctx, token)
 
 	client := pb.NewCovenControlClient(conn)
 	stream, err := client.AgentStream(ctx)
@@ -127,6 +131,15 @@ func run(addr, name, agentID string) error {
 			log.Printf("send done error: %v", err)
 		}
 	}
+}
+
+// withBearer returns ctx carrying gRPC authorization metadata when token is non-empty.
+// The gateway's JWT interceptor reads metadata key "authorization" as "Bearer <token>".
+func withBearer(ctx context.Context, token string) context.Context {
+	if token == "" {
+		return ctx
+	}
+	return metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
 }
 
 func echoReply(input string) string {
