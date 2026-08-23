@@ -34,6 +34,7 @@
     }
   }
 
+  // $derived needed: the cell snippets are top-level template declarations, so the script sees them as forward refs
   const columns = $derived([
     { key: 'name', header: 'Name', cell: nameCell },
     { key: 'connected', header: 'Status', cell: statusCell },
