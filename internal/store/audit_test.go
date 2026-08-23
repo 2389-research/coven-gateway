@@ -5,6 +5,7 @@ package store
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -208,4 +209,61 @@ func TestAuditStore_Append_WithMemberID(t *testing.T) {
 	require.Len(t, entries, 1)
 	require.NotNil(t, entries[0].ActorMemberID)
 	assert.Equal(t, memberID, *entries[0].ActorMemberID)
+}
+
+func TestAuditLogAcceptsPairActions(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	for _, action := range []AuditAction{AuditMintPairToken, AuditPairEnroll, AuditApproveLink} {
+		err := s.AppendAuditLog(ctx, &AuditEntry{
+			ActorPrincipalID: "actor-1",
+			Action:           action,
+			TargetType:       "principal",
+			TargetID:         "target-1",
+		})
+		require.NoError(t, err, "action %s must pass the CHECK constraint", action)
+	}
+
+	entries, err := s.ListAuditLog(ctx, AuditFilter{})
+	require.NoError(t, err)
+	require.Len(t, entries, 3)
+}
+
+func TestAuditLogMigrationAddsPairActions(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "migrate-test.db")
+
+	s, err := NewSQLiteStore(dbPath)
+	require.NoError(t, err)
+
+	// Simulate a pre-pair database: recreate audit_log with the old CHECK list.
+	_, err = s.db.Exec(`DROP TABLE audit_log`)
+	require.NoError(t, err)
+	_, err = s.db.Exec(`CREATE TABLE audit_log (
+		audit_id TEXT PRIMARY KEY,
+		actor_principal_id TEXT NOT NULL,
+		actor_member_id TEXT,
+		action TEXT NOT NULL,
+		target_type TEXT NOT NULL,
+		target_id TEXT NOT NULL,
+		ts TEXT NOT NULL,
+		detail_json TEXT,
+		CHECK (action IN ('approve_principal', 'revoke_principal', 'grant_capability', 'revoke_capability', 'create_binding', 'update_binding', 'delete_binding', 'create_token', 'create_principal', 'delete_principal'))
+	)`)
+	require.NoError(t, err)
+	require.NoError(t, s.Close())
+
+	// Reopening runs migrations against the old-shaped table.
+	s2, err := NewSQLiteStore(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = s2.Close() }()
+
+	err = s2.AppendAuditLog(context.Background(), &AuditEntry{
+		ActorPrincipalID: "actor-1",
+		Action:           AuditMintPairToken,
+		TargetType:       "pair_token",
+		TargetID:         "tok-1",
+	})
+	require.NoError(t, err, "migrated table must accept mint_pair_token")
 }

@@ -26,6 +26,9 @@ const (
 	AuditCreateToken      AuditAction = "create_token"
 	AuditCreatePrincipal  AuditAction = "create_principal"
 	AuditDeletePrincipal  AuditAction = "delete_principal"
+	AuditMintPairToken    AuditAction = "mint_pair_token"
+	AuditPairEnroll       AuditAction = "pair_enroll"
+	AuditApproveLink      AuditAction = "approve_link"
 )
 
 // ValidAuditActions lists all valid audit actions.
@@ -40,6 +43,9 @@ var ValidAuditActions = []AuditAction{
 	AuditCreateToken,
 	AuditCreatePrincipal,
 	AuditDeletePrincipal,
+	AuditMintPairToken,
+	AuditPairEnroll,
+	AuditApproveLink,
 }
 
 // AuditEntry represents a single audit log entry.
