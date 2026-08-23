@@ -106,6 +106,49 @@ func determineWebAdminBaseURL(cfg *config.Config, logger *slog.Logger) string {
 	return "http://" + cfg.Tailscale.Hostname
 }
 
+// resolveGRPCPort returns the gRPC port for QR pairing payloads. The tsnet
+// listener is hardcoded to :50051; direct mode parses Server.GRPCAddr.
+func resolveGRPCPort(cfg *config.Config) int {
+	if cfg.Tailscale.Enabled {
+		return 50051
+	}
+	_, portStr, err := net.SplitHostPort(cfg.Server.GRPCAddr)
+	if err != nil {
+		return 50051
+	}
+	p, err := strconv.Atoi(portStr)
+	if err != nil {
+		return 50051
+	}
+	return p
+}
+
+// buildWebAdmin constructs and returns a configured Admin instance.
+// Assign TokenGenerator only when jwtVerifier is non-nil: a typed-nil
+// *JWTVerifier in the interface field defeats webadmin's nil guard and panics.
+func buildWebAdmin(cfg *config.Config, sqlStore *store.SQLiteStore, mgr *agent.Manager,
+	conv *conversation.Service, broadcaster *conversation.EventBroadcaster,
+	registry *packs.Registry, grpcResult *grpcServerResult, logger *slog.Logger,
+) *webadmin.Admin {
+	newCfg := webadmin.NewConfig{
+		Store:        sqlStore,
+		Manager:      mgr,
+		Conversation: conv,
+		Broadcaster:  broadcaster,
+		Registry:     registry,
+		Config: webadmin.Config{
+			BaseURL:             determineWebAdminBaseURL(cfg, logger),
+			GRPCPort:            resolveGRPCPort(cfg),
+			TrustForwardedProto: cfg.Server.TrustForwardedProto,
+		},
+		PrincipalStore: sqlStore,
+	}
+	if grpcResult.jwtVerifier != nil {
+		newCfg.TokenGenerator = grpcResult.jwtVerifier
+	}
+	return webadmin.NewWithConfig(newCfg)
+}
+
 // initStore creates and returns a store based on config and environment.
 func initStore(cfg *config.Config) (store.Store, error) {
 	dbPath := cfg.Database.Path
@@ -365,42 +408,9 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		return nil, err
 	}
 
-	// Register web admin UI routes
-	// The admin UI has its own session-based auth (separate from JWT)
-	webAdminBaseURL := determineWebAdminBaseURL(cfg, logger)
-
-	// gRPC port for QR pairing payloads: the tsnet listener is hardcoded to
-	// :50051 in setupTailscaleListeners; direct mode parses Server.GRPCAddr.
-	grpcPort := 50051
-	if !cfg.Tailscale.Enabled {
-		if _, portStr, err := net.SplitHostPort(cfg.Server.GRPCAddr); err == nil {
-			if p, err := strconv.Atoi(portStr); err == nil {
-				grpcPort = p
-			}
-		}
-	}
-
-	webAdminCfg := webadmin.NewConfig{
-		Store:        sqlStore,
-		Manager:      gw.agentManager,
-		Conversation: convService,
-		Broadcaster:  eventBroadcaster,
-		Registry:     packRegistry,
-		Config: webadmin.Config{
-			BaseURL:             webAdminBaseURL,
-			GRPCPort:            grpcPort,
-			TrustForwardedProto: cfg.Server.TrustForwardedProto,
-		},
-		PrincipalStore: sqlStore,
-	}
-	// Assign only a non-nil verifier: a typed-nil *JWTVerifier in the interface
-	// field would defeat webadmin's `tokenGenerator == nil` guard and panic.
-	if grpcResult.jwtVerifier != nil {
-		webAdminCfg.TokenGenerator = grpcResult.jwtVerifier
-	}
-	gw.webAdmin = webadmin.NewWithConfig(webAdminCfg)
+	gw.webAdmin = buildWebAdmin(cfg, sqlStore, gw.agentManager, convService, eventBroadcaster, packRegistry, grpcResult, logger)
 	gw.webAdmin.RegisterRoutes(mux)
-	logger.Info("admin web UI enabled at /admin/", "base_url", webAdminBaseURL)
+	logger.Info("admin web UI enabled at /admin/", "base_url", determineWebAdminBaseURL(cfg, logger))
 
 	// Create question router for ask_user tool (uses webAdmin as ClientStreamer)
 	gw.questionRouter = builtins.NewInMemoryQuestionRouter(gw.webAdmin)

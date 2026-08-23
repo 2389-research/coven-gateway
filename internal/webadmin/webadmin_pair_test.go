@@ -227,11 +227,14 @@ func createStoredPairToken(t *testing.T, a *Admin, s *store.SQLiteStore, expires
 }
 
 func pairBody(token, fingerprint, deviceName string) string {
-	b, _ := json.Marshal(map[string]string{
+	b, err := json.Marshal(map[string]string{
 		"token":       token,
 		"fingerprint": fingerprint,
 		"device_name": deviceName,
 	})
+	if err != nil {
+		panic("pairBody marshal: " + err.Error())
+	}
 	return string(b)
 }
 
@@ -488,7 +491,7 @@ func TestHandleLinkPair_RateLimited(t *testing.T) {
 	pairLimiter = newPairRateLimiter()
 	defer func() { pairLimiter = saved }()
 
-	for i := 0; i < maxPairFailuresPerWindow; i++ {
+	for range maxPairFailuresPerWindow {
 		pairLimiter.recordFailure("192.0.2.9")
 	}
 

@@ -94,7 +94,7 @@ func TestConsumePairToken_ConcurrentRace(t *testing.T) {
 
 	start := make(chan struct{})
 	results := make(chan error, 2)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		go func() {
 			<-start
 			results <- s.ConsumePairToken(ctx, pt.ID)
@@ -103,7 +103,7 @@ func TestConsumePairToken_ConcurrentRace(t *testing.T) {
 	close(start)
 
 	var wins, losses int
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		switch err := <-results; {
 		case err == nil:
 			wins++

@@ -39,10 +39,12 @@ func hashPairToken(token string) string {
 }
 
 // writePairError writes the pairing contract's JSON error envelope.
-func writePairError(w http.ResponseWriter, status int, reason string) {
+func (a *Admin) writePairError(w http.ResponseWriter, status int, reason string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": reason})
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": reason}); err != nil {
+		a.logger.Error("writing pair error response", "error", err)
+	}
 }
 
 // pairHost extracts the QR payload hostname from the resolved BaseURL.
@@ -79,108 +81,91 @@ func remoteIP(r *http.Request) string {
 	return host
 }
 
+// pairEnrollRequest holds the validated fields from a /api/link/pair body.
+type pairEnrollRequest struct {
+	Token       string
+	Fingerprint string
+	DeviceName  string
+}
+
+// parsePairEnrollRequest decodes and validates the request body. On any
+// validation failure it returns a non-empty reason string (the 401 reason) and
+// a nil error; a non-nil error means an internal failure.
+func parsePairEnrollRequest(r *http.Request) (*pairEnrollRequest, string) {
+	var raw struct {
+		Token       string `json:"token"`
+		Fingerprint string `json:"fingerprint"`
+		DeviceName  string `json:"device_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		return nil, "invalid request: body"
+	}
+	switch {
+	case raw.Token == "":
+		return nil, "invalid request: token"
+	case len(raw.Fingerprint) != 64:
+		return nil, "invalid request: fingerprint"
+	case raw.DeviceName == "" || len(raw.DeviceName) > 100:
+		return nil, "invalid request: device_name"
+	}
+	return &pairEnrollRequest{Token: raw.Token, Fingerprint: raw.Fingerprint, DeviceName: raw.DeviceName}, ""
+}
+
+// lookupValidPairToken hashes the token and verifies it exists, is unused, and
+// has not expired. Returns the token row, or a non-empty reason/internalErr.
+// reason is a 401 reason; internalErr signals a 500.
+func (a *Admin) lookupValidPairToken(r *http.Request, token string) (*store.PairToken, string, error) {
+	hash := hashPairToken(token)
+	pt, err := a.store.GetPairTokenByHash(r.Context(), hash)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, "invalid token", nil
+		}
+		return nil, "", fmt.Errorf("looking up pair token: %w", err)
+	}
+	// Belt and braces on top of the indexed hash lookup: a found row already
+	// implies equality, but the explicit compare keeps the path constant-time.
+	if subtle.ConstantTimeCompare([]byte(pt.TokenHash), []byte(hash)) != 1 {
+		return nil, "invalid token", nil
+	}
+	if pt.UsedAt != nil {
+		return nil, "token already used", nil
+	}
+	if time.Now().After(pt.ExpiresAt) {
+		return nil, "token expired", nil
+	}
+	return pt, "", nil
+}
+
 // handleLinkPair enrolls a device presenting a QR pair token.
 // Contract (frozen — the client already shipped against it): 200
 // {"principal_id"} on success; 401 {"error": reason} for EVERY rejection;
 // 500 {"error":"internal error"} on store failure. The raw token is never
 // logged; slog lines carry the token row ID once known.
-func (a *Admin) handleLinkPair(w http.ResponseWriter, r *http.Request) {
-	ip := remoteIP(r)
-	if pairLimiter.tooMany(ip) {
-		writePairError(w, http.StatusUnauthorized, "too many attempts")
-		return
-	}
-
-	var req struct {
-		Token       string `json:"token"`
-		Fingerprint string `json:"fingerprint"`
-		DeviceName  string `json:"device_name"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		pairLimiter.recordFailure(ip)
-		writePairError(w, http.StatusUnauthorized, "invalid request: body")
-		return
-	}
-	if req.Token == "" {
-		pairLimiter.recordFailure(ip)
-		writePairError(w, http.StatusUnauthorized, "invalid request: token")
-		return
-	}
-	if len(req.Fingerprint) != 64 {
-		pairLimiter.recordFailure(ip)
-		writePairError(w, http.StatusUnauthorized, "invalid request: fingerprint")
-		return
-	}
-	if req.DeviceName == "" || len(req.DeviceName) > 100 {
-		pairLimiter.recordFailure(ip)
-		writePairError(w, http.StatusUnauthorized, "invalid request: device_name")
-		return
-	}
-
-	_ = a.store.DeleteExpiredPairTokens(r.Context())
-
-	hash := hashPairToken(req.Token)
-	pt, err := a.store.GetPairTokenByHash(r.Context(), hash)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			pairLimiter.recordFailure(ip)
-			writePairError(w, http.StatusUnauthorized, "invalid token")
-			return
-		}
-		a.logger.Error("looking up pair token", "error", err)
-		writePairError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	// Belt and braces on top of the indexed hash lookup: a found row already
-	// implies equality, but the explicit compare keeps the path constant-time.
-	if subtle.ConstantTimeCompare([]byte(pt.TokenHash), []byte(hash)) != 1 {
-		pairLimiter.recordFailure(ip)
-		writePairError(w, http.StatusUnauthorized, "invalid token")
-		return
-	}
-	if pt.UsedAt != nil {
-		pairLimiter.recordFailure(ip)
-		writePairError(w, http.StatusUnauthorized, "token already used")
-		return
-	}
-	if time.Now().After(pt.ExpiresAt) {
-		pairLimiter.recordFailure(ip)
-		writePairError(w, http.StatusUnauthorized, "token expired")
-		return
-	}
-
-	if a.principalStore == nil {
-		pairLimiter.recordFailure(ip)
-		a.logger.Error("server not configured for pair enrollment")
-		writePairError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
+// enrollPairedDevice claims the token and creates (or finds) the principal.
+// Returned reason is a 401 reason; non-nil error signals a 500. On success both
+// are zero values and the enrolled principalID is returned.
+func (a *Admin) enrollPairedDevice(r *http.Request, pt *store.PairToken, req *pairEnrollRequest) (principalID string, reason string, err error) {
 	// The claim: exactly one concurrent request per token gets past here.
-	if err := a.store.ConsumePairToken(r.Context(), pt.ID); err != nil {
+	if err = a.store.ConsumePairToken(r.Context(), pt.ID); err != nil {
 		if errors.Is(err, store.ErrPairTokenUsed) {
-			pairLimiter.recordFailure(ip)
-			writePairError(w, http.StatusUnauthorized, "token already used")
-			return
+			return "", "token already used", nil
 		}
-		a.logger.Error("consuming pair token", "error", err, "pair_token_id", pt.ID)
-		writePairError(w, http.StatusInternalServerError, "internal error")
-		return
+		return "", "", fmt.Errorf("consuming pair token %s: %w", pt.ID, err)
 	}
 
-	principalID, created, err := a.getOrCreatePrincipalForDevice(r.Context(), req.Fingerprint, req.DeviceName)
+	var created bool
+	principalID, created, err = a.getOrCreatePrincipalForDevice(r.Context(), req.Fingerprint, req.DeviceName)
 	if err != nil {
 		// Fail closed: the token stays burned; the admin mints another.
-		a.logger.Error("pair enrollment failed after claim", "error", err, "pair_token_id", pt.ID)
-		writePairError(w, http.StatusInternalServerError, "internal error")
-		return
+		return "", "", fmt.Errorf("pair enrollment after claim: %w", err)
 	}
 
-	if err := a.store.SetPairTokenPrincipal(r.Context(), pt.ID, principalID); err != nil {
+	if err = a.store.SetPairTokenPrincipal(r.Context(), pt.ID, principalID); err != nil {
 		a.logger.Error("recording pair token principal", "error", err, "pair_token_id", pt.ID)
 	}
 
-	if err := a.store.AppendAuditLog(r.Context(), &store.AuditEntry{
+	if err = a.store.AppendAuditLog(r.Context(), &store.AuditEntry{
 		ActorPrincipalID: principalID,
 		Action:           store.AuditPairEnroll,
 		TargetType:       "principal",
@@ -192,6 +177,60 @@ func (a *Admin) handleLinkPair(w http.ResponseWriter, r *http.Request) {
 		},
 	}); err != nil {
 		a.logger.Error("appending pair enroll audit log", "error", err, "pair_token_id", pt.ID)
+	}
+	return principalID, "", nil
+}
+
+// handleLinkPair enrolls a device presenting a QR pair token.
+// Contract (frozen — the client already shipped against it): 200
+// {"principal_id"} on success; 401 {"error": reason} for EVERY rejection;
+// 500 {"error":"internal error"} on store failure. The raw token is never
+// logged; slog lines carry the token row ID once known.
+func (a *Admin) handleLinkPair(w http.ResponseWriter, r *http.Request) {
+	ip := remoteIP(r)
+	if pairLimiter.tooMany(ip) {
+		a.writePairError(w, http.StatusUnauthorized, "too many attempts")
+		return
+	}
+
+	req, reason := parsePairEnrollRequest(r)
+	if reason != "" {
+		pairLimiter.recordFailure(ip)
+		a.writePairError(w, http.StatusUnauthorized, reason)
+		return
+	}
+
+	_ = a.store.DeleteExpiredPairTokens(r.Context())
+
+	pt, reason, err := a.lookupValidPairToken(r, req.Token)
+	if reason != "" {
+		pairLimiter.recordFailure(ip)
+		a.writePairError(w, http.StatusUnauthorized, reason)
+		return
+	}
+	if err != nil {
+		a.logger.Error("looking up pair token", "error", err)
+		a.writePairError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if a.principalStore == nil {
+		pairLimiter.recordFailure(ip)
+		a.logger.Error("server not configured for pair enrollment")
+		a.writePairError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	principalID, reason, err := a.enrollPairedDevice(r, pt, req)
+	if reason != "" {
+		pairLimiter.recordFailure(ip)
+		a.writePairError(w, http.StatusUnauthorized, reason)
+		return
+	}
+	if err != nil {
+		a.logger.Error("pair enrollment", "error", err)
+		a.writePairError(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 
 	a.logger.Info("device paired", "device_name", req.DeviceName, "principal_id", principalID, "pair_token_id", pt.ID)
