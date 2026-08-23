@@ -950,6 +950,18 @@ gh pr create --title "refactor: DataTable for simple admin pages" --body "Adds D
 
 Report per-page LOC deltas to Harper.
 
+#### Task 13 verdicts (recorded 2026-08-22)
+
+| Page | Verdict | Reason | LOC before→after |
+|------|---------|--------|-----------------|
+| ThreadsPage.svelte | migrated | 5-column uniform table; cells are code text, plain text, link — all expressible as snippets | 144→102 |
+| LogsPage.svelte | migrated | 4-column uniform table; tags column is a flex badge list — expressible as a snippet | 162→116 |
+| TodosPage.svelte | migrated | 6-column uniform table; status/priority badges with conditional logic fit neatly as snippets | 175→126 |
+| PrincipalsPage.svelte | left on primitives | Per-row action buttons (Approve/Revoke/Delete) with conditional rendering drive modal state; actions column is not uniform — disqualified by inline-editing / per-row dialog rule | — |
+| BoardPage.svelte | left on primitives | Renders thread list as clickable `<button>` cards, not a table; no Table primitives imported | — |
+| UsagePage.svelte | left on primitives | Renders a stat-card grid and info panel, no table; no Table primitives imported | — |
+| ToolsPage.svelte | left on primitives | Table is nested inside `{#each packs}` — multiple tables, one per pack, with no flat rows array; structure is inherently multi-level | — |
+
 ---
 
 ## Self-Review (performed at write time)
