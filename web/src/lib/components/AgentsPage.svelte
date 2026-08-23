@@ -4,12 +4,8 @@
   import Card from './Card.svelte';
   import CodeText from './CodeText.svelte';
   import EmptyState from './EmptyState.svelte';
-  import Table from './Table.svelte';
-  import TableHead from './TableHead.svelte';
-  import TableBody from './TableBody.svelte';
-  import TableRow from './TableRow.svelte';
-  import TableHeader from './TableHeader.svelte';
-  import TableCell from './TableCell.svelte';
+  import DataTable from './DataTable.svelte';
+  import type { DataColumn } from './dataTable.js';
 
   interface Agent {
     id: string;
@@ -37,7 +33,34 @@
       loading = false;
     }
   }
+
+  const columns = $derived([
+    { key: 'name', header: 'Name', cell: nameCell },
+    { key: 'connected', header: 'Status', cell: statusCell },
+    { key: 'actions', header: 'Actions', align: 'right' as const, cell: actionsCell },
+  ] satisfies DataColumn<Agent>[]);
 </script>
+
+{#snippet nameCell(agent: Agent)}
+  <div>
+    <div class="font-[var(--typography-fontWeight-medium)] text-fg">{agent.name}</div>
+    <CodeText class="text-[length:var(--typography-fontSize-xs)] text-fgMuted mt-0.5">
+      {#snippet children()}{agent.id}{/snippet}
+    </CodeText>
+  </div>
+{/snippet}
+
+{#snippet statusCell(agent: Agent)}
+  <Badge variant={agent.connected ? 'success' : 'default'} size="sm">
+    {#snippet children()}{agent.connected ? 'Online' : 'Offline'}{/snippet}
+  </Badge>
+{/snippet}
+
+{#snippet actionsCell(agent: Agent)}
+  <a href="/admin/agents/{agent.id}" class="text-[length:var(--typography-fontSize-sm)] text-accent hover:underline">
+    Details
+  </a>
+{/snippet}
 
 <AdminLayout activePage="agents" {userName} {csrfToken}>
 <div data-testid="agents-page" class="p-6">
@@ -64,58 +87,7 @@
             description="Agents will appear here when they connect to the gateway."
           />
         {:else}
-          <Table>
-            {#snippet children()}
-              <TableHead>
-                {#snippet children()}
-                  <TableRow>
-                    {#snippet children()}
-                      <TableHeader>{#snippet children()}Name{/snippet}</TableHeader>
-                      <TableHeader>{#snippet children()}Status{/snippet}</TableHeader>
-                      <TableHeader align="right">{#snippet children()}Actions{/snippet}</TableHeader>
-                    {/snippet}
-                  </TableRow>
-                {/snippet}
-              </TableHead>
-              <TableBody>
-                {#snippet children()}
-                  {#each agents as agent (agent.id)}
-                    <TableRow>
-                      {#snippet children()}
-                        <TableCell>
-                          {#snippet children()}
-                            <div>
-                              <div class="font-[var(--typography-fontWeight-medium)] text-fg">{agent.name}</div>
-                              <CodeText class="text-[length:var(--typography-fontSize-xs)] text-fgMuted mt-0.5">
-                                {#snippet children()}{agent.id}{/snippet}
-                              </CodeText>
-                            </div>
-                          {/snippet}
-                        </TableCell>
-                        <TableCell>
-                          {#snippet children()}
-                            <Badge variant={agent.connected ? 'success' : 'default'} size="sm">
-                              {#snippet children()}{agent.connected ? 'Online' : 'Offline'}{/snippet}
-                            </Badge>
-                          {/snippet}
-                        </TableCell>
-                        <TableCell align="right">
-                          {#snippet children()}
-                            <a
-                              href="/admin/agents/{agent.id}"
-                              class="text-[length:var(--typography-fontSize-sm)] text-accent hover:underline"
-                            >
-                              Details
-                            </a>
-                          {/snippet}
-                        </TableCell>
-                      {/snippet}
-                    </TableRow>
-                  {/each}
-                {/snippet}
-              </TableBody>
-            {/snippet}
-          </Table>
+          <DataTable {columns} rows={agents} rowKey={(a) => a.id} />
         {/if}
       </div>
     {/snippet}
