@@ -378,7 +378,11 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 			TrustForwardedProto: cfg.Server.TrustForwardedProto,
 		},
 		PrincipalStore: sqlStore,
-		TokenGenerator: grpcResult.jwtVerifier, // May be nil if auth is disabled
+	}
+	// Assign only a non-nil verifier: a typed-nil *JWTVerifier in the interface
+	// field would defeat webadmin's `tokenGenerator == nil` guard and panic.
+	if grpcResult.jwtVerifier != nil {
+		webAdminCfg.TokenGenerator = grpcResult.jwtVerifier
 	}
 	gw.webAdmin = webadmin.NewWithConfig(webAdminCfg)
 	gw.webAdmin.RegisterRoutes(mux)

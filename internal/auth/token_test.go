@@ -184,3 +184,19 @@ func TestJWTVerifier_DifferentPrincipals(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateOnNilVerifier(t *testing.T) {
+	var v *JWTVerifier
+	_, err := v.Generate("principal-1", time.Hour)
+	if !errors.Is(err, ErrNilVerifier) {
+		t.Fatalf("expected ErrNilVerifier, got %v", err)
+	}
+}
+
+func TestVerifyOnNilVerifier(t *testing.T) {
+	var v *JWTVerifier
+	_, err := v.Verify("some-token")
+	if !errors.Is(err, ErrNilVerifier) {
+		t.Fatalf("expected ErrNilVerifier, got %v", err)
+	}
+}

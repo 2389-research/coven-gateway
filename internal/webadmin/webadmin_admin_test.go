@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/2389/coven-gateway/internal/auth"
 	"github.com/2389/coven-gateway/internal/store"
 )
 
@@ -629,6 +631,29 @@ func TestCreateOwnerPrincipal_NilPrincipalStore_ReturnsEmpty(t *testing.T) {
 	result := a.createOwnerPrincipal(context.Background(), "test-user")
 	if result != "" {
 		t.Errorf("expected empty string when principalStore is nil, got %q", result)
+	}
+}
+
+func TestCreateOwnerPrincipal_TypedNilTokenGenerator(t *testing.T) {
+	// Regression: gateway wiring assigned a nil *auth.JWTVerifier into the
+	// TokenGenerator interface field; the non-nil interface defeated the nil
+	// guard and Generate panicked on a nil receiver (token.go:90).
+	tmpDir := t.TempDir()
+	s, err := store.NewSQLiteStore(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("NewSQLiteStore: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	var nilVerifier *auth.JWTVerifier
+	a := NewWithConfig(NewConfig{
+		Store:          s,
+		PrincipalStore: s,
+		TokenGenerator: nilVerifier,
+	})
+	got := a.createOwnerPrincipal(context.Background(), "typed-nil-user")
+	if got != "" {
+		t.Fatalf("expected empty token from unconfigured generator, got %q", got)
 	}
 }
 

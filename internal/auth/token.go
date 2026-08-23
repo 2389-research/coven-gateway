@@ -17,6 +17,9 @@ var (
 	ErrExpiredToken = errors.New("token expired")
 	ErrMissingClaim = errors.New("missing required claim")
 	ErrWeakSecret   = errors.New("JWT secret must be at least 32 bytes")
+	// ErrNilVerifier indicates a token operation on a nil JWTVerifier — the
+	// gateway is running without JWT auth, so no token can be issued or checked.
+	ErrNilVerifier = errors.New("jwt verifier is not configured")
 )
 
 // MinSecretLength is the minimum required length for JWT secrets (256 bits).
@@ -44,6 +47,9 @@ func NewJWTVerifier(secret []byte) (*JWTVerifier, error) {
 
 // Verify validates the token and extracts the principal ID from the "sub" claim.
 func (v *JWTVerifier) Verify(tokenString string) (principalID string, err error) {
+	if v == nil {
+		return "", ErrNilVerifier
+	}
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 		// Validate the signing method is HS256
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -79,6 +85,9 @@ func (v *JWTVerifier) Verify(tokenString string) (principalID string, err error)
 
 // Generate creates a new JWT token for the given principal ID with expiration.
 func (v *JWTVerifier) Generate(principalID string, expiresIn time.Duration) (string, error) {
+	if v == nil {
+		return "", ErrNilVerifier
+	}
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"sub": principalID,
