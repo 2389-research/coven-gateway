@@ -147,7 +147,6 @@ func TestSetPairTokenPrincipal(t *testing.T) {
 func TestSetPairTokenPrincipal_NotFound(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	user := createPairTestUser(t, s)
 
 	principal := &Principal{
 		ID:          uuid.New().String(),
@@ -158,7 +157,6 @@ func TestSetPairTokenPrincipal_NotFound(t *testing.T) {
 		CreatedAt:   time.Now(),
 	}
 	require.NoError(t, s.CreatePrincipal(ctx, principal))
-	_ = user
 
 	err := s.SetPairTokenPrincipal(ctx, "no-such-id", principal.ID)
 	assert.ErrorIs(t, err, ErrNotFound)

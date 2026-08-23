@@ -42,6 +42,9 @@ type PairTokenStore interface {
 	DeleteExpiredPairTokens(ctx context.Context) error
 }
 
+// Ensure SQLiteStore implements PairTokenStore interface.
+var _ PairTokenStore = (*SQLiteStore)(nil)
+
 // CreatePairToken stores a new pair token hash and returns the created row.
 func (s *SQLiteStore) CreatePairToken(ctx context.Context, tokenHash, createdBy string, expiresAt time.Time) (*PairToken, error) {
 	pt := &PairToken{
