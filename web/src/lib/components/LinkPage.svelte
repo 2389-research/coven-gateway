@@ -10,6 +10,7 @@
   import TableRow from './TableRow.svelte';
   import TableHeader from './TableHeader.svelte';
   import TableCell from './TableCell.svelte';
+  import { formatTime } from '../utils/time.js';
 
   interface LinkCodeItem {
     ID: string;
@@ -30,12 +31,6 @@
   let { codes = [] as LinkCodeItem[], userName = '', csrfToken }: Props = $props();
   let approving = $state<Record<string, boolean>>({});
   let approved = $state<Record<string, boolean>>({});
-
-  function formatTime(iso: string): string {
-    if (!iso) return '\u2014';
-    const d = new Date(iso);
-    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  }
 
   function truncateFingerprint(fp: string): string {
     if (fp.length >= 16) return fp.slice(0, 16) + '...';
@@ -148,7 +143,7 @@
                         </TableCell>
                         <TableCell>
                           {#snippet children()}
-                            <span class="text-fgMuted">{formatTime(code.ExpiresAt)}</span>
+                            <span class="text-fgMuted">{formatTime(code.ExpiresAt, { seconds: true })}</span>
                           {/snippet}
                         </TableCell>
                         <TableCell>

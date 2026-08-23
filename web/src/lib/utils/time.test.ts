@@ -18,4 +18,8 @@ describe('formatTime', () => {
       /^[A-Z][a-z]{2} \d{2} \d{2}:\d{2}:\d{2}$/
     );
   });
+
+  it('renders em-dash for null input', () => {
+    expect(formatTime(null)).toBe('—');
+  });
 });

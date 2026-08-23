@@ -27,7 +27,9 @@
     return DOMPurify.sanitize(raw);
   });
 
-  function formatTime(date: Date): string {
+  // Chat bubbles deliberately show clock time only, in the system locale, from a Date —
+  // this is not the admin pages' "Mon DD HH:MM" format (web/src/lib/utils/time.ts).
+  function formatClockTime(date: Date): string {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 </script>
@@ -111,7 +113,7 @@
           {isUser ? 'You' : 'Agent'}
         </span>
         <span class="text-[length:var(--typography-fontSize-xs)] {isUser ? 'text-fgOnAccent/50' : 'text-fgMuted/70'}">
-          {formatTime(message.timestamp)}
+          {formatClockTime(message.timestamp)}
         </span>
       </div>
       {#if isUser}

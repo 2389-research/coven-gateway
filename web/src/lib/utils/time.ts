@@ -3,7 +3,7 @@
 
 const EM_DASH = '—';
 
-export function formatTime(iso: string, opts?: { seconds?: boolean }): string {
+export function formatTime(iso: string | null, opts?: { seconds?: boolean }): string {
   if (!iso) return EM_DASH;
   const d = new Date(iso);
   return (

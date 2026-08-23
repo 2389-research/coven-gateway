@@ -5,6 +5,7 @@
   import CodeText from './CodeText.svelte';
   import EmptyState from './EmptyState.svelte';
   import ToolCallView from './ToolCallView.svelte';
+  import { formatTime } from '../utils/time.js';
 
   interface ThreadInfo {
     ID: string;
@@ -32,13 +33,6 @@
   }
 
   let { thread, messages = [] as MessageItem[], userName = '', csrfToken }: Props = $props();
-
-  function formatTime(iso: string): string {
-    if (!iso) return '\u2014';
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) +
-      ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-  }
 
   function isToolMessage(msg: MessageItem): boolean {
     return msg.Type === 'tool_use' || msg.Type === 'tool_result';

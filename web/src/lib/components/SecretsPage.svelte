@@ -17,6 +17,7 @@
   import TableRow from './TableRow.svelte';
   import TableHeader from './TableHeader.svelte';
   import TableCell from './TableCell.svelte';
+  import { formatTime } from '../utils/time.js';
 
   interface SecretItem {
     ID: string;
@@ -148,12 +149,6 @@
     }
   }
 
-  function formatTime(iso: string): string {
-    if (!iso) return '\u2014';
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) +
-      ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-  }
 </script>
 
 <AdminLayout activePage="secrets" {userName} {csrfToken}>
