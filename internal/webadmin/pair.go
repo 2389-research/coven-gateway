@@ -137,11 +137,6 @@ func (a *Admin) lookupValidPairToken(r *http.Request, token string) (*store.Pair
 	return pt, "", nil
 }
 
-// handleLinkPair enrolls a device presenting a QR pair token.
-// Contract (frozen — the client already shipped against it): 200
-// {"principal_id"} on success; 401 {"error": reason} for EVERY rejection;
-// 500 {"error":"internal error"} on store failure. The raw token is never
-// logged; slog lines carry the token row ID once known.
 // enrollPairedDevice claims the token and creates (or finds) the principal.
 // Returned reason is a 401 reason; non-nil error signals a 500. On success both
 // are zero values and the enrolled principalID is returned.

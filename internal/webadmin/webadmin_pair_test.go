@@ -527,6 +527,15 @@ func TestHandleLinkApprove_WritesAuditEntry(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
+	lc, err := s.GetLinkCode(context.Background(), linkID)
+	if err != nil {
+		t.Fatalf("getting link code after approval: %v", err)
+	}
+	if lc.PrincipalID == nil {
+		t.Fatal("expected link code to have a principal ID after approval")
+	}
+	approvedPrincipalID := *lc.PrincipalID
+
 	entries, err := s.ListAuditLog(context.Background(), store.AuditFilter{})
 	if err != nil {
 		t.Fatalf("listing audit log: %v", err)
@@ -540,6 +549,12 @@ func TestHandleLinkApprove_WritesAuditEntry(t *testing.T) {
 			}
 			if e.Detail["link_code_id"] != linkID {
 				t.Errorf("expected link_code_id detail %q, got %v", linkID, e.Detail["link_code_id"])
+			}
+			if e.TargetType != "principal" {
+				t.Errorf("expected TargetType %q, got %q", "principal", e.TargetType)
+			}
+			if e.TargetID != approvedPrincipalID {
+				t.Errorf("expected TargetID %q, got %q", approvedPrincipalID, e.TargetID)
 			}
 		}
 	}
