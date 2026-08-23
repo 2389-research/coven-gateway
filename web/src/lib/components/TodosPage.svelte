@@ -3,12 +3,8 @@
   import Badge from './Badge.svelte';
   import Card from './Card.svelte';
   import EmptyState from './EmptyState.svelte';
-  import Table from './Table.svelte';
-  import TableHead from './TableHead.svelte';
-  import TableBody from './TableBody.svelte';
-  import TableRow from './TableRow.svelte';
-  import TableHeader from './TableHeader.svelte';
-  import TableCell from './TableCell.svelte';
+  import DataTable from './DataTable.svelte';
+  import type { DataColumn } from './dataTable.js';
 
   interface TodoItem {
     ID: string;
@@ -32,7 +28,7 @@
   let loading = $state(false);
 
   function formatTime(iso: string): string {
-    if (!iso) return '\u2014';
+    if (!iso) return '—';
     const d = new Date(iso);
     return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) +
       ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -63,7 +59,53 @@
       loading = false;
     }
   }
+
+  const columns = $derived([
+    { key: 'Description', header: 'Description', cell: descriptionCell },
+    { key: 'AgentID', header: 'Agent', cell: agentCell },
+    { key: 'Status', header: 'Status', cell: statusCell },
+    { key: 'Priority', header: 'Priority', cell: priorityCell },
+    { key: 'DueDate', header: 'Due', cell: dueCell },
+    { key: 'CreatedAt', header: 'Created', cell: createdCell },
+  ] satisfies DataColumn<TodoItem>[]);
 </script>
+
+{#snippet descriptionCell(todo: TodoItem)}
+  <div class="max-w-md">
+    <span class="text-fg">{todo.Description}</span>
+    {#if todo.Notes}
+      <p class="text-[length:var(--typography-fontSize-xs)] text-fgMuted mt-0.5 truncate">{todo.Notes}</p>
+    {/if}
+  </div>
+{/snippet}
+
+{#snippet agentCell(todo: TodoItem)}
+  <span class="font-mono text-[length:var(--typography-fontSize-xs)]">{todo.AgentID || '—'}</span>
+{/snippet}
+
+{#snippet statusCell(todo: TodoItem)}
+  <Badge variant={statusVariant(todo.Status)} size="sm">
+    {#snippet children()}{todo.Status}{/snippet}
+  </Badge>
+{/snippet}
+
+{#snippet priorityCell(todo: TodoItem)}
+  {#if todo.Priority}
+    <Badge variant={priorityVariant(todo.Priority)} size="sm">
+      {#snippet children()}{todo.Priority}{/snippet}
+    </Badge>
+  {:else}
+    <span class="text-fgMuted">{'—'}</span>
+  {/if}
+{/snippet}
+
+{#snippet dueCell(todo: TodoItem)}
+  <span class="text-fgMuted">{todo.DueDate ? formatTime(todo.DueDate) : '—'}</span>
+{/snippet}
+
+{#snippet createdCell(todo: TodoItem)}
+  <span class="text-fgMuted whitespace-nowrap">{formatTime(todo.CreatedAt)}</span>
+{/snippet}
 
 <AdminLayout activePage="todos" {userName} {csrfToken}>
 <div data-testid="todos-page" class="max-w-screen-xl mx-auto p-6">
@@ -95,77 +137,7 @@
             description="Tasks created by agents will appear here."
           />
         {:else}
-          <Table>
-            {#snippet children()}
-              <TableHead>
-                {#snippet children()}
-                  <TableRow>
-                    {#snippet children()}
-                      <TableHeader>{#snippet children()}Description{/snippet}</TableHeader>
-                      <TableHeader>{#snippet children()}Agent{/snippet}</TableHeader>
-                      <TableHeader>{#snippet children()}Status{/snippet}</TableHeader>
-                      <TableHeader>{#snippet children()}Priority{/snippet}</TableHeader>
-                      <TableHeader>{#snippet children()}Due{/snippet}</TableHeader>
-                      <TableHeader>{#snippet children()}Created{/snippet}</TableHeader>
-                    {/snippet}
-                  </TableRow>
-                {/snippet}
-              </TableHead>
-              <TableBody>
-                {#snippet children()}
-                  {#each todos as todo (todo.ID)}
-                    <TableRow>
-                      {#snippet children()}
-                        <TableCell>
-                          {#snippet children()}
-                            <div class="max-w-md">
-                              <span class="text-fg">{todo.Description}</span>
-                              {#if todo.Notes}
-                                <p class="text-[length:var(--typography-fontSize-xs)] text-fgMuted mt-0.5 truncate">{todo.Notes}</p>
-                              {/if}
-                            </div>
-                          {/snippet}
-                        </TableCell>
-                        <TableCell>
-                          {#snippet children()}
-                            <span class="font-mono text-[length:var(--typography-fontSize-xs)]">{todo.AgentID || '\u2014'}</span>
-                          {/snippet}
-                        </TableCell>
-                        <TableCell>
-                          {#snippet children()}
-                            <Badge variant={statusVariant(todo.Status)} size="sm">
-                              {#snippet children()}{todo.Status}{/snippet}
-                            </Badge>
-                          {/snippet}
-                        </TableCell>
-                        <TableCell>
-                          {#snippet children()}
-                            {#if todo.Priority}
-                              <Badge variant={priorityVariant(todo.Priority)} size="sm">
-                                {#snippet children()}{todo.Priority}{/snippet}
-                              </Badge>
-                            {:else}
-                              <span class="text-fgMuted">{'\u2014'}</span>
-                            {/if}
-                          {/snippet}
-                        </TableCell>
-                        <TableCell>
-                          {#snippet children()}
-                            <span class="text-fgMuted">{todo.DueDate ? formatTime(todo.DueDate) : '\u2014'}</span>
-                          {/snippet}
-                        </TableCell>
-                        <TableCell>
-                          {#snippet children()}
-                            <span class="text-fgMuted whitespace-nowrap">{formatTime(todo.CreatedAt)}</span>
-                          {/snippet}
-                        </TableCell>
-                      {/snippet}
-                    </TableRow>
-                  {/each}
-                {/snippet}
-              </TableBody>
-            {/snippet}
-          </Table>
+          <DataTable {columns} rows={todos} rowKey={(t) => t.ID} />
         {/if}
       </div>
     {/snippet}
