@@ -443,6 +443,44 @@ func TestHandleLinkPair_Rejections(t *testing.T) {
 	}
 }
 
+func TestHandleLinkPair_NilPrincipalStore_RecordsFailureAndReturns500(t *testing.T) {
+	saved := pairLimiter
+	pairLimiter = newPairRateLimiter()
+	defer func() { pairLimiter = saved }()
+
+	a, s := newPairTestAdmin(t, Config{BaseURL: "https://gw.example.ts.net"})
+	token := createStoredPairToken(t, a, s, time.Now().Add(5*time.Minute))
+	fp := validFingerprint()
+
+	// Nil out the principalStore after setup so the enrollment hits that branch.
+	a.principalStore = nil
+
+	rec := pairRequest(t, a, pairBody(token, fp, "Test iPhone"))
+
+	// Must be 500 with the standard error envelope.
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("500 body must be JSON error envelope, got %q", rec.Body.String())
+	}
+	if resp.Error != "internal error" {
+		t.Errorf("expected error %q, got %q", "internal error", resp.Error)
+	}
+
+	// The failure must have been recorded: one more failure trips the limiter.
+	ip := "192.0.2.1" // default httptest.NewRequest RemoteAddr host
+	for i := 1; i < maxPairFailuresPerWindow; i++ {
+		pairLimiter.recordFailure(ip)
+	}
+	if !pairLimiter.tooMany(ip) {
+		t.Error("expected failure to be recorded in pairLimiter; limiter not triggered after maxPairFailuresPerWindow total")
+	}
+}
+
 func TestHandleLinkPair_RateLimited(t *testing.T) {
 	a, _ := newPairTestAdmin(t, Config{BaseURL: "https://gw.example.ts.net"})
 

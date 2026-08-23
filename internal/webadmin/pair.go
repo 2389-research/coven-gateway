@@ -150,6 +150,7 @@ func (a *Admin) handleLinkPair(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if a.principalStore == nil {
+		pairLimiter.recordFailure(ip)
 		a.logger.Error("server not configured for pair enrollment")
 		writePairError(w, http.StatusInternalServerError, "internal error")
 		return
