@@ -119,7 +119,7 @@ func registerFakeAgent(t *testing.T, mgr *agent.Manager, agentID, name string, c
 }
 
 // =============================================================================
-// handleLinkApprove happy path — covers getOrCreatePrincipalForLink +
+// handleLinkApprove happy path — covers getOrCreatePrincipalForDevice +
 // generateApprovalToken (both were at 0%)
 // =============================================================================
 

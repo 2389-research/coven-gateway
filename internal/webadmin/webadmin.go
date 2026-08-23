@@ -281,6 +281,7 @@ func (a *Admin) registerRootRoutes(mux *http.ServeMux) {
 	// Device linking API (unauthenticated for devices)
 	mux.HandleFunc("POST /api/link/request", a.handleLinkRequest)
 	mux.HandleFunc("GET /api/link/status/{code}", a.handleLinkStatus)
+	mux.HandleFunc("POST /api/link/pair", a.handleLinkPair)
 
 	// Chat API and SSE
 	mux.HandleFunc("GET /api/agents", a.requireAuth(a.handleAgentsJSON))
@@ -2182,33 +2183,35 @@ func (a *Admin) handleLinkJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// getOrCreatePrincipalForLink finds an existing principal by fingerprint or creates a new one.
-// Returns the principal ID and any error.
-func (a *Admin) getOrCreatePrincipalForLink(ctx context.Context, linkCode *store.LinkCode) (string, error) {
-	existing, err := a.principalStore.GetPrincipalByPubkey(ctx, linkCode.Fingerprint)
+// getOrCreatePrincipalForDevice finds an existing principal by pubkey
+// fingerprint or creates a new approved agent principal with a member role.
+// Both the code-approval flow and QR pairing enroll through here. The second
+// return reports whether a new principal was created.
+func (a *Admin) getOrCreatePrincipalForDevice(ctx context.Context, fingerprint, deviceName string) (string, bool, error) {
+	existing, err := a.principalStore.GetPrincipalByPubkey(ctx, fingerprint)
 	if err == nil && existing != nil {
-		a.logger.Info("using existing principal for link", "principal_id", existing.ID, "fingerprint", linkCode.Fingerprint)
-		return existing.ID, nil
+		a.logger.Info("using existing principal for link", "principal_id", existing.ID, "fingerprint", fingerprint)
+		return existing.ID, false, nil
 	}
 
 	principalID := uuid.New().String()
 	principal := &store.Principal{
 		ID:          principalID,
 		Type:        store.PrincipalTypeAgent,
-		PubkeyFP:    linkCode.Fingerprint,
-		DisplayName: linkCode.DeviceName,
+		PubkeyFP:    fingerprint,
+		DisplayName: deviceName,
 		Status:      store.PrincipalStatusApproved,
 		CreatedAt:   time.Now(),
 	}
 
 	if err := a.principalStore.CreatePrincipal(ctx, principal); err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	if err := a.principalStore.AddRole(ctx, store.RoleSubjectPrincipal, principalID, store.RoleMember); err != nil {
 		a.logger.Error("failed to add role", "error", err)
 	}
-	return principalID, nil
+	return principalID, true, nil
 }
 
 // validatePendingLinkCode fetches a link code and validates it's pending.
@@ -2232,7 +2235,7 @@ func (a *Admin) validatePendingLinkCode(w http.ResponseWriter, ctx context.Conte
 
 // generateApprovalToken creates a principal and generates an auth token.
 func (a *Admin) generateApprovalToken(ctx context.Context, linkCode *store.LinkCode) (string, string, error) {
-	principalID, err := a.getOrCreatePrincipalForLink(ctx, linkCode)
+	principalID, _, err := a.getOrCreatePrincipalForDevice(ctx, linkCode.Fingerprint, linkCode.DeviceName)
 	if err != nil {
 		return "", "", fmt.Errorf("create principal: %w", err)
 	}

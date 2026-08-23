@@ -6,9 +6,11 @@ package webadmin
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -66,6 +68,136 @@ func (a *Admin) pairPayloadURL(host, token string) string {
 		payload += "&port=" + strconv.Itoa(a.config.GRPCPort)
 	}
 	return payload + "&token=" + url.QueryEscape(token)
+}
+
+// remoteIP extracts the client IP for rate limiting.
+func remoteIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// handleLinkPair enrolls a device presenting a QR pair token.
+// Contract (frozen — the client already shipped against it): 200
+// {"principal_id"} on success; 401 {"error": reason} for EVERY rejection;
+// 500 {"error":"internal error"} on store failure. The raw token is never
+// logged; slog lines carry the token row ID once known.
+func (a *Admin) handleLinkPair(w http.ResponseWriter, r *http.Request) {
+	ip := remoteIP(r)
+	if pairLimiter.tooMany(ip) {
+		writePairError(w, http.StatusUnauthorized, "too many attempts")
+		return
+	}
+
+	var req struct {
+		Token       string `json:"token"`
+		Fingerprint string `json:"fingerprint"`
+		DeviceName  string `json:"device_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pairLimiter.recordFailure(ip)
+		writePairError(w, http.StatusUnauthorized, "invalid request: body")
+		return
+	}
+	if req.Token == "" {
+		pairLimiter.recordFailure(ip)
+		writePairError(w, http.StatusUnauthorized, "invalid request: token")
+		return
+	}
+	if len(req.Fingerprint) != 64 {
+		pairLimiter.recordFailure(ip)
+		writePairError(w, http.StatusUnauthorized, "invalid request: fingerprint")
+		return
+	}
+	if req.DeviceName == "" || len(req.DeviceName) > 100 {
+		pairLimiter.recordFailure(ip)
+		writePairError(w, http.StatusUnauthorized, "invalid request: device_name")
+		return
+	}
+
+	_ = a.store.DeleteExpiredPairTokens(r.Context())
+
+	hash := hashPairToken(req.Token)
+	pt, err := a.store.GetPairTokenByHash(r.Context(), hash)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			pairLimiter.recordFailure(ip)
+			writePairError(w, http.StatusUnauthorized, "invalid token")
+			return
+		}
+		a.logger.Error("looking up pair token", "error", err)
+		writePairError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	// Belt and braces on top of the indexed hash lookup: a found row already
+	// implies equality, but the explicit compare keeps the path constant-time.
+	if subtle.ConstantTimeCompare([]byte(pt.TokenHash), []byte(hash)) != 1 {
+		pairLimiter.recordFailure(ip)
+		writePairError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+	if pt.UsedAt != nil {
+		pairLimiter.recordFailure(ip)
+		writePairError(w, http.StatusUnauthorized, "token already used")
+		return
+	}
+	if time.Now().After(pt.ExpiresAt) {
+		pairLimiter.recordFailure(ip)
+		writePairError(w, http.StatusUnauthorized, "token expired")
+		return
+	}
+
+	if a.principalStore == nil {
+		a.logger.Error("server not configured for pair enrollment")
+		writePairError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// The claim: exactly one concurrent request per token gets past here.
+	if err := a.store.ConsumePairToken(r.Context(), pt.ID); err != nil {
+		if errors.Is(err, store.ErrPairTokenUsed) {
+			pairLimiter.recordFailure(ip)
+			writePairError(w, http.StatusUnauthorized, "token already used")
+			return
+		}
+		a.logger.Error("consuming pair token", "error", err, "pair_token_id", pt.ID)
+		writePairError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	principalID, created, err := a.getOrCreatePrincipalForDevice(r.Context(), req.Fingerprint, req.DeviceName)
+	if err != nil {
+		// Fail closed: the token stays burned; the admin mints another.
+		a.logger.Error("pair enrollment failed after claim", "error", err, "pair_token_id", pt.ID)
+		writePairError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := a.store.SetPairTokenPrincipal(r.Context(), pt.ID, principalID); err != nil {
+		a.logger.Error("recording pair token principal", "error", err, "pair_token_id", pt.ID)
+	}
+
+	if err := a.store.AppendAuditLog(r.Context(), &store.AuditEntry{
+		ActorPrincipalID: principalID,
+		Action:           store.AuditPairEnroll,
+		TargetType:       "principal",
+		TargetID:         principalID,
+		Detail: map[string]any{
+			"device_name":      req.DeviceName,
+			"pair_token_id":    pt.ID,
+			"reused_principal": !created,
+		},
+	}); err != nil {
+		a.logger.Error("appending pair enroll audit log", "error", err, "pair_token_id", pt.ID)
+	}
+
+	a.logger.Info("device paired", "device_name", req.DeviceName, "principal_id", principalID, "pair_token_id", pt.ID)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{"principal_id": principalID}); err != nil {
+		a.logger.Error("encoding pair enrollment response", "error", err, "pair_token_id", pt.ID)
+	}
 }
 
 // handleMintPairToken mints a single-use pair token and returns the payload
