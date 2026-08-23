@@ -11,6 +11,15 @@
  *   COVEN_NEW_CHAT=1 ./bin/coven-gateway serve   (with a fresh or test database)
  *   ../bin/fake-agent exists (built via: go build -o bin/fake-agent ./cmd/fake-agent)
  *
+ * Agent authentication:
+ *   Enforced-auth gateways (jwt_secret set, no allow_anonymous) need an agent token so
+ *   fake-agent can register. On a fresh DB this is automatic: ensureAdminUser captures the
+ *   API token from the setup completion page and beforeAll feeds it to fake-agent -token.
+ *   When reusing a DB where setup already ran (capture is skipped because /setup redirects
+ *   to /login), set COVEN_E2E_AGENT_TOKEN to a valid agent JWT. Note: token capture only
+ *   works when chat.spec performs the first-time setup — other spec files can win the /setup
+ *   race in multi-file runs, leaving capturedAgentToken empty.
+ *
  * Tests run serially to avoid race conditions on setup/login.
  */
 import { test, expect, type Page } from '@playwright/test';
@@ -33,7 +42,7 @@ const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
 const FAKE_AGENT_BIN = path.join(PROJECT_ROOT, 'bin/fake-agent');
 
-/** Create admin user via /setup if no users exist. */
+/** Create admin user via /setup if no users exist. Captures the API token when shown. */
 async function ensureAdminUser(page: Page) {
   const resp = await page.goto('/setup', { waitUntil: 'domcontentloaded' });
   if (!resp) return;
@@ -49,6 +58,14 @@ async function ensureAdminUser(page: Page) {
 
   // Setup renders a "complete" page (doesn't redirect). It also creates a session.
   await page.waitForLoadState('domcontentloaded');
+
+  // Under enforced auth the completion page shows an API token (create_principal
+  // defaults to checked) — capture it for fake-agent. Absent under allow_anonymous;
+  // that path needs no token.
+  const tokenEl = page.locator('[data-testid="api-token"]');
+  if (await tokenEl.count()) {
+    capturedAgentToken = (await tokenEl.first().textContent())?.trim() ?? '';
+  }
 }
 
 /** Log in via the login form. */
@@ -67,6 +84,7 @@ async function login(page: Page) {
 }
 
 let setupDone = false;
+let capturedAgentToken = '';
 
 test.describe('Chat smoke test', () => {
   test.beforeEach(async ({ page }) => {
@@ -113,7 +131,17 @@ test.describe('Chat smoke test', () => {
 test.describe('Chat with connected agent', () => {
   let fakeAgent: ChildProcess | null = null;
 
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ browser }) => {
+    // Setup must precede the agent spawn: under enforced auth the agent token
+    // only exists after first-time setup creates a principal.
+    if (!setupDone) {
+      const page = await browser.newPage();
+      await ensureAdminUser(page);
+      await page.close();
+      setupDone = true;
+    }
+    const agentToken = process.env.COVEN_E2E_AGENT_TOKEN || capturedAgentToken;
+
     if (!fs.existsSync(FAKE_AGENT_BIN)) {
       console.log(`fake-agent binary not found at ${FAKE_AGENT_BIN}, building...`);
       execFileSync('go', ['build', '-o', 'bin/fake-agent', './cmd/fake-agent'], {
@@ -123,10 +151,16 @@ test.describe('Chat with connected agent', () => {
     }
 
     // Start fake agent as subprocess
-    fakeAgent = spawn(FAKE_AGENT_BIN, ['-addr', 'localhost:50051', '-name', 'Echo Agent', '-id', 'e2e-echo-agent'], {
-      cwd: PROJECT_ROOT,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    fakeAgent = spawn(
+      FAKE_AGENT_BIN,
+      [
+        '-addr', 'localhost:50051',
+        '-name', 'Echo Agent',
+        '-id', 'e2e-echo-agent',
+        ...(agentToken ? ['-token', agentToken] : []),
+      ],
+      { cwd: PROJECT_ROOT, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
 
     // Wait for registration (fake-agent prints to stderr on success)
     await new Promise<void>((resolve, reject) => {
