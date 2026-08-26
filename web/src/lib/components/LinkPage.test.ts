@@ -93,6 +93,34 @@ describe('LinkPage QR pairing', () => {
     });
   });
 
+  it('re-mints a fresh code from the New code button while one is active', async () => {
+    const secondMint = {
+      ok: true,
+      json: async () => ({
+        url: 'coven://pair?v=1&host=gw.example.ts.net&token=second',
+        qr: 'data:image/png;base64,BBBB',
+        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      }),
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(mintOK).mockResolvedValueOnce(secondMint);
+    vi.stubGlobal('fetch', fetchMock);
+    render(LinkPage, { props: { codes: [], csrfToken: 't' } });
+
+    await fireEvent.click(screen.getByText('Generate QR code'));
+    await waitFor(() => {
+      expect(screen.getByAltText('Pairing QR code')).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByText('New code'));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(
+        screen.getByText('coven://pair?v=1&host=gw.example.ts.net&token=second')
+      ).toBeTruthy();
+    });
+  });
+
   it('surfaces the 409 remediation message from the server', async () => {
     vi.stubGlobal(
       'fetch',

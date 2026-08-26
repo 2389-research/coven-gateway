@@ -259,9 +259,19 @@
             <CodeText class="text-[length:var(--typography-fontSize-xs)] break-all">
               {#snippet children()}{pairURL}{/snippet}
             </CodeText>
-            <span class="text-[length:var(--typography-fontSize-sm)] text-fgMuted">
-              Expires in {formatRemaining(remaining)}
-            </span>
+            <div class="flex items-center gap-3">
+              <span class="text-[length:var(--typography-fontSize-sm)] text-fgMuted">
+                Expires in {formatRemaining(remaining)}
+              </span>
+              <button
+                type="button"
+                onclick={mintPairToken}
+                disabled={minting}
+                class="text-[length:var(--typography-fontSize-sm)] text-fgMuted hover:text-fg disabled:opacity-50"
+              >
+                {minting ? 'Generating...' : 'New code'}
+              </button>
+            </div>
           </div>
         {:else}
           {#if pairExpiresAt && remaining <= 0}
