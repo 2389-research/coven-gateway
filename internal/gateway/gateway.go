@@ -128,7 +128,7 @@ func resolveGRPCPort(cfg *config.Config) int {
 // *JWTVerifier in the interface field defeats webadmin's nil guard and panics.
 func buildWebAdmin(cfg *config.Config, sqlStore *store.SQLiteStore, mgr *agent.Manager,
 	conv *conversation.Service, broadcaster *conversation.EventBroadcaster,
-	registry *packs.Registry, grpcResult *grpcServerResult, logger *slog.Logger,
+	registry *packs.Registry, grpcResult *grpcServerResult, baseURL string,
 ) *webadmin.Admin {
 	newCfg := webadmin.NewConfig{
 		Store:        sqlStore,
@@ -137,7 +137,7 @@ func buildWebAdmin(cfg *config.Config, sqlStore *store.SQLiteStore, mgr *agent.M
 		Broadcaster:  broadcaster,
 		Registry:     registry,
 		Config: webadmin.Config{
-			BaseURL:             determineWebAdminBaseURL(cfg, logger),
+			BaseURL:             baseURL,
 			GRPCPort:            resolveGRPCPort(cfg),
 			TrustForwardedProto: cfg.Server.TrustForwardedProto,
 		},
@@ -408,9 +408,10 @@ func New(cfg *config.Config, logger *slog.Logger) (*Gateway, error) {
 		return nil, err
 	}
 
-	gw.webAdmin = buildWebAdmin(cfg, sqlStore, gw.agentManager, convService, eventBroadcaster, packRegistry, grpcResult, logger)
+	webAdminBaseURL := determineWebAdminBaseURL(cfg, logger)
+	gw.webAdmin = buildWebAdmin(cfg, sqlStore, gw.agentManager, convService, eventBroadcaster, packRegistry, grpcResult, webAdminBaseURL)
 	gw.webAdmin.RegisterRoutes(mux)
-	logger.Info("admin web UI enabled at /admin/", "base_url", determineWebAdminBaseURL(cfg, logger))
+	logger.Info("admin web UI enabled at /admin/", "base_url", webAdminBaseURL)
 
 	// Create question router for ask_user tool (uses webAdmin as ClientStreamer)
 	gw.questionRouter = builtins.NewInMemoryQuestionRouter(gw.webAdmin)
