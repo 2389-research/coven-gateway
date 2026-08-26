@@ -230,6 +230,20 @@ func TestAuditLogAcceptsPairActions(t *testing.T) {
 	require.Len(t, entries, 3)
 }
 
+func TestAuditLogMigrationSurfacesProbeErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "probe-err-test.db")
+
+	s, err := NewSQLiteStore(dbPath)
+	require.NoError(t, err)
+	require.NoError(t, s.Close())
+
+	// A closed handle makes the schema probe fail with a non-ErrNoRows error;
+	// that must surface, not silently read as "no migration needed".
+	err = s.migrateAuditLogCheckConstraint()
+	require.ErrorContains(t, err, "checking audit_log schema")
+}
+
 func TestAuditLogMigrationAddsPairActions(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "migrate-test.db")

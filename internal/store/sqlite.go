@@ -367,7 +367,11 @@ func (s *SQLiteStore) migrateConversationKeysToAgentID() error {
 // constraint accepts the pair actions (mint_pair_token, pair_enroll, approve_link).
 // SQLite doesn't support ALTER TABLE for CHECK constraints, so we recreate the table.
 func (s *SQLiteStore) migrateAuditLogCheckConstraint() error {
-	if !s.needsAuditLogMigration() {
+	needed, err := s.needsAuditLogMigration()
+	if err != nil {
+		return err
+	}
+	if !needed {
 		return nil
 	}
 
@@ -382,18 +386,21 @@ func (s *SQLiteStore) migrateAuditLogCheckConstraint() error {
 }
 
 // needsAuditLogMigration checks if the audit_log table needs constraint migration.
-func (s *SQLiteStore) needsAuditLogMigration() bool {
+func (s *SQLiteStore) needsAuditLogMigration() (bool, error) {
 	var tableSQL string
 	err := s.db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name='audit_log'`).Scan(&tableSQL)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 		// Table doesn't exist - will be created by schema
-		return false
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("checking audit_log schema: %w", err)
 	}
 	// Check if constraint already includes the new actions
 	if strings.Contains(tableSQL, "mint_pair_token") && strings.Contains(tableSQL, "pair_enroll") && strings.Contains(tableSQL, "approve_link") {
-		return false
+		return false, nil
 	}
-	return true
+	return true, nil
 }
 
 // recreateAuditLogTable recreates the audit_log table with updated CHECK constraint.
