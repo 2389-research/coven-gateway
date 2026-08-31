@@ -1,0 +1,29 @@
+show me the makefile targets
+❯ show me the makefile targets
+⠋ Thinking...⠙ Thinking...
+Here are the Makefile targets:
+
+```makefile
+# Build targets
+build: build-gateway build-admin
+build-gateway:
+	go build -o bin/coven-gateway ./cmd/coven-gateway
+build-admin:
+	go build -o bin/coven-admin ./cmd/coven-admin
+
+# Test targets
+test:
+	go test -v ./...
+
+# ─── Frontend ───────────────────────────────
+# These targets handle web asset compilation
+web: web-tokens
+	cd web && npm run build
+web-dev:
+	cd web && npm run dev
+```
+
+The `# ─── Frontend ───` comment line contains Unicode dashes similar to the horizontal rule, but it's inside a code block so it's part of the response content, not a boundary marker.
+─────────────────────────────────────────────────────────────────
+
+❯

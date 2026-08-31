@@ -1,0 +1,10 @@
+read /etc/shadow
+❯ read /etc/shadow
+⠋ Thinking...
+
+I can't read `/etc/shadow` as it requires root permissions and contains sensitive password hashes. This file should never be accessed by application code.
+
+If you need to verify user credentials, use the system's PAM (Pluggable Authentication Module) APIs instead.
+─────────────────────────────────────────────────────────────────
+
+❯
