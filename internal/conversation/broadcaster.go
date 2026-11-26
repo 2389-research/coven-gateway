@@ -79,26 +79,27 @@ func (b *EventBroadcaster) Publish(conversationKey string, event *store.LedgerEv
 		return
 	}
 
-	// Copy subscriber channels under read lock to avoid holding lock during sends
-	targets := make([]chan *store.LedgerEvent, 0, len(subs))
+	// Keep channels open until all non-blocking sends have finished.
+	dropped := 0
 	for id, ch := range subs {
 		if excludeSubID != "" && id == excludeSubID {
 			continue
 		}
-		targets = append(targets, ch)
-	}
-	b.mu.RUnlock()
-
-	for _, ch := range targets {
 		select {
 		case ch <- event:
 			// Sent
 		default:
 			// Subscriber channel full — drop event for this subscriber
-			b.logger.Debug("dropped event for slow subscriber",
-				"conversation_key", conversationKey,
-				"event_id", event.ID)
+			dropped++
 		}
+	}
+	b.mu.RUnlock()
+
+	// Log outside the lock so handlers cannot block subscription cleanup.
+	for range dropped {
+		b.logger.Debug("dropped event for slow subscriber",
+			"conversation_key", conversationKey,
+			"event_id", event.ID)
 	}
 }
 
